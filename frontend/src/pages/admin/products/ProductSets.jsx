@@ -320,11 +320,17 @@ export default function ProductSets() {
         }
       />
 
-      <div className="form-card mt-6">
+      <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
         {isLoading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="divide-y divide-gray-100">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-44 animate-pulse rounded-xl bg-gray-100" />
+              <div key={i} className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_150px]">
+                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
+              </div>
             ))}
           </div>
         ) : sets.length === 0 ? (
@@ -337,88 +343,117 @@ export default function ProductSets() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_150px] md:items-center md:gap-4">
+              <div>Set Name</div>
+              <div>Products In Set</div>
+              <div>Price</div>
+              <div>Status</div>
+              <div className="text-right">Actions</div>
+            </div>
+
             {sets.map((s) => (
               <div
                 key={s.id}
-                className="flex flex-col rounded-2xl border border-gray-100 p-4 transition-shadow hover:shadow-card"
+                className="grid gap-4 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_150px] md:items-center"
               >
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    {s.is_featured && (
-                      <Star size={13} className="shrink-0 fill-yellow-400 text-yellow-500" />
-                    )}
-                    <h3 className="truncate font-semibold text-gray-900">{s.name}</h3>
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-700">
+                      <PackageCheck size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        {s.is_featured && (
+                          <Star size={13} className="shrink-0 fill-yellow-400 text-yellow-500" />
+                        )}
+                        <h3 className="truncate text-sm font-black text-gray-900">{s.name}</h3>
+                      </div>
+                      <p className="mt-0.5 text-xs font-semibold text-gray-400">
+                        {s.items?.length ?? 0} product{s.items?.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
                   </div>
+                  {s.description && (
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-500">{s.description}</p>
+                  )}
+                </div>
+
+                <div>
+                  {s.items?.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {s.items.slice(0, 3).map((item) => (
+                        <div key={item.id} className="flex min-w-0 items-center gap-2 rounded-xl bg-gray-50 px-2.5 py-2">
+                          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white">
+                            {item.product_image ? (
+                              <img src={item.product_image} alt={item.product_name} className="h-full w-full object-contain p-0.5" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Tag size={12} className="text-gray-300" />
+                              </div>
+                            )}
+                            <span className="absolute bottom-0 right-0 rounded-tl bg-black/70 px-1 text-[9px] font-black text-white">
+                              x{item.quantity}
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-black text-gray-900">{item.product_name}</p>
+                            <p className="text-[11px] font-semibold text-gray-400">{item.product_code}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {s.items.length > 3 && (
+                        <div className="rounded-xl bg-purple-50 px-2.5 py-2 text-xs font-black text-purple-700">
+                          +{s.items.length - 3} more product{s.items.length - 3 === 1 ? '' : 's'}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-center text-xs font-semibold text-gray-400">
+                      No products added
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
+                  <span className="text-xs font-bold uppercase text-gray-400 md:hidden">Price</span>
+                  <div className="text-right md:text-left">
+                    {s.discount_price ? (
+                      <>
+                        <p className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(s.price)}</p>
+                        <p className="text-sm font-black text-purple-600">{formatCurrency(s.discount_price)}</p>
+                      </>
+                    ) : (
+                      <p className="text-sm font-black text-gray-900">{formatCurrency(s.price)}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
                   <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${
                       s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                     }`}
                   >
                     {s.is_active ? 'Active' : 'Inactive'}
                   </span>
+                  {s.is_featured && (
+                    <span className="mt-1 inline-flex rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-black text-yellow-700 md:block md:w-fit">
+                      Featured
+                    </span>
+                  )}
                 </div>
 
-                {s.description && (
-                  <p className="mb-3 line-clamp-2 text-xs text-gray-500">{s.description}</p>
-                )}
-
-                {/* Product thumbnails */}
-                {s.items?.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-1">
-                    {s.items.slice(0, 4).map((item) => (
-                      <div
-                        key={item.id}
-                        className="relative h-10 w-10 overflow-hidden rounded-lg border border-gray-100 bg-gray-50"
-                        title={`${item.product_name} x${item.quantity}`}
-                      >
-                        {item.product_image ? (
-                          <img src={item.product_image} alt={item.product_name} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <Tag size={12} className="text-gray-300" />
-                          </div>
-                        )}
-                        <span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-0.5 text-[9px] font-bold text-white">
-                          x{item.quantity}
-                        </span>
-                      </div>
-                    ))}
-                    {s.items.length > 4 && (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-100 bg-gray-50 text-xs font-semibold text-gray-400">
-                        +{s.items.length - 4}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-auto mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-1 text-xs text-gray-400">
-                    <Tag size={12} />
-                    {s.items?.length ?? 0} products
-                  </div>
-                  <div className="text-right">
-                    {s.discount_price ? (
-                      <>
-                        <p className="text-xs text-gray-400 line-through">{formatCurrency(s.price)}</p>
-                        <p className="font-bold text-purple-600">{formatCurrency(s.discount_price)}</p>
-                      </>
-                    ) : (
-                      <p className="font-bold text-gray-900">{formatCurrency(s.price)}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-2 border-t border-gray-100 pt-3">
+                <div className="flex gap-2 md:justify-end">
                   <button
                     onClick={() => openEdit(s)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-50 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-100 md:flex-none"
                   >
                     <Edit size={13} /> Edit
                   </button>
                   <button
                     onClick={() => handleDelete(s)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-50 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-100"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-500 transition-colors hover:bg-red-100 md:flex-none"
                   >
                     <Trash2 size={13} /> Delete
                   </button>

@@ -23,6 +23,7 @@ import Products from '@/pages/admin/products/Products'
 import Categories from '@/pages/admin/products/Categories'
 import Brands from '@/pages/admin/products/Brands'
 import ProductSets from '@/pages/admin/products/ProductSets'
+import FlashSales from '@/pages/admin/products/FlashSales'
 import Banners from '@/pages/admin/products/Banners'
 import StockDashboard from '@/pages/admin/inventory/StockDashboard'
 import StockMovements from '@/pages/admin/inventory/StockMovements'
@@ -225,6 +226,7 @@ export default function App() {
             <Route path="products/brands" element={<Brands />} />
             <Route path="products/categories" element={<Categories />} />
             <Route path="products/sets" element={<ProductSets />} />
+            <Route path="products/flash-sale" element={<FlashSales />} />
             <Route path="products/banners" element={<Banners />} />
 
             {/* Inventory */}

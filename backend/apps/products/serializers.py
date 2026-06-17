@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Sum
 from .models import Brand, Category, Product, ProductImage, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
 
 
@@ -68,6 +69,8 @@ class ProductListSerializer(serializers.ModelSerializer):
     display_price = serializers.SerializerMethodField()
     old_price = serializers.SerializerMethodField()
     is_flash_sale_active = serializers.BooleanField(read_only=True)
+    flash_sale_order_count = serializers.SerializerMethodField()
+    flash_sale_quantity_sold = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -79,6 +82,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             'flash_sale_starts_at', 'flash_sale_ends_at',
             'unit', 'current_stock', 'is_active', 'is_featured',
             'is_flash_sale_active',
+            'flash_sale_order_count', 'flash_sale_quantity_sold',
             'is_new_arrival', 'is_best_seller', 'rating', 'created_at',
         ]
 
@@ -104,6 +108,25 @@ class ProductListSerializer(serializers.ModelSerializer):
     def get_old_price(self, obj):
         return obj.retail_price if obj.is_flash_sale_active else None
 
+    def _flash_sale_items(self, obj):
+        if not obj.flash_sale_price:
+            return obj.order_items.none()
+        qs = obj.order_items.filter(
+            unit_price=obj.flash_sale_price,
+            order__is_draft=False,
+        ).exclude(order__status='cancelled')
+        if obj.flash_sale_starts_at:
+            qs = qs.filter(order__created_at__gte=obj.flash_sale_starts_at)
+        if obj.flash_sale_ends_at:
+            qs = qs.filter(order__created_at__lte=obj.flash_sale_ends_at)
+        return qs
+
+    def get_flash_sale_order_count(self, obj):
+        return self._flash_sale_items(obj).values('order_id').distinct().count()
+
+    def get_flash_sale_quantity_sold(self, obj):
+        return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
+
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -113,6 +136,8 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     display_price = serializers.SerializerMethodField()
     old_price = serializers.SerializerMethodField()
     is_flash_sale_active = serializers.BooleanField(read_only=True)
+    flash_sale_order_count = serializers.SerializerMethodField()
+    flash_sale_quantity_sold = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -129,6 +154,25 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     def get_old_price(self, obj):
         return obj.retail_price if obj.is_flash_sale_active else None
+
+    def _flash_sale_items(self, obj):
+        if not obj.flash_sale_price:
+            return obj.order_items.none()
+        qs = obj.order_items.filter(
+            unit_price=obj.flash_sale_price,
+            order__is_draft=False,
+        ).exclude(order__status='cancelled')
+        if obj.flash_sale_starts_at:
+            qs = qs.filter(order__created_at__gte=obj.flash_sale_starts_at)
+        if obj.flash_sale_ends_at:
+            qs = qs.filter(order__created_at__lte=obj.flash_sale_ends_at)
+        return qs
+
+    def get_flash_sale_order_count(self, obj):
+        return self._flash_sale_items(obj).values('order_id').distinct().count()
+
+    def get_flash_sale_quantity_sold(self, obj):
+        return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):

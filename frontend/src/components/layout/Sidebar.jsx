@@ -12,6 +12,7 @@ import {
   UserCircle, Bell, Shield, Sliders, MessageCircle,
   MapPin, CreditCard, ShoppingBag, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
+  Flame,
 } from 'lucide-react'
 
 // `module` maps to the Permission.module value — used to check `view` access
@@ -40,6 +41,7 @@ const navItems = [
       { label: 'Brands',            path: '/admin/products/brands',     icon: Award,        module: 'products' },
       { label: 'Main Category Menu',path: '/admin/products/categories', icon: Boxes,        module: 'products' },
       { label: 'Product Sets',      path: '/admin/products/sets',       icon: PackageCheck, module: 'products' },
+      { label: 'Flash Sale',        path: '/admin/products/flash-sale', icon: Flame,        module: 'products' },
       { label: 'Banners',           path: '/admin/products/banners',    icon: Image,        module: 'products' },
     ],
   },

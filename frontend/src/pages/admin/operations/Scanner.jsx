@@ -53,7 +53,7 @@ export default function Scanner() {
   })
 
   return (
-    <div className="animate-fade-in">
+    <div className="mx-auto w-full max-w-[1500px] animate-fade-in">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Scanner Dashboard</h1>

@@ -412,26 +412,28 @@ export default function PrepareItems() {
       )}
 
       {/* Header */}
-      <div
-        className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3.5 shadow-sm"
-        style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
-      >
-        <button
-          onClick={() => navigate('/admin/scanner')}
-          className="flex items-center gap-1 text-sm font-semibold text-gray-600 hover:text-gray-900"
+      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white shadow-sm">
+        <div
+          className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-4 py-3.5"
+          style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
         >
-          <ArrowLeft size={18} /> Back
-        </button>
-        <h1 className="text-base font-black text-gray-900">Prepare Package</h1>
-        <button
-          onClick={() => navigate('/admin/prepare/history')}
-          className="flex items-center gap-1.5 rounded-lg border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50"
-        >
-          <History size={14} /> History
-        </button>
+          <button
+            onClick={() => navigate('/admin/scanner')}
+            className="flex items-center gap-1 text-sm font-semibold text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft size={18} /> Back
+          </button>
+          <h1 className="text-base font-black text-gray-900">Prepare Package</h1>
+          <button
+            onClick={() => navigate('/admin/prepare/history')}
+            className="flex items-center gap-1.5 rounded-lg border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50"
+          >
+            <History size={14} /> History
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-4 p-4 pb-32">
+      <div className="mx-auto w-full max-w-[1500px] space-y-4 p-4 pb-32">
         {/* QR Scanner Card */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-5">
           <div className="pointer-events-none absolute right-4 top-4 grid grid-cols-3 gap-1.5 opacity-20">
@@ -766,13 +768,15 @@ export default function PrepareItems() {
         className="fixed bottom-0 left-0 right-0 bg-white/80 p-4 backdrop-blur"
         style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
       >
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-purple-900 py-4 text-sm font-black text-white shadow-lg shadow-purple-300/40 disabled:opacity-60"
-        >
-          <Save size={18} /> {saving ? 'Saving...' : 'Save Prepare Package'}
-        </button>
+        <div className="mx-auto w-full max-w-[1500px]">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-purple-900 py-4 text-sm font-black text-white shadow-lg shadow-purple-300/40 disabled:opacity-60"
+          >
+            <Save size={18} /> {saving ? 'Saving...' : 'Save Prepare Package'}
+          </button>
+        </div>
       </div>
     </div>
   )

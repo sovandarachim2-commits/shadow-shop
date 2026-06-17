@@ -9,7 +9,7 @@ import { productsApi } from '@/api/products'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency, debounce } from '@/utils/helpers'
 
-export default function NewOrder() {
+export default function NewOrder({ embedded = false, onCreated }) {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
   const [cartItems, setCartItems] = useState([])
@@ -41,7 +41,11 @@ export default function NewOrder() {
     mutationFn: ordersApi.orders.create,
     onSuccess: (data) => {
       toast.success('Order created successfully!')
-      navigate(`/admin/orders/${data.data.id}`)
+      if (onCreated) {
+        onCreated(data.data)
+      } else {
+        navigate(`/admin/orders/${data.data.id}`)
+      }
     },
     onError: () => toast.error('Failed to create order'),
   })
@@ -132,13 +136,15 @@ export default function NewOrder() {
   ]
 
   return (
-    <div className="animate-fade-in">
-      <PageHeader
-        title="Create New Order"
-        breadcrumbs={[{ label: 'Sales', path: '/admin/orders' }, { label: 'New Order' }]}
-      />
+    <div className={embedded ? '' : 'animate-fade-in'}>
+      {!embedded && (
+        <PageHeader
+          title="Create New Order"
+          breadcrumbs={[{ label: 'Sales', path: '/admin/orders' }, { label: 'New Order' }]}
+        />
+      )}
 
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className={`grid gap-6 ${embedded ? 'p-5 lg:grid-cols-5' : 'lg:grid-cols-5'}`}>
         {/* Left: Customer + Products */}
         <div className="lg:col-span-3 space-y-4">
           {/* Customer Info */}

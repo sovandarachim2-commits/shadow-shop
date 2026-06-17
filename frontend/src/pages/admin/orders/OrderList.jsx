@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Eye, Filter, RefreshCw } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Badge, OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
+import { Modal } from '@/components/ui/Modal'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import NewOrder from './NewOrder'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
@@ -26,6 +28,7 @@ export default function OrderList() {
   const [status, setStatus] = useState('')
   const [paymentStatus, setPaymentStatus] = useState('')
   const [page, setPage] = useState(1)
+  const [showNewOrder, setShowNewOrder] = useState(false)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['orders', search, status, paymentStatus, page],
@@ -48,9 +51,9 @@ export default function OrderList() {
         subtitle={`${total} total orders`}
         breadcrumbs={[{ label: 'Sales' }, { label: 'Orders' }]}
         actions={
-          <Link to="/admin/orders/new" className="btn-primary">
+          <button type="button" onClick={() => setShowNewOrder(true)} className="btn-primary">
             <Plus size={16} /> New Order
-          </Link>
+          </button>
         }
       />
 
@@ -139,6 +142,23 @@ export default function OrderList() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={showNewOrder}
+        onClose={() => setShowNewOrder(false)}
+        title="Create New Order"
+        size="full"
+        className="max-h-[92vh] overflow-hidden"
+      >
+        <NewOrder
+          embedded
+          onCreated={(order) => {
+            setShowNewOrder(false)
+            refetch()
+            navigate(`/admin/orders/${order.id}`)
+          }}
+        />
+      </Modal>
     </div>
   )
 }
