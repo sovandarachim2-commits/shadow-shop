@@ -1,0 +1,206 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html[lang="km"] body,
+html[lang="km"] button,
+html[lang="km"] input,
+html[lang="km"] select,
+html[lang="km"] textarea {
+  font-family: 'Noto Sans Khmer', 'Inter', sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 262.1 83.3% 57.8%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-gray-50 text-foreground font-sans antialiased;
+    touch-action: manipulation;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer;
+  }
+  .sidebar-nav-item.active {
+    @apply bg-purple-600 text-white shadow-lg shadow-purple-500/25;
+  }
+  .sidebar-nav-item:not(.active) {
+    @apply text-navy-200 hover:bg-white/10 hover:text-white;
+  }
+  .kpi-card {
+    @apply bg-white rounded-2xl p-5 shadow-card border border-gray-100 hover:shadow-soft transition-all duration-200;
+  }
+  .data-table-row {
+    @apply hover:bg-gray-50/80 transition-colors duration-150;
+  }
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .form-card {
+    @apply bg-white rounded-2xl shadow-card border border-gray-100 p-6;
+  }
+  .section-title {
+    @apply text-lg font-semibold text-gray-900;
+  }
+  .mobile-bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 z-50 flex items-end justify-around border-t border-pink-50 bg-white/95 px-1 shadow-[0_-14px_34px_rgba(15,23,42,0.08)] backdrop-blur overflow-visible;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    padding-top: 0.375rem;
+  }
+  .product-card {
+    @apply bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden hover:shadow-soft transition-all duration-200 hover:-translate-y-0.5;
+  }
+  .page-header {
+    @apply flex items-center justify-between mb-6;
+  }
+  .btn-primary {
+    @apply bg-purple-600 hover:bg-purple-700 text-white font-medium px-4 py-2 rounded-xl transition-colors duration-200 flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-xl transition-colors duration-200 flex items-center gap-2;
+  }
+  .shop-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-pink-600 px-5 py-3 text-sm font-black text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 disabled:opacity-60;
+  }
+  .shop-btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-pink-500 bg-white px-5 py-3 text-sm font-black text-pink-600 transition hover:bg-pink-50 disabled:opacity-60;
+  }
+  .shop-btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-pink-100 bg-pink-50 px-5 py-3 text-sm font-black text-pink-600 transition hover:bg-pink-100 disabled:opacity-60;
+  }
+  .shop-icon-btn {
+    @apply inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-pink-200 hover:bg-pink-50 hover:text-pink-600;
+  }
+  .btn-danger {
+    @apply bg-red-50 hover:bg-red-100 text-red-600 font-medium px-4 py-2 rounded-xl transition-colors duration-200 flex items-center gap-2;
+  }
+  .input-field {
+    @apply w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all;
+  }
+  .select-field {
+    @apply w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 transition-all appearance-none;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1.5;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print styles */
+.print-only {
+  display: none;
+}
+
+.delivery-slip {
+  width: 80mm;
+  max-width: 100%;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-only,
+  .print-only * {
+    visibility: visible !important;
+  }
+  .print-preview-window,
+  .print-preview-window * {
+    visibility: visible !important;
+  }
+  body {
+    background: white !important;
+    margin: 0 !important;
+  }
+  .print-preview-window {
+    background: white !important;
+    padding: 0 !important;
+  }
+  .print-preview-window > .flex > div {
+    box-shadow: none !important;
+    page-break-after: always;
+  }
+  .print-preview-window > .flex > div:last-child {
+    page-break-after: auto;
+  }
+  .print-document-root {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+  }
+  .print-receipt-page {
+    page-break-after: always;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+  }
+  .print-receipt-page:last-child {
+    page-break-after: auto;
+  }
+  .print-preview {
+    width: min(100%, 420px);
+    border-color: #e5e7eb !important;
+  }
+  .delivery-slip {
+    width: 80mm !important;
+    min-height: auto;
+    font-family: Arial, 'Noto Sans Khmer', sans-serif;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

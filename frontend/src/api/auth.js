@@ -1,0 +1,52 @@
+import client from './client'
+
+export const authApi = {
+  login: (credentials) => client.post('/auth/login/', credentials),
+  register: (data) => client.post('/auth/register/', data),
+  telegramConfig: () => client.get('/auth/telegram/config/'),
+  telegramLogin: (data) => client.post('/auth/telegram/login/', data),
+  telegramStart: (data) => client.post('/auth/telegram/start/', data),
+  telegramStatus: (params) => client.get('/auth/telegram/status/', { params }),
+  telegramConfirm: (data) => client.post('/auth/telegram/confirm/', data),
+  telegramOtpLogin: (data) => client.post('/auth/telegram/otp-login/', data),
+  logout: (refresh) => client.post('/auth/logout/', { refresh }),
+  me: () => client.get('/auth/me/'),
+  updateMe: (data) => client.patch('/auth/me/', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+  }),
+  changePassword: (data) => client.put('/auth/change-password/', data),
+  dashboardStats: () => client.get('/auth/dashboard/stats/'),
+  users: {
+    list: (params) => client.get('/auth/users/', { params }),
+    get: (id) => client.get(`/auth/users/${id}/`),
+    create: (data) => client.post('/auth/users/', data),
+    update: (id, data) => client.patch(`/auth/users/${id}/`, data),
+    delete: (id) => client.delete(`/auth/users/${id}/`),
+    toggleActive: (id) => client.post(`/auth/users/${id}/toggle_active/`),
+    resetPassword: (id, data) => client.post(`/auth/users/${id}/reset_password/`, data),
+  },
+  activityLogs: (params) => client.get('/auth/activity-logs/', { params }),
+  permissions: { list: () => client.get('/auth/permissions/') },
+  roles: {
+    list: () => client.get('/auth/roles/'),
+    create: (data) => client.post('/auth/roles/', data),
+    delete: (id) => client.delete(`/auth/roles/${id}/`),
+  },
+  rolePermissions: (role) => client.get('/auth/role-permissions/by_role/', { params: { role } }),
+  rolePermissionGrant: (data) => client.post('/auth/role-permissions/', data),
+  rolePermissionDelete: (id) => client.delete(`/auth/role-permissions/${id}/`),
+  rolePermissionResetDefaults: (role) => client.post('/auth/role-permissions/reset_defaults/', { role }),
+  addresses: {
+    list: () => client.get('/auth/addresses/'),
+    create: (data) => client.post('/auth/addresses/', data),
+    update: (id, data) => client.patch(`/auth/addresses/${id}/`, data),
+    delete: (id) => client.delete(`/auth/addresses/${id}/`),
+    setDefault: (id) => client.post(`/auth/addresses/${id}/set_default/`),
+  },
+  siteSettings: {
+    get: () => client.get('/auth/site-settings/'),
+    update: (data) => client.patch('/auth/site-settings/', data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    }),
+  },
+}

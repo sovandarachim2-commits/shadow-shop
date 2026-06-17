@@ -1,0 +1,801 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { useState, useRef, useEffect } from 'react'
+import client from '@/api/client'
+import { authApi } from '@/api/auth'
+
+const SECTION_TITLES = {
+  general:  'General Settings',
+  telegram: 'Telegram Bot',
+  delivery: 'Delivery Settings',
+  payment:  'Payment Methods',
+  printLogo: 'Print Logo',
+}
+
+export default function Settings({ tab = 'general' }) {
+  const queryClient = useQueryClient()
+
+  // ── General Settings ──────────────────────────────────────────────
+  const [generalForm, setGeneralForm] = useState({
+    store_name: '', store_phone: '', store_address: '', currency: 'USD', timezone: 'Asia/Phnom_Penh',
+  })
+  const [logoFile, setLogoFile] = useState(null)
+  const [faviconFile, setFaviconFile] = useState(null)
+  const [printLogoFile, setPrintLogoFile] = useState(null)
+  const [logoPreview, setLogoPreview] = useState(null)
+  const [faviconPreview, setFaviconPreview] = useState(null)
+  const [printLogoPreview, setPrintLogoPreview] = useState(null)
+  const [printLogoSize, setPrintLogoSize] = useState(64)
+  const [printQrSize, setPrintQrSize] = useState(68)
+  const logoInputRef = useRef()
+  const faviconInputRef = useRef()
+  const printLogoInputRef = useRef()
+
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+  })
+
+  useEffect(() => {
+    if (!siteSettings) return
+    setGeneralForm({
+      store_name: siteSettings.store_name || '',
+      store_phone: siteSettings.store_phone || '',
+      store_address: siteSettings.store_address || '',
+      currency: siteSettings.currency || 'USD',
+      timezone: siteSettings.timezone || 'Asia/Phnom_Penh',
+    })
+    if (siteSettings.delivery_fees && Object.keys(siteSettings.delivery_fees).length > 0) {
+      setDeliveryFees(Object.fromEntries(
+        Object.entries(siteSettings.delivery_fees).map(([k, v]) => [k, normalizeDeliveryZone(k, v)])
+      ))
+    }
+    if (siteSettings.payment_methods && Object.keys(siteSettings.payment_methods).length > 0) {
+      setPaymentMethods((prev) => ({ ...prev, ...siteSettings.payment_methods }))
+    }
+    setPrintLogoSize(siteSettings.print_logo_size || 64)
+    setPrintQrSize(siteSettings.print_qr_size || 68)
+  }, [siteSettings])
+
+  const saveGeneralMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData()
+      fd.append('store_name', generalForm.store_name)
+      fd.append('store_phone', generalForm.store_phone)
+      fd.append('store_address', generalForm.store_address)
+      fd.append('currency', generalForm.currency)
+      fd.append('timezone', generalForm.timezone)
+      if (logoFile) fd.append('logo', logoFile)
+      if (faviconFile) fd.append('favicon', faviconFile)
+      return authApi.siteSettings.update(fd)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      toast.success('General settings saved!')
+    },
+    onError: () => toast.error('Failed to save settings'),
+  })
+
+  const pickFile = (fileSetter, previewSetter) => (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    fileSetter(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => previewSetter(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  const savePrintLogoMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData()
+      if (printLogoFile) fd.append('print_logo', printLogoFile)
+      fd.append('print_logo_size', String(printLogoSize))
+      fd.append('print_qr_size', String(printQrSize))
+      return authApi.siteSettings.update(fd)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      setPrintLogoFile(null)
+      toast.success('Print logo saved!')
+    },
+    onError: () => toast.error('Failed to save print logo'),
+  })
+
+  // ── Payment Methods ───────────────────────────────────────────────
+  const ALL_PAYMENT_METHODS = [
+    { key: 'bakong',  label: 'Bakong KHQR',      desc: 'Bakong dynamic KHQR payment' },
+    { key: 'aba',     label: 'ABA Bank',         desc: 'ABA mobile banking & QR payment' },
+    { key: 'acleda',  label: 'ACLEDA Bank',      desc: 'ACLEDA mobile banking' },
+    { key: 'wing',    label: 'Wing Money',       desc: 'Wing mobile payment' },
+    { key: 'cod',     label: 'Cash on Delivery', desc: 'Customer pays upon receipt' },
+    { key: 'cash',    label: 'Cash',             desc: 'In-store cash payment' },
+  ]
+  const [paymentMethods, setPaymentMethods] = useState(
+    Object.fromEntries(ALL_PAYMENT_METHODS.map((m) => [m.key, true]))
+  )
+
+  const savePaymentMutation = useMutation({
+    mutationFn: () => authApi.siteSettings.update({ payment_methods: paymentMethods }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      toast.success('Payment methods saved!')
+    },
+    onError: () => toast.error('Failed to save payment methods'),
+  })
+
+  // ── Delivery Settings ─────────────────────────────────────────────
+  const DEFAULT_DELIVERY_FEES = {}
+  const PROVINCE_OPTIONS = [
+    { key: 'phnom_penh', label: 'Phnom Penh' },
+    { key: 'siem_reap', label: 'Siem Reap' },
+    { key: 'battambang', label: 'Battambang' },
+    { key: 'kampong_cham', label: 'Kampong Cham' },
+    { key: 'kandal', label: 'Kandal' },
+    { key: 'takeo', label: 'Takeo' },
+    { key: 'prey_veng', label: 'Prey Veng' },
+    { key: 'svay_rieng', label: 'Svay Rieng' },
+    { key: 'kampot', label: 'Kampot' },
+    { key: 'kep', label: 'Kep' },
+    { key: 'other', label: 'Other' },
+  ]
+  const DELIVERY_ZONE_LABELS = Object.fromEntries(PROVINCE_OPTIONS.map((z) => [z.key, z.label]))
+  const normalizeDeliveryZone = (key, value) => {
+    if (value && typeof value === 'object') {
+      return {
+        label: value.label || DELIVERY_ZONE_LABELS[key] || key,
+        fee: String(value.fee ?? '0.00'),
+        enabled: value.enabled !== false,
+        is_default: value.is_default === true,
+      }
+    }
+    return {
+      label: DELIVERY_ZONE_LABELS[key] || key,
+      fee: String(value ?? '0.00'),
+      enabled: true,
+      is_default: false,
+    }
+  }
+  const [deliveryFees, setDeliveryFees] = useState(
+    Object.fromEntries(Object.entries(DEFAULT_DELIVERY_FEES).map(([k, v]) => [k, normalizeDeliveryZone(k, v)]))
+  )
+  const [deliveryModal, setDeliveryModal] = useState(null)
+
+  const deliveryRows = Object.entries(deliveryFees).map(([key, zone]) => ({
+    key,
+    label: zone.label || DELIVERY_ZONE_LABELS[key] || key.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '),
+    fee: zone.fee,
+    enabled: zone.enabled !== false,
+    is_default: zone.is_default === true,
+  }))
+
+  const makeDeliveryKey = (label) =>
+    label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `zone_${Date.now()}`
+
+  const serializeDeliveryFees = (fees) => Object.fromEntries(
+    Object.entries(fees).map(([k, v]) => [k, {
+      label: v.label || DELIVERY_ZONE_LABELS[k] || k,
+      fee: parseFloat(v.fee) || 0,
+      enabled: v.enabled !== false,
+      is_default: v.is_default === true,
+    }])
+  )
+
+  const openDeliveryModal = (zone = null) => {
+    setDeliveryModal(zone
+      ? { mode: 'edit', originalKey: zone.key, key: zone.key, label: zone.label, fee: String(zone.fee ?? ''), enabled: zone.enabled !== false }
+      : { mode: 'add', originalKey: '', key: '', label: '', fee: '', enabled: true })
+  }
+
+  const saveDeliveryModal = () => {
+    if (!deliveryModal?.label?.trim()) {
+      toast.error('Please select a province')
+      return
+    }
+
+    const selectedProvince = PROVINCE_OPTIONS.find((p) => p.key === deliveryModal.key)
+    const nextKey = deliveryModal.mode === 'edit' ? deliveryModal.originalKey : (selectedProvince?.key || makeDeliveryKey(deliveryModal.label))
+    const nextLabel = deliveryModal.mode === 'edit' ? deliveryModal.label.trim() : (selectedProvince?.label || deliveryModal.label.trim())
+    const nextFee = parseFloat(deliveryModal.fee)
+    if (Number.isNaN(nextFee) || nextFee < 0) {
+      toast.error('Please enter a valid delivery fee')
+      return
+    }
+
+    const nextFees = {
+      ...deliveryFees,
+      [nextKey]: {
+        label: nextLabel,
+        fee: nextFee.toFixed(2),
+        enabled: deliveryModal.enabled !== false,
+        is_default: deliveryFees[deliveryModal.originalKey || nextKey]?.is_default === true,
+      },
+    }
+    setDeliveryFees(nextFees)
+    setDeliveryModal(null)
+    saveDeliveryMutation.mutate(nextFees)
+  }
+
+  const toggleDeliveryZone = (key) => {
+    const nextFees = {
+      ...deliveryFees,
+      [key]: {
+        ...deliveryFees[key],
+        enabled: deliveryFees[key]?.enabled === false,
+      },
+    }
+    setDeliveryFees(nextFees)
+    saveDeliveryMutation.mutate(nextFees)
+  }
+
+  const deleteDeliveryZone = (key) => {
+    const nextFees = { ...deliveryFees }
+    delete nextFees[key]
+    setDeliveryFees(nextFees)
+    saveDeliveryMutation.mutate(nextFees)
+  }
+
+  const setDefaultDeliveryZone = (key) => {
+    const nextFees = Object.fromEntries(
+      Object.entries(deliveryFees).map(([zoneKey, zone]) => [
+        zoneKey,
+        { ...zone, is_default: zoneKey === key },
+      ])
+    )
+    setDeliveryFees(nextFees)
+    saveDeliveryMutation.mutate(nextFees)
+  }
+
+  const saveDeliveryMutation = useMutation({
+    mutationFn: (fees = deliveryFees) => authApi.siteSettings.update({ delivery_fees: serializeDeliveryFees(fees) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      toast.success('Delivery fees saved!')
+    },
+    onError: () => toast.error('Failed to save delivery fees'),
+  })
+
+  // ── Telegram Settings ─────────────────────────────────────────────
+  const [telegramForm, setTelegramForm] = useState({
+    name: 'Default', bot_username: '', bot_token: '', chat_id: '',
+    notify_new_order: true, notify_payment: true,
+    notify_low_stock: true, notify_delivery: true,
+    notify_daily_summary: true,
+  })
+
+  const { data: telegramConfigs } = useQuery({
+    queryKey: ['telegram-configs'],
+    queryFn: () => client.get('/notifications/telegram/').then((r) => {
+      const configs = r.data.results || r.data
+      if (configs?.length > 0) setTelegramForm(configs[0])
+      return configs
+    }),
+  })
+
+  const saveTelegramMutation = useMutation({
+    mutationFn: (data) =>
+      telegramConfigs?.length > 0
+        ? client.patch(`/notifications/telegram/${telegramConfigs[0].id}/`, data)
+        : client.post('/notifications/telegram/', data),
+    onSuccess: () => toast.success('Telegram settings saved!'),
+    onError: () => toast.error('Failed to save settings'),
+  })
+
+  const testMutation = useMutation({
+    mutationFn: (id) => client.post(`/notifications/telegram/${id}/test/`),
+    onSuccess: (data) =>
+      data.data.success ? toast.success('Test message sent!') : toast.error('Test failed — check your settings'),
+  })
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="text-2xl font-bold text-navy-900">{SECTION_TITLES[tab]}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Settings › {SECTION_TITLES[tab]}</p>
+        </div>
+      </div>
+
+      <div className="form-card mt-6 max-w-2xl">
+        {tab === 'general' && (
+          <div className="space-y-5">
+            {/* Logo */}
+            <div>
+              <label className="label">Store Logo</label>
+              <div className="flex items-center gap-4">
+                <div
+                  onClick={() => logoInputRef.current?.click()}
+                  className="relative w-20 h-20 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden hover:border-purple-400 transition bg-gray-50"
+                >
+                  {logoPreview || siteSettings?.logo_url ? (
+                    <img src={logoPreview || siteSettings.logo_url} alt="logo" className="w-full h-full object-contain" />
+                  ) : (
+                    <Upload size={22} className="text-gray-300" />
+                  )}
+                </div>
+                <div>
+                  <button type="button" onClick={() => logoInputRef.current?.click()}
+                    className="btn-secondary text-sm px-4 py-2">
+                    {logoPreview || siteSettings?.logo_url ? 'Change Logo' : 'Upload Logo'}
+                  </button>
+                  <p className="mt-1 text-xs text-gray-400">PNG, JPG, SVG · shown in header & footer</p>
+                </div>
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={pickFile(setLogoFile, setLogoPreview)} />
+              </div>
+            </div>
+
+            {/* Favicon */}
+            <div>
+              <label className="label">Favicon</label>
+              <div className="flex items-center gap-4">
+                <div
+                  onClick={() => faviconInputRef.current?.click()}
+                  className="relative w-12 h-12 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center cursor-pointer overflow-hidden hover:border-purple-400 transition bg-gray-50"
+                >
+                  {faviconPreview || siteSettings?.favicon_url ? (
+                    <img src={faviconPreview || siteSettings.favicon_url} alt="favicon" className="w-full h-full object-contain" />
+                  ) : (
+                    <Upload size={16} className="text-gray-300" />
+                  )}
+                </div>
+                <div>
+                  <button type="button" onClick={() => faviconInputRef.current?.click()}
+                    className="btn-secondary text-sm px-4 py-2">
+                    {faviconPreview || siteSettings?.favicon_url ? 'Change Favicon' : 'Upload Favicon'}
+                  </button>
+                  <p className="mt-1 text-xs text-gray-400">16×16 or 32×32 PNG · browser tab icon</p>
+                </div>
+                <input ref={faviconInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={pickFile(setFaviconFile, setFaviconPreview)} />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-5 space-y-4">
+              <div>
+                <label className="label">Store Name</label>
+                <input className="input-field" value={generalForm.store_name}
+                  onChange={(e) => setGeneralForm((f) => ({ ...f, store_name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Store Phone</label>
+                <input className="input-field" placeholder="+855 xx xxx xxxx" value={generalForm.store_phone}
+                  onChange={(e) => setGeneralForm((f) => ({ ...f, store_phone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Store Address</label>
+                <textarea className="input-field resize-none" rows={2} value={generalForm.store_address}
+                  onChange={(e) => setGeneralForm((f) => ({ ...f, store_address: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Default Currency</label>
+                  <select className="select-field" value={generalForm.currency}
+                    onChange={(e) => setGeneralForm((f) => ({ ...f, currency: e.target.value }))}>
+                    <option value="USD">USD ($)</option>
+                    <option value="KHR">KHR (฿)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Time Zone</label>
+                  <select className="select-field" value={generalForm.timezone}
+                    onChange={(e) => setGeneralForm((f) => ({ ...f, timezone: e.target.value }))}>
+                    <option value="Asia/Phnom_Penh">Asia/Phnom_Penh</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button onClick={() => saveGeneralMutation.mutate()}
+                disabled={saveGeneralMutation.isPending}
+                className="btn-primary flex items-center gap-2">
+                <Save size={15} /> {saveGeneralMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'telegram' && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
+              <p className="font-semibold mb-1">Setup Instructions</p>
+              <ol className="list-decimal ml-4 space-y-1 text-xs">
+                <li>Create a bot with @BotFather on Telegram</li>
+                <li>Copy the bot username and token</li>
+                <li>Use the same bot for customer OTP verification</li>
+                <li>Add a default chat ID for admin test/order notifications</li>
+                <li>Set the webhook to /api/auth/telegram/webhook/ on your public HTTPS domain</li>
+              </ol>
+            </div>
+            <div>
+              <label className="label">Bot Username</label>
+              <input className="input-field font-mono" value={telegramForm.bot_username || ''}
+                onChange={(e) => setTelegramForm(f => ({ ...f, bot_username: e.target.value.replace('@', '') }))}
+                placeholder="shadow_shop_bot" />
+              <p className="mt-1 text-xs text-gray-400">Do not include @. This creates the customer verification link.</p>
+            </div>
+            <div>
+              <label className="label">Bot Token</label>
+              <input className="input-field font-mono" value={telegramForm.bot_token}
+                onChange={(e) => setTelegramForm(f => ({ ...f, bot_token: e.target.value }))}
+                placeholder="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ" />
+            </div>
+            <div>
+              <label className="label">Default Admin Chat ID</label>
+              <input className="input-field font-mono" value={telegramForm.chat_id}
+                onChange={(e) => setTelegramForm(f => ({ ...f, chat_id: e.target.value }))}
+                placeholder="-100xxxxxxxxxx" />
+              <p className="mt-1 text-xs text-gray-400">Used for test messages and admin notifications. Customer OTP uses the user's own Telegram chat automatically.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="label">Notifications to send</label>
+              {[
+                ['notify_new_order',      'New Orders'],
+                ['notify_payment',        'Payment Received'],
+                ['notify_low_stock',      'Low Stock Alert'],
+                ['notify_delivery',       'Delivery Updates'],
+                ['notify_daily_summary',  'Daily Summary'],
+              ].map(([k, l]) => (
+                <label key={k} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100">
+                  <input type="checkbox" checked={telegramForm[k]}
+                    onChange={(e) => setTelegramForm(f => ({ ...f, [k]: e.target.checked }))}
+                    className="w-4 h-4 accent-purple-600" />
+                  <span className="text-sm">{l}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => saveTelegramMutation.mutate(telegramForm)}
+                className="btn-primary flex items-center gap-2" disabled={saveTelegramMutation.isPending}>
+                <Save size={15} /> {saveTelegramMutation.isPending ? 'Saving...' : 'Save Settings'}
+              </button>
+              {telegramConfigs?.length > 0 && (
+                <button onClick={() => testMutation.mutate(telegramConfigs[0].id)}
+                  className="btn-secondary flex items-center gap-2">
+                  <TestTube size={15} /> Test Connection
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'printLogo' && (
+          <div className="space-y-5">
+            <div>
+              <label className="label">Print Logo</label>
+              <div className="flex items-center gap-4">
+                <div
+                  onClick={() => printLogoInputRef.current?.click()}
+                  className="relative flex h-28 w-44 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-purple-400"
+                >
+                  {printLogoPreview || siteSettings?.print_logo_url ? (
+                    <img src={printLogoPreview || siteSettings.print_logo_url} alt="print logo" className="h-full w-full object-contain p-3" />
+                  ) : (
+                    <Upload size={24} className="text-gray-300" />
+                  )}
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => printLogoInputRef.current?.click()}
+                    className="btn-secondary px-4 py-2 text-sm"
+                  >
+                    {printLogoPreview || siteSettings?.print_logo_url ? 'Change Print Logo' : 'Upload Print Logo'}
+                  </button>
+                  <p className="mt-1 text-xs text-gray-400">Used on receipt and delivery note prints. PNG with transparent background works best.</p>
+                </div>
+                <input
+                  ref={printLogoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={pickFile(setPrintLogoFile, setPrintLogoPreview)}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="mb-3 text-xs font-black uppercase tracking-wide text-gray-400">Print Preview</p>
+              <div className="mx-auto flex w-[80mm] max-w-full flex-col items-center rounded-xl bg-white px-3 py-5 text-center shadow-sm">
+                {printLogoPreview || siteSettings?.print_logo_url ? (
+                  <img
+                    src={printLogoPreview || siteSettings.print_logo_url}
+                    alt="print preview"
+                    className="mb-2 w-full object-contain"
+                    style={{ maxHeight: `${printLogoSize}px` }}
+                  />
+                ) : (
+                  <>
+                    <div className="text-3xl leading-none">✿</div>
+                    <div className="font-serif text-4xl italic leading-none">shadow</div>
+                  </>
+                )}
+                <div className="mt-2 text-sm font-black tracking-[0.22em]">RECEIPT</div>
+                <div
+                  className="mt-4 flex items-center justify-center border-2 border-black text-center text-[8px] font-black"
+                  style={{ width: `${printQrSize}px`, height: `${printQrSize}px` }}
+                >
+                  QR
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="label mb-0">Logo Size</label>
+                <span className="text-xs font-black text-purple-600">{printLogoSize}px</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="36"
+                  max="120"
+                  value={printLogoSize}
+                  onChange={(e) => setPrintLogoSize(Number(e.target.value))}
+                  className="w-full accent-purple-600"
+                />
+                <input
+                  type="number"
+                  min="36"
+                  max="120"
+                  value={printLogoSize}
+                  onChange={(e) => setPrintLogoSize(Math.min(120, Math.max(36, Number(e.target.value) || 64)))}
+                  className="input-field w-24"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Controls the logo height on receipt and delivery note printouts.</p>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="label mb-0">QR Code Size</label>
+                <span className="text-xs font-black text-purple-600">{printQrSize}px</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="48"
+                  max="120"
+                  value={printQrSize}
+                  onChange={(e) => setPrintQrSize(Number(e.target.value))}
+                  className="w-full accent-purple-600"
+                />
+                <input
+                  type="number"
+                  min="48"
+                  max="120"
+                  value={printQrSize}
+                  onChange={(e) => setPrintQrSize(Math.min(120, Math.max(48, Number(e.target.value) || 68)))}
+                  className="input-field w-24"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Controls the QR box size on receipt and delivery note printouts.</p>
+            </div>
+
+            <button
+              onClick={() => savePrintLogoMutation.mutate()}
+              disabled={savePrintLogoMutation.isPending}
+              className="btn-primary flex items-center gap-2 disabled:opacity-60"
+            >
+              <Save size={15} /> {savePrintLogoMutation.isPending ? 'Saving...' : 'Save Print Logo Settings'}
+            </button>
+          </div>
+        )}
+
+        {tab === 'delivery' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-gray-500">Configure delivery zones and fees per province.</p>
+              <button
+                type="button"
+                onClick={() => openDeliveryModal()}
+                className="btn-secondary flex items-center gap-2 px-4 py-2 text-sm"
+              >
+                <Plus size={15} /> Add Zone
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              {deliveryRows.map((z) => (
+                <div key={z.key} className={`flex items-center justify-between rounded-2xl border p-4 ${z.enabled ? 'border-gray-100 bg-gray-50' : 'border-gray-100 bg-white opacity-70'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ${z.enabled ? 'text-purple-600' : 'text-gray-300'}`}>
+                      <MapPin size={16} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-gray-900">{z.label}</p>
+                        {z.is_default && (
+                          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black uppercase text-purple-700">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400">{z.key} · {z.enabled ? 'On' : 'Off'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-gray-900 shadow-sm">
+                      ${Number(z.fee || 0).toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDefaultDeliveryZone(z.key)}
+                      disabled={z.is_default}
+                      className="rounded-xl border border-purple-100 bg-white px-3 py-2 text-xs font-black text-purple-600 hover:bg-purple-50 disabled:cursor-default disabled:opacity-50"
+                    >
+                      Set Default
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleDeliveryZone(z.key)}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl border bg-white ${
+                        z.enabled
+                          ? 'border-green-100 text-green-600 hover:bg-green-50'
+                          : 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                      }`}
+                      title={z.enabled ? 'Turn off' : 'Turn on'}
+                    >
+                      <Power size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDeliveryModal(z)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-purple-200 hover:text-purple-600"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteDeliveryZone(z.key)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-white text-red-500 hover:bg-red-50"
+                      title="Delete"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {deliveryModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 backdrop-blur-sm">
+                <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-purple-600">
+                        {deliveryModal.mode === 'edit' ? 'Edit Delivery Zone' : 'Add Delivery Zone'}
+                      </p>
+                      <h2 className="mt-1 text-xl font-black text-gray-950">
+                        {deliveryModal.mode === 'edit' ? 'Update Fee' : 'New Zone'}
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryModal(null)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-100 text-gray-500"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    <div>
+                      <label className="label">Province</label>
+                      {deliveryModal.mode === 'add' ? (
+                        <select
+                          className="select-field"
+                          value={deliveryModal.key}
+                          onChange={(e) => {
+                            const selected = PROVINCE_OPTIONS.find((p) => p.key === e.target.value)
+                            setDeliveryModal((m) => ({ ...m, key: e.target.value, label: selected?.label || '' }))
+                          }}
+                        >
+                          <option value="">Select province</option>
+                          {PROVINCE_OPTIONS.filter((province) => !deliveryFees[province.key]).map((province) => (
+                            <option key={province.key} value={province.key}>{province.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          className="input-field"
+                          value={deliveryModal.label}
+                          disabled
+                        />
+                      )}
+                      {deliveryModal.mode === 'edit' && (
+                        <p className="mt-1 text-xs text-gray-400">Zone name is locked to keep existing checkout mappings stable.</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="label">Delivery Fee</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-gray-400">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="input-field pl-8"
+                          value={deliveryModal.fee}
+                          onChange={(e) => setDeliveryModal((m) => ({ ...m, fee: e.target.value }))}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <label className="flex items-center justify-between rounded-2xl bg-gray-50 p-4">
+                      <span>
+                        <span className="block text-sm font-bold text-gray-900">Status</span>
+                        <span className="text-xs text-gray-400">Show this delivery zone at checkout</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={deliveryModal.enabled !== false}
+                        onChange={(e) => setDeliveryModal((m) => ({ ...m, enabled: e.target.checked }))}
+                        className="h-5 w-5 accent-purple-600"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryModal(null)}
+                      className="btn-secondary px-5 py-2.5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveDeliveryModal}
+                      className="btn-primary flex items-center gap-2 px-5 py-2.5"
+                    >
+                      <Save size={15} /> Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'payment' && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">Enable or disable payment methods available at checkout.</p>
+            {ALL_PAYMENT_METHODS.map((p) => (
+              <div key={p.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100">
+                    <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
+                  </div>
+                  <div>
+                    <p className={`font-medium text-sm ${paymentMethods[p.key] ? 'text-gray-900' : 'text-gray-400'}`}>{p.label}</p>
+                    <p className="text-xs text-gray-400">{p.desc}</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={paymentMethods[p.key] ?? true}
+                    onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
+                  />
+                  <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
+                </label>
+              </div>
+            ))}
+            <div className="pt-2">
+              <button
+                onClick={() => savePaymentMutation.mutate()}
+                disabled={savePaymentMutation.isPending}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Save size={15} /> {savePaymentMutation.isPending ? 'Saving...' : 'Save Payment Methods'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

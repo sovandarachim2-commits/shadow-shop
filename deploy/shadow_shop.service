@@ -1,0 +1,19 @@
+[Unit]
+Description=Shadow Shop Django Application
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/shadow_shop/backend
+Environment="DJANGO_SETTINGS_MODULE=config.settings.production"
+ExecStart=/var/www/shadow_shop/venv/bin/gunicorn \
+    --config /var/www/shadow_shop/backend/gunicorn.conf.py \
+    config.wsgi:application
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/shadow_shop/service.log
+StandardError=append:/var/log/shadow_shop/service_error.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,94 @@
+import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+
+const getProductId = (item) => item?.product?.id
+const getProductPrice = (item) => Number(item?.product?.retail_price || 0)
+const getQuantity = (item) => Number(item?.quantity || 0)
+
+const useCartStore = create(
+  persist(
+    (set, get) => ({
+      items: [],
+      selectedProductIds: [],
+      addItem: (product, quantity = 1) => {
+        if (!product?.id) return
+
+        const items = get().items
+        const selectedProductIds = get().selectedProductIds
+        const existing = items.find((i) => getProductId(i) === product.id)
+        const nextQuantity = Number(quantity) || 1
+
+        if (existing) {
+          set({
+            items: items.map((i) =>
+              getProductId(i) === product.id
+                ? { ...i, product: { ...i.product, ...product }, quantity: getQuantity(i) + nextQuantity }
+                : i
+            ),
+          })
+        } else {
+          set({
+            items: [...items, { product, quantity: nextQuantity }],
+            selectedProductIds: selectedProductIds.includes(product.id)
+              ? selectedProductIds
+              : [...selectedProductIds, product.id],
+          })
+        }
+      },
+      removeItem: (productId) => {
+        set({
+          items: get().items.filter((i) => getProductId(i) !== productId),
+          selectedProductIds: get().selectedProductIds.filter((id) => id !== productId),
+        })
+      },
+      updateQuantity: (productId, quantity) => {
+        const nextQuantity = Number(quantity) || 0
+
+        if (nextQuantity <= 0) {
+          get().removeItem(productId)
+          return
+        }
+
+        set({
+          items: get().items.map((i) =>
+            getProductId(i) === productId ? { ...i, quantity: nextQuantity } : i
+          ),
+        })
+      },
+      toggleSelected: (productId) => {
+        const selectedProductIds = get().selectedProductIds
+        set({
+          selectedProductIds: selectedProductIds.includes(productId)
+            ? selectedProductIds.filter((id) => id !== productId)
+            : [...selectedProductIds, productId],
+        })
+      },
+      selectAll: () => set({ selectedProductIds: get().items.map(getProductId).filter(Boolean) }),
+      clearSelection: () => set({ selectedProductIds: [] }),
+      removeSelectedItems: () => {
+        const selected = new Set(get().selectedProductIds)
+        set({
+          items: get().items.filter((item) => !selected.has(getProductId(item))),
+          selectedProductIds: [],
+        })
+      },
+      clearCart: () => set({ items: [], selectedProductIds: [] }),
+      totalItems: () => get().items.reduce((sum, i) => sum + getQuantity(i), 0),
+      subtotal: () => get().items.reduce((sum, i) => sum + getProductPrice(i) * getQuantity(i), 0),
+    }),
+    {
+      name: 'shadow-shop-cart',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        items: state.items.filter((item) => getProductId(item) && getQuantity(item) > 0),
+        selectedProductIds: state.selectedProductIds.filter((id) =>
+          state.items.some((item) => getProductId(item) === id)
+        ),
+      }),
+      version: 2,
+      migrate: () => ({ items: [] }),
+    }
+  )
+)
+
+export default useCartStore
