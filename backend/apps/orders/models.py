@@ -166,6 +166,11 @@ class OrderItem(models.Model):
         on_delete=models.SET_NULL, null=True,
         related_name='order_items'
     )
+    product_set = models.ForeignKey(
+        'products.ProductSet',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='order_items'
+    )
     product_name = models.CharField(max_length=300)
     product_code = models.CharField(max_length=50)
     product_image = models.URLField(blank=True)

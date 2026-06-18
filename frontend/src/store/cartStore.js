@@ -1,9 +1,14 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-const getProductId = (item) => item?.product?.id
+const getProductId = (item) => item?.product?.cart_key || item?.product?.id
 const getProductPrice = (item) => Number(item?.product?.retail_price || 0)
 const getQuantity = (item) => Number(item?.quantity || 0)
+const getMaxQuantity = (product) => {
+  const maxFlashQty = Number(product?.flash_sale_max_order_qty || 0)
+  if (product?.is_flash_sale_active && maxFlashQty > 0) return maxFlashQty
+  return Infinity
+}
 
 const useCartStore = create(
   persist(
@@ -15,23 +20,25 @@ const useCartStore = create(
 
         const items = get().items
         const selectedProductIds = get().selectedProductIds
-        const existing = items.find((i) => getProductId(i) === product.id)
+        const productKey = product.cart_key || product.id
+        const existing = items.find((i) => getProductId(i) === productKey)
         const nextQuantity = Number(quantity) || 1
+        const maxQuantity = getMaxQuantity(product)
 
         if (existing) {
           set({
             items: items.map((i) =>
-              getProductId(i) === product.id
-                ? { ...i, product: { ...i.product, ...product }, quantity: getQuantity(i) + nextQuantity }
+              getProductId(i) === productKey
+                ? { ...i, product: { ...i.product, ...product }, quantity: Math.min(maxQuantity, getQuantity(i) + nextQuantity) }
                 : i
             ),
           })
         } else {
           set({
-            items: [...items, { product, quantity: nextQuantity }],
-            selectedProductIds: selectedProductIds.includes(product.id)
+            items: [...items, { product, quantity: Math.min(maxQuantity, nextQuantity) }],
+            selectedProductIds: selectedProductIds.includes(productKey)
               ? selectedProductIds
-              : [...selectedProductIds, product.id],
+              : [...selectedProductIds, productKey],
           })
         }
       },
@@ -43,6 +50,8 @@ const useCartStore = create(
       },
       updateQuantity: (productId, quantity) => {
         const nextQuantity = Number(quantity) || 0
+        const currentItem = get().items.find((i) => getProductId(i) === productId)
+        const maxQuantity = getMaxQuantity(currentItem?.product)
 
         if (nextQuantity <= 0) {
           get().removeItem(productId)
@@ -51,7 +60,7 @@ const useCartStore = create(
 
         set({
           items: get().items.map((i) =>
-            getProductId(i) === productId ? { ...i, quantity: nextQuantity } : i
+            getProductId(i) === productId ? { ...i, quantity: Math.min(maxQuantity, nextQuantity) } : i
           ),
         })
       },

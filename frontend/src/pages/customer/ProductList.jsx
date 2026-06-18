@@ -1,7 +1,7 @@
 ﻿import { useMemo, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown } from 'lucide-react'
+import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import { authApi } from '@/api/auth'
 import { Logo } from '@/components/layout/CustomerLayout'
@@ -184,6 +184,96 @@ function ProductCard({ product, priority = false }) {
   )
 }
 
+function ProductSetCard({ productSet }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { addItem, updateQuantity, items } = useCartStore()
+  const imageUrl = productSet.image_url || productSet.image
+  const price = Number(productSet.discount_price || productSet.price || 0)
+  const oldPrice = productSet.discount_price ? Number(productSet.price || 0) : 0
+  const setStock = Number(productSet.current_stock || 0)
+  const cartProduct = {
+    id: `set-${productSet.id}`,
+    cart_key: `set-${productSet.id}`,
+    item_type: 'set',
+    product_set_id: productSet.id,
+    name: productSet.name,
+    primary_image: imageUrl,
+    image_url: imageUrl,
+    retail_price: price,
+    cost_price: 0,
+    current_stock: setStock,
+    category_name: 'Product Set',
+  }
+  const cartItem = items.find((item) => item.product?.cart_key === cartProduct.cart_key)
+  const qty = cartItem?.quantity || 0
+
+  return (
+    <article
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
+      onClick={() => navigate(`/product-set/${productSet.id}`)}
+    >
+      <div className="relative h-44 overflow-hidden bg-white">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={productSet.name}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <ProductArt tone="set" />
+        )}
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-xs font-black text-pink-600 shadow-sm">
+          SET
+        </span>
+      </div>
+      <div className="p-3">
+        <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
+          <span className="truncate">Product Set</span>
+          <span className="shrink-0 text-gray-300">/</span>
+          <span className="truncate">{productSet.items?.length || 0} items inside</span>
+        </div>
+        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
+        <div className="mt-2 flex items-center gap-1">
+          <Gift size={13} className="text-pink-500" />
+          <span className="text-xs font-semibold text-gray-500">
+            {setStock > 0 ? t('common.inStock') : 'Sold Out'}
+          </span>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(price)}</span>
+            {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+          </div>
+          {setStock <= 0 ? (
+            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">Sold Out</span>
+          ) : qty === 0 ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); addItem(cartProduct, 1) }}
+              className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4"
+            >
+              Add
+            </button>
+          ) : (
+            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
+              <button onClick={() => updateQuantity(cartProduct.cart_key, qty - 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
+              </button>
+              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
+              <button onClick={() => updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30 disabled:opacity-40" disabled={qty >= setStock}>
+                <Plus size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
 export default function ProductList() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
@@ -226,11 +316,33 @@ export default function ProductList() {
     staleTime: 30_000,
   })
 
+  const setOrdering = sortBy === 'retail_price'
+    ? 'price'
+    : sortBy === '-retail_price'
+      ? '-price'
+      : sortBy === '-rating'
+        ? '-created_at'
+        : sortBy
+
+  const { data: setData = [], isLoading: setsLoading } = useQuery({
+    queryKey: ['shop-product-sets', search, setOrdering],
+    queryFn: () => productsApi.sets.list({
+      search: search || undefined,
+      ordering: setOrdering,
+      page_size: 100,
+      is_active: true,
+    }).then((r) => r.data.results ?? r.data ?? []),
+    enabled: !categoryId && !brand && page === 1,
+    staleTime: 30_000,
+  })
+
   const categories = useMemo(() => categoryData || [], [categoryData])
   const shopBrands = useMemo(() => brandData || [], [brandData])
 
   const products = data?.results || []
-  const total = data?.count || 0
+  const productSets = (!categoryId && !brand && page === 1) ? setData.filter((set) => set.is_active !== false) : []
+  const isGridLoading = isLoading || setsLoading
+  const total = (data?.count || 0) + productSets.length
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
 
   return (
@@ -349,12 +461,17 @@ export default function ProductList() {
           </div>
 
           <div className="relative z-0 grid grid-cols-2 justify-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
-            {isLoading
+            {isGridLoading
               ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)
-              : products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 6} />)}
+              : (
+                <>
+                  {productSets.map((set) => <ProductSetCard key={`set-${set.id}`} productSet={set} />)}
+                  {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 6} />)}
+                </>
+              )}
           </div>
 
-          {!isLoading && products.length === 0 && (
+          {!isGridLoading && products.length === 0 && productSets.length === 0 && (
             <div className="rounded-2xl border border-gray-100 py-20 text-center">
               <ShoppingBag size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">{t('shop.noProductsFound')}</p>
@@ -385,4 +502,3 @@ export default function ProductList() {
     </div>
   )
 }
-

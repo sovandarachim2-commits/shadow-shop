@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, Heart, ShoppingCart, Zap, Plus, Minus, Check,
   PackageSearch, Store, Star, Droplet, Sparkles, ShieldCheck, Leaf,
@@ -11,50 +11,89 @@ import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import { CosmeticArt, RatingRow } from '@/components/customer/CustomerUi'
 import { useTranslation } from 'react-i18next'
+import useAuthStore from '@/store/authStore'
 
 export default function ProductDetail() {
   const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [qty, setQty] = useState(1)
   const [activeImg, setActiveImg] = useState(0)
   const [tab, setTab] = useState('description')
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [added, setAdded] = useState(false)
+  const [reviewRating, setReviewRating] = useState(5)
+  const [reviewComment, setReviewComment] = useState('')
   const addItem = useCartStore((s) => s.addItem)
   const clearSelection = useCartStore((s) => s.clearSelection)
   const toggleSelected = useCartStore((s) => s.toggleSelected)
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
 
   const { data: product, isLoading, isError } = useQuery({
     queryKey: ['product', id],
     queryFn: () => productsApi.products.get(id).then((r) => r.data),
   })
+  const { data: reviewData } = useQuery({
+    queryKey: ['product-reviews', id],
+    queryFn: () => productsApi.reviews.list({ product: id }).then((r) => r.data.results || r.data),
+    enabled: !!id,
+  })
+  const reviews = reviewData || []
+
+  const reviewMutation = useMutation({
+    mutationFn: (data) => productsApi.reviews.create(data),
+    onSuccess: () => {
+      setReviewComment('')
+      queryClient.invalidateQueries({ queryKey: ['product-reviews', id] })
+      queryClient.invalidateQueries({ queryKey: ['product', id] })
+      toast.success('Review saved')
+    },
+    onError: () => toast.error('Could not save review'),
+  })
 
   const images = product?.images?.length > 0 ? product.images : []
   const currentImage = images[activeImg]
   const stock = product?.current_stock ?? 0
+  const isInStock = stock > 0
   const oldPrice = Number(product?.old_price || product?.wholesale_price || 0)
   const currentPrice = Number(product?.display_price || product?.retail_price || 0)
   const savedAmount = oldPrice > currentPrice ? oldPrice - currentPrice : 0
   const discountPercent = oldPrice > currentPrice ? Math.round(((oldPrice - currentPrice) / oldPrice) * 100) : 15
   const saleProduct = product?.display_price ? { ...product, retail_price: product.display_price } : product
+  const flashSaleMaxQty = product?.is_flash_sale_active ? Number(product?.flash_sale_max_order_qty || 0) : 0
+  const maxPurchaseQty = flashSaleMaxQty > 0 ? Math.min(stock, flashSaleMaxQty) : stock
 
   const handleAddToCart = () => {
-    if (!product) return
+    if (!product || !isInStock) return
 
-    addItem(saleProduct, qty)
+    addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
     setAdded(true)
     toast.success(t('product.addedToCart'))
     setTimeout(() => setAdded(false), 2000)
   }
 
   const handleBuyNow = () => {
-    if (!product) return
+    if (!product || !isInStock) return
 
-    addItem(saleProduct, qty)
+    addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
     clearSelection()
     toggleSelected(product.id)
     navigate('/checkout')
+  }
+
+  const handleSubmitReview = (e) => {
+    e.preventDefault()
+    if (!loggedIn) {
+      toast.error('Please login to write a review')
+      navigate('/login', { state: { from: `/product/${id}` } })
+      return
+    }
+    reviewMutation.mutate({
+      product: product.id,
+      rating: reviewRating,
+      comment: reviewComment,
+    })
   }
 
   if (isLoading && !product) {
@@ -156,14 +195,17 @@ export default function ProductDetail() {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-pink-600">
               <Star size={14} className="fill-pink-600" /> {t('home.bestSeller')}
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-green-600">
-              <span className="h-2 w-2 rounded-full bg-green-500" /> {t('common.inStock')}
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide ${
+              isInStock ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+            }`}>
+              <span className={`h-2 w-2 rounded-full ${isInStock ? 'bg-green-500' : 'bg-red-500'}`} />
+              {isInStock ? t('common.inStock') : t('common.outOfStock')}
             </span>
           </div>
 
           <h1 className="text-3xl font-black leading-tight tracking-tight text-gray-950 md:text-5xl">{product.name}</h1>
           <div className="mt-3 flex items-center gap-2">
-            <RatingRow rating={product.rating || 4.9} reviews={product.review_count || 126} />
+            <RatingRow rating={Number(product.rating || 0)} reviews={Number(product.review_count || 0)} />
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-3">
@@ -198,17 +240,18 @@ export default function ProductDetail() {
                 <Minus size={15} />
               </button>
               <span className="w-10 text-center text-base font-black">{qty}</span>
-              <button onClick={() => setQty((q) => Math.min(stock, q + 1))} className="shop-icon-btn h-10 w-10">
+              <button disabled={!isInStock || qty >= maxPurchaseQty} onClick={() => setQty((q) => Math.min(maxPurchaseQty, q + 1))} className="shop-icon-btn h-10 w-10 disabled:opacity-50">
                 <Plus size={15} />
               </button>
             </div>
-            {stock <= 0 && <span className="text-sm font-black text-red-500">{t('common.outOfStock')}</span>}
+            {flashSaleMaxQty > 0 && <span className="text-sm font-black text-pink-600">Max {flashSaleMaxQty} per order</span>}
+            {!isInStock && <span className="text-sm font-black text-red-500">{t('common.outOfStock')}</span>}
           </div>
 
           <div className="mt-6 hidden flex-col gap-3 sm:flex-row md:flex">
             <button
               onClick={handleAddToCart}
-              disabled={stock <= 0}
+              disabled={!isInStock}
               className={`flex flex-1 items-center justify-center gap-2 rounded-lg border py-4 text-base font-black transition ${
                 added ? 'border-green-500 bg-green-500 text-white' : 'border-pink-500 bg-white text-pink-600 hover:bg-pink-50'
               }`}
@@ -218,7 +261,7 @@ export default function ProductDetail() {
             </button>
             <button
               onClick={handleBuyNow}
-              disabled={stock <= 0}
+              disabled={!isInStock}
               className="shop-btn-primary flex-1 py-4 text-base"
             >
               <Zap size={19} /> {t('common.buyNow')}
@@ -231,6 +274,7 @@ export default function ProductDetail() {
                 { key: 'description', label: t('product.description') },
                 { key: 'benefits', label: t('product.benefits') },
                 { key: 'how_to_use', label: t('product.howToUse') },
+                { key: 'reviews', label: t('profile.reviews') || 'Reviews' },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -245,6 +289,79 @@ export default function ProductDetail() {
               {tab === 'description' && (product.description || t('product.noDescription'))}
               {tab === 'benefits' && (product.benefits || t('product.noBenefits'))}
               {tab === 'how_to_use' && (product.how_to_use || t('product.noUsage'))}
+              {tab === 'reviews' && (
+                <div className="space-y-5">
+                  <form onSubmit={handleSubmitReview} className="rounded-2xl bg-gray-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-gray-950">Rate this product</p>
+                        <p className="text-xs font-semibold text-gray-400">Share your experience for other customers.</p>
+                      </div>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setReviewRating(value)}
+                            className="rounded-full p-1"
+                            aria-label={`${value} stars`}
+                          >
+                            <Star
+                              size={22}
+                              className={value <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={3}
+                      className="mt-3 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
+                      placeholder="Write your comment..."
+                    />
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={reviewMutation.isPending}
+                        className="rounded-full bg-pink-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                      >
+                        {reviewMutation.isPending ? 'Saving...' : 'Submit Review'}
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="space-y-3">
+                    {reviews.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center">
+                        <p className="text-sm font-black text-gray-500">No reviews yet</p>
+                      </div>
+                    ) : reviews.map((review) => (
+                      <div key={review.id} className="rounded-2xl border border-gray-100 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black text-gray-950">{review.user_name || 'Customer'}</p>
+                            <div className="mt-1 flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map((value) => (
+                                <Star
+                                  key={value}
+                                  size={14}
+                                  className={value <= review.rating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-400">
+                            {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
+                          </span>
+                        </div>
+                        {review.comment && <p className="mt-3 text-sm leading-6 text-gray-600">{review.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -255,7 +372,7 @@ export default function ProductDetail() {
           <MobileProductAction icon={Store} label={t('product.store')} onClick={() => navigate('/shop')} />
           <button
             onClick={handleAddToCart}
-            disabled={stock <= 0}
+            disabled={!isInStock}
             className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gray-950 px-2 text-sm font-black text-white shadow-lg shadow-gray-200 disabled:opacity-50"
           >
             <ShoppingCart size={21} />
@@ -263,7 +380,7 @@ export default function ProductDetail() {
           </button>
           <button
             onClick={handleBuyNow}
-            disabled={stock <= 0}
+            disabled={!isInStock}
             className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-pink-600 px-2 text-sm font-black text-white shadow-lg shadow-pink-200 disabled:opacity-50"
           >
             <Zap size={21} />

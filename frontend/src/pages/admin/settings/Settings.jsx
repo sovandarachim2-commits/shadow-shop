@@ -256,28 +256,52 @@ export default function Settings({ tab = 'general' }) {
   })
 
   // ── Telegram Settings ─────────────────────────────────────────────
-  const [telegramForm, setTelegramForm] = useState({
-    name: 'Default', bot_username: '', bot_token: '', chat_id: '',
+  const TELEGRAM_NOTIFICATION_OPTIONS = [
+    ['notify_new_order', 'New Orders (customer/admin created)'],
+    ['notify_payment', 'Payment Received'],
+    ['notify_low_stock', 'Low Stock Alert'],
+    ['notify_delivery', 'Delivery Updates'],
+    ['notify_daily_summary', 'Daily Summary'],
+  ]
+  const emptyTelegramForm = {
+    name: '', bot_username: '', bot_token: '', chat_id: '', topic_id: '', is_active: true,
     notify_new_order: true, notify_payment: true,
     notify_low_stock: true, notify_delivery: true,
     notify_daily_summary: true,
+  }
+  const [telegramForm, setTelegramForm] = useState(emptyTelegramForm)
+  const [telegramModal, setTelegramModal] = useState(null)
+
+  const openTelegramModal = (config = null) => {
+    setTelegramForm(config ? { ...emptyTelegramForm, ...config, topic_id: config.topic_id || '' } : { ...emptyTelegramForm, name: 'Default' })
+    setTelegramModal(config ? 'edit' : 'add')
+  }
+
+  const normalizeTelegramPayload = (data) => ({
+    ...data,
+    name: data.name?.trim() || 'Default',
+    bot_username: (data.bot_username || '').replace('@', '').trim(),
+    chat_id: String(data.chat_id || '').trim(),
+    topic_id: data.topic_id === '' || data.topic_id === null ? null : Number(data.topic_id),
   })
 
   const { data: telegramConfigs } = useQuery({
     queryKey: ['telegram-configs'],
-    queryFn: () => client.get('/notifications/telegram/').then((r) => {
-      const configs = r.data.results || r.data
-      if (configs?.length > 0) setTelegramForm(configs[0])
-      return configs
-    }),
+    queryFn: () => client.get('/notifications/telegram/').then((r) => r.data.results || r.data),
   })
 
   const saveTelegramMutation = useMutation({
-    mutationFn: (data) =>
-      telegramConfigs?.length > 0
-        ? client.patch(`/notifications/telegram/${telegramConfigs[0].id}/`, data)
-        : client.post('/notifications/telegram/', data),
-    onSuccess: () => toast.success('Telegram settings saved!'),
+    mutationFn: (data) => {
+      const payload = normalizeTelegramPayload(data)
+      return payload.id
+        ? client.patch(`/notifications/telegram/${payload.id}/`, payload)
+        : client.post('/notifications/telegram/', payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['telegram-configs'] })
+      setTelegramModal(null)
+      toast.success('Telegram settings saved!')
+    },
     onError: () => toast.error('Failed to save settings'),
   })
 
@@ -285,6 +309,15 @@ export default function Settings({ tab = 'general' }) {
     mutationFn: (id) => client.post(`/notifications/telegram/${id}/test/`),
     onSuccess: (data) =>
       data.data.success ? toast.success('Test message sent!') : toast.error('Test failed — check your settings'),
+  })
+
+  const deleteTelegramMutation = useMutation({
+    mutationFn: (id) => client.delete(`/notifications/telegram/${id}/`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['telegram-configs'] })
+      toast.success('Telegram config deleted')
+    },
+    onError: () => toast.error('Failed to delete Telegram config'),
   })
 
   return (
@@ -296,7 +329,7 @@ export default function Settings({ tab = 'general' }) {
         </div>
       </div>
 
-      <div className="form-card mt-6 max-w-2xl">
+      <div className={`form-card mt-6 ${tab === 'telegram' ? 'max-w-5xl' : 'max-w-2xl'}`}>
         {tab === 'general' && (
           <div className="space-y-5">
             {/* Logo */}
@@ -397,66 +430,223 @@ export default function Settings({ tab = 'general' }) {
         )}
 
         {tab === 'telegram' && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
-              <p className="font-semibold mb-1">Setup Instructions</p>
-              <ol className="list-decimal ml-4 space-y-1 text-xs">
+          <div className="space-y-5">
+            <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
+              <p className="mb-1 font-semibold">Setup Instructions</p>
+              <ol className="ml-4 list-decimal space-y-1 text-xs">
                 <li>Create a bot with @BotFather on Telegram</li>
                 <li>Copy the bot username and token</li>
-                <li>Use the same bot for customer OTP verification</li>
-                <li>Add a default chat ID for admin test/order notifications</li>
+                <li>Add the bot to each group you want to notify</li>
+                <li>Use Group Topic ID when the group uses Telegram forum topics</li>
                 <li>Set the webhook to /api/auth/telegram/webhook/ on your public HTTPS domain</li>
               </ol>
             </div>
-            <div>
-              <label className="label">Bot Username</label>
-              <input className="input-field font-mono" value={telegramForm.bot_username || ''}
-                onChange={(e) => setTelegramForm(f => ({ ...f, bot_username: e.target.value.replace('@', '') }))}
-                placeholder="shadow_shop_bot" />
-              <p className="mt-1 text-xs text-gray-400">Do not include @. This creates the customer verification link.</p>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-gray-900">Notification Destinations</p>
+                <p className="text-xs text-gray-400">Create different rows for orders, payments, delivery, or stock alerts.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openTelegramModal()}
+                className="btn-primary flex items-center justify-center gap-2 px-4 py-2 text-sm"
+              >
+                <Plus size={15} /> Add New
+              </button>
             </div>
-            <div>
-              <label className="label">Bot Token</label>
-              <input className="input-field font-mono" value={telegramForm.bot_token}
-                onChange={(e) => setTelegramForm(f => ({ ...f, bot_token: e.target.value }))}
-                placeholder="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ" />
-            </div>
-            <div>
-              <label className="label">Default Admin Chat ID</label>
-              <input className="input-field font-mono" value={telegramForm.chat_id}
-                onChange={(e) => setTelegramForm(f => ({ ...f, chat_id: e.target.value }))}
-                placeholder="-100xxxxxxxxxx" />
-              <p className="mt-1 text-xs text-gray-400">Used for test messages and admin notifications. Customer OTP uses the user's own Telegram chat automatically.</p>
-            </div>
-            <div className="space-y-2">
-              <label className="label">Notifications to send</label>
-              {[
-                ['notify_new_order',      'New Orders'],
-                ['notify_payment',        'Payment Received'],
-                ['notify_low_stock',      'Low Stock Alert'],
-                ['notify_delivery',       'Delivery Updates'],
-                ['notify_daily_summary',  'Daily Summary'],
-              ].map(([k, l]) => (
-                <label key={k} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100">
-                  <input type="checkbox" checked={telegramForm[k]}
-                    onChange={(e) => setTelegramForm(f => ({ ...f, [k]: e.target.checked }))}
-                    className="w-4 h-4 accent-purple-600" />
-                  <span className="text-sm">{l}</span>
-                </label>
+
+            <div className="grid gap-3">
+              {(telegramConfigs || []).length === 0 && (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+                  <p className="text-sm font-bold text-gray-900">No Telegram destinations yet</p>
+                  <p className="mt-1 text-xs text-gray-400">Add one group or topic to start sending order notifications.</p>
+                </div>
+              )}
+
+              {(telegramConfigs || []).map((config) => (
+                <div key={config.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-black text-gray-950">{config.name || 'Default'}</p>
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+                          config.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'
+                        }`}>
+                          {config.is_active ? 'Active' : 'Off'}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid gap-1 text-xs text-gray-500 sm:grid-cols-2">
+                        <span className="font-mono">@{config.bot_username || 'no_username'}</span>
+                        <span className="font-mono">Group: {config.chat_id}</span>
+                        <span className="font-mono">Topic: {config.topic_id || 'No topic'}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {TELEGRAM_NOTIFICATION_OPTIONS.filter(([key]) => config[key]).map(([, label]) => (
+                          <span key={label} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-purple-600 shadow-sm">
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => testMutation.mutate(config.id)}
+                        className="btn-secondary flex items-center gap-2 px-3 py-2 text-xs"
+                      >
+                        <TestTube size={14} /> Test
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openTelegramModal(config)}
+                        className="btn-secondary flex items-center gap-2 px-3 py-2 text-xs"
+                      >
+                        <Pencil size={14} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTelegramMutation.mutate(config.id)}
+                        className="rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => saveTelegramMutation.mutate(telegramForm)}
-                className="btn-primary flex items-center gap-2" disabled={saveTelegramMutation.isPending}>
-                <Save size={15} /> {saveTelegramMutation.isPending ? 'Saving...' : 'Save Settings'}
-              </button>
-              {telegramConfigs?.length > 0 && (
-                <button onClick={() => testMutation.mutate(telegramConfigs[0].id)}
-                  className="btn-secondary flex items-center gap-2">
-                  <TestTube size={15} /> Test Connection
-                </button>
-              )}
+
+            <div className="rounded-2xl border border-gray-100 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-gray-400">New Order Message Includes</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-600 sm:grid-cols-3">
+                <span>Order code</span>
+                <span>Source</span>
+                <span>Customer name</span>
+                <span>Customer phone</span>
+                <span>Product list</span>
+                <span>Total amount</span>
+              </div>
             </div>
+
+            {telegramModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 backdrop-blur-sm">
+                <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-purple-600">
+                        {telegramModal === 'edit' ? 'Edit Telegram Destination' : 'Add Telegram Destination'}
+                      </p>
+                      <h2 className="mt-1 text-xl font-black text-gray-950">Group Notification</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTelegramModal(null)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-100 text-gray-500"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="label">Name</label>
+                      <input
+                        className="input-field"
+                        value={telegramForm.name || ''}
+                        onChange={(e) => setTelegramForm((f) => ({ ...f, name: e.target.value }))}
+                        placeholder="Orders Group"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Bot Username</label>
+                      <input
+                        className="input-field font-mono"
+                        value={telegramForm.bot_username || ''}
+                        onChange={(e) => setTelegramForm((f) => ({ ...f, bot_username: e.target.value.replace('@', '') }))}
+                        placeholder="shadow_shop_bot"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="label">Bot Token</label>
+                      <input
+                        className="input-field font-mono"
+                        value={telegramForm.bot_token || ''}
+                        onChange={(e) => setTelegramForm((f) => ({ ...f, bot_token: e.target.value }))}
+                        placeholder="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Group / Chat ID</label>
+                      <input
+                        className="input-field font-mono"
+                        value={telegramForm.chat_id || ''}
+                        onChange={(e) => setTelegramForm((f) => ({ ...f, chat_id: e.target.value }))}
+                        placeholder="-100xxxxxxxxxx"
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Group Topic ID</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="input-field font-mono"
+                        value={telegramForm.topic_id || ''}
+                        onChange={(e) => setTelegramForm((f) => ({ ...f, topic_id: e.target.value }))}
+                        placeholder="Optional"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="mt-4 flex items-center justify-between rounded-2xl bg-gray-50 p-4">
+                    <span>
+                      <span className="block text-sm font-bold text-gray-900">Active</span>
+                      <span className="text-xs text-gray-400">Turn off to keep this row saved without sending messages</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={telegramForm.is_active !== false}
+                      onChange={(e) => setTelegramForm((f) => ({ ...f, is_active: e.target.checked }))}
+                      className="h-5 w-5 accent-purple-600"
+                    />
+                  </label>
+
+                  <div className="mt-4 space-y-2">
+                    <label className="label">Notifications to send</label>
+                    {TELEGRAM_NOTIFICATION_OPTIONS.map(([key, label]) => (
+                      <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl bg-gray-50 p-3 hover:bg-gray-100">
+                        <input
+                          type="checkbox"
+                          checked={telegramForm[key] !== false}
+                          onChange={(e) => setTelegramForm((f) => ({ ...f, [key]: e.target.checked }))}
+                          className="h-4 w-4 accent-purple-600"
+                        />
+                        <span className="text-sm">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setTelegramModal(null)}
+                      className="btn-secondary px-5 py-2.5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveTelegramMutation.mutate(telegramForm)}
+                      disabled={saveTelegramMutation.isPending}
+                      className="btn-primary flex items-center gap-2 px-5 py-2.5 disabled:opacity-60"
+                    >
+                      <Save size={15} /> {saveTelegramMutation.isPending ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

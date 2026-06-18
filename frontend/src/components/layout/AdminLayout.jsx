@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { LayoutDashboard, ClipboardList, Package, MoreHorizontal, ScanLine } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, UserCircle, MoreHorizontal, ScanLine } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import useAuthStore from '@/store/authStore'
@@ -13,7 +13,7 @@ const LEFT_TABS = [
   { label: 'Orders',    path: '/admin/orders', icon: ClipboardList,   module: 'orders' },
 ]
 const RIGHT_TABS = [
-  { label: 'Products', path: '/admin/products', icon: Package, module: 'products' },
+  { label: 'Profile', path: '/admin/profile', icon: UserCircle, module: 'profile' },
 ]
 
 function AdminBottomNav({ onMoreClick }) {
@@ -33,9 +33,10 @@ function AdminBottomNav({ onMoreClick }) {
     myPerms.filter((rp) => rp.permission_detail?.action === 'view').map((rp) => rp.permission_detail?.module)
   )
   const canView = (mod) => isFullAccess || viewable.has(mod)
+  const canShowTab = (tab) => tab.module === 'profile' || canView(tab.module)
 
   const renderTab = (tab) => {
-    if (!canView(tab.module)) return null
+    if (!canShowTab(tab)) return null
     const isActive = tab.exact
       ? location.pathname === tab.path
       : location.pathname.startsWith(tab.path)
@@ -55,6 +56,7 @@ function AdminBottomNav({ onMoreClick }) {
   }
 
   const isScannerActive = location.pathname.startsWith('/admin/scanner')
+  const canUseScanner = canView('scanner')
 
   return (
     <nav
@@ -63,24 +65,25 @@ function AdminBottomNav({ onMoreClick }) {
     >
       {LEFT_TABS.map(renderTab)}
 
-      {/* Center scan button */}
-      <div className="relative -top-4 flex flex-col items-center">
-        <div className={cn(
-          'rounded-full p-1 transition-all',
-          isScannerActive ? 'bg-pink-200/60' : 'bg-pink-100/80'
-        )}>
-          <button
-            onClick={() => navigate('/admin/scanner')}
-            className="flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-purple-700 shadow-lg shadow-purple-400/50 transition-transform active:scale-95"
-            style={{ width: '3.25rem', height: '3.25rem' }}
-          >
-            <ScanLine size={24} className="text-white" strokeWidth={2.2} />
-          </button>
+      {canUseScanner && (
+        <div className="relative -top-4 flex flex-col items-center">
+          <div className={cn(
+            'rounded-full p-1 transition-all',
+            isScannerActive ? 'bg-pink-200/60' : 'bg-pink-100/80'
+          )}>
+            <button
+              onClick={() => navigate('/admin/scanner')}
+              className="flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-purple-700 shadow-lg shadow-purple-400/50 transition-transform active:scale-95"
+              style={{ width: '3.25rem', height: '3.25rem' }}
+            >
+              <ScanLine size={24} className="text-white" strokeWidth={2.2} />
+            </button>
+          </div>
+          <span className={cn('mt-1 text-[10px] font-semibold', isScannerActive ? 'text-purple-600' : 'text-gray-400')}>
+            Scanner
+          </span>
         </div>
-        <span className={cn('mt-1 text-[10px] font-semibold', isScannerActive ? 'text-purple-600' : 'text-gray-400')}>
-          Scanner
-        </span>
-      </div>
+      )}
 
       {RIGHT_TABS.map(renderTab)}
 

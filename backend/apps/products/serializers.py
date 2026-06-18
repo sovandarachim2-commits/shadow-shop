@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Sum
-from .models import Brand, Category, Product, ProductImage, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -61,6 +61,24 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'alt_text', 'is_primary', 'order']
 
 
+class ProductReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductReview
+        fields = ['id', 'product', 'user', 'user_name', 'rating', 'comment', 'created_at', 'updated_at']
+        read_only_fields = ['user', 'user_name', 'created_at', 'updated_at']
+        validators = []
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError('Rating must be between 1 and 5.')
+        return value
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     brand_name = serializers.CharField(source='brand.name', read_only=True)
@@ -79,7 +97,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             'brand', 'brand_name',
             'primary_image', 'wholesale_price', 'retail_price', 'cost_price',
             'display_price', 'old_price', 'flash_sale_price',
-            'flash_sale_starts_at', 'flash_sale_ends_at',
+            'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
             'unit', 'current_stock', 'is_active', 'is_featured',
             'is_flash_sale_active',
             'flash_sale_order_count', 'flash_sale_quantity_sold',
@@ -176,27 +194,48 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 
 class ProductWriteSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(max_length=50, required=False, allow_blank=True)
+
     class Meta:
         model = Product
         fields = [
             'id', 'code', 'barcode', 'name', 'category', 'brand', 'description', 'benefits',
             'ingredients', 'how_to_use', 'unit', 'weight', 'cost_price',
             'wholesale_price', 'retail_price', 'flash_sale_price',
-            'flash_sale_starts_at', 'flash_sale_ends_at',
+            'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
             'min_order_qty', 'is_active',
             'is_featured', 'is_new_arrival', 'is_best_seller',
         ]
         read_only_fields = ['id']
+
+    def _generate_product_code(self):
+        next_number = (Product.objects.order_by('-id').values_list('id', flat=True).first() or 0) + 1
+        while True:
+            code = f"SKU{next_number:03d}"
+            if not Product.objects.filter(code=code).exists():
+                return code
+            next_number += 1
+
+    def create(self, validated_data):
+        if not validated_data.get('code'):
+            validated_data['code'] = self._generate_product_code()
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'code' in validated_data and not validated_data.get('code'):
+            validated_data.pop('code')
+        return super().update(instance, validated_data)
 
 
 class ProductSetItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_image = serializers.SerializerMethodField()
+    product_current_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductSetItem
-        fields = ['id', 'product', 'product_name', 'product_code', 'product_image', 'quantity']
+        fields = ['id', 'product', 'product_name', 'product_code', 'product_image', 'product_current_stock', 'quantity']
 
     def get_product_image(self, obj):
         images = list(obj.product.images.all())
@@ -208,20 +247,44 @@ class ProductSetItemSerializer(serializers.ModelSerializer):
             return img.image.url
         return None
 
+    def get_product_current_stock(self, obj):
+        try:
+            return obj.product.stock.quantity
+        except Exception:
+            return 0
+
 
 class ProductSetSerializer(serializers.ModelSerializer):
     items = ProductSetItemSerializer(many=True, read_only=True)
     image_url = serializers.SerializerMethodField()
+    current_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductSet
         fields = '__all__'
+        extra_kwargs = {'image': {'write_only': True, 'required': False}}
 
     def get_image_url(self, obj):
         if obj.image:
             request = self.context.get('request')
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
+
+    def get_current_stock(self, obj):
+        items = list(obj.items.all())
+        if not items:
+            return 0
+
+        available_sets = []
+        for item in items:
+            required_qty = max(1, int(item.quantity or 1))
+            try:
+                product_stock = int(item.product.stock.quantity or 0)
+            except Exception:
+                product_stock = 0
+            available_sets.append(product_stock // required_qty)
+
+        return min(available_sets) if available_sets else 0
 
 
 class PromotionSerializer(serializers.ModelSerializer):

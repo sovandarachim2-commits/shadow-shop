@@ -23,6 +23,7 @@ const DEFAULT_PROVINCE_FEES = {
   phnom_penh: 3, siem_reap: 6, battambang: 6,
   kampong_cham: 5, kandal: 4, takeo: 4, other: 8,
 }
+const getCartKey = (item) => item.product.cart_key || item.product.id
 const PROVINCE_LABELS = {
   phnom_penh: 'Phnom Penh', siem_reap: 'Siem Reap', battambang: 'Battambang',
   kampong_cham: 'Kampong Cham', kandal: 'Kandal', takeo: 'Takeo', other: 'Other',
@@ -161,12 +162,14 @@ export default function Checkout() {
   }, [siteSettings])
 
   const info = useMemo(() => buildDeliveryInfo(addresses, user), [addresses, user])
-  const province = provinces.find((p) => p.value === info.province) || provinces.find((p) => p.is_default) || provinces[0] || { label: 'Phnom Penh', fee: 3 }
-  const checkoutItems = items.filter((item) => selectedProductIds.includes(item.product.id))
-  const subtotal = checkoutItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
-  const deliveryFee = province.fee
-  const grandTotal = subtotal + deliveryFee
+  const checkoutItems = items.filter((item) => selectedProductIds.includes(getCartKey(item)))
   const hasAddress = Boolean(info.name && info.phone && info.address)
+  const province = hasAddress
+    ? (provinces.find((p) => p.value === info.province) || provinces.find((p) => p.is_default) || provinces[0])
+    : null
+  const subtotal = checkoutItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
+  const deliveryFee = checkoutItems.length > 0 && hasAddress ? Number(province?.fee || 0) : 0
+  const grandTotal = subtotal + deliveryFee
 
   useEffect(() => {
     if (items.length > 0 && selectedProductIds.length === 0) {
@@ -260,7 +263,8 @@ export default function Checkout() {
         discount: 0,
         notes: `Home Delivery. ${info.district ? `${info.district}, ${province.label}` : province.label}`,
         items: checkoutItems.map((i) => ({
-          product: i.product.id,
+          product: i.product.item_type === 'set' ? undefined : i.product.id,
+          product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
           quantity: i.quantity,
           unit_price: i.product.retail_price,
           cost_price: i.product.cost_price || 0,
@@ -404,7 +408,7 @@ export default function Checkout() {
             <h2 className="text-sm font-bold text-gray-950">Order Items</h2>
             <div className="mt-4 space-y-3">
               {checkoutItems.map((item) => (
-                <div key={item.product.id} className="flex items-center gap-3 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                <div key={getCartKey(item)} className="flex items-center gap-3 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
                   <ProductThumb product={item.product} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-gray-950">{item.product.name}</p>
@@ -421,7 +425,7 @@ export default function Checkout() {
           <h2 className="text-lg font-black text-gray-950">Order Summary</h2>
           <div className="mt-4 hidden space-y-3 lg:block">
             {checkoutItems.map((item) => (
-              <div key={item.product.id} className="flex items-center gap-3">
+              <div key={getCartKey(item)} className="flex items-center gap-3">
                 <ProductThumb product={item.product} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-gray-950">{item.product.name}</p>

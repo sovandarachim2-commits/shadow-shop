@@ -38,11 +38,21 @@ export const productsApi = {
     deleteImage: (id, imageId) => client.delete(`/products/items/${id}/delete_image/${imageId}/`),
     searchByCode: (code) => client.get('/products/items/search_by_code/', { params: { code } }),
   },
+  reviews: {
+    list: (params) => client.get('/products/reviews/', { params }),
+    create: (data) => client.post('/products/reviews/', data),
+    update: (id, data) => client.patch(`/products/reviews/${id}/`, data),
+    delete: (id) => client.delete(`/products/reviews/${id}/`),
+  },
   sets: {
     list: (params) => client.get('/products/sets/', { params }),
     get: (id) => client.get(`/products/sets/${id}/`),
-    create: (data) => client.post('/products/sets/', data),
-    update: (id, data) => client.patch(`/products/sets/${id}/`, data),
+    create: (data) => client.post('/products/sets/', data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    }),
+    update: (id, data) => client.patch(`/products/sets/${id}/`, data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    }),
     delete: (id) => client.delete(`/products/sets/${id}/`),
     setItems: (id, data) => client.post(`/products/sets/${id}/set_items/`, data),
   },

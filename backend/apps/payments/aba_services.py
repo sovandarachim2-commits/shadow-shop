@@ -75,11 +75,11 @@ def build_aba_payment_params(order):
 
     items = [
         {
-            'name': item.product.name[:100],
+            'name': item.product_name[:100],
             'quantity': item.quantity,
             'price': f"{item.unit_price:.2f}",
         }
-        for item in order.items.select_related('product').all()
+        for item in order.items.all()
     ]
     encoded_items = base64.b64encode(json.dumps(items, separators=(',', ':')).encode('utf-8')).decode('utf-8')
     return_params = base64.b64encode(

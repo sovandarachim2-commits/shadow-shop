@@ -7,6 +7,7 @@ class TelegramConfig(models.Model):
     bot_username = models.CharField(max_length=100, blank=True)
     bot_token = models.CharField(max_length=200)
     chat_id = models.CharField(max_length=50)
+    topic_id = models.PositiveIntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     notify_new_order = models.BooleanField(default=True)
     notify_payment = models.BooleanField(default=True)

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Customer, Order, OrderItem, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord
+from apps.products.models import Product, ProductSet
 
 
 def resolve_product_image_url(product, request=None):
@@ -11,6 +12,14 @@ def resolve_product_image_url(product, request=None):
             return request.build_absolute_uri(img.image.url)
         return img.image.url
     return ''
+
+
+def resolve_product_set_image_url(product_set, request=None):
+    if not product_set or not product_set.image:
+        return ''
+    if request:
+        return request.build_absolute_uri(product_set.image.url)
+    return product_set.image.url
 
 
 def first_order_item_image(order, request=None):
@@ -32,6 +41,98 @@ def display_seller_name(order):
     return seller.get_full_name() or seller.username
 
 
+def validate_flash_sale_max_quantities(requested):
+    errors = []
+    for product, quantity in requested.items():
+        max_qty = getattr(product, 'flash_sale_max_order_qty', None)
+        if product.is_flash_sale_active and max_qty and quantity > max_qty:
+            errors.append(f'{product.name} flash sale maximum order quantity is {max_qty}.')
+    return errors
+
+
+def get_product_set_stock(product_set):
+    items = list(product_set.items.select_related('product', 'product__stock').all())
+    if not items:
+        return 0
+
+    available_sets = []
+    for item in items:
+        required_qty = max(1, int(item.quantity or 1))
+        try:
+            product_stock = int(item.product.stock.quantity or 0)
+        except Exception:
+            product_stock = 0
+        available_sets.append(product_stock // required_qty)
+
+    return min(available_sets) if available_sets else 0
+
+
+def aggregate_order_targets(items):
+    product_totals = {}
+    set_totals = {}
+    for item in items:
+        quantity = int(item.get('quantity') or 0)
+        product = item.get('product')
+        product_set = item.get('product_set')
+        if product:
+            product_totals[product] = product_totals.get(product, 0) + quantity
+        elif product_set:
+            set_totals[product_set] = set_totals.get(product_set, 0) + quantity
+    return product_totals, set_totals
+
+
+def expand_set_component_totals(set_totals):
+    component_totals = {}
+    for product_set, set_quantity in set_totals.items():
+        for set_item in product_set.items.select_related('product').all():
+            component_totals[set_item.product] = (
+                component_totals.get(set_item.product, 0)
+                + int(set_quantity or 0) * int(set_item.quantity or 1)
+            )
+    return component_totals
+
+
+def validate_order_target_stock(items, old_product_totals=None, old_set_totals=None):
+    old_product_totals = old_product_totals or {}
+    old_set_totals = old_set_totals or {}
+    requested_products, requested_sets = aggregate_order_targets(items)
+
+    errors = []
+    requested_components = expand_set_component_totals(requested_sets)
+    old_components = expand_set_component_totals(old_set_totals)
+    combined_products = set(requested_products) | set(requested_components)
+
+    for product in combined_products:
+        quantity = requested_products.get(product, 0) + requested_components.get(product, 0)
+        available = product.current_stock + old_product_totals.get(product, 0) + old_components.get(product, 0)
+        if quantity > available:
+            errors.append(f'{product.name} has only {available} in stock.')
+    errors.extend(validate_flash_sale_max_quantities(requested_products))
+
+    for product_set, quantity in requested_sets.items():
+        available = get_product_set_stock(product_set) + old_set_totals.get(product_set, 0)
+        if quantity > available:
+            errors.append(f'{product_set.name} has only {available} sets in stock.')
+
+    return errors
+
+
+def apply_order_item_snapshot(item_data, request=None):
+    product = item_data.get('product')
+    product_set = item_data.get('product_set')
+    if product:
+        item_data['product_name'] = product.name
+        item_data['product_code'] = product.code
+        item_data['cost_price'] = item_data.get('cost_price', product.cost_price)
+        item_data['product_image'] = resolve_product_image_url(product, request)
+    else:
+        item_data['product_name'] = product_set.name
+        item_data['product_code'] = f'SET-{product_set.id}'
+        item_data['cost_price'] = item_data.get('cost_price') or 0
+        item_data['product_image'] = resolve_product_set_image_url(product_set, request)
+    return item_data
+
+
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
@@ -46,7 +147,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = [
-            'id', 'product', 'product_name', 'product_code', 'product_image',
+            'id', 'product', 'product_set', 'product_name', 'product_code', 'product_image',
             'quantity', 'unit_price', 'cost_price', 'discount', 'total_price', 'subtotal',
         ]
         read_only_fields = ['total_price', 'subtotal']
@@ -54,13 +155,23 @@ class OrderItemSerializer(serializers.ModelSerializer):
     def get_product_image(self, obj):
         if obj.product_image:
             return obj.product_image
+        if obj.product_set:
+            return resolve_product_set_image_url(obj.product_set, self.context.get('request')) or None
         return resolve_product_image_url(obj.product, self.context.get('request')) or None
 
 
 class OrderItemWriteSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), required=False, allow_null=True)
+    product_set = serializers.PrimaryKeyRelatedField(queryset=ProductSet.objects.all(), required=False, allow_null=True)
+
     class Meta:
         model = OrderItem
-        fields = ['product', 'quantity', 'unit_price', 'cost_price', 'discount']
+        fields = ['product', 'product_set', 'quantity', 'unit_price', 'cost_price', 'discount']
+
+    def validate(self, attrs):
+        if bool(attrs.get('product')) == bool(attrs.get('product_set')):
+            raise serializers.ValidationError('Provide either product or product_set.')
+        return attrs
 
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
@@ -86,6 +197,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     payment_status = serializers.SerializerMethodField()
     status_changed_by_name = serializers.SerializerMethodField()
     status_changed_at = serializers.SerializerMethodField()
+    delivery_by = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -96,7 +208,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'items_preview', 'is_draft', 'printed_at', 'printed_by_name', 'created_at',
             'updated_at', 'status_changed_by_name', 'status_changed_at',
             'prepare_invoice_photo', 'prepare_package_photo',
-            'out_invoice_photo', 'out_package_photo', 'out_delivery_by',
+            'out_invoice_photo', 'out_package_photo', 'out_delivery_by', 'delivery_by',
         ]
 
     def get_seller_name(self, obj):
@@ -154,6 +266,12 @@ class OrderListSerializer(serializers.ModelSerializer):
     def get_status_changed_at(self, obj):
         history = self._latest_current_status_history(obj)
         return history.created_at if history else obj.updated_at
+
+    def get_delivery_by(self, obj):
+        if obj.out_delivery_by:
+            return obj.out_delivery_by
+        out_record = OutRecord.objects.filter(code=obj.order_number).only('delivery_by').first()
+        return out_record.delivery_by if out_record else ''
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
@@ -222,6 +340,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'discount', 'notes', 'is_draft', 'items',
         ]
 
+    def validate(self, attrs):
+        errors = validate_order_target_stock(attrs.get('items', []))
+        if errors:
+            raise serializers.ValidationError({'items': errors})
+        return attrs
+
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         request = self.context['request']
@@ -230,12 +354,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         subtotal = 0
         for item_data in items_data:
-            product = item_data['product']
-            item_data['product_name'] = product.name
-            item_data['product_code'] = product.code
-            cost_price = item_data.get('cost_price', product.cost_price)
-            item_data['cost_price'] = cost_price
-            item_data['product_image'] = resolve_product_image_url(product, request)
+            apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price
 
@@ -261,6 +380,126 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return order
 
 
+class OrderAdminUpdateSerializer(serializers.Serializer):
+    customer_info = serializers.DictField(required=False)
+    payment_method = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_METHOD_CHOICES], required=False, allow_blank=True)
+    payment_status = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_STATUS_CHOICES], required=False)
+    delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    discount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    is_draft = serializers.BooleanField(required=False)
+    items = OrderItemWriteSerializer(many=True, required=False)
+
+    def _aggregate_items(self, items):
+        return aggregate_order_targets(items)
+
+    def validate(self, attrs):
+        order = self.instance
+        items = attrs.get('items')
+        if items is None:
+            return attrs
+
+        old_product_totals = {}
+        old_set_totals = {}
+        if not order.is_draft:
+            for item in order.items.select_related('product', 'product_set').all():
+                if item.product:
+                    old_product_totals[item.product] = old_product_totals.get(item.product, 0) + item.quantity
+                elif item.product_set:
+                    old_set_totals[item.product_set] = old_set_totals.get(item.product_set, 0) + item.quantity
+
+        errors = validate_order_target_stock(items, old_product_totals, old_set_totals)
+        if errors:
+            raise serializers.ValidationError({'items': errors})
+        return attrs
+
+    def _adjust_stock(self, order, old_totals, new_totals, user):
+        from apps.inventory.models import Stock, StockMovement
+
+        products = set(old_totals.keys()) | set(new_totals.keys())
+        for product in products:
+            delta = new_totals.get(product, 0) - old_totals.get(product, 0)
+            if delta == 0:
+                continue
+
+            stock, _ = Stock.objects.get_or_create(product=product, defaults={'quantity': 0})
+            before_qty = stock.quantity
+            movement_type = StockMovement.TYPE_STOCK_OUT if delta > 0 else StockMovement.TYPE_RETURN
+            movement_qty = -delta if delta > 0 else abs(delta)
+            stock.quantity = stock.quantity + movement_qty
+            stock.save()
+
+            StockMovement.objects.create(
+                type=movement_type,
+                product=product,
+                quantity=movement_qty,
+                before_qty=before_qty,
+                after_qty=stock.quantity,
+                reference=order.order_number,
+                reference_type='order_edit',
+                notes=f'Stock adjusted for edited Order #{order.order_number}',
+                created_by=user,
+            )
+
+    def update(self, order, validated_data):
+        from django.db import transaction
+
+        request = self.context['request']
+        items_data = validated_data.pop('items', None)
+        customer_info = validated_data.pop('customer_info', None)
+
+        with transaction.atomic():
+            if customer_info:
+                for field in ['name', 'phone', 'email', 'address', 'province', 'notes']:
+                    if field in customer_info:
+                        setattr(order.customer, field, customer_info[field] or '')
+                order.customer.save()
+
+            old_is_draft = order.is_draft
+            for field, value in validated_data.items():
+                setattr(order, field, value)
+
+            old_totals = {}
+            if not old_is_draft:
+                for item in order.items.select_related('product').all():
+                    if item.product:
+                        old_totals[item.product] = old_totals.get(item.product, 0) + item.quantity
+
+            if items_data is not None:
+                new_product_totals, _new_set_totals = self._aggregate_items(items_data)
+                new_totals = new_product_totals if not order.is_draft else {}
+                if old_is_draft and not order.is_draft:
+                    new_totals = new_product_totals
+                elif old_is_draft and order.is_draft:
+                    new_totals = {}
+
+                order.items.all().delete()
+                subtotal = 0
+                for item_data in items_data:
+                    apply_order_item_snapshot(item_data, request)
+                    item = OrderItem.objects.create(order=order, **item_data)
+                    subtotal += item.total_price
+                order.subtotal = subtotal
+
+                if not old_is_draft or not order.is_draft:
+                    self._adjust_stock(order, old_totals, new_totals, request.user)
+
+            order.save()
+
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=order.status,
+                changed_by=request.user,
+                note='Order edited',
+            )
+
+            order.customer.total_orders = order.customer.orders.count()
+            order.customer.total_spent = sum(o.grand_total for o in order.customer.orders.all())
+            order.customer.save(update_fields=['total_orders', 'total_spent'])
+
+        return order
+
+
 class CustomerCheckoutSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     phone = serializers.CharField(max_length=20)
@@ -277,6 +516,12 @@ class CustomerCheckoutSerializer(serializers.Serializer):
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
     items = OrderItemWriteSerializer(many=True)
+
+    def validate(self, attrs):
+        errors = validate_order_target_stock(attrs.get('items', []))
+        if errors:
+            raise serializers.ValidationError({'items': errors})
+        return attrs
 
     def create(self, validated_data):
         request = self.context['request']
@@ -314,12 +559,7 @@ class CustomerCheckoutSerializer(serializers.Serializer):
 
         subtotal = 0
         for item_data in items_data:
-            product = item_data['product']
-            item_data['product_name'] = product.name
-            item_data['product_code'] = product.code
-            cost_price = item_data.get('cost_price', product.cost_price)
-            item_data['cost_price'] = cost_price
-            item_data['product_image'] = resolve_product_image_url(product, request)
+            apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price
 

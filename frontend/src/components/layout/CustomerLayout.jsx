@@ -28,7 +28,7 @@ import { authApi } from '@/api/auth'
 const MOBILE_NAV_ITEMS = [
   { path: '/', key: 'nav.home', icon: Home, exact: true },
   { path: '/shop', key: 'nav.shop', icon: Grid },
-  { path: '/lucky-box', key: 'nav.luckyBox', icon: Gift },
+  { path: '/lucky-box', key: 'nav.luckyBox', icon: Gift, center: true },
   { path: '/my-orders', key: 'nav.orders', icon: ClipboardList },
   { path: '/profile', key: 'nav.account', icon: User },
 ]
@@ -36,7 +36,7 @@ const MOBILE_NAV_ITEMS = [
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
   { path: '/shop', key: 'nav.shop' },
-  { path: '/shop?promotions=1', key: 'nav.promotions' },
+  { path: '/flash-sale', key: 'home.flashSale' },
   { path: '/shop?filter=new_arrival', key: 'nav.newArrivals' },
 ]
 
@@ -127,8 +127,9 @@ export default function CustomerLayout() {
     location.pathname === '/profile' ||
     location.pathname === '/address-book' ||
     location.pathname.startsWith('/product/') ||
+    location.pathname.startsWith('/product-set/') ||
     location.pathname.startsWith('/my-orders/')
-  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname.startsWith('/product/')
+  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
   const submitSearch = (e) => {
     e.preventDefault()
     const q = headerSearch.trim()
@@ -386,7 +387,7 @@ export default function CustomerLayout() {
         <nav className="mobile-bottom-nav md:hidden">
           {MOBILE_NAV_ITEMS.map((item, index) => {
             const isActive = isItemActive(location, item)
-            const isCenter = index === 2
+            const isCenter = item.center
 
             if (isCenter) {
               return (

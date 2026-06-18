@@ -3,21 +3,51 @@ import { useNavigate } from 'react-router-dom'
 import { Minus, Plus, Trash2, ShoppingCart, ArrowRight, ChevronLeft } from 'lucide-react'
 import useCartStore from '@/store/cartStore'
 import useAuthStore from '@/store/authStore'
+import { authApi } from '@/api/auth'
 import { formatCurrency } from '@/utils/helpers'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
+
+const DEFAULT_PROVINCE_FEES = {
+  phnom_penh: 3, siem_reap: 6, battambang: 6,
+  kampong_cham: 5, kandal: 4, takeo: 4, other: 8,
+}
+
+const getCartKey = (item) => item.product.cart_key || item.product.id
+
+function getDefaultDeliveryFee(siteSettings) {
+  const fees = (siteSettings?.delivery_fees && Object.keys(siteSettings.delivery_fees).length > 0)
+    ? siteSettings.delivery_fees
+    : DEFAULT_PROVINCE_FEES
+  const rows = Object.entries(fees)
+    .map(([, config]) => {
+      const isObjectConfig = config && typeof config === 'object'
+      return {
+        fee: parseFloat(isObjectConfig ? config.fee : config) || 0,
+        enabled: isObjectConfig ? config.enabled !== false : true,
+        is_default: isObjectConfig ? config.is_default === true : false,
+      }
+    })
+    .filter((row) => row.enabled)
+  return (rows.find((row) => row.is_default) || rows[0])?.fee || 0
+}
 
 export default function Cart() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const { items, selectedProductIds, updateQuantity, removeItem, clearCart, toggleSelected, selectAll, clearSelection } = useCartStore()
-  const selectedItems = items.filter((item) => selectedProductIds.includes(item.product.id))
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+  })
+  const selectedItems = items.filter((item) => selectedProductIds.includes(getCartKey(item)))
   const selectedCount = selectedItems.length
   const allSelected = items.length > 0 && selectedCount === items.length
   const subtotal = selectedItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
-  const deliveryFee = selectedItems.length > 0 ? 3 : 0
+  const deliveryFee = selectedItems.length > 0 ? getDefaultDeliveryFee(siteSettings) : 0
   const total = subtotal + deliveryFee
 
   useEffect(() => {
@@ -85,14 +115,16 @@ export default function Cart() {
             </label>
             <span className="text-xs font-bold text-gray-400">{selectedCount} {t('cart.selected')}</span>
           </div>
-          {items.map((item) => (
-            <article key={item.product.id} className="border-b border-gray-100 bg-white p-3 transition last:border-b-0 hover:bg-gray-50 md:rounded-3xl md:border md:p-4 md:shadow-card md:hover:shadow-soft">
+          {items.map((item) => {
+            const cartKey = getCartKey(item)
+            return (
+            <article key={cartKey} className="border-b border-gray-100 bg-white p-3 transition last:border-b-0 hover:bg-gray-50 md:rounded-3xl md:border md:p-4 md:shadow-card md:hover:shadow-soft">
               <div className="grid grid-cols-[24px_82px_1fr] gap-3 md:flex md:gap-4">
                 <label className="pt-6 md:pt-8">
                   <input
                     type="checkbox"
-                    checked={selectedProductIds.includes(item.product.id)}
-                    onChange={() => toggleSelected(item.product.id)}
+                    checked={selectedProductIds.includes(cartKey)}
+                    onChange={() => toggleSelected(cartKey)}
                     className="h-5 w-5 accent-pink-600"
                   />
                 </label>
@@ -101,9 +133,9 @@ export default function Cart() {
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <p className="line-clamp-2 text-sm font-black leading-tight text-gray-950 md:text-base">{item.product.name}</p>
-                      <p className="mt-1 text-xs font-semibold text-gray-400">{item.product.category_name || item.product.code || t('product.cosmetics')}</p>
+                      <p className="mt-1 text-xs font-semibold text-gray-400">{item.product.item_type === 'set' ? 'Product Set' : item.product.category_name || item.product.code || t('product.cosmetics')}</p>
                     </div>
-                    <button onClick={() => removeItem(item.product.id)} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 md:flex">
+                    <button onClick={() => removeItem(cartKey)} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 md:flex">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -114,14 +146,14 @@ export default function Cart() {
                       <p className="text-xs font-semibold text-gray-400">{formatCurrency(item.product.retail_price)} {t('cart.each')}</p>
                     </div>
                     <div className="flex w-fit items-center gap-1 rounded-full bg-gray-50 p-1 md:gap-2 md:rounded-2xl">
-                      <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="flex h-9 w-9 items-center justify-center rounded-full bg-pink-600 text-white md:hidden">
+                      <button onClick={() => updateQuantity(cartKey, item.quantity - 1)} className="flex h-9 w-9 items-center justify-center rounded-full bg-pink-600 text-white md:hidden">
                         <Minus size={18} />
                       </button>
-                      <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="hidden h-9 w-9 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm md:flex">
+                      <button onClick={() => updateQuantity(cartKey, item.quantity - 1)} className="hidden h-9 w-9 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm md:flex">
                         <Minus size={14} />
                       </button>
                       <span className="min-w-9 text-center text-sm font-black text-gray-700">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm md:h-9 md:w-9">
+                      <button onClick={() => updateQuantity(cartKey, item.quantity + 1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm md:h-9 md:w-9">
                         <Plus size={20} className="md:h-4 md:w-4" />
                       </button>
                     </div>
@@ -129,7 +161,7 @@ export default function Cart() {
                 </div>
               </div>
             </article>
-          ))}
+          )})}
         </section>
 
         <aside className="hidden h-fit rounded-3xl border border-pink-100 bg-gradient-to-br from-white to-pink-50 p-5 shadow-soft md:block lg:sticky lg:top-36">

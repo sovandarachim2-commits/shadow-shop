@@ -306,19 +306,24 @@ export default function Home() {
   const newArrivals = useMemo(() => newArrivalData || [], [newArrivalData])
 
   const categoryItems = useMemo(() => {
-    return CATEGORY_SHORTCUTS.map((sc) => {
-      const matched = categories.find((cat) =>
-        sc.keywords.some((kw) => (cat.name || '').toLowerCase().includes(kw))
-      )
-      if (!matched && !sc.path) return null
-      return {
-        ...sc,
-        id: matched?.id || sc.id,
-        path: sc.path || `/shop?category=${matched.id}`,
-        imageUrl: matched?.image_url || null,
-        icon: matched ? iconForCategory(matched.name) : sc.icon,
-      }
-    }).filter(Boolean)
+    const realCategories = categories
+      .filter((cat) => !cat.parent)
+      .map((cat, index) => {
+        const shortcut = CATEGORY_SHORTCUTS.find((sc) =>
+          sc.keywords.some((kw) => (cat.name || '').toLowerCase().includes(kw))
+        ) || CATEGORY_SHORTCUTS[index % (CATEGORY_SHORTCUTS.length - 1)]
+        return {
+          ...shortcut,
+          id: cat.id,
+          name: cat.name,
+          path: `/shop?category=${cat.id}`,
+          imageUrl: cat.image_url || null,
+          icon: iconForCategory(cat.name),
+        }
+      })
+
+    const newShortcut = CATEGORY_SHORTCUTS.find((sc) => sc.isNew)
+    return newShortcut ? [...realCategories, newShortcut] : realCategories
   }, [categories])
 
   const categoryPages = Math.max(1, Math.ceil(categoryItems.length / 10))
@@ -562,7 +567,7 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <Link to="/shop?filter=featured" className="flex items-center gap-0.5 text-[13px] font-bold text-pink-600">
+              <Link to="/flash-sale" className="flex items-center gap-0.5 text-[13px] font-bold text-pink-600">
                 {t('common.seeAll')} <ChevronRight size={13} />
               </Link>
             </div>

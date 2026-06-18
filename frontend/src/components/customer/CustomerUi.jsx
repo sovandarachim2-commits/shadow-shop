@@ -71,8 +71,8 @@ export function ProductThumb({ product, size = 'md', className = '' }) {
 
   return (
     <div className={cn('overflow-hidden rounded-2xl bg-white', sizes[size], className)}>
-      {product?.primary_image ? (
-        <img src={product.primary_image} alt={product.name || 'Product'} loading="lazy" decoding="async" className="h-full w-full object-contain p-1" />
+      {product?.primary_image || product?.image_url ? (
+        <img src={product.primary_image || product.image_url} alt={product.name || 'Product'} loading="lazy" decoding="async" className="h-full w-full object-contain p-1" />
       ) : (
         <CosmeticArt tone={product?.tone} className="min-h-full rounded-none" />
       )}

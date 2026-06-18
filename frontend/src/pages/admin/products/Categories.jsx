@@ -5,7 +5,7 @@ import { productsApi } from '@/api/products'
 import toast from 'react-hot-toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
-function CategoryModal({ open, editing, topLevel, onClose, onSave, saving }) {
+function CategoryModal({ open, editing, onClose, onSave, saving }) {
   const [form, setForm] = useState(() => editing
     ? { name: editing.name, description: editing.description || '', parent: editing.parent || '' }
     : { name: '', description: '', parent: '' }
@@ -43,9 +43,7 @@ function CategoryModal({ open, editing, topLevel, onClose, onSave, saving }) {
       <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h3 className="text-base font-bold text-gray-900">
-            {editing ? 'Edit Category' : 'New Main Category'}
-          </h3>
+          <h3 className="text-base font-bold text-gray-900">{editing ? 'Edit Category' : 'New Category'}</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">
             <X size={18} />
           </button>
@@ -92,18 +90,6 @@ function CategoryModal({ open, editing, topLevel, onClose, onSave, saving }) {
             <label className="label">Name <span className="text-red-400">*</span></label>
             <input className="input-field" required value={form.name}
               onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
-          </div>
-
-          {/* Parent */}
-          <div>
-            <label className="label">Category Type</label>
-            <select className="select-field" value={form.parent}
-              onChange={(e) => setForm(f => ({ ...f, parent: e.target.value }))}>
-              <option value="">Main Category</option>
-              {topLevel.filter(c => c.id !== editing?.id).map(c => (
-                <option key={c.id} value={c.id}>Sub category under {c.name}</option>
-              ))}
-            </select>
           </div>
 
           {/* Description */}
@@ -171,11 +157,11 @@ export default function Categories() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-navy-900">Main Category Menu</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Create main home categories and optional sub categories for products.</p>
+          <h1 className="text-2xl font-bold text-navy-900">Category Menu</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Create product categories for the shop.</p>
         </div>
         <button className="btn-primary flex items-center gap-2" onClick={openAdd}>
-          <Plus size={16} /> Add Main Category
+          <Plus size={16} /> Add Category
         </button>
       </div>
 
@@ -183,7 +169,6 @@ export default function Categories() {
         key={editing?.id ?? 'new'}
         open={showModal}
         editing={editing}
-        topLevel={topLevel}
         onClose={closeModal}
         onSave={(fd) => saveMutation.mutate(fd)}
         saving={saveMutation.isPending}

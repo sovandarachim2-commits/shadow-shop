@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { PackageCheck, Tag, Plus, Edit, Trash2, Star, X, Minus } from 'lucide-react'
+import { PackageCheck, Tag, Plus, Edit, Trash2, Star, X, Minus, Image, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Modal } from '@/components/ui/Modal'
@@ -8,6 +8,7 @@ import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 
 function SetForm({ set, onSave, onClose, saving }) {
+  const fileInputRef = useRef(null)
   const [form, setForm] = useState({
     name: set?.name || '',
     description: set?.description || '',
@@ -16,6 +17,8 @@ function SetForm({ set, onSave, onClose, saving }) {
     is_active: set?.is_active ?? true,
     is_featured: set?.is_featured ?? false,
   })
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(set?.image_url || null)
   const [selectedItems, setSelectedItems] = useState(
     set?.items?.map((i) => ({
       product: i.product,
@@ -34,6 +37,13 @@ function SetForm({ set, onSave, onClose, saving }) {
   })
 
   const f = (k, v) => setForm((s) => ({ ...s, [k]: v }))
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
 
   const addProduct = () => {
     if (!selectedProductId) return
@@ -72,6 +82,41 @@ function SetForm({ set, onSave, onClose, saving }) {
     <div className="flex flex-col gap-5 p-6">
       {/* Basic info */}
       <div className="grid gap-4">
+        <div>
+          <label className="label">Set Image</label>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-purple-300 hover:bg-purple-50"
+            >
+              {imagePreview ? (
+                <img src={imagePreview} alt="" className="h-full w-full object-contain bg-white p-1" />
+              ) : (
+                <Image size={24} className="text-gray-300" />
+              )}
+            </button>
+            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-secondary text-sm"
+              >
+                <Upload size={15} /> {imagePreview ? 'Change Image' : 'Upload Image'}
+              </button>
+              <p className="mt-2 text-xs font-semibold text-gray-400">
+                PNG, JPG, WEBP. This image appears on Lucky Box and set cards.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageChange}
+              />
+            </div>
+          </div>
+        </div>
         <div>
           <label className="label">Set Name *</label>
           <input
@@ -226,7 +271,7 @@ function SetForm({ set, onSave, onClose, saving }) {
       {/* Actions */}
       <div className="flex gap-3 border-t border-gray-100 pt-2">
         <button
-          onClick={() => onSave(form, selectedItems)}
+          onClick={() => onSave(form, selectedItems, imageFile)}
           disabled={saving}
           className="btn-primary flex-1 justify-center disabled:opacity-60"
         >
@@ -251,15 +296,29 @@ export default function ProductSets() {
     queryFn: () => productsApi.sets.list().then((r) => r.data?.results ?? r.data ?? []),
   })
 
-  const handleSave = async (form, items) => {
-    if (!form.name.trim()) return toast.error('Name is required')
-    if (!form.price) return toast.error('Price is required')
-
+  const buildSetPayload = (form, imageFile) => {
     const data = {
       ...form,
       price: parseFloat(form.price),
       discount_price: form.discount_price ? parseFloat(form.discount_price) : null,
     }
+
+    if (!imageFile) return data
+
+    const fd = new FormData()
+    Object.entries(data).forEach(([key, value]) => {
+      if (value == null || value === '') return
+      fd.append(key, value)
+    })
+    fd.append('image', imageFile)
+    return fd
+  }
+
+  const handleSave = async (form, items, imageFile) => {
+    if (!form.name.trim()) return toast.error('Name is required')
+    if (!form.price) return toast.error('Price is required')
+
+    const data = buildSetPayload(form, imageFile)
 
     setSaving(true)
     try {
@@ -359,8 +418,12 @@ export default function ProductSets() {
               >
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-700">
-                      <PackageCheck size={18} />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-purple-50 text-purple-700">
+                      {s.image_url ? (
+                        <img src={s.image_url} alt={s.name} className="h-full w-full object-contain bg-white p-1" />
+                      ) : (
+                        <PackageCheck size={18} />
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-1.5">

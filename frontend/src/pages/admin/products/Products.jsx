@@ -15,14 +15,6 @@ const IMAGE_MAX_SIZE = 1800
 const IMAGE_QUALITY = 0.92
 const IMAGE_COMPRESS_THRESHOLD = 2 * 1024 * 1024
 
-function toDatetimeLocal(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const offset = date.getTimezoneOffset() * 60000
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
-}
-
 function loadImage(file) {
   return new Promise((resolve, reject) => {
     const img = new window.Image()
@@ -96,16 +88,13 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
     brand: product?.brand || '',
     description: product?.description || '',
     benefits: product?.benefits || '',
+    how_to_use: product?.how_to_use || '',
     unit: product?.unit || 'piece',
     cost_price: product?.cost_price || '',
     wholesale_price: product?.wholesale_price || '',
     retail_price: product?.retail_price || '',
-    flash_sale_price: product?.flash_sale_price || '',
-    flash_sale_starts_at: toDatetimeLocal(product?.flash_sale_starts_at),
-    flash_sale_ends_at: toDatetimeLocal(product?.flash_sale_ends_at),
     min_order_qty: product?.min_order_qty || 1,
     is_active: product?.is_active ?? true,
-    is_featured: product?.is_featured ?? false,
     is_new_arrival: product?.is_new_arrival ?? false,
     is_best_seller: product?.is_best_seller ?? false,
   })
@@ -116,16 +105,8 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
     e.preventDefault()
 
     const nextErrors = {}
-    if (!form.code.trim()) nextErrors.code = 'Product code is required'
     if (!form.name.trim()) nextErrors.name = 'Product name is required'
     if (!String(form.retail_price).trim()) nextErrors.retail_price = 'Retail price is required'
-    if (form.is_featured) {
-      if (!String(form.flash_sale_price).trim()) nextErrors.flash_sale_price = 'Flash sale price is required'
-      if (Number(form.flash_sale_price) >= Number(form.retail_price)) nextErrors.flash_sale_price = 'Sale price must be lower than retail price'
-      if (form.flash_sale_starts_at && form.flash_sale_ends_at && new Date(form.flash_sale_starts_at) >= new Date(form.flash_sale_ends_at)) {
-        nextErrors.flash_sale_ends_at = 'End time must be after start time'
-      }
-    }
 
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
@@ -142,8 +123,9 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="label">Product Code *</label>
-          <input className="input-field" value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="e.g. SKU001" />
+          <label className="label">Product Code</label>
+          <input className="input-field" value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="Auto generated if empty" />
+          <p className="mt-1 text-xs font-semibold text-gray-400">Leave empty for auto SKU, or type your own product code.</p>
           {errors.code && <p className="mt-1 text-xs font-semibold text-red-500">{errors.code}</p>}
         </div>
         <div>
@@ -194,32 +176,6 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
           <input type="number" step="0.01" className="input-field" value={form.retail_price} onChange={(e) => set('retail_price', e.target.value)} />
           {errors.retail_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.retail_price}</p>}
         </div>
-        <div className="md:col-span-2 rounded-2xl border border-pink-100 bg-pink-50/60 p-4">
-          <div className="mb-3">
-            <h3 className="text-sm font-black text-gray-950">Flash Sale</h3>
-            <p className="mt-1 text-xs font-semibold text-gray-500">Set a time-limited discount for this product on the home Flash Sale row.</p>
-          </div>
-          <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm font-black text-gray-800">
-            <input type="checkbox" checked={form.is_featured} onChange={(e) => set('is_featured', e.target.checked)} className="h-4 w-4 accent-pink-600" />
-            Show this product in Flash Sale
-          </label>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="label">Sale Price ($)</label>
-              <input type="number" step="0.01" min="0" className="input-field bg-white" value={form.flash_sale_price} onChange={(e) => set('flash_sale_price', e.target.value)} placeholder="e.g. 9.99" disabled={!form.is_featured} />
-              {errors.flash_sale_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.flash_sale_price}</p>}
-            </div>
-            <div>
-              <label className="label">Start Time</label>
-              <input type="datetime-local" className="input-field bg-white" value={form.flash_sale_starts_at} onChange={(e) => set('flash_sale_starts_at', e.target.value)} disabled={!form.is_featured} />
-            </div>
-            <div>
-              <label className="label">End Time</label>
-              <input type="datetime-local" className="input-field bg-white" value={form.flash_sale_ends_at} onChange={(e) => set('flash_sale_ends_at', e.target.value)} disabled={!form.is_featured} />
-              {errors.flash_sale_ends_at && <p className="mt-1 text-xs font-semibold text-red-500">{errors.flash_sale_ends_at}</p>}
-            </div>
-          </div>
-        </div>
         <div className="md:col-span-2">
           <label className="label">Description</label>
           <textarea className="input-field resize-none" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} />
@@ -227,6 +183,10 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
         <div className="md:col-span-2">
           <label className="label">Benefits</label>
           <textarea className="input-field resize-none" rows={2} value={form.benefits} onChange={(e) => set('benefits', e.target.value)} />
+        </div>
+        <div className="md:col-span-2">
+          <label className="label">How to Use</label>
+          <textarea className="input-field resize-none" rows={3} value={form.how_to_use} onChange={(e) => set('how_to_use', e.target.value)} placeholder="Steps or usage instructions for customers" />
         </div>
         <div className="flex flex-wrap gap-4 md:col-span-2">
           {[['is_active', 'Active'], ['is_new_arrival', 'New Arrival'], ['is_best_seller', 'Best Seller']].map(([k, l]) => (
@@ -618,9 +578,6 @@ export default function Products() {
     cost_price: Number(form.cost_price) || 0,
     wholesale_price: Number(form.wholesale_price) || 0,
     retail_price: Number(form.retail_price) || 0,
-    flash_sale_price: form.is_featured && form.flash_sale_price ? Number(form.flash_sale_price) : null,
-    flash_sale_starts_at: form.is_featured && form.flash_sale_starts_at ? form.flash_sale_starts_at : null,
-    flash_sale_ends_at: form.is_featured && form.flash_sale_ends_at ? form.flash_sale_ends_at : null,
   })
 
   const handleSave = async (form, files) => {
@@ -730,14 +687,7 @@ export default function Products() {
                 <Td><span className="text-sm">{formatCurrency(p.cost_price)}</span></Td>
                 <Td><span className="text-sm font-semibold">{formatCurrency(p.wholesale_price)}</span></Td>
                 <Td>
-                  <div>
-                    <span className="text-sm">{formatCurrency(p.retail_price)}</span>
-                    {p.flash_sale_price && (
-                      <p className="mt-0.5 text-xs font-black text-pink-600">
-                        Flash: {formatCurrency(p.flash_sale_price)}
-                      </p>
-                    )}
-                  </div>
+                  <span className="text-sm">{formatCurrency(p.retail_price)}</span>
                 </Td>
                 <Td>
                   <span className={`text-sm font-semibold ${p.current_stock <= 0 ? 'text-red-500' : p.current_stock <= 5 ? 'text-yellow-500' : 'text-green-600'}`}>
@@ -745,14 +695,7 @@ export default function Products() {
                   </span>
                 </Td>
                 <Td>
-                  <div className="flex flex-col items-start gap-1">
-                    <Badge variant={p.is_active ? 'success' : 'default'}>{p.is_active ? 'Active' : 'Inactive'}</Badge>
-                    {p.is_featured && (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${p.is_flash_sale_active ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {p.is_flash_sale_active ? 'Flash Sale Live' : 'Flash Sale'}
-                      </span>
-                    )}
-                  </div>
+                  <Badge variant={p.is_active ? 'success' : 'default'}>{p.is_active ? 'Active' : 'Inactive'}</Badge>
                 </Td>
                 <Td>
                   <div className="flex gap-1">

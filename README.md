@@ -114,7 +114,7 @@ python manage.py runserver
 ```
 cd "C:\xampp\htdocs\Shadow Shop\backend"
 .\venv\Scripts\Activate.ps1
-python manage.py runserver 8001
+python manage.py runserver 0.0.0.0:8001
 
 
 ### Frontend
@@ -123,6 +123,29 @@ cd frontend
 npm install
 npm run dev
 ```
+
+### Open From Another Device On The Same Wi-Fi
+
+Use your computer IP with the frontend port:
+
+```text
+http://192.168.110.89:5173
+```
+
+Keep both servers running:
+
+```bash
+# Backend
+cd "C:\xampp\htdocs\Shadow Shop\backend"
+.\venv\Scripts\Activate.ps1
+python manage.py runserver 0.0.0.0:8001
+
+# Frontend
+cd "C:\xampp\htdocs\Shadow Shop\frontend"
+npm run dev
+```
+
+If your computer IP changes, update `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` in `backend/.env`.
 
 ### API Documentation
 - Swagger UI: http://localhost:8000/api/docs/
@@ -156,4 +179,32 @@ npm run dev
 git clone <repo> /var/www/shadow_shop
 cd /var/www/shadow_shop
 bash deploy/setup.sh
-# Edit .env, then:![alt text](image.png)
+# Edit backend/.env and deploy/nginx.conf with your real domain.
+bash deploy/deploy.sh
+```
+
+## HTTPS Setup
+
+1. Point your domain DNS `A` record to the server public IP.
+2. In `deploy/nginx.conf`, replace `your-domain.com` and `www.your-domain.com` with your real domain names.
+3. In `/var/www/shadow_shop/backend/.env`, set:
+
+```env
+DEBUG=False
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+CORS_ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+FRONTEND_URL=https://your-domain.com
+BACKEND_URL=https://your-domain.com
+```
+
+4. Install the SSL certificate:
+
+```bash
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+sudo nginx -t
+sudo systemctl reload nginx
+sudo systemctl restart shadow_shop
+```
+
+After this, `http://your-domain.com` redirects to `https://your-domain.com`.

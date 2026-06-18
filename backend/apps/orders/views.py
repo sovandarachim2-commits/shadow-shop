@@ -13,8 +13,15 @@ from .serializers import (
     CustomerSerializer, OrderListSerializer, OrderDetailSerializer,
     OrderCreateSerializer, CustomerCheckoutSerializer, OrderStatusHistorySerializer,
     WishlistSerializer, CartItemSerializer, PrepareRecordSerializer, OutRecordSerializer,
+    OrderAdminUpdateSerializer,
 )
 from utils.permissions import IsStaff, IsSeller, IsCashier
+from utils.pagination import StandardPagination
+
+
+class OrderPagination(StandardPagination):
+    page_size = 100
+    max_page_size = 1000
 
 
 class CustomerFilter(filters.FilterSet):
@@ -50,10 +57,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         'customer', 'seller', 'bakong_payment', 'aba_payment'
     ).prefetch_related(
         'items__product__images',
+        'items__product_set',
         'items',
         'status_history',
     ).order_by('-created_at')
     permission_classes = [IsAuthenticated, IsStaff]
+    pagination_class = OrderPagination
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = OrderFilter
     search_fields = ['order_number', 'customer__name', 'customer__phone']
@@ -140,6 +149,14 @@ class OrderViewSet(viewsets.ModelViewSet):
             order.printed_by = request.user
             order.save()
 
+        return Response(OrderDetailSerializer(order, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def admin_update(self, request, pk=None):
+        order = self.get_object()
+        serializer = OrderAdminUpdateSerializer(order, data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
         return Response(OrderDetailSerializer(order, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])

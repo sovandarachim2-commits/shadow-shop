@@ -1,0 +1,231 @@
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, Gift, Minus, PackageSearch, Plus, ShoppingCart, Trash2, Zap, Heart } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { productsApi } from '@/api/products'
+import { formatCurrency } from '@/utils/helpers'
+import useCartStore from '@/store/cartStore'
+import { ProductThumb } from '@/components/customer/CustomerUi'
+
+function toCartProduct(productSet) {
+  const imageUrl = productSet.image_url || productSet.image
+  const price = Number(productSet.discount_price || productSet.price || 0)
+  return {
+    id: `set-${productSet.id}`,
+    cart_key: `set-${productSet.id}`,
+    item_type: 'set',
+    product_set_id: productSet.id,
+    name: productSet.name,
+    primary_image: imageUrl,
+    image_url: imageUrl,
+    retail_price: price,
+    cost_price: 0,
+    current_stock: Number(productSet.current_stock || 0),
+    category_name: 'Product Set',
+  }
+}
+
+export default function ProductSetDetail() {
+  const { t } = useTranslation()
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const { addItem, updateQuantity, items, clearSelection, toggleSelected } = useCartStore()
+  const [imageFailed, setImageFailed] = useState(false)
+
+  const { data: productSet, isLoading, isError } = useQuery({
+    queryKey: ['product-set-detail', id],
+    queryFn: () => productsApi.sets.get(id).then((r) => r.data),
+    enabled: !!id,
+  })
+
+  const cartProduct = useMemo(() => productSet ? toCartProduct(productSet) : null, [productSet])
+  const cartItem = cartProduct ? items.find((item) => item.product?.cart_key === cartProduct.cart_key) : null
+  const qty = cartItem?.quantity || 0
+  const setStock = Number(productSet?.current_stock || 0)
+  const price = Number(productSet?.discount_price || productSet?.price || 0)
+  const oldPrice = productSet?.discount_price ? Number(productSet?.price || 0) : 0
+  const imageUrl = productSet?.image_url || productSet?.image
+  const isInStock = setStock > 0
+
+  const addSetToCart = () => {
+    if (!cartProduct || !isInStock) return
+    addItem(cartProduct, 1)
+    toast.success('Product set added to cart')
+  }
+
+  const buyNow = () => {
+    if (!cartProduct || !isInStock) return
+    addItem(cartProduct, 1)
+    clearSelection()
+    toggleSelected(cartProduct.cart_key)
+    navigate('/checkout')
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-8 md:grid-cols-2">
+        <div className="h-[420px] animate-pulse rounded-3xl bg-pink-50" />
+        <div className="space-y-4">
+          <div className="h-8 w-2/3 animate-pulse rounded bg-gray-100" />
+          <div className="h-5 w-1/2 animate-pulse rounded bg-gray-100" />
+          <div className="h-12 w-1/3 animate-pulse rounded bg-gray-100" />
+        </div>
+      </div>
+    )
+  }
+
+  if (isError || !productSet) {
+    return (
+      <div className="mx-auto max-w-lg py-20 text-center">
+        <PackageSearch size={52} className="mx-auto mb-4 text-gray-200" />
+        <h1 className="text-xl font-black text-gray-950">Product set not found</h1>
+        <button onClick={() => navigate('/shop')} className="shop-btn-primary mt-6 px-8">
+          Browse Products
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white pb-28 md:pb-0">
+      <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
+        <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+          <ChevronLeft size={20} />
+        </button>
+        <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('product.details')}</h1>
+        <div className="flex items-center justify-end gap-2">
+          <button onClick={() => navigate('/wishlist')} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 text-pink-600 active:scale-95">
+            <Heart size={18} />
+          </button>
+          <button onClick={() => navigate('/cart')} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
+            <ShoppingCart size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 hidden items-center justify-between gap-3 md:flex">
+        <div className="flex items-center gap-3 text-sm font-black text-gray-600 hover:text-pink-600">
+          <button onClick={() => navigate(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700">
+            <ChevronLeft size={22} />
+          </button>
+          <span>{t('product.details')}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/wishlist')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-pink-600 active:scale-95">
+            <Heart size={18} />
+          </button>
+          <button onClick={() => navigate('/cart')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
+            <ShoppingCart size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-8 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:items-start">
+        <section className="overflow-hidden rounded-3xl border border-pink-100 bg-white shadow-card">
+          <div className="relative aspect-square bg-pink-50">
+            {imageUrl && !imageFailed ? (
+              <img
+                src={imageUrl}
+                alt={productSet.name}
+                onError={() => setImageFailed(true)}
+                className="h-full w-full object-contain p-4"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-pink-50 to-rose-100">
+                <div className="flex h-28 w-28 items-center justify-center rounded-[32px] bg-pink-600 text-white shadow-xl shadow-pink-200">
+                  <Gift size={50} />
+                </div>
+              </div>
+            )}
+            <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm">
+              PRODUCT SET
+            </span>
+          </div>
+        </section>
+
+        <section>
+          <p className="text-xs font-black uppercase tracking-wide text-pink-600">Product Set</p>
+          <h1 className="mt-2 text-3xl font-black leading-tight text-gray-950 md:text-4xl">{productSet.name}</h1>
+          <p className="mt-3 text-sm font-semibold text-gray-500">
+            {productSet.items?.length || 0} products inside
+          </p>
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide ${isInStock ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+              <span className={`h-2 w-2 rounded-full ${isInStock ? 'bg-green-500' : 'bg-red-500'}`} />
+              {isInStock ? t('common.inStock') : t('common.outOfStock')}
+            </span>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-end gap-3">
+            <span className="text-4xl font-black text-pink-600">{formatCurrency(price)}</span>
+            {oldPrice > price && (
+              <span className="text-base font-bold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
+            )}
+          </div>
+
+          <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
+            {productSet.description || 'This set includes selected products with special bundle pricing.'}
+          </p>
+
+
+          <div className="mt-6 hidden flex-col gap-3 sm:flex-row md:flex">
+            {qty === 0 ? (
+              <button
+                onClick={addSetToCart}
+                disabled={!isInStock}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-pink-500 bg-white py-4 text-base font-black text-pink-600 transition hover:bg-pink-50 disabled:border-gray-200 disabled:text-gray-400"
+              >
+                <ShoppingCart size={19} /> Add to Cart
+              </button>
+            ) : (
+              <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-pink-100 bg-pink-50 py-3">
+                <button onClick={() => updateQuantity(cartProduct.cart_key, qty - 1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white">
+                  {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
+                </button>
+                <span className="min-w-10 text-center text-base font-black text-gray-950">{qty}</span>
+                <button onClick={() => updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))} disabled={qty >= setStock} className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white disabled:opacity-40">
+                  <Plus size={16} />
+                </button>
+              </div>
+            )}
+            <button onClick={buyNow} disabled={!isInStock} className="shop-btn-primary flex-1 py-4 text-base disabled:opacity-50">
+              <Zap size={19} /> Buy Now
+            </button>
+          </div>
+
+          <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-5 shadow-card">
+            <h2 className="text-lg font-black text-gray-950">Products Inside</h2>
+            <div className="mt-4 space-y-3">
+              {(productSet.items || []).map((item) => (
+                <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-gray-100 p-3">
+                  <ProductThumb product={{ name: item.product_name, primary_image: item.product_image }} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black text-gray-950">{item.product_name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-gray-950">x{item.quantity}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] md:hidden">
+        <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-gray-400">{isInStock ? t('common.inStock') : t('common.outOfStock')}</p>
+            <p className="text-2xl font-black leading-tight text-pink-600">{formatCurrency(price)}</p>
+          </div>
+          <button onClick={addSetToCart} disabled={!isInStock} className="shrink-0 rounded-full bg-pink-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-pink-200 disabled:bg-gray-200 disabled:text-gray-400">
+            Add to Cart
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

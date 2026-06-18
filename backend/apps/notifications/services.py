@@ -11,6 +11,9 @@ class TelegramService:
     def __init__(self):
         self.config = TelegramConfig.objects.filter(is_active=True).first()
 
+    def get_configs_for(self, flag: str):
+        return TelegramConfig.objects.filter(is_active=True, **{flag: True})
+
     @staticmethod
     def is_placeholder(value: str) -> bool:
         clean = (value or '').strip()
@@ -62,11 +65,15 @@ class TelegramService:
 
         try:
             url = f"https://api.telegram.org/bot{self.config.bot_token}/sendMessage"
-            response = requests.post(url, json={
+            payload = {
                 'chat_id': recipient,
                 'text': message,
                 'parse_mode': 'HTML',
-            }, timeout=10)
+            }
+            if self.config.topic_id and not chat_id:
+                payload['message_thread_id'] = self.config.topic_id
+
+            response = requests.post(url, json=payload, timeout=10)
 
             if response.status_code == 200:
                 from django.utils import timezone
@@ -86,26 +93,44 @@ class TelegramService:
             logger.error(f"Telegram notification failed: {e}")
             return False
 
+    def send_to_configs(self, configs, message: str, event_type: str) -> bool:
+        sent = False
+        current_config = self.config
+        for config in configs:
+            self.config = config
+            sent = self.send_message(message, event_type) or sent
+        self.config = current_config
+        return sent
+
     def notify_new_order(self, order) -> bool:
-        if not self.config or not self.config.notify_new_order:
+        configs = self.get_configs_for('notify_new_order')
+        if not configs.exists():
             return False
+        source = 'Customer Checkout' if getattr(order.seller, 'role', '') == 'customer' else 'Admin/Staff Order'
+        item_lines = [
+            f"- {item.product_name} x{item.quantity} @ ${item.unit_price}"
+            for item in order.items.all()[:10]
+        ]
+        items_text = "\n".join(item_lines) if item_lines else "-"
         message = (
             f"🛍️ <b>New Order!</b>\n"
             f"Order: <code>#{order.order_number}</code>\n"
+            f"Source: {source}\n"
             f"Customer: {order.customer.name}\n"
             f"Phone: {order.customer.phone}\n"
+            f"Items:\n{items_text}\n"
             f"Total: ${order.grand_total}\n"
             f"Payment: {order.get_payment_status_display()}\n"
             f"Seller: {order.seller.get_full_name() if order.seller else 'N/A'}"
         )
-        return self.send_message(message, 'new_order')
+        return self.send_to_configs(configs, message, 'new_order')
 
     @classmethod
     def notify_new_order_async(cls, order_id) -> None:
         def send():
             try:
                 from apps.orders.models import Order
-                order = Order.objects.select_related('customer', 'seller').get(pk=order_id)
+                order = Order.objects.select_related('customer', 'seller').prefetch_related('items').get(pk=order_id)
                 cls().notify_new_order(order)
             except Exception as e:
                 logger.error(f"Async Telegram new order notification failed: {e}")
@@ -113,7 +138,8 @@ class TelegramService:
         Thread(target=send, daemon=True).start()
 
     def notify_low_stock(self, product, qty: int) -> bool:
-        if not self.config or not self.config.notify_low_stock:
+        configs = self.get_configs_for('notify_low_stock')
+        if not configs.exists():
             return False
         message = (
             f"⚠️ <b>Low Stock Alert!</b>\n"
@@ -121,10 +147,11 @@ class TelegramService:
             f"Code: {product.code}\n"
             f"Current Stock: {qty}"
         )
-        return self.send_message(message, 'low_stock')
+        return self.send_to_configs(configs, message, 'low_stock')
 
     def notify_payment_received(self, order) -> bool:
-        if not self.config or not self.config.notify_payment:
+        configs = self.get_configs_for('notify_payment')
+        if not configs.exists():
             return False
         message = (
             f"💰 <b>Payment Received!</b>\n"
@@ -133,10 +160,11 @@ class TelegramService:
             f"Method: {order.get_payment_method_display()}\n"
             f"Customer: {order.customer.name}"
         )
-        return self.send_message(message, 'payment')
+        return self.send_to_configs(configs, message, 'payment')
 
     def notify_delivery_update(self, delivery) -> bool:
-        if not self.config or not self.config.notify_delivery:
+        configs = self.get_configs_for('notify_delivery')
+        if not configs.exists():
             return False
         message = (
             f"🚚 <b>Delivery Update!</b>\n"
@@ -145,4 +173,4 @@ class TelegramService:
             f"Customer: {delivery.order.customer.name}\n"
             f"Tracking: {delivery.tracking_number or 'N/A'}"
         )
-        return self.send_message(message, 'delivery')
+        return self.send_to_configs(configs, message, 'delivery')

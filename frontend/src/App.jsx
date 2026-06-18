@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { lazy, Suspense, useEffect } from 'react'
+import { Component, lazy, Suspense, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -48,12 +48,14 @@ import InventoryReport from '@/pages/admin/reports/InventoryReport'
 import Users from '@/pages/admin/users/Users'
 import Roles from '@/pages/admin/users/Roles'
 import ActivityLogs from '@/pages/admin/users/ActivityLogs'
+import AdminProfile from '@/pages/admin/users/AdminProfile'
 import Settings from '@/pages/admin/settings/Settings'
 
 // Customer Pages
 import Home from '@/pages/customer/Home'
 import ProductList from '@/pages/customer/ProductList'
 import ProductDetail from '@/pages/customer/ProductDetail'
+import ProductSetDetail from '@/pages/customer/ProductSetDetail'
 import Cart from '@/pages/customer/Cart'
 import Checkout from '@/pages/customer/Checkout'
 import MyOrders from '@/pages/customer/MyOrders'
@@ -63,6 +65,7 @@ import Wishlist from '@/pages/customer/Wishlist'
 import OrderTracking from '@/pages/customer/OrderTracking'
 import AddressBook from '@/pages/customer/AddressBook'
 import LuckyBox from '@/pages/customer/LuckyBox'
+import FlashSale from '@/pages/customer/FlashSale'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +76,39 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+class AppErrorBoundary extends Component {
+  state = { error: null }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
+        <div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-5 shadow-lg">
+          <p className="text-lg font-black text-gray-950">App could not load</p>
+          <p className="mt-2 text-sm leading-6 text-gray-600">
+            The page opened, but the app hit an error while starting.
+          </p>
+          <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">
+            {this.state.error?.message || 'Unknown error'}
+          </pre>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 w-full rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
 
 function RequireAuth({ children, adminOnly = false }) {
   const { isAuthenticated, user } = useAuthStore()
@@ -139,10 +175,11 @@ function LazyPage({ children }) {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthBootstrap />
-        <Routes>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthBootstrap />
+          <Routes>
           {/* Auth */}
           <Route path="/login" element={<Login />} />
 
@@ -151,7 +188,9 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="shop" element={<ProductList />} />
             <Route path="lucky-box" element={<LuckyBox />} />
+            <Route path="flash-sale" element={<FlashSale />} />
             <Route path="product/:id" element={<ProductDetail />} />
+            <Route path="product-set/:id" element={<ProductSetDetail />} />
             <Route path="cart" element={<Cart />} />
             <Route path="checkout" element={
               <RequireAuth>
@@ -255,6 +294,7 @@ export default function App() {
             <Route path="reports/inventory" element={<InventoryReport />} />
 
             {/* Administration */}
+            <Route path="profile" element={<AdminProfile />} />
             <Route path="users" element={<Users />} />
             <Route path="roles" element={<Roles />} />
             <Route path="activity" element={<ActivityLogs />} />
@@ -269,37 +309,38 @@ export default function App() {
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+          </Routes>
 
-        <Toaster
-          position="top-right"
-          containerStyle={{
-            top: 'max(1rem, calc(env(safe-area-inset-top) + 1rem))',
-            right: '0.75rem',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            padding: '0 0.75rem',
-          }}
-          toastOptions={{
-            className: '',
-            style: {
-              borderRadius: '12px',
-              background: '#1e1b4b',
-              color: '#fff',
-              fontSize: '14px',
-              maxWidth: 'min(92vw, 420px)',
-            },
-            success: {
-              style: { background: '#059669', color: '#fff' },
-              iconTheme: { primary: '#fff', secondary: '#059669' },
-            },
-            error: {
-              style: { background: '#dc2626', color: '#fff' },
-              iconTheme: { primary: '#fff', secondary: '#dc2626' },
-            },
-          }}
-        />
-      </BrowserRouter>
-    </QueryClientProvider>
+          <Toaster
+            position="top-right"
+            containerStyle={{
+              top: 'max(1rem, calc(env(safe-area-inset-top) + 1rem))',
+              right: '0.75rem',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '0 0.75rem',
+            }}
+            toastOptions={{
+              className: '',
+              style: {
+                borderRadius: '12px',
+                background: '#1e1b4b',
+                color: '#fff',
+                fontSize: '14px',
+                maxWidth: 'min(92vw, 420px)',
+              },
+              success: {
+                style: { background: '#059669', color: '#fff' },
+                iconTheme: { primary: '#fff', secondary: '#059669' },
+              },
+              error: {
+                style: { background: '#dc2626', color: '#fff' },
+                iconTheme: { primary: '#fff', secondary: '#dc2626' },
+              },
+            }}
+          />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   )
 }

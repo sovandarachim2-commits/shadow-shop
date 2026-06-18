@@ -12,6 +12,7 @@ export const ordersApi = {
     get: (id) => client.get(`/orders/list/${id}/`),
     create: (data) => client.post('/orders/list/', data),
     update: (id, data) => client.patch(`/orders/list/${id}/`, data),
+    adminUpdate: (id, data) => client.post(`/orders/list/${id}/admin_update/`, data),
     delete: (id) => client.delete(`/orders/list/${id}/`),
     updateStatus: (id, data) => client.post(
       `/orders/list/${id}/update_status/`,

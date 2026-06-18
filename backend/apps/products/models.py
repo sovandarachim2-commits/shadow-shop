@@ -1,4 +1,6 @@
 from django.db import models
+from django.conf import settings
+from django.db.models import Avg
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -102,6 +104,7 @@ class Product(models.Model):
     flash_sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     flash_sale_starts_at = models.DateTimeField(null=True, blank=True)
     flash_sale_ends_at = models.DateTimeField(null=True, blank=True)
+    flash_sale_max_order_qty = models.PositiveIntegerField(null=True, blank=True)
     min_order_qty = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
@@ -169,6 +172,41 @@ class ProductImage(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - Image {self.order}"
+
+
+class ProductReview(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='product_reviews')
+    rating = models.PositiveSmallIntegerField(default=5)
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_reviews'
+        ordering = ['-created_at']
+        unique_together = ['product', 'user']
+
+    def __str__(self):
+        return f"{self.product.name} - {self.rating}/5"
+
+    def save(self, *args, **kwargs):
+        self.rating = max(1, min(5, int(self.rating or 5)))
+        super().save(*args, **kwargs)
+        self.update_product_rating()
+
+    def delete(self, *args, **kwargs):
+        product = self.product
+        result = super().delete(*args, **kwargs)
+        self.update_product_rating(product)
+        return result
+
+    def update_product_rating(self, product=None):
+        product = product or self.product
+        stats = product.reviews.aggregate(avg=Avg('rating'), count=models.Count('id'))
+        product.rating = round(stats['avg'] or 0, 2)
+        product.review_count = stats['count'] or 0
+        product.save(update_fields=['rating', 'review_count'])
 
 
 class ProductSet(models.Model):

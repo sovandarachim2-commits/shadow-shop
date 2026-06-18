@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { Shield, Loader2, Check, X, Plus, Trash2, CheckSquare, Square, RotateCcw } from 'lucide-react'
+import { Shield, Loader2, Check, X, Plus, Trash2, CheckSquare, Square, RotateCcw, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
 
@@ -77,8 +77,9 @@ function AddRoleModal({ onClose, onCreated }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Roles() {
   const [selectedRole, setSelectedRole] = useState(null)
-  const [saving, setSaving] = useState({})
+  const [draftGrants, setDraftGrants] = useState({})
   const [showAddModal, setShowAddModal] = useState(false)
+  const [savePending, setSavePending] = useState(false)
   const qc = useQueryClient()
 
   const { data: roles = [], isLoading: loadingRoles } = useQuery({
@@ -114,11 +115,34 @@ export default function Roles() {
   })
 
   // map `module_action` → granted RolePermission id
-  const grantedMap = {}
-  rolePerms.forEach((rp) => {
-    const k = `${rp.permission_detail?.module}_${rp.permission_detail?.action}`
-    grantedMap[k] = rp.id
-  })
+  const grantedMap = useMemo(() => {
+    const map = {}
+    rolePerms.forEach((rp) => {
+      const k = `${rp.permission_detail?.module}_${rp.permission_detail?.action}`
+      map[k] = rp.id
+    })
+    return map
+  }, [rolePerms])
+
+  const serverGrantState = useMemo(() => {
+    const state = {}
+    rolePerms.forEach((rp) => {
+      const k = `${rp.permission_detail?.module}_${rp.permission_detail?.action}`
+      state[k] = true
+    })
+    return state
+  }, [rolePerms])
+
+  useEffect(() => {
+    setDraftGrants(serverGrantState)
+  }, [serverGrantState, activeRole])
+
+  const dirtyKeys = useMemo(() => {
+    const keys = new Set([...Object.keys(serverGrantState), ...Object.keys(draftGrants)])
+    return [...keys].filter((key) => Boolean(serverGrantState[key]) !== Boolean(draftGrants[key]))
+  }, [draftGrants, serverGrantState])
+
+  const hasUnsavedChanges = dirtyKeys.length > 0
 
   // map `module_action` → Permission id
   const permIdMap = {}
@@ -127,31 +151,17 @@ export default function Roles() {
   const modules = MODULE_ORDER.filter((m) => allPerms.some((p) => p.module === m))
   const actions = ACTION_ORDER.filter((a) => allPerms.some((p) => p.action === a))
 
-  const toggle = useCallback(async (module, action) => {
+  const toggle = (module, action) => {
     const key = `${module}_${action}`
-    if (saving[key]) return
     const permId = permIdMap[key]
     if (!permId) return
-    const grantedId = grantedMap[key]
-
-    setSaving((s) => ({ ...s, [key]: true }))
-    try {
-      if (grantedId) {
-        await authApi.rolePermissionDelete(grantedId)
-      } else {
-        await authApi.rolePermissionGrant({ role: activeRole, permission: permId, granted: true })
-      }
-      await qc.invalidateQueries({ queryKey: ['role-perms', activeRole] })
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Failed to update permission')
-    } finally {
-      setSaving((s) => ({ ...s, [key]: false }))
-    }
-  }, [saving, grantedMap, permIdMap, activeRole, qc])
+    setDraftGrants((current) => ({ ...current, [key]: !current[key] }))
+  }
 
   const [bulkPending, setBulkPending] = useState(false)
 
   const resetDefaults = async () => {
+    if (hasUnsavedChanges && !window.confirm('Discard unsaved changes and reset this role to defaults?')) return
     setBulkPending(true)
     try {
       await authApi.rolePermissionResetDefaults(activeRole)
@@ -163,22 +173,41 @@ export default function Roles() {
   }
 
   const grantAll = async () => {
-    setBulkPending(true)
-    try {
-      const missing = allPerms.filter((p) => !grantedMap[`${p.module}_${p.action}`])
-      await Promise.all(missing.map((p) => authApi.rolePermissionGrant({ role: activeRole, permission: p.id, granted: true })))
-      await qc.invalidateQueries({ queryKey: ['role-perms', activeRole] })
-      toast.success('All permissions granted')
-    } catch { toast.error('Failed to grant all') } finally { setBulkPending(false) }
+    const next = {}
+    allPerms.forEach((p) => { next[`${p.module}_${p.action}`] = true })
+    setDraftGrants(next)
   }
 
   const revokeAll = async () => {
-    setBulkPending(true)
+    setDraftGrants({})
+  }
+
+  const discardChanges = () => {
+    setDraftGrants(serverGrantState)
+  }
+
+  const savePermissions = async () => {
+    if (!activeRole || !hasUnsavedChanges) return
+    setSavePending(true)
     try {
-      await Promise.all(Object.values(grantedMap).map((id) => authApi.rolePermissionDelete(id)))
+      const toGrant = dirtyKeys.filter((key) => draftGrants[key])
+      const toRevoke = dirtyKeys.filter((key) => !draftGrants[key] && grantedMap[key])
+
+      await Promise.all([
+        ...toGrant.map((key) => authApi.rolePermissionGrant({
+          role: activeRole,
+          permission: permIdMap[key],
+          granted: true,
+        })),
+        ...toRevoke.map((key) => authApi.rolePermissionDelete(grantedMap[key])),
+      ])
       await qc.invalidateQueries({ queryKey: ['role-perms', activeRole] })
-      toast.success('All permissions revoked')
-    } catch { toast.error('Failed to revoke all') } finally { setBulkPending(false) }
+      toast.success('Permissions saved')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to save permissions')
+    } finally {
+      setSavePending(false)
+    }
   }
 
   const isLoading = loadingPerms || loadingRole || loadingRoles
@@ -198,11 +227,28 @@ export default function Roles() {
       <div className="page-header">
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Roles &amp; Permissions</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Click a cell to grant or revoke a permission</p>
+          <p className="text-gray-500 text-sm mt-0.5">Click permissions, then press Save to apply changes</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="btn-primary">
-          <Plus size={16} /> Add Role
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={discardChanges}
+            disabled={!hasUnsavedChanges || savePending}
+            className="btn-secondary disabled:opacity-50"
+          >
+            <RotateCcw size={16} /> Discard
+          </button>
+          <button
+            onClick={savePermissions}
+            disabled={!hasUnsavedChanges || savePending}
+            className="btn-primary disabled:opacity-50"
+          >
+            {savePending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save{hasUnsavedChanges ? ` (${dirtyKeys.length})` : ''}
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="btn-primary">
+            <Plus size={16} /> Add Role
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 flex items-center gap-3">
@@ -211,7 +257,10 @@ export default function Roles() {
           <select
             className="select-field w-56 pl-9 font-medium"
             value={activeRole ?? ''}
-            onChange={(e) => setSelectedRole(e.target.value)}
+            onChange={(e) => {
+              if (hasUnsavedChanges && !window.confirm('Switch role and discard unsaved changes?')) return
+              setSelectedRole(e.target.value)
+            }}
             disabled={loadingRoles}
           >
             {roles.map((r) => (
@@ -281,8 +330,9 @@ export default function Roles() {
                   </td>
                   {actions.map((act) => {
                     const key = `${mod}_${act}`
-                    const granted = !!grantedMap[key]
-                    const isSaving = !!saving[key]
+                    const granted = !!draftGrants[key]
+                    const changed = Boolean(serverGrantState[key]) !== granted
+                    const isSaving = false
                     return (
                       <td key={act} className="py-2 px-3 text-center">
                         {isSaving ? (
@@ -290,11 +340,12 @@ export default function Roles() {
                         ) : (
                           <button
                             onClick={() => toggle(mod, act)}
-                            className={`mx-auto flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                            disabled={savePending}
+                            className={`mx-auto flex h-7 w-7 items-center justify-center rounded-lg ring-2 transition-all disabled:opacity-60 ${
                               granted
                                 ? 'bg-green-100 text-green-600 hover:bg-red-50 hover:text-red-400'
                                 : 'bg-gray-100 text-gray-300 hover:bg-green-50 hover:text-green-500'
-                            }`}
+                            } ${changed ? 'ring-purple-300' : 'ring-transparent'}`}
                             title={granted ? 'Granted — click to revoke' : 'Not granted — click to grant'}
                           >
                             {granted ? <Check size={13} /> : <X size={13} />}

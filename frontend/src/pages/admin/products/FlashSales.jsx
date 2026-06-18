@@ -21,6 +21,7 @@ function FlashSaleForm({ products, saleProduct, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     product: saleProduct?.id ? String(saleProduct.id) : '',
     flash_sale_price: saleProduct?.flash_sale_price || '',
+    flash_sale_max_order_qty: saleProduct?.flash_sale_max_order_qty || '',
     flash_sale_starts_at: toDatetimeLocal(saleProduct?.flash_sale_starts_at),
     flash_sale_ends_at: toDatetimeLocal(saleProduct?.flash_sale_ends_at),
   })
@@ -37,6 +38,9 @@ function FlashSaleForm({ products, saleProduct, onClose, onSave, saving }) {
     }
     if (Number(form.flash_sale_price) >= Number(selectedProduct.retail_price)) {
       return toast.error('Flash sale price must be lower than retail price')
+    }
+    if (form.flash_sale_max_order_qty && Number(form.flash_sale_max_order_qty) < 1) {
+      return toast.error('Max order qty must be at least 1')
     }
     if (
       form.flash_sale_starts_at &&
@@ -85,7 +89,7 @@ function FlashSaleForm({ products, saleProduct, onClose, onSave, saving }) {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <div>
           <label className="label">Flash Sale Price *</label>
           <input
@@ -96,6 +100,18 @@ function FlashSaleForm({ products, saleProduct, onClose, onSave, saving }) {
             onChange={(event) => set('flash_sale_price', event.target.value)}
             className="input-field"
             placeholder="0.00"
+          />
+        </div>
+        <div>
+          <label className="label">Max Order Qty</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={form.flash_sale_max_order_qty}
+            onChange={(event) => set('flash_sale_max_order_qty', event.target.value)}
+            className="input-field"
+            placeholder="No limit"
           />
         </div>
         <div>
@@ -156,6 +172,7 @@ export default function FlashSales() {
     mutationFn: ({ product, form }) => productsApi.products.update(product.id, {
       is_featured: true,
       flash_sale_price: Number(form.flash_sale_price),
+      flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
       flash_sale_starts_at: form.flash_sale_starts_at || null,
       flash_sale_ends_at: form.flash_sale_ends_at || null,
     }),
@@ -173,6 +190,7 @@ export default function FlashSales() {
     mutationFn: (product) => productsApi.products.update(product.id, {
       is_featured: false,
       flash_sale_price: null,
+      flash_sale_max_order_qty: null,
       flash_sale_starts_at: null,
       flash_sale_ends_at: null,
     }),
@@ -223,13 +241,14 @@ export default function FlashSales() {
               className="input-field pl-9"
             />
           </div>
-          <p className="text-xs font-semibold text-gray-400">Select product, set sale price, and choose start/end time.</p>
+          <p className="text-xs font-semibold text-gray-400">Select product, set sale price, max order qty, and choose start/end time.</p>
         </div>
 
         {isLoading ? (
           <div className="divide-y divide-gray-100">
             {[...Array(6)].map((_, index) => (
-              <div key={index} className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(260px,1.4fr)_110px_110px_110px_minmax(220px,1fr)_120px_160px]">
+              <div key={index} className="grid gap-4 px-5 py-4 md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px]">
+                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
                 <div className="h-12 animate-pulse rounded-xl bg-gray-100" />
                 <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
                 <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
@@ -250,21 +269,24 @@ export default function FlashSales() {
           </div>
         ) : (
           <div className="overflow-hidden">
-            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[minmax(260px,1.4fr)_110px_110px_110px_minmax(220px,1fr)_120px_160px] md:items-center md:gap-4">
+            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px] md:items-center md:gap-4">
+              <div>No</div>
               <div>Product</div>
               <div>Retail</div>
               <div>Flash Price</div>
+              <div>Max Qty</div>
               <div>Orders</div>
               <div>Schedule</div>
               <div>Status</div>
               <div className="text-right">Actions</div>
             </div>
 
-            {flashProducts.map((product) => (
+            {flashProducts.map((product, index) => (
               <div
                 key={product.id}
-                className="grid gap-3 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[minmax(260px,1.4fr)_110px_110px_110px_minmax(220px,1fr)_120px_160px] md:items-center md:gap-4"
+                className="grid gap-3 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px] md:items-center md:gap-4"
               >
+                <div className="hidden text-sm font-black text-gray-500 md:block">{index + 1}</div>
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-100">
                     {product.primary_image ? (
@@ -291,6 +313,11 @@ export default function FlashSales() {
                 <div className="flex items-center justify-between rounded-xl bg-pink-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
                   <span className="text-xs font-bold uppercase text-pink-500 md:hidden">Flash</span>
                   <span className="text-sm font-black text-pink-600">{formatCurrency(product.flash_sale_price)}</span>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-orange-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
+                  <span className="text-xs font-bold uppercase text-orange-500 md:hidden">Max Qty</span>
+                  <span className="text-sm font-black text-orange-600">{product.flash_sale_max_order_qty || 'No limit'}</span>
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl bg-purple-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">

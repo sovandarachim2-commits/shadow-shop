@@ -10,7 +10,7 @@ import {
   ChevronDown, ChevronRight, LogOut, Store, FileText,
   TrendingUp, ArrowLeftRight, ScanLine, PackageCheck,
   UserCircle, Bell, Shield, Sliders, MessageCircle,
-  MapPin, CreditCard, ShoppingBag, Tag, Boxes, Receipt,
+  MapPin, CreditCard, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
   Flame,
 } from 'lucide-react'
@@ -28,7 +28,6 @@ const navItems = [
     label: 'Sales',
     icon: ShoppingCart,
     children: [
-      { label: 'New Order',  path: '/admin/orders/new', icon: ShoppingBag,   module: 'orders' },
       { label: 'Orders',     path: '/admin/orders',     icon: ClipboardList, module: 'orders' },
       { label: 'Customers',  path: '/admin/customers',  icon: Users,         module: 'orders' },
     ],

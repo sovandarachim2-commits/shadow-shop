@@ -8,11 +8,11 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
 from django.db.models import F, Q
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
 from .serializers import (
     BrandSerializer, CategorySerializer, ProductListSerializer, ProductDetailSerializer,
     ProductWriteSerializer, ProductImageSerializer, ProductSetSerializer,
-    PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
+    ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
 )
 from utils.permissions import IsAdminOrSuperAdmin, IsStaff
 
@@ -50,7 +50,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().prefetch_related('children')
     serializer_class = CategorySerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [SearchFilter, OrderingFilter]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['is_active', 'parent']
     search_fields = ['name']
     ordering_fields = ['order', 'name']
 
@@ -162,11 +163,46 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Product not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
+class ProductReviewViewSet(viewsets.ModelViewSet):
+    queryset = ProductReview.objects.select_related('product', 'user')
+    serializer_class = ProductReviewSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['product', 'user']
+    ordering_fields = ['created_at', 'rating']
+    ordering = ['-created_at']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        product_id = request.data.get('product')
+        if not product_id:
+            return Response({'product': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = ProductReview.objects.filter(product_id=product_id, user=request.user).first()
+        if review:
+            serializer = self.get_serializer(review, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(user=request.user)
+            return Response(serializer.data)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
 class ProductSetViewSet(viewsets.ModelViewSet):
-    queryset = ProductSet.objects.all().prefetch_related('items__product')
+    queryset = ProductSet.objects.all().prefetch_related('items__product__images', 'items__product__stock')
     serializer_class = ProductSetSerializer
-    filter_backends = [SearchFilter]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['is_active', 'is_featured']
     search_fields = ['name']
+    ordering_fields = ['name', 'price', 'created_at']
+    ordering = ['-created_at']
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
