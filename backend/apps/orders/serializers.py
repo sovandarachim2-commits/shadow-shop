@@ -57,6 +57,10 @@ def get_product_set_stock(product_set):
 
     available_sets = []
     for item in items:
+        if not item.product.is_available_for_sale:
+            return 0
+        if item.product.availability_status == Product.AVAILABILITY_AVAILABLE:
+            continue
         required_qty = max(1, int(item.quantity or 1))
         try:
             product_stock = int(item.product.stock.quantity or 0)
@@ -64,7 +68,7 @@ def get_product_set_stock(product_set):
             product_stock = 0
         available_sets.append(product_stock // required_qty)
 
-    return min(available_sets) if available_sets else 0
+    return min(available_sets) if available_sets else 999999
 
 
 def aggregate_order_targets(items):
@@ -104,6 +108,11 @@ def validate_order_target_stock(items, old_product_totals=None, old_set_totals=N
 
     for product in combined_products:
         quantity = requested_products.get(product, 0) + requested_components.get(product, 0)
+        if not product.is_available_for_sale:
+            errors.append(f'{product.name} is out of stock.')
+            continue
+        if product.availability_status == Product.AVAILABILITY_AVAILABLE:
+            continue
         available = product.current_stock + old_product_totals.get(product, 0) + old_components.get(product, 0)
         if quantity > available:
             errors.append(f'{product.name} has only {available} in stock.')
@@ -418,6 +427,8 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
 
         products = set(old_totals.keys()) | set(new_totals.keys())
         for product in products:
+            if product.availability_status == Product.AVAILABILITY_AVAILABLE:
+                continue
             delta = new_totals.get(product, 0) - old_totals.get(product, 0)
             if delta == 0:
                 continue

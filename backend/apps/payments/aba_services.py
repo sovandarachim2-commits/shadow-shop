@@ -65,7 +65,7 @@ def build_aba_payment_params(order):
     customer = order.customer
     firstname = (customer.user.first_name or customer.user.username)[:50]
     lastname = (customer.user.last_name or '')[:50]
-    phone = (order.delivery_phone or customer.user.phone or '')[:20]
+    phone = (customer.phone or getattr(customer.user, 'phone', '') or '')[:20]
     email = (customer.user.email or '')[:100]
 
     frontend_url = settings.FRONTEND_URL.rstrip('/')

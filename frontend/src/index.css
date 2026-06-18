@@ -169,6 +169,12 @@ html[lang="km"] textarea {
     background: white !important;
     padding: 0 !important;
   }
+  .print-preview-window .receipt-paper {
+    width: min(100%, 420px) !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border-color: #e5e7eb !important;
+  }
   .print-preview-window > .flex > div {
     box-shadow: none !important;
     page-break-after: always;

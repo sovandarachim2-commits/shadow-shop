@@ -16,8 +16,10 @@ import {
 import { ordersApi } from '@/api/orders'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { useTranslation } from 'react-i18next'
+import useCartStore from '@/store/cartStore'
 
 const ONLINE_PAYMENTS = ['bakong', 'aba', 'acleda', 'wing']
+const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
 
 const PAYMENT_LABEL_KEYS = {
   aba: 'orders.payment.aba',
@@ -79,6 +81,7 @@ export default function OrderSuccess() {
   const orderId = location.state?.orderId
   const orderNumber = location.state?.orderNumber || query.get('order') || query.get('tran_id') || ''
   const [bakongPayment, setBakongPayment] = useState(location.state?.bakongPayment || null)
+  const removeSelectedItems = useCartStore((s) => s.removeSelectedItems)
 
   const { data: order, isLoading, refetch } = useQuery({
     queryKey: ['order-success', orderId, orderNumber],
@@ -115,6 +118,12 @@ export default function OrderSuccess() {
   const orderStatusColor = ORDER_STATUS_COLORS[order?.status] || 'text-gray-700'
   const paymentStatus = paid ? t('orders.paid') : t('orders.unpaid')
   const trackPath = order?.id ? `/my-orders/${order.id}` : '/my-orders'
+
+  useEffect(() => {
+    if (!paid) return
+    localStorage.removeItem(PENDING_PAYMENT_KEY)
+    removeSelectedItems()
+  }, [paid, removeSelectedItems])
 
   useEffect(() => {
     if (!bakongPayment || bakongPayment.status === 'paid') return undefined

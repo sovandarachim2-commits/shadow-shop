@@ -35,6 +35,7 @@ const CART_PROVINCE_MAP = {
   'Siem Reap': 'siem_reap',
   'Battambang': 'battambang',
 }
+const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
 
 function mapProvince(text) {
   const value = (text || '').toLowerCase()
@@ -126,6 +127,13 @@ export default function Checkout() {
   const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(300)
   const [abaLoading, setAbaLoading] = useState(false)
   const [checkingBakong, setCheckingBakong] = useState(false)
+  const [pendingReturnPayment, setPendingReturnPayment] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || 'null')
+    } catch {
+      return null
+    }
+  })
 
   const { data: addresses = [], isLoading: addressesLoading } = useQuery({
     queryKey: ['my-addresses'],
@@ -182,6 +190,43 @@ export default function Checkout() {
       setPaymentMethod(paymentMethods[0].key)
     }
   }, [paymentMethods])
+
+  useEffect(() => {
+    if (!pendingReturnPayment?.orderId) return undefined
+
+    let stopped = false
+    const checkOrderPayment = async () => {
+      try {
+        const { data: order } = await ordersApi.orders.get(pendingReturnPayment.orderId)
+        if (stopped) return
+        if (order.payment_status === 'paid') {
+          localStorage.removeItem(PENDING_PAYMENT_KEY)
+          setPendingReturnPayment(null)
+          removeSelectedItems()
+          navigate('/order-success', {
+            replace: true,
+            state: {
+              orderId: order.id,
+              orderNumber: order.order_number,
+            },
+          })
+        }
+      } catch {
+        if (!stopped) {
+          localStorage.removeItem(PENDING_PAYMENT_KEY)
+          setPendingReturnPayment(null)
+        }
+      }
+    }
+
+    checkOrderPayment()
+    const timer = setInterval(checkOrderPayment, 2500)
+
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
+  }, [pendingReturnPayment?.orderId, navigate, removeSelectedItems])
 
   useEffect(() => {
     if (!bakongPayment || bakongPayment.status === 'paid' || bakongPayment.status === 'expired') {
@@ -288,9 +333,19 @@ export default function Checkout() {
         setAbaLoading(true)
         try {
           const { data: abaData } = await ordersApi.payments.generateAba(order.id)
+          const pending = {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            paymentMethod: 'aba',
+            createdAt: Date.now(),
+          }
+          localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(pending))
+          setPendingReturnPayment(pending)
           submitAbaForm(abaData.endpoint, abaData.params)
         } catch {
           toast.error('Could not initiate ABA payment. Please try another method.')
+          localStorage.removeItem(PENDING_PAYMENT_KEY)
+          setPendingReturnPayment(null)
           setAbaLoading(false)
         }
         return

@@ -75,6 +75,15 @@ class Brand(models.Model):
 
 
 class Product(models.Model):
+    AVAILABILITY_AUTO = 'auto'
+    AVAILABILITY_AVAILABLE = 'available'
+    AVAILABILITY_OUT_OF_STOCK = 'out_of_stock'
+    AVAILABILITY_CHOICES = [
+        (AVAILABILITY_AUTO, 'Auto by Stock'),
+        (AVAILABILITY_AVAILABLE, 'Available'),
+        (AVAILABILITY_OUT_OF_STOCK, 'Out of Stock'),
+    ]
+
     UNIT_CHOICES = [
         ('piece', 'Piece'),
         ('box', 'Box'),
@@ -106,6 +115,7 @@ class Product(models.Model):
     flash_sale_ends_at = models.DateTimeField(null=True, blank=True)
     flash_sale_max_order_qty = models.PositiveIntegerField(null=True, blank=True)
     min_order_qty = models.PositiveIntegerField(default=1)
+    availability_status = models.CharField(max_length=20, choices=AVAILABILITY_CHOICES, default=AVAILABILITY_AUTO)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     is_new_arrival = models.BooleanField(default=False)
@@ -142,6 +152,14 @@ class Product(models.Model):
             except Exception:
                 stock = 0
         return stock
+
+    @property
+    def is_available_for_sale(self):
+        if self.availability_status == self.AVAILABILITY_AVAILABLE:
+            return True
+        if self.availability_status == self.AVAILABILITY_OUT_OF_STOCK:
+            return False
+        return self.current_stock > 0
 
     @property
     def is_flash_sale_active(self):
@@ -230,6 +248,21 @@ class ProductSet(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
+
+
+class ProductSetImage(models.Model):
+    product_set = models.ForeignKey(ProductSet, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='product_sets/')
+    alt_text = models.CharField(max_length=200, blank=True)
+    is_primary = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'product_set_images'
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.product_set.name} - Image {self.order}"
 
 
 class ProductSetItem(models.Model):

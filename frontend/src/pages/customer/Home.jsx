@@ -35,6 +35,10 @@ function iconForCategory(name) {
   return Droplet
 }
 
+function isAvailableForSale(product) {
+  return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
+}
+
 // ─── Countdown to midnight ────────────────────────────────────────────────────
 function useCountdown() {
   const calc = () => {
@@ -95,6 +99,7 @@ function ProductCard({ product, badge }) {
   const wishlisted = isWishlisted(product.id)
   const cartItem = items.find((i) => i.product?.id === product.id)
   const qty = cartItem?.quantity || 0
+  const available = isAvailableForSale(product)
 
   const discountPct = product.old_price
     ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
@@ -128,7 +133,7 @@ function ProductCard({ product, badge }) {
           <span className="rounded-full bg-pink-600 px-2 py-1 text-xs font-black tracking-wide text-white shadow-sm">{badge}</span>
         )}
         {discountPct && (
-          <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-pink-600 shadow-sm">-{discountPct}%</span>
+          <span className="rounded-full bg-pink-600 px-3.5 py-1.5 text-xs font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">-{discountPct}%</span>
         )}
       </div>
       {/* Image */}
@@ -168,7 +173,7 @@ function ProductCard({ product, badge }) {
             <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(product.display_price || product.retail_price)}</span>
             {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
           </div>
-          {product.current_stock <= 0 ? (
+          {!available ? (
             <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">Sold Out</span>
           ) : qty === 0 ? (
             <button
@@ -202,6 +207,7 @@ function FlashSaleCard({ product }) {
   const navigate = useNavigate()
   const cartItem = items.find((i) => i.product?.id === product.id)
   const qty = cartItem?.quantity || 0
+  const available = isAvailableForSale(product)
   const discountPct = product.old_price
     ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
     : null
@@ -216,7 +222,7 @@ function FlashSaleCard({ product }) {
       onClick={() => navigate(`/product/${product.id}`)}
     >
       {discountPct && (
-        <div className="absolute left-2 top-2 z-10 rounded-lg bg-white px-1.5 py-0.5 text-[9px] font-black text-pink-600 shadow-sm">
+        <div className="absolute left-2 top-2 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-[10px] font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">
           -{discountPct}%
         </div>
       )}
@@ -233,7 +239,7 @@ function FlashSaleCard({ product }) {
         <p className="line-clamp-2 min-h-[30px] text-[11px] font-semibold leading-tight text-gray-800">{product.name}</p>
         <p className="mt-1.5 text-sm font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</p>
         {product.old_price && <p className="text-[10px] font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</p>}
-        {product.current_stock <= 0 ? (
+        {!available ? (
           <div className="mt-2 w-full rounded-xl bg-gray-100 py-1.5 text-center text-[11px] font-black text-gray-400">Sold Out</div>
         ) : qty === 0 ? (
           <button

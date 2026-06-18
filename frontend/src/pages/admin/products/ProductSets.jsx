@@ -1,11 +1,61 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { PackageCheck, Tag, Plus, Edit, Trash2, Star, X, Minus, Image, Upload } from 'lucide-react'
+import { PackageCheck, Tag, Plus, Edit, Trash2, Star, X, Minus, Image, Upload, Images } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Modal } from '@/components/ui/Modal'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
+
+const IMAGE_MAX_SIZE = 1800
+const IMAGE_QUALITY = 0.92
+const IMAGE_COMPRESS_THRESHOLD = 2 * 1024 * 1024
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve(img)
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Could not read image'))
+    }
+    img.src = url
+  })
+}
+
+async function optimizeImage(file) {
+  if (!file.type.startsWith('image/') || file.size <= IMAGE_COMPRESS_THRESHOLD) {
+    return file
+  }
+
+  try {
+    const img = await loadImage(file)
+    const scale = Math.min(1, IMAGE_MAX_SIZE / Math.max(img.width, img.height))
+    const width = Math.round(img.width * scale)
+    const height = Math.round(img.height * scale)
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, width, height)
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/webp', IMAGE_QUALITY)
+    })
+
+    if (!blob || blob.size >= file.size) return file
+
+    const name = file.name.replace(/\.[^.]+$/, '') || 'product-set-image'
+    return new File([blob], `${name}.webp`, { type: 'image/webp' })
+  } catch {
+    return file
+  }
+}
 
 function SetForm({ set, onSave, onClose, saving }) {
   const fileInputRef = useRef(null)
@@ -285,10 +335,159 @@ function SetForm({ set, onSave, onClose, saving }) {
   )
 }
 
+function SetImageManagerModal({ productSet, onClose }) {
+  const qc = useQueryClient()
+  const fileRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+
+  const { data: detail, isLoading } = useQuery({
+    queryKey: ['product-set-images', productSet.id],
+    queryFn: () => productsApi.sets.get(productSet.id).then((r) => r.data),
+  })
+
+  const images = detail?.images || []
+
+  const refreshImages = () => {
+    qc.invalidateQueries({ queryKey: ['product-set-images', productSet.id] })
+    qc.invalidateQueries({ queryKey: ['product-sets'] })
+  }
+
+  const handleUpload = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+
+    setUploading(true)
+    try {
+      const optimized = await Promise.all(files.map(optimizeImage))
+      const fd = new FormData()
+      optimized.forEach((file) => fd.append('images', file))
+      if (images.length === 0 && !detail?.image_url) fd.append('is_primary', 'true')
+      await productsApi.sets.uploadImages(productSet.id, fd)
+      refreshImages()
+      toast.success(`${files.length} image${files.length > 1 ? 's' : ''} uploaded`)
+    } catch {
+      toast.error('Upload failed')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const setPrimary = async (imageId) => {
+    try {
+      await productsApi.sets.setPrimaryImage(productSet.id, imageId)
+      refreshImages()
+    } catch {
+      toast.error('Failed to set primary')
+    }
+  }
+
+  const deleteImage = async (imageId) => {
+    if (!window.confirm('Delete this image?')) return
+    try {
+      await productsApi.sets.deleteImage(productSet.id, imageId)
+      refreshImages()
+      toast.success('Image deleted')
+    } catch {
+      toast.error('Failed to delete image')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h2 className="text-base font-black text-gray-950">Manage Images</h2>
+            <p className="mt-0.5 line-clamp-1 text-xs text-gray-400">{productSet.name}</p>
+          </div>
+          <button onClick={onClose} className="rounded-xl p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto p-6">
+          {isLoading ? (
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="aspect-square animate-pulse rounded-2xl bg-gray-100" />)}
+            </div>
+          ) : images.length === 0 ? (
+            <div className="py-10 text-center">
+              <Image size={40} className="mx-auto mb-3 text-gray-200" />
+              <p className="text-sm font-semibold text-gray-400">No managed images yet</p>
+              {detail?.image_url && (
+                <p className="mt-1 text-xs font-semibold text-gray-400">
+                  This set still has an older form image. Upload here to manage primary and extra images.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {images.map((img) => (
+                <div
+                  key={img.id}
+                  className="group relative aspect-square overflow-hidden rounded-2xl border-2 bg-white transition hover:shadow-lg"
+                  style={{ borderColor: img.is_primary ? '#9333ea' : '#f3f4f6' }}
+                >
+                  <img src={img.image} alt="" className="h-full w-full object-contain p-2" />
+
+                  {img.is_primary && (
+                    <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-purple-600 px-2 py-0.5 text-[10px] font-black text-white shadow">
+                      <Star size={9} className="fill-white" /> Primary
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
+                    {!img.is_primary && (
+                      <button
+                        onClick={() => setPrimary(img.id)}
+                        className="flex items-center gap-1 rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-black text-white shadow hover:bg-purple-700"
+                      >
+                        <Star size={11} /> Set Primary
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteImage(img.id)}
+                      className="flex items-center gap-1 rounded-xl bg-red-500 px-3 py-1.5 text-xs font-black text-white shadow hover:bg-red-600"
+                    >
+                      <Trash2 size={11} /> Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div
+            onClick={() => !uploading && fileRef.current?.click()}
+            className={`mt-4 flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-5 text-center transition ${
+              uploading ? 'cursor-wait border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50 hover:border-purple-300 hover:bg-purple-50'
+            }`}
+          >
+            <Upload size={20} className={uploading ? 'animate-bounce text-purple-400' : 'text-gray-400'} />
+            <p className="text-sm font-semibold text-gray-500">
+              {uploading ? 'Uploading...' : 'Click to upload more images'}
+            </p>
+            <p className="text-xs text-gray-400">PNG, JPG, WEBP - Multiple files supported</p>
+            <input ref={fileRef} type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 px-6 py-4">
+          <p className="text-xs text-gray-400">
+            {images.length} image{images.length !== 1 ? 's' : ''} - Hover to set primary or delete
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ProductSets() {
   const qc = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [editSet, setEditSet] = useState(null)
+  const [imageSet, setImageSet] = useState(null)
   const [saving, setSaving] = useState(false)
 
   const { data: sets = [], isLoading } = useQuery({
@@ -296,29 +495,30 @@ export default function ProductSets() {
     queryFn: () => productsApi.sets.list().then((r) => r.data?.results ?? r.data ?? []),
   })
 
-  const buildSetPayload = (form, imageFile) => {
-    const data = {
+  const buildSetPayload = (form) => ({
       ...form,
       price: parseFloat(form.price),
       discount_price: form.discount_price ? parseFloat(form.discount_price) : null,
-    }
-
-    if (!imageFile) return data
-
-    const fd = new FormData()
-    Object.entries(data).forEach(([key, value]) => {
-      if (value == null || value === '') return
-      fd.append(key, value)
     })
-    fd.append('image', imageFile)
-    return fd
+
+  const uploadSetImage = async (setId, imageFile) => {
+    if (!imageFile) return
+    try {
+      const optimized = await optimizeImage(imageFile)
+      const fd = new FormData()
+      fd.append('images', optimized)
+      fd.append('is_primary', 'true')
+      await productsApi.sets.uploadImages(setId, fd)
+    } catch {
+      toast.error('Set saved but image upload failed')
+    }
   }
 
   const handleSave = async (form, items, imageFile) => {
     if (!form.name.trim()) return toast.error('Name is required')
     if (!form.price) return toast.error('Price is required')
 
-    const data = buildSetPayload(form, imageFile)
+    const data = buildSetPayload(form)
 
     setSaving(true)
     try {
@@ -334,6 +534,7 @@ export default function ProductSets() {
       await productsApi.sets.setItems(savedSet.id, {
         items: items.map((i) => ({ product: i.product, quantity: i.quantity })),
       })
+      await uploadSetImage(savedSet.id, imageFile)
 
       qc.invalidateQueries({ queryKey: ['product-sets'] })
       setShowModal(false)
@@ -383,7 +584,7 @@ export default function ProductSets() {
         {isLoading ? (
           <div className="divide-y divide-gray-100">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_150px]">
+              <div key={i} className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_230px]">
                 <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
                 <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
                 <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
@@ -403,7 +604,7 @@ export default function ProductSets() {
           </div>
         ) : (
           <div>
-            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_150px] md:items-center md:gap-4">
+            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_230px] md:items-center md:gap-4">
               <div>Set Name</div>
               <div>Products In Set</div>
               <div>Price</div>
@@ -414,7 +615,7 @@ export default function ProductSets() {
             {sets.map((s) => (
               <div
                 key={s.id}
-                className="grid gap-4 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_150px] md:items-center"
+                className="grid gap-4 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_230px] md:items-center"
               >
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
@@ -509,6 +710,13 @@ export default function ProductSets() {
 
                 <div className="flex gap-2 md:justify-end">
                   <button
+                    onClick={() => setImageSet(s)}
+                    title="Manage Images"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-50 px-3 py-2 text-xs font-bold text-purple-600 transition-colors hover:bg-purple-100 md:flex-none"
+                  >
+                    <Images size={13} /> Images
+                  </button>
+                  <button
                     onClick={() => openEdit(s)}
                     className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-100 md:flex-none"
                   >
@@ -541,6 +749,13 @@ export default function ProductSets() {
           saving={saving}
         />
       </Modal>
+
+      {imageSet && (
+        <SetImageManagerModal
+          productSet={imageSet}
+          onClose={() => setImageSet(null)}
+        />
+      )}
     </div>
   )
 }

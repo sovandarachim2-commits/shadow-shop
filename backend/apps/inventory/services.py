@@ -2,10 +2,20 @@ from .models import Stock, StockMovement
 
 
 def deduct_stock_for_order(order, user):
+    already_deducted = StockMovement.objects.filter(
+        reference=order.order_number,
+        type=StockMovement.TYPE_STOCK_OUT,
+        reference_type__in=['order', 'order_set'],
+    ).exists()
+    if already_deducted:
+        return
+
     for item in order.items.select_related('product', 'product_set').prefetch_related('product_set__items__product').all():
         if item.product_set:
             set_items = item.product_set.items.select_related('product').all()
             for set_item in set_items:
+                if set_item.product.availability_status == set_item.product.AVAILABILITY_AVAILABLE:
+                    continue
                 quantity_to_deduct = item.quantity * set_item.quantity
                 stock, _ = Stock.objects.get_or_create(
                     product=set_item.product,
@@ -31,6 +41,8 @@ def deduct_stock_for_order(order, user):
                     from apps.notifications.services import TelegramService
                     TelegramService().notify_low_stock(set_item.product, stock.quantity)
         elif item.product:
+            if item.product.availability_status == item.product.AVAILABILITY_AVAILABLE:
+                continue
             stock, _ = Stock.objects.get_or_create(
                 product=item.product,
                 defaults={'quantity': 0}

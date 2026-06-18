@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { Printer, FileText, Truck } from 'lucide-react'
+import { AlertTriangle, Printer, FileText, Truck, X } from 'lucide-react'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
@@ -361,6 +361,8 @@ export default function PrintCenter() {
   const [selectedOrders, setSelectedOrders] = useState([])
   const [printType, setPrintType] = useState('receipt')
   const [previewOrder, setPreviewOrder] = useState(null)
+  const [stockAlert, setStockAlert] = useState(null)
+  const [checkingStock, setCheckingStock] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['print-orders', search],
@@ -419,7 +421,7 @@ export default function PrintCenter() {
     onError: () => toast.error('Printed, but failed to update order status'),
   })
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (selectedOrders.length === 0) {
       toast.error('Select at least one order to print')
       return
@@ -427,6 +429,24 @@ export default function PrintCenter() {
     if (isLoadingPrintDetails) {
       toast.error('Preparing order details, please try again in a moment')
       return
+    }
+    setCheckingStock(true)
+    try {
+      const { data: stockCheck } = await ordersApi.orders.validatePrintStock(selectedOrders)
+      if (!stockCheck.ok || stockCheck.issues?.length) {
+        setStockAlert(stockCheck)
+        toast.error('Cannot print. Some products do not have enough stock.')
+        return
+      }
+    } catch (error) {
+      const payload = error?.response?.data
+      if (payload?.stock_issues?.length || payload?.issues?.length) {
+        setStockAlert({ issues: payload.stock_issues || payload.issues })
+      }
+      toast.error(payload?.detail || 'Could not check stock before printing')
+      return
+    } finally {
+      setCheckingStock(false)
     }
     toast.success(`Printing ${selectedOrders.length} ${printType}(s)...`)
     window.open(`/admin/print-preview?type=${printType}&ids=${selectedOrders.join(',')}`, '_blank', 'noopener,noreferrer')
@@ -478,11 +498,11 @@ export default function PrintCenter() {
                 <button onClick={() => setSelectedOrders([])} className="rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 hover:bg-gray-50">Clear</button>
                 <button
                   onClick={handlePrint}
-                  disabled={selectedOrders.length === 0 || isLoadingPrintDetails || markPrintedMutation.isPending}
+                  disabled={selectedOrders.length === 0 || isLoadingPrintDetails || checkingStock || markPrintedMutation.isPending}
                   className="btn-primary justify-center px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Printer size={15} />
-                  Print Now
+                  {checkingStock ? 'Checking Stock...' : 'Print Now'}
                 </button>
               </div>
             </div>
@@ -619,6 +639,7 @@ export function PrintHistory() {
   const [search, setSearch] = useState('')
   const [printType, setPrintType] = useState('receipt')
   const [previewOrder, setPreviewOrder] = useState(null)
+  const [stockAlert, setStockAlert] = useState(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['print-history-orders', search],
@@ -770,6 +791,140 @@ export function PrintHistory() {
               ) : (
                 <PrintPreview order={orderDetail || previewOrder} type={printType} printLogoUrl={printLogoUrl} printLogoSize={printLogoSize} printQrSize={printQrSize} />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {stockAlert?.issues?.length > 0 && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50 px-5 py-4">
+              <div className="flex gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-red-600 shadow-sm">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-red-700">Cannot Print: Stock Not Enough</h3>
+                  <p className="mt-1 text-sm font-semibold text-red-500">
+                    Please add stock or update the order before printing.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockAlert(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-red-500 hover:bg-red-100"
+                aria-label="Close stock alert"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              <div className="space-y-3">
+                {stockAlert.issues.map((issue, index) => (
+                  <div key={`${issue.order_id}-${issue.product_id}-${index}`} className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-wide text-red-500">
+                          Order #{issue.order_number}
+                        </p>
+                        <h4 className="mt-1 truncate text-base font-black text-gray-950">{issue.product_name}</h4>
+                        <p className="mt-0.5 text-xs font-semibold text-gray-400">{issue.product_code}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[270px]">
+                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                          <p className="text-[11px] font-bold text-gray-400">Need</p>
+                          <p className="text-lg font-black text-gray-950">{issue.required}</p>
+                        </div>
+                        <div className="rounded-xl bg-red-50 px-3 py-2">
+                          <p className="text-[11px] font-bold text-red-400">Available</p>
+                          <p className="text-lg font-black text-red-600">{issue.available}</p>
+                        </div>
+                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                          <p className="text-[11px] font-bold text-gray-400">Stock</p>
+                          <p className="text-lg font-black text-gray-950">{issue.current_stock}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border-t border-gray-100 bg-gray-50 px-5 py-4 text-right">
+              <button
+                type="button"
+                onClick={() => setStockAlert(null)}
+                className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-red-100 hover:bg-red-700"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {stockAlert?.issues?.length > 0 && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50 px-5 py-4">
+              <div className="flex gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-red-600 shadow-sm">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-red-700">Cannot Print: Stock Not Enough</h3>
+                  <p className="mt-1 text-sm font-semibold text-red-500">
+                    Please add stock or update the order before printing.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockAlert(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-red-500 hover:bg-red-100"
+                aria-label="Close stock alert"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              <div className="space-y-3">
+                {stockAlert.issues.map((issue, index) => (
+                  <div key={`${issue.order_id}-${issue.product_id}-${index}`} className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-wide text-red-500">
+                          Order #{issue.order_number}
+                        </p>
+                        <h4 className="mt-1 truncate text-base font-black text-gray-950">{issue.product_name}</h4>
+                        <p className="mt-0.5 text-xs font-semibold text-gray-400">{issue.product_code}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[270px]">
+                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                          <p className="text-[11px] font-bold text-gray-400">Need</p>
+                          <p className="text-lg font-black text-gray-950">{issue.required}</p>
+                        </div>
+                        <div className="rounded-xl bg-red-50 px-3 py-2">
+                          <p className="text-[11px] font-bold text-red-400">Available</p>
+                          <p className="text-lg font-black text-red-600">{issue.available}</p>
+                        </div>
+                        <div className="rounded-xl bg-gray-50 px-3 py-2">
+                          <p className="text-[11px] font-bold text-gray-400">Stock</p>
+                          <p className="text-lg font-black text-gray-950">{issue.current_stock}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border-t border-gray-100 bg-gray-50 px-5 py-4 text-right">
+              <button
+                type="button"
+                onClick={() => setStockAlert(null)}
+                className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-red-100 hover:bg-red-700"
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

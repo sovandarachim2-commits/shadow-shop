@@ -1,3 +1,8 @@
+backend\venv\Scripts\python.exe backend\scripts\clear_orders.py --execute
+
+
+backend\venv\Scripts\python.exe backend\scripts\clear_orders.py
+
 # Shadow Shop — Wholesale Cosmetics Management System
 
 Enterprise-level wholesale e-commerce management system for cosmetics distribution.

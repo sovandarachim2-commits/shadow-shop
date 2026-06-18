@@ -175,17 +175,66 @@ def create_or_refresh_bakong_payment(order):
     return payment
 
 
+def _bakong_response_is_paid(response_data):
+    if not isinstance(response_data, dict):
+        return False
+
+    status_value = str(response_data.get('status') or '').strip().upper()
+    if status_value in {'PAID', 'SUCCESS', 'COMPLETED'}:
+        return True
+
+    response_code = response_data.get('responseCode')
+    if str(response_code) not in {'0', '00'}:
+        return False
+
+    data = response_data.get('data')
+    if data is True:
+        return True
+    if not isinstance(data, dict):
+        return False
+
+    data_status = str(data.get('status') or data.get('transactionStatus') or '').strip().upper()
+    return bool(
+        data.get('acknowledgedDateMs')
+        or data.get('createdDateMs')
+        or data.get('hash')
+        or data_status in {'PAID', 'SUCCESS', 'COMPLETED'}
+    )
+
+
+def _mark_bakong_paid(payment, response_data, user=None):
+    paid_at = timezone.now()
+    acknowledged_ms = response_data.get('data', {}).get('acknowledgedDateMs') if isinstance(response_data.get('data'), dict) else None
+    if acknowledged_ms:
+        try:
+            paid_at = datetime.fromtimestamp(int(acknowledged_ms) / 1000, tz=timezone.get_current_timezone())
+        except (TypeError, ValueError, OSError):
+            paid_at = timezone.now()
+
+    payment.status = 'paid'
+    payment.paid_at = paid_at
+    payment.order.payment_status = 'paid'
+    payment.order.payment_method = 'bakong'
+    payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+    Revenue.objects.get_or_create(
+        order=payment.order,
+        defaults={
+            'amount': payment.order.grand_total,
+            'payment_method': 'bakong',
+            'reference': payment.md5,
+            'received_at': payment.paid_at,
+            'received_by': user,
+        },
+    )
+    TelegramService().notify_payment_received(payment.order)
+
+
 def check_bakong_status(payment, user=None):
     if payment.status == 'paid':
         if payment.order.payment_status != 'paid' or payment.order.payment_method != 'bakong':
             payment.order.payment_status = 'paid'
             payment.order.payment_method = 'bakong'
             payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
-        return payment
-
-    if timezone.now() > payment.expires_at:
-        payment.status = 'expired'
-        payment.save(update_fields=['status', 'updated_at'])
         return payment
 
     response_data = {}
@@ -195,7 +244,6 @@ def check_bakong_status(payment, user=None):
             response = requests.get(settings.BAKONG_CHECK_API_URL, params={'md5': payment.md5}, timeout=20)
             response.raise_for_status()
             response_data = response.json()
-            paid = response_data.get('status') == 'PAID'
         else:
             if not settings.BAKONG_TOKEN:
                 raise ImproperlyConfigured('BAKONG_TOKEN is not configured.')
@@ -211,10 +259,7 @@ def check_bakong_status(payment, user=None):
             )
             response.raise_for_status()
             response_data = response.json()
-            paid = (
-                response_data.get('responseCode') == 0
-                and bool(response_data.get('data', {}).get('acknowledgedDateMs'))
-            )
+        paid = _bakong_response_is_paid(response_data)
     except Exception as exc:
         payment.response_data = {'success': False, 'error': str(exc)}
         payment.save(update_fields=['response_data', 'updated_at'])
@@ -222,21 +267,8 @@ def check_bakong_status(payment, user=None):
 
     payment.response_data = response_data
     if paid:
-        payment.status = 'paid'
-        payment.paid_at = timezone.now()
-        payment.order.payment_status = 'paid'
-        payment.order.payment_method = 'bakong'
-        payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
-        Revenue.objects.get_or_create(
-            order=payment.order,
-            defaults={
-                'amount': payment.order.grand_total,
-                'payment_method': 'bakong',
-                'reference': payment.md5,
-                'received_at': payment.paid_at,
-                'received_by': user,
-            },
-        )
-        TelegramService().notify_payment_received(payment.order)
+        _mark_bakong_paid(payment, response_data, user)
+    elif timezone.now() > payment.expires_at:
+        payment.status = 'expired'
     payment.save(update_fields=['status', 'paid_at', 'response_data', 'updated_at'])
     return payment

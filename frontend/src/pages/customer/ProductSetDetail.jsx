@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Gift, Minus, PackageSearch, Plus, ShoppingCart, Trash2, Zap, Heart } from 'lucide-react'
+import { ChevronLeft, Gift, Minus, PackageSearch, Plus, ShoppingCart, Store, Trash2, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
+import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 
 function toCartProduct(productSet) {
@@ -95,30 +96,15 @@ export default function ProductSetDetail() {
           <ChevronLeft size={20} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('product.details')}</h1>
-        <div className="flex items-center justify-end gap-2">
-          <button onClick={() => navigate('/wishlist')} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 text-pink-600 active:scale-95">
-            <Heart size={18} />
-          </button>
-          <button onClick={() => navigate('/cart')} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
-            <ShoppingCart size={18} />
-          </button>
-        </div>
+        <HeaderActionIcons />
       </div>
 
-      <div className="mb-4 hidden items-center justify-between gap-3 md:flex">
+      <div className="mb-4 hidden items-center gap-3 md:flex">
         <div className="flex items-center gap-3 text-sm font-black text-gray-600 hover:text-pink-600">
           <button onClick={() => navigate(-1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700">
             <ChevronLeft size={22} />
           </button>
           <span>{t('product.details')}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigate('/wishlist')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-pink-600 active:scale-95">
-            <Heart size={18} />
-          </button>
-          <button onClick={() => navigate('/cart')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
-            <ShoppingCart size={18} />
-          </button>
         </div>
       </div>
 
@@ -215,17 +201,39 @@ export default function ProductSetDetail() {
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] md:hidden">
-        <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-gray-400">{isInStock ? t('common.inStock') : t('common.outOfStock')}</p>
-            <p className="text-2xl font-black leading-tight text-pink-600">{formatCurrency(price)}</p>
-          </div>
-          <button onClick={addSetToCart} disabled={!isInStock} className="shrink-0 rounded-full bg-pink-600 px-6 py-3.5 text-sm font-black text-white shadow-lg shadow-pink-200 disabled:bg-gray-200 disabled:text-gray-400">
+      <div className="fixed inset-x-0 bottom-0 z-40 bg-white px-4 pb-4 pt-2 shadow-[0_-8px_25px_rgba(15,23,42,0.08)] md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-[64px_1fr_1fr] items-center gap-2">
+          <MobileSetAction icon={Store} label={t('product.store')} onClick={() => navigate('/shop')} />
+          <button
+            onClick={addSetToCart}
+            disabled={!isInStock}
+            className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gray-950 px-2 text-sm font-black text-white shadow-lg shadow-gray-200 disabled:opacity-50"
+          >
+            <ShoppingCart size={21} />
             Add to Cart
+          </button>
+          <button
+            onClick={buyNow}
+            disabled={!isInStock}
+            className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-pink-600 px-2 text-sm font-black text-white shadow-lg shadow-pink-200 disabled:opacity-50"
+          >
+            <Zap size={21} />
+            Buy Now
           </button>
         </div>
       </div>
     </div>
+  )
+}
+
+function MobileSetAction({ icon: Icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center justify-center gap-0.5 text-xs font-black text-gray-500"
+    >
+      <Icon size={24} />
+      <span>{label}</span>
+    </button>
   )
 }

@@ -63,6 +63,7 @@ import OrderSuccess from '@/pages/customer/OrderSuccess'
 import Profile from '@/pages/customer/Profile'
 import Wishlist from '@/pages/customer/Wishlist'
 import OrderTracking from '@/pages/customer/OrderTracking'
+import OrderReceipt from '@/pages/customer/OrderReceipt'
 import AddressBook from '@/pages/customer/AddressBook'
 import LuckyBox from '@/pages/customer/LuckyBox'
 import FlashSale from '@/pages/customer/FlashSale'
@@ -199,6 +200,7 @@ export default function App() {
             } />
             <Route path="order-success" element={<OrderSuccess />} />
             <Route path="my-orders" element={<MyOrders />} />
+            <Route path="my-orders/:id/receipt" element={<OrderReceipt />} />
             <Route path="my-orders/:id" element={<OrderTracking />} />
             <Route path="wishlist" element={<Wishlist />} />
             <Route path="profile" element={<Profile />} />
@@ -215,6 +217,8 @@ export default function App() {
               <PrintPreviewPage />
             </RequireAuth>
           } />
+          <Route path="/print/history" element={<Navigate to="/admin/print/history" replace />} />
+          <Route path="/print" element={<Navigate to="/admin/print" replace />} />
           <Route path="/admin/prepare" element={
             <RequireAuth adminOnly>
               <LazyPage><PrepareItems /></LazyPage>

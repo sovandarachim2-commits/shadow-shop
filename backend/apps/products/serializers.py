@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Sum
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -61,6 +61,12 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'alt_text', 'is_primary', 'order']
 
 
+class ProductSetImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductSetImage
+        fields = ['id', 'image', 'alt_text', 'is_primary', 'order']
+
+
 class ProductReviewSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
 
@@ -84,6 +90,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     primary_image = serializers.SerializerMethodField()
     current_stock = serializers.SerializerMethodField()
+    is_available_for_sale = serializers.BooleanField(read_only=True)
     display_price = serializers.SerializerMethodField()
     old_price = serializers.SerializerMethodField()
     is_flash_sale_active = serializers.BooleanField(read_only=True)
@@ -98,7 +105,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             'primary_image', 'wholesale_price', 'retail_price', 'cost_price',
             'display_price', 'old_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
-            'unit', 'current_stock', 'is_active', 'is_featured',
+            'unit', 'current_stock', 'availability_status', 'is_available_for_sale', 'is_active', 'is_featured',
             'is_flash_sale_active',
             'flash_sale_order_count', 'flash_sale_quantity_sold',
             'is_new_arrival', 'is_best_seller', 'rating', 'created_at',
@@ -151,6 +158,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     current_stock = serializers.SerializerMethodField()
+    is_available_for_sale = serializers.BooleanField(read_only=True)
     display_price = serializers.SerializerMethodField()
     old_price = serializers.SerializerMethodField()
     is_flash_sale_active = serializers.BooleanField(read_only=True)
@@ -203,7 +211,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             'ingredients', 'how_to_use', 'unit', 'weight', 'cost_price',
             'wholesale_price', 'retail_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
-            'min_order_qty', 'is_active',
+            'min_order_qty', 'availability_status', 'is_active',
             'is_featured', 'is_new_arrival', 'is_best_seller',
         ]
         read_only_fields = ['id']
@@ -256,6 +264,7 @@ class ProductSetItemSerializer(serializers.ModelSerializer):
 
 class ProductSetSerializer(serializers.ModelSerializer):
     items = ProductSetItemSerializer(many=True, read_only=True)
+    images = ProductSetImageSerializer(many=True, read_only=True)
     image_url = serializers.SerializerMethodField()
     current_stock = serializers.SerializerMethodField()
 
@@ -265,6 +274,11 @@ class ProductSetSerializer(serializers.ModelSerializer):
         extra_kwargs = {'image': {'write_only': True, 'required': False}}
 
     def get_image_url(self, obj):
+        images = list(obj.images.all())
+        img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
+        if img and img.image:
+            request = self.context.get('request')
+            return request.build_absolute_uri(img.image.url) if request else img.image.url
         if obj.image:
             request = self.context.get('request')
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
@@ -277,6 +291,10 @@ class ProductSetSerializer(serializers.ModelSerializer):
 
         available_sets = []
         for item in items:
+            if not item.product.is_available_for_sale:
+                return 0
+            if item.product.availability_status == Product.AVAILABILITY_AVAILABLE:
+                continue
             required_qty = max(1, int(item.quantity or 1))
             try:
                 product_stock = int(item.product.stock.quantity or 0)
@@ -284,7 +302,7 @@ class ProductSetSerializer(serializers.ModelSerializer):
                 product_stock = 0
             available_sets.append(product_stock // required_qty)
 
-        return min(available_sets) if available_sets else 0
+        return min(available_sets) if available_sets else 999999
 
 
 class PromotionSerializer(serializers.ModelSerializer):

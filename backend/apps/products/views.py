@@ -8,10 +8,10 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
 from django.db.models import F, Q
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
 from .serializers import (
     BrandSerializer, CategorySerializer, ProductListSerializer, ProductDetailSerializer,
-    ProductWriteSerializer, ProductImageSerializer, ProductSetSerializer,
+    ProductWriteSerializer, ProductImageSerializer, ProductSetImageSerializer, ProductSetSerializer,
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
 )
 from utils.permissions import IsAdminOrSuperAdmin, IsStaff
@@ -29,8 +29,14 @@ class ProductFilter(filters.FilterSet):
 
     def filter_in_stock(self, queryset, name, value):
         if value:
-            return queryset.filter(stock__quantity__gt=0)
-        return queryset.filter(stock__quantity__lte=0)
+            return queryset.filter(
+                Q(availability_status=Product.AVAILABILITY_AVAILABLE) |
+                Q(availability_status=Product.AVAILABILITY_AUTO, stock__quantity__gt=0)
+            )
+        return queryset.filter(
+            Q(availability_status=Product.AVAILABILITY_OUT_OF_STOCK) |
+            Q(availability_status=Product.AVAILABILITY_AUTO, stock__quantity__lte=0)
+        )
 
     def filter_active_flash_sale(self, queryset, name, value):
         if not value:
@@ -195,7 +201,7 @@ class ProductReviewViewSet(viewsets.ModelViewSet):
 
 
 class ProductSetViewSet(viewsets.ModelViewSet):
-    queryset = ProductSet.objects.all().prefetch_related('items__product__images', 'items__product__stock')
+    queryset = ProductSet.objects.all().prefetch_related('images', 'items__product__images', 'items__product__stock')
     serializer_class = ProductSetSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -225,6 +231,46 @@ class ProductSetViewSet(viewsets.ModelViewSet):
                 pass
         serializer = self.get_serializer(product_set)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def upload_images(self, request, pk=None):
+        product_set = self.get_object()
+        images = request.FILES.getlist('images')
+        if not images:
+            return Response({'detail': 'No images were uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_primary = request.data.get('is_primary', False)
+        created = []
+        for i, image in enumerate(images):
+            img = ProductSetImage.objects.create(
+                product_set=product_set,
+                image=image,
+                is_primary=(is_primary and i == 0),
+                order=product_set.images.count() + i,
+            )
+            created.append(ProductSetImageSerializer(img, context={'request': request}).data)
+        return Response(created, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def set_primary_image(self, request, pk=None):
+        product_set = self.get_object()
+        image_id = request.data.get('image_id')
+        product_set.images.update(is_primary=False)
+        product_set.images.filter(id=image_id).update(is_primary=True)
+        return Response({'detail': 'Primary image updated.'})
+
+    @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
+    def delete_image(self, request, pk=None, image_id=None):
+        product_set = self.get_object()
+        deleted, _ = product_set.images.filter(id=image_id).delete()
+        if not deleted:
+            return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not product_set.images.filter(is_primary=True).exists():
+            first = product_set.images.first()
+            if first:
+                first.is_primary = True
+                first.save(update_fields=['is_primary'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class PromotionViewSet(viewsets.ModelViewSet):

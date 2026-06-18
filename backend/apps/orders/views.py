@@ -8,6 +8,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
+from django.db.models import Sum
 from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord
 from .serializers import (
     CustomerSerializer, OrderListSerializer, OrderDetailSerializer,
@@ -22,6 +23,54 @@ from utils.pagination import StandardPagination
 class OrderPagination(StandardPagination):
     page_size = 100
     max_page_size = 1000
+
+
+def get_order_print_stock_issues(order):
+    from apps.inventory.models import StockMovement
+    from apps.products.models import Product
+
+    requirements = {}
+    for item in order.items.select_related('product', 'product_set').prefetch_related('product_set__items__product__stock').all():
+        if item.product:
+            requirements[item.product] = requirements.get(item.product, 0) + int(item.quantity or 0)
+            continue
+        if item.product_set:
+            for set_item in item.product_set.items.select_related('product', 'product__stock').all():
+                requirements[set_item.product] = requirements.get(set_item.product, 0) + (
+                    int(item.quantity or 0) * int(set_item.quantity or 1)
+                )
+
+    issues = []
+    for product, required_qty in requirements.items():
+        if product.availability_status == Product.AVAILABILITY_AVAILABLE:
+            continue
+
+        try:
+            current_qty = int(product.stock.quantity or 0)
+        except Exception:
+            current_qty = 0
+
+        reserved_qty = abs(StockMovement.objects.filter(
+            product=product,
+            reference=order.order_number,
+            type=StockMovement.TYPE_STOCK_OUT,
+        ).aggregate(total=Sum('quantity'))['total'] or 0)
+        available_for_order = current_qty + reserved_qty
+
+        if product.availability_status == Product.AVAILABILITY_OUT_OF_STOCK or available_for_order < required_qty:
+            issues.append({
+                'order_id': order.id,
+                'order_number': order.order_number,
+                'product_id': product.id,
+                'product_name': product.name,
+                'product_code': product.code,
+                'required': required_qty,
+                'available': available_for_order,
+                'current_stock': current_qty,
+                'reserved_for_order': reserved_qty,
+                'availability_status': product.availability_status,
+            })
+    return issues
 
 
 class CustomerFilter(filters.FilterSet):
@@ -103,6 +152,16 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
 
         old_status = order.status
+        if new_status == Order.STATUS_PRINTED:
+            stock_issues = get_order_print_stock_issues(order)
+            if stock_issues:
+                return Response(
+                    {
+                        'detail': 'Cannot print because some products do not have enough stock.',
+                        'stock_issues': stock_issues,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         if new_status == Order.STATUS_PREPARING and old_status == Order.STATUS_PREPARING:
             return Response(
                 {'detail': 'This QR already saved in Prepare Package.'},
@@ -182,6 +241,32 @@ class OrderViewSet(viewsets.ModelViewSet):
         TelegramService().notify_payment_received(order)
 
         return Response({'payment_status': 'paid'})
+
+    @action(detail=False, methods=['post'])
+    def validate_print_stock(self, request):
+        order_ids = request.data.get('order_ids') or request.data.get('orders') or []
+        if not isinstance(order_ids, list) or not order_ids:
+            return Response({'detail': 'Select at least one order.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            order_ids = [int(order_id) for order_id in order_ids]
+        except (TypeError, ValueError):
+            return Response({'detail': 'Invalid order selected.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        orders = self.get_queryset().filter(id__in=order_ids).prefetch_related(
+            'items__product__stock',
+            'items__product_set__items__product__stock',
+        )
+        found_ids = {order.id for order in orders}
+        missing_ids = [order_id for order_id in order_ids if order_id not in found_ids]
+        issues = []
+        for order in orders:
+            issues.extend(get_order_print_stock_issues(order))
+
+        return Response({
+            'ok': not issues and not missing_ids,
+            'issues': issues,
+            'missing_order_ids': missing_ids,
+        })
 
     @action(detail=True, methods=['get'])
     def generate_qr(self, request, pk=None):

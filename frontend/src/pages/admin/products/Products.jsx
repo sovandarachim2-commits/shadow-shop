@@ -14,6 +14,15 @@ import { formatCurrency } from '@/utils/helpers'
 const IMAGE_MAX_SIZE = 1800
 const IMAGE_QUALITY = 0.92
 const IMAGE_COMPRESS_THRESHOLD = 2 * 1024 * 1024
+const AVAILABILITY_OPTIONS = [
+  { value: 'auto', label: 'Auto by Stock' },
+  { value: 'available', label: 'Available' },
+  { value: 'out_of_stock', label: 'Out of Stock' },
+]
+
+function isAvailableForSale(product) {
+  return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
+}
 
 function loadImage(file) {
   return new Promise((resolve, reject) => {
@@ -94,6 +103,7 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
     wholesale_price: product?.wholesale_price || '',
     retail_price: product?.retail_price || '',
     min_order_qty: product?.min_order_qty || 1,
+    availability_status: product?.availability_status || 'auto',
     is_active: product?.is_active ?? true,
     is_new_arrival: product?.is_new_arrival ?? false,
     is_best_seller: product?.is_best_seller ?? false,
@@ -162,6 +172,15 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
         <div>
           <label className="label">Min Order Qty</label>
           <input type="number" className="input-field" value={form.min_order_qty} onChange={(e) => set('min_order_qty', e.target.value)} min={1} />
+        </div>
+        <div>
+          <label className="label">Customer Availability</label>
+          <select className="select-field" value={form.availability_status} onChange={(e) => set('availability_status', e.target.value)}>
+            {AVAILABILITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs font-semibold text-gray-400">Controls storefront buying without changing inventory stock.</p>
         </div>
         <div>
           <label className="label">Cost Price ($)</label>
@@ -690,9 +709,16 @@ export default function Products() {
                   <span className="text-sm">{formatCurrency(p.retail_price)}</span>
                 </Td>
                 <Td>
-                  <span className={`text-sm font-semibold ${p.current_stock <= 0 ? 'text-red-500' : p.current_stock <= 5 ? 'text-yellow-500' : 'text-green-600'}`}>
-                    {p.current_stock}
-                  </span>
+                  <div className="space-y-1">
+                    <span className={`text-sm font-semibold ${p.current_stock <= 0 ? 'text-red-500' : p.current_stock <= 5 ? 'text-yellow-500' : 'text-green-600'}`}>
+                      {p.current_stock}
+                    </span>
+                    {p.availability_status !== 'auto' && (
+                      <p className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-black ${isAvailableForSale(p) ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+                        {p.availability_status === 'available' ? 'Available' : 'Out of Stock'}
+                      </p>
+                    )}
+                  </div>
                 </Td>
                 <Td>
                   <Badge variant={p.is_active ? 'success' : 'default'}>{p.is_active ? 'Active' : 'Inactive'}</Badge>

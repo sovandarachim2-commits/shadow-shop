@@ -20,6 +20,7 @@ export const ordersApi = {
       data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined
     ),
     markPaid: (id, data) => client.post(`/orders/list/${id}/mark_paid/`, data),
+    validatePrintStock: (orderIds) => client.post('/orders/list/validate_print_stock/', { order_ids: orderIds }),
     generateQr: (id) => client.get(`/orders/list/${id}/generate_qr/`),
     today: () => client.get('/orders/list/today/'),
     kanban: () => client.get('/orders/list/kanban/'),

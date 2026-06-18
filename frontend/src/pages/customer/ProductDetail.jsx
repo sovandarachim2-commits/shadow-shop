@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
+import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { CosmeticArt, RatingRow } from '@/components/customer/CustomerUi'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -55,14 +56,14 @@ export default function ProductDetail() {
   const images = product?.images?.length > 0 ? product.images : []
   const currentImage = images[activeImg]
   const stock = product?.current_stock ?? 0
-  const isInStock = stock > 0
+  const isInStock = product?.is_available_for_sale ?? stock > 0
   const oldPrice = Number(product?.old_price || product?.wholesale_price || 0)
   const currentPrice = Number(product?.display_price || product?.retail_price || 0)
   const savedAmount = oldPrice > currentPrice ? oldPrice - currentPrice : 0
   const discountPercent = oldPrice > currentPrice ? Math.round(((oldPrice - currentPrice) / oldPrice) * 100) : 15
   const saleProduct = product?.display_price ? { ...product, retail_price: product.display_price } : product
   const flashSaleMaxQty = product?.is_flash_sale_active ? Number(product?.flash_sale_max_order_qty || 0) : 0
-  const maxPurchaseQty = flashSaleMaxQty > 0 ? Math.min(stock, flashSaleMaxQty) : stock
+  const maxPurchaseQty = flashSaleMaxQty > 0 ? (stock > 0 ? Math.min(stock, flashSaleMaxQty) : flashSaleMaxQty) : (stock > 0 ? stock : 9999)
 
   const handleAddToCart = () => {
     if (!product || !isInStock) return
@@ -124,12 +125,12 @@ export default function ProductDetail() {
 
   return (
     <div className="bg-white pb-24 md:pb-0">
-      <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
+      <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('product.details')}</h1>
-        <div />
+        <HeaderActionIcons />
       </div>
 
       <button onClick={() => navigate(-1)} className="mb-4 hidden items-center gap-3 text-sm font-black text-gray-600 hover:text-pink-600 md:inline-flex">
