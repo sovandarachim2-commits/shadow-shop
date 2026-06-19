@@ -1,13 +1,16 @@
 from .models import Stock, StockMovement
 
 
-def deduct_stock_for_order(order, user):
-    already_deducted = StockMovement.objects.filter(
+def has_stock_deduction_for_order(order):
+    return StockMovement.objects.filter(
         reference=order.order_number,
         type=StockMovement.TYPE_STOCK_OUT,
         reference_type__in=['order', 'order_set'],
     ).exists()
-    if already_deducted:
+
+
+def deduct_stock_for_order(order, user):
+    if has_stock_deduction_for_order(order):
         return
 
     for item in order.items.select_related('product', 'product_set').prefetch_related('product_set__items__product').all():

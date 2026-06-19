@@ -2,8 +2,8 @@ from django.core.management.base import BaseCommand
 from apps.accounts.models import Permission
 
 
-MODULES = ['dashboard', 'orders', 'products', 'inventory', 'delivery', 'finance', 'reports', 'users', 'settings', 'print', 'scanner', 'storefront']
-ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'print']
+MODULES = ['dashboard', 'orders', 'products', 'inventory', 'delivery', 'finance', 'reports', 'users', 'settings', 'print', 'scanner', 'storefront', 'rewards']
+ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'print', 'approve', 'adjust_points']
 
 
 class Command(BaseCommand):

@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw
 
 from apps.finance.models import Revenue
 from apps.notifications.services import TelegramService
+from apps.orders.rewards import award_points_for_paid_order
 from .models import BakongPayment
 
 
@@ -151,6 +152,7 @@ def create_or_refresh_bakong_payment(order):
             order.payment_method = 'bakong'
             order.payment_status = 'paid'
             order.save(update_fields=['payment_method', 'payment_status', 'updated_at'])
+        award_points_for_paid_order(order)
         return existing_payment
 
     qr_payload, expires_ms = generate_khqr_payload(order)
@@ -216,6 +218,7 @@ def _mark_bakong_paid(payment, response_data, user=None):
     payment.order.payment_status = 'paid'
     payment.order.payment_method = 'bakong'
     payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+    award_points_for_paid_order(payment.order)
     Revenue.objects.get_or_create(
         order=payment.order,
         defaults={
@@ -235,6 +238,7 @@ def check_bakong_status(payment, user=None):
             payment.order.payment_status = 'paid'
             payment.order.payment_method = 'bakong'
             payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+        award_points_for_paid_order(payment.order)
         return payment
 
     response_data = {}

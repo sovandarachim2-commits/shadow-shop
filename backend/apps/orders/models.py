@@ -1,6 +1,9 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 import uuid
+import secrets
+import string
 
 
 def generate_order_number():
@@ -295,3 +298,130 @@ class CartItem(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.product.name} x{self.quantity}"
+
+
+class RewardItem(models.Model):
+    TYPE_DISCOUNT = 'discount'
+    TYPE_FREE_DELIVERY = 'free_delivery'
+    TYPE_GIFT = 'gift'
+    TYPE_MANUAL = 'manual'
+
+    DISCOUNT_AMOUNT = 'amount'
+    DISCOUNT_PERCENT = 'percent'
+
+    TYPE_CHOICES = [
+        (TYPE_DISCOUNT, 'Discount Coupon'),
+        (TYPE_FREE_DELIVERY, 'Free Delivery'),
+        (TYPE_GIFT, 'Gift Product'),
+        (TYPE_MANUAL, 'Manual Reward'),
+    ]
+
+    DISCOUNT_TYPE_CHOICES = [
+        (DISCOUNT_AMOUNT, 'Amount'),
+        (DISCOUNT_PERCENT, 'Percent'),
+    ]
+
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    points_required = models.PositiveIntegerField()
+    type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+    coupon_discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_AMOUNT)
+    coupon_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    gift_product = models.ForeignKey(
+        'products.Product',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reward_items',
+    )
+    stock = models.PositiveIntegerField(null=True, blank=True)
+    per_customer_limit = models.PositiveIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reward_items'
+        ordering = ['points_required', 'name']
+
+    def __str__(self):
+        return f'{self.name} ({self.points_required} pts)'
+
+
+class RewardRedemption(models.Model):
+    STATUS_ACTIVE = 'active'
+    STATUS_PENDING = 'pending'
+    STATUS_PREPARED = 'prepared'
+    STATUS_COMPLETED = 'completed'
+    STATUS_USED = 'used'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Active'),
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_PREPARED, 'Prepared'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_USED, 'Used'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reward_redemptions')
+    reward_item = models.ForeignKey(RewardItem, on_delete=models.PROTECT, related_name='redemptions')
+    points_spent = models.PositiveIntegerField()
+    coupon_code = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'reward_redemptions'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user} - {self.reward_item.name}'
+
+    @staticmethod
+    def generate_coupon_code():
+        alphabet = string.ascii_uppercase + string.digits
+        while True:
+            code = 'SS-' + ''.join(secrets.choice(alphabet) for _ in range(8))
+            if not RewardRedemption.objects.filter(coupon_code=code).exists():
+                return code
+
+
+class PointTransaction(models.Model):
+    TYPE_EARN = 'earn'
+    TYPE_REDEEM = 'redeem'
+    TYPE_ADJUST = 'adjust'
+
+    TYPE_CHOICES = [
+        (TYPE_EARN, 'Earn'),
+        (TYPE_REDEEM, 'Redeem'),
+        (TYPE_ADJUST, 'Adjust'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='point_transactions')
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='point_transactions')
+    reward_redemption = models.ForeignKey(
+        RewardRedemption,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='point_transactions',
+    )
+    points = models.IntegerField()
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'point_transactions'
+        ordering = ['-created_at']
+        unique_together = ['user', 'order', 'type']
+
+    def __str__(self):
+        return f'{self.user} {self.type} {self.points} pts'

@@ -4,9 +4,9 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   User, MapPin, Shield, LogOut, ChevronRight, ChevronDown, Camera,
-  Package, Heart, CheckCircle2, Pencil, Trash2, Lock, Loader2, Truck, ShoppingBag,
-  ArrowLeft, Mail, Phone, CalendarDays, IdCard, Award, Sparkles, Languages,
-  Bell, Settings, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
+  Package, Heart, CheckCircle2, Pencil, Lock, Loader2, Truck, ShoppingBag,
+  ArrowLeft, Mail, Phone, IdCard, Languages,
+  Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
   Home, Headphones,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -15,12 +15,16 @@ import useWishlistStore from '@/store/wishlistStore'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { Modal } from '@/components/ui/Modal'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 
 const ACCOUNT_MENU_ITEMS = [
   { icon: User, label: 'Profile', description: 'Edit name, phone, and photo', view: 'profile' },
   { icon: Package, label: 'Orders', description: 'View orders and tracking', view: 'orders', path: '/my-orders' },
   { icon: MapPin, label: 'Addresses', description: 'Manage delivery addresses', view: 'addresses', path: '/address-book' },
+  { icon: Gift, label: 'Exchange Rewards', description: 'Redeem points', view: 'rewards', path: '/profile/rewards' },
+  { icon: Percent, label: 'Coupons', description: 'Reward coupon codes', view: 'coupons' },
+  { icon: Bell, label: 'Notifications', description: 'Account alerts', view: 'notifications' },
   { icon: Heart, label: 'Wishlist', description: 'Saved products', view: 'wishlist', path: '/wishlist' },
   { icon: Shield, label: 'Password', description: 'Change account password', view: 'password' },
 ]
@@ -37,8 +41,8 @@ const SHORTCUTS = [
   { tKey: 'nav.orders',       icon: ShoppingBag, path: '/my-orders' },
   { tKey: 'profile.address',  icon: MapPin,      path: '/address-book' },
   { tKey: 'wishlist.title',   icon: Heart,       path: '/wishlist' },
-  { tKey: 'profile.rewards',  icon: Gift,        path: '/profile' },
-  { tKey: 'profile.coupons',  icon: Percent,     path: '/shop' },
+  { tKey: 'profile.rewards',  icon: Gift,        path: '/profile/rewards' },
+  { tKey: 'profile.coupons',  icon: Percent,     path: '/profile' },
   { tKey: 'profile.reviews',  icon: Star,        path: '/my-orders' },
 ]
 
@@ -86,30 +90,36 @@ function compressImage(file, maxPx = 400, quality = 0.82) {
   })
 }
 
-function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSaved }) {
+function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSaved, asPage = false }) {
   const updateUser = useAuthStore((s) => s.updateUser)
   const fileInputRef = useRef(null)
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(user.avatar_url || null)
+  const [errors, setErrors] = useState({})
   const [form, setForm] = useState({
     full_name: [user.first_name, user.last_name].filter(Boolean).join(' '),
     email: user.email || '',
     phone: user.phone || '',
-    gender: user.gender || '',
-    date_of_birth: user.date_of_birth || '',
   })
 
   const initials = [user.first_name, user.last_name].filter(Boolean).map((n) => n[0]).join('').toUpperCase() || user.username?.[0]?.toUpperCase() || '?'
   const memberId = `#SS${String(user.id || 0).padStart(6, '0')}`
   const memberSince = user.created_at ? formatDate(user.created_at, 'MMMM yyyy') : 'New member'
-  const rewardPoints = 1250
-  const membershipLevel = rewardPoints >= 3000 ? 'Platinum' : rewardPoints >= 1500 ? 'Gold' : 'Silver'
   const defaultAddress = addresses.find((addr) => addr.is_default) || addresses[0]
 
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setAvatarPreview(URL.createObjectURL(file))
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file')
+      return
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      toast.error('Profile photo must be under 6 MB')
+      return
+    }
+    const previewUrl = URL.createObjectURL(file)
+    setAvatarPreview(previewUrl)
     const compressed = await compressImage(file)
     setAvatarFile(compressed)
   }
@@ -128,14 +138,33 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     },
   })
 
-  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+  const set = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }))
+    setErrors((current) => ({ ...current, [key]: undefined }))
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    const nextErrors = {}
+    const cleanName = form.full_name.trim()
+    const cleanEmail = form.email.trim()
+    const cleanPhone = form.phone.trim()
+
+    if (!cleanName) nextErrors.full_name = 'Enter your full name'
+    if (!cleanEmail) nextErrors.email = 'Enter your email address'
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      nextErrors.email = 'Enter a valid email address'
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+
     const [firstName, ...lastParts] = form.full_name.trim().split(/\s+/)
     const payload = {
-      email: form.email,
-      phone: form.phone,
+      email: cleanEmail,
+      phone: cleanPhone,
       first_name: firstName || '',
       last_name: lastParts.join(' '),
     }
@@ -150,86 +179,91 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     }
   }
 
-  return (
-    <Modal isOpen onClose={onClose} size="md" className="max-h-[94vh] overflow-hidden rounded-[28px] p-0 md:max-w-[430px]">
-      <form onSubmit={handleSubmit} className="flex max-h-[94vh] flex-col bg-white">
-        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-pink-50 bg-white/95 px-4 py-3 backdrop-blur">
+  const content = (
+      <form
+        onSubmit={handleSubmit}
+        className={cn('flex flex-col bg-white', asPage ? 'min-h-screen' : 'max-h-[94vh]')}
+      >
+        <div className={cn(
+          'sticky top-0 z-20 flex items-center justify-between border-b border-gray-100 bg-white/95 px-4 pb-3 backdrop-blur',
+          asPage ? 'pt-[calc(0.35rem+env(safe-area-inset-top))]' : 'pt-3'
+        )}>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-700 transition active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-700 transition hover:bg-gray-100 active:scale-95"
             aria-label="Back"
           >
             <ArrowLeft size={20} />
           </button>
-          <h2 className="text-base font-black text-gray-950">Edit Profile</h2>
+          <div className="text-center">
+            <h2 className="text-base font-black text-gray-950">Edit Profile</h2>
+            <p className="text-xs font-semibold text-gray-400">Keep your checkout details up to date</p>
+          </div>
           <button
             type="submit"
             disabled={saveMutation.isPending}
-            className="rounded-full px-3 py-2 text-sm font-black text-[#E91E63] transition active:scale-95 disabled:opacity-60"
+            className="flex h-10 min-w-[66px] items-center justify-center rounded-xl bg-[#E91E63] px-3 text-sm font-black text-white shadow-sm transition hover:bg-pink-600 active:scale-95 disabled:opacity-60"
           >
-            Save
+            {saveMutation.isPending ? <Loader2 size={17} className="animate-spin" /> : 'Save'}
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-pink-50/55 via-white to-white px-4 pb-5 pt-5">
-          <div className="flex flex-col items-center">
-            <div className="relative">
-              <div className="flex h-[120px] w-[120px] items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-[#E91E63] to-pink-300 text-4xl font-black text-white shadow-[0_18px_45px_rgba(233,30,99,0.22)]">
-                {avatarPreview
-                  ? <img src={avatarPreview} alt="Profile avatar" className="h-full w-full object-cover" />
-                  : initials}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gray-50 px-4 pb-5 pt-4">
+          <section className="overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm">
+            <div className="bg-gradient-to-r from-pink-50 via-white to-rose-50 px-4 py-5">
+              <div className="flex items-center gap-4">
+                <div className="relative shrink-0">
+                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-[#E91E63] to-pink-300 text-3xl font-black text-white shadow-[0_14px_30px_rgba(233,30,99,0.22)]">
+                    {avatarPreview
+                      ? <img src={avatarPreview} alt="Profile avatar" className="h-full w-full object-cover" />
+                      : initials}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#E91E63] text-white shadow-lg transition hover:bg-pink-600 active:scale-95"
+                    aria-label="Change profile photo"
+                  >
+                    <Camera size={17} />
+                  </button>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-lg font-black text-gray-950">{form.full_name || user.username || 'Your profile'}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-gray-500">{form.email || 'Add your email address'}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {avatarPreview && avatarPreview !== user.avatar_url && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarFile(null)
+                          setAvatarPreview(user.avatar_url || null)
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                        }}
+                        className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 active:scale-[0.98]"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#E91E63] text-white shadow-lg transition active:scale-95"
-                aria-label="Change profile photo"
-              >
-                <Camera size={17} />
-              </button>
             </div>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="mt-3 text-sm font-black text-[#E91E63]"
-            >
-              Change Photo
-            </button>
-          </div>
+          </section>
 
           <ProfileSection title="Personal Information" icon={User}>
-            <ProfileField label="Full Name" value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} />
-            <ProfileField label="Phone Number" value={form.phone} onChange={(v) => set('phone', v)} icon={Phone} />
-            <ProfileField label="Email Address" type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} />
-            <label className="block">
-              <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-400">Gender</span>
-              <div className="grid grid-cols-2 gap-2">
-                {['Male', 'Female'].map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => set('gender', option.toLowerCase())}
-                    className={cn(
-                      'h-12 rounded-2xl border text-sm font-black transition active:scale-[0.98]',
-                      form.gender === option.toLowerCase()
-                        ? 'border-[#E91E63] bg-pink-50 text-[#E91E63] shadow-sm'
-                        : 'border-gray-100 bg-white text-gray-500'
-                    )}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </label>
-            <ProfileField label="Date of Birth" type="date" value={form.date_of_birth} onChange={(v) => set('date_of_birth', v)} icon={CalendarDays} />
+            <ProfileField label="Full Name" value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} error={errors.full_name} autoComplete="name" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ProfileField label="Phone Number" value={form.phone} onChange={(v) => set('phone', v)} icon={Phone} autoComplete="tel" />
+              <ProfileField label="Email Address" type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} error={errors.email} autoComplete="email" />
+            </div>
           </ProfileSection>
 
           <ProfileSection title="Address" icon={MapPin}>
-            <div className="rounded-[20px] bg-pink-50/70 p-4">
+            <div className="rounded-2xl border border-pink-100 bg-pink-50/60 p-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#E91E63] shadow-sm">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#E91E63] shadow-sm">
                   <MapPin size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -247,9 +281,9 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               <button
                 type="button"
                 onClick={onEditAddress}
-                className="mt-4 h-12 w-full rounded-2xl border border-[#E91E63]/20 bg-white text-sm font-black text-[#E91E63] shadow-sm transition active:scale-[0.98]"
+                className="mt-4 h-11 w-full rounded-xl border border-[#E91E63]/20 bg-white text-sm font-black text-[#E91E63] shadow-sm transition hover:bg-white/80 active:scale-[0.98]"
               >
-                Edit Address
+                {defaultAddress ? 'Edit Default Address' : 'Add Delivery Address'}
               </button>
             </div>
           </ProfileSection>
@@ -262,43 +296,21 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               value={<span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-600"><CheckCircle2 size={13} /> Verified</span>}
             />
           </ProfileSection>
-
-          <ProfileSection title="Reward Information" icon={Award}>
-            <div className="rounded-[20px] bg-gradient-to-br from-[#E91E63] to-pink-400 p-4 text-white shadow-[0_16px_36px_rgba(233,30,99,0.22)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-white/75">Current Points</p>
-                  <p className="mt-1 text-3xl font-black">{rewardPoints.toLocaleString()}</p>
-                </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/18">
-                  <Sparkles size={22} />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between rounded-2xl bg-white/16 px-4 py-3">
-                <span className="text-sm font-semibold text-white/80">Membership Level</span>
-                <span className="text-sm font-black">{membershipLevel}</span>
-              </div>
-            </div>
-          </ProfileSection>
-        </div>
-
-        <div className="sticky bottom-0 z-20 space-y-3 border-t border-pink-50 bg-white px-4 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.06)]">
-          <button
-            type="submit"
-            disabled={saveMutation.isPending}
-            className="flex h-14 w-full items-center justify-center rounded-[20px] bg-[#E91E63] text-base font-black text-white shadow-[0_14px_30px_rgba(233,30,99,0.25)] transition active:scale-[0.98] disabled:opacity-70"
-          >
-            {saveMutation.isPending ? <Loader2 size={20} className="animate-spin" /> : 'Save Changes'}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-14 w-full rounded-[20px] border border-[#E91E63]/25 bg-white text-base font-black text-[#E91E63] transition active:scale-[0.98]"
-          >
-            Cancel
-          </button>
         </div>
       </form>
+  )
+
+  if (asPage) {
+    return (
+      <div className="min-h-screen bg-white">
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} size="md" className="max-h-[94vh] overflow-hidden p-0 md:max-w-[520px]">
+      {content}
     </Modal>
   )
 }
@@ -369,9 +381,9 @@ function ChangePasswordModal({ onClose }) {
 
 function ProfileSection({ title, icon: Icon, children }) {
   return (
-    <section className="rounded-[20px] border border-pink-50 bg-white p-4 shadow-[0_12px_34px_rgba(15,23,42,0.06)]">
+    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-50 text-[#E91E63]">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 text-[#E91E63]">
           <Icon size={19} />
         </div>
         <h3 className="text-base font-black text-gray-950">{title}</h3>
@@ -383,17 +395,20 @@ function ProfileSection({ title, icon: Icon, children }) {
 
 function ProfileInfoRow({ label, value }) {
   return (
-    <div className="flex min-h-12 items-center justify-between gap-4 rounded-2xl bg-gray-50 px-4 py-3">
+    <div className="flex min-h-12 items-center justify-between gap-4 rounded-xl bg-gray-50 px-4 py-3">
       <span className="text-sm font-semibold text-gray-500">{label}</span>
       <span className="text-right text-sm font-black text-gray-950">{value}</span>
     </div>
   )
 }
 
-function ProfileField({ label, value, onChange, type = 'text', readOnly, required, icon: Icon }) {
+function ProfileField({ label, value, onChange, type = 'text', readOnly, required, icon: Icon, error, autoComplete }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="mb-2 flex items-center gap-1 text-xs font-black uppercase tracking-wide text-gray-400">
+        {label}
+        {required && <span className="text-[#E91E63]">*</span>}
+      </span>
       <div className="relative">
         {Icon && (
           <Icon size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
@@ -403,15 +418,48 @@ function ProfileField({ label, value, onChange, type = 'text', readOnly, require
           value={value}
           readOnly={readOnly}
           required={required}
+          autoComplete={autoComplete}
+          aria-invalid={error ? 'true' : 'false'}
           onChange={onChange ? (e) => onChange(e.target.value) : undefined}
           className={cn(
-            'h-12 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 text-sm font-bold text-gray-950 outline-none transition placeholder:text-gray-300 focus:border-[#E91E63] focus:bg-white focus:ring-4 focus:ring-pink-100',
+            'h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-950 outline-none transition placeholder:text-gray-300 focus:border-[#E91E63] focus:bg-white focus:ring-4 focus:ring-pink-100',
             Icon && 'pl-11',
+            error && 'border-red-300 bg-red-50/40 focus:border-red-400 focus:ring-red-100',
             readOnly && 'cursor-not-allowed bg-gray-50 text-gray-500'
           )}
         />
       </div>
+      {error && <p className="mt-1.5 text-xs font-semibold text-red-500">{error}</p>}
     </label>
+  )
+}
+
+function MobileSettingsGroup({ title, children }) {
+  return (
+    <section className="mt-7">
+      <h2 className="mb-3 text-[13px] font-black text-[#202A44]">{title}</h2>
+      <div className="space-y-0.5">{children}</div>
+    </section>
+  )
+}
+
+function MobileSettingsRow({ icon: Icon, label, action, danger }) {
+  return (
+    <button
+      type="button"
+      onClick={action}
+      className="flex h-11 w-full items-center gap-3 rounded-lg text-left transition active:bg-slate-50"
+    >
+      <Icon
+        size={16}
+        strokeWidth={1.9}
+        className={cn('shrink-0', danger ? 'text-red-500' : 'text-slate-500')}
+      />
+      <span className={cn('min-w-0 flex-1 text-[12px] font-black', danger ? 'text-red-500' : 'text-[#202A44]')}>
+        {label}
+      </span>
+      <ChevronRight size={15} strokeWidth={2.2} className={danger ? 'text-red-200' : 'text-slate-400'} />
+    </button>
   )
 }
 
@@ -459,10 +507,51 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
   )
 }
 
+export function EditProfilePage() {
+  const navigate = useNavigate()
+  const { user, fetchMe } = useAuthStore()
+
+  useEffect(() => {
+    if (user) fetchMe()
+  }, [user?.id])
+
+  const { data: addresses = [] } = useQuery({
+    queryKey: ['my-addresses'],
+    queryFn: () => authApi.addresses.list().then((r) => r.data.results ?? r.data),
+    enabled: Boolean(user),
+  })
+
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-sm px-5 pt-12 text-center">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-pink-50 text-pink-600">
+          <User size={36} />
+        </div>
+        <h2 className="mt-5 text-xl font-black text-gray-950">Sign in to edit your profile</h2>
+        <button onClick={() => navigate('/login')} className="shop-btn-primary mt-6 px-10">
+          Login
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <EditProfileModal
+      asPage
+      user={user}
+      addresses={addresses}
+      onEditAddress={() => navigate('/address-book')}
+      onClose={() => navigate('/profile')}
+      onSaved={() => navigate('/profile')}
+    />
+  )
+}
+
 export default function Profile() {
   const navigate = useNavigate()
   const { user, logout, fetchMe } = useAuthStore()
   const wishlistItems = useWishlistStore((s) => s.items)
+  const [confirm, ConfirmDialog] = useConfirm()
   const [activeModal, setActiveModal] = useState(null)
   const [activeView, setActiveView] = useState('profile')
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
@@ -494,7 +583,18 @@ export default function Profile() {
     enabled: Boolean(user),
   })
 
+  const { data: rewardsSummary } = useQuery({
+    queryKey: ['customer-rewards-summary'],
+    queryFn: () => ordersApi.rewards.summary().then((r) => r.data),
+    enabled: Boolean(user),
+  })
+
   const handleLogout = async () => {
+    const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
+      confirmText: 'Logout',
+      icon: 'logout',
+    })
+    if (!ok) return
     await logout()
     navigate('/login')
   }
@@ -506,7 +606,7 @@ export default function Profile() {
         return
       }
       if (item.view === 'profile') {
-        setActiveModal('personal')
+        navigate('/profile/edit')
         return
       }
       if (item.view === 'password') {
@@ -537,11 +637,12 @@ export default function Profile() {
   const phone = user.phone || '—'
   const memberSince = user.created_at ? formatDate(user.created_at, 'MMM yyyy') : '—'
   const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-  const rewardPoints = 1250
-  const nextTierPoints = 3000
-  const membershipLevel = rewardPoints >= 5000 ? 'Platinum' : rewardPoints >= 3000 ? 'Gold' : 'Silver'
-  const ptsToNext = Math.max(0, nextTierPoints - rewardPoints)
-  const progressPct = Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
+  const rewardPoints = rewardsSummary?.current_points ?? 0
+  const nextTierPoints = rewardsSummary?.next_tier_points ?? 3000
+  const membershipLevel = rewardsSummary?.member_level || 'Silver'
+  const ptsToNext = rewardsSummary?.points_to_next_level ?? Math.max(0, nextTierPoints - rewardPoints)
+  const progressPct = rewardsSummary?.progress_pct ?? Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
+  const rewardRedemptions = rewardsSummary?.redemptions ?? []
 
   const orderCounts = useMemo(() => {
     const c = { pending: 0, preparing: 0, packed: 0, shipped: 0, completed: 0 }
@@ -555,13 +656,27 @@ export default function Profile() {
     return c
   }, [accountOrders])
 
-  const mobileMenuItems = [
-    { icon: User,        label: t('profile.editProfile'),      desc: t('profile.signInDesc'),    action: () => setActiveModal('personal') },
-    { icon: Lock,        label: t('profile.passwordSecurity'), desc: t('profile.passwordSecurity'), action: () => setActiveModal('password') },
-    { icon: CreditCard,  label: t('profile.paymentMethods'),   desc: t('profile.paymentMethods'), action: () => {} },
-    { icon: Bell,        label: t('profile.notifications'),    desc: t('profile.notifications'),  action: () => {} },
-    { icon: HelpCircle,  label: t('profile.helpCenter'),       desc: t('profile.helpCenter'),     action: () => {} },
-    { icon: LogOut,      label: t('auth.logout'),              desc: t('auth.logout'),            action: handleLogout, danger: true },
+  const mobileQuickActions = [
+    { icon: ClipboardList, label: 'My Orders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },
+    { icon: Percent, label: 'Coupons', action: () => setActiveView('coupons'), color: 'text-rose-400' },
+    { icon: Heart, label: 'Following', action: () => navigate('/wishlist'), color: 'text-amber-400' },
+  ]
+
+  const mobileGeneralSettings = [
+    { icon: User, label: 'My account', action: () => navigate('/profile/edit') },
+    { icon: ClipboardList, label: 'My Orders', action: () => navigate('/my-orders') },
+    { icon: MapPin, label: 'My Address', action: () => navigate('/address-book') },
+    { icon: Gift, label: 'Exchange Rewards', action: () => navigate('/profile/rewards') },
+    { icon: Percent, label: 'Coupons', action: () => setActiveView('coupons') },
+    { icon: Bell, label: 'Notifications', action: () => setActiveView('notifications') },
+  ]
+
+  const mobileOtherSettings = [
+    { icon: Headphones, label: 'Contact preferences', action: () => setActiveView('help') },
+    { icon: ClipboardList, label: 'Terms & Conditions', action: () => setActiveView('help') },
+    { icon: Shield, label: 'Privacy policy', action: () => setActiveView('help') },
+    { icon: Lock, label: 'Password & Security', action: () => setActiveModal('password') },
+    { icon: LogOut, label: 'Logout', action: handleLogout, danger: true },
   ]
 
   return (
@@ -570,23 +685,20 @@ export default function Profile() {
       {/* ═══════════════════════════════════════════
           MOBILE FULL REDESIGN
       ═══════════════════════════════════════════ */}
-      <div className="lg:hidden">
-
-        {/* ── Mobile Header ─────────────────────── */}
-        <div className="flex items-center justify-between bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm">
-          <h1 className="text-xl font-black text-gray-950">{t('nav.account')}</h1>
+      <div className="min-h-screen bg-white px-5 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:hidden">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-black text-[#202A44]">Profile</h1>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
                 onClick={() => setIsLanguageMenuOpen((open) => !open)}
-                className="flex h-9 items-center gap-1.5 rounded-full bg-gray-100 px-2.5 text-sm font-black text-gray-700 shadow-sm transition active:scale-95"
+                className="flex h-9 items-center gap-1.5 rounded-full bg-white px-2 text-sm font-black text-gray-700 transition active:scale-95"
                 aria-expanded={isLanguageMenuOpen}
                 aria-label="Choose language"
               >
-                <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-white text-base shadow-sm">
+                <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-50 text-base">
                   {currentLanguage.flag}
                 </span>
-                <span>{currentLanguage.label}</span>
                 <ChevronDown
                   size={14}
                   className={cn('text-gray-500 transition-transform', isLanguageMenuOpen && 'rotate-180')}
@@ -618,171 +730,86 @@ export default function Profile() {
                 </div>
               )}
             </div>
-            <button className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-90">
-              <Bell size={17} />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-pink-500 ring-[1.5px] ring-white" />
+            <button
+              type="button"
+              onClick={() => navigate('/my-orders')}
+              aria-label="Messages"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition active:scale-90"
+            >
+              <Mail size={18} />
             </button>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-90">
-              <Settings size={17} />
+            <button
+              type="button"
+              onClick={() => setActiveView('notifications')}
+              aria-label="Notifications"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition active:scale-90"
+            >
+              <Bell size={18} />
+              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-rose-500 ring-2 ring-white" />
             </button>
           </div>
         </div>
 
-        <div className="space-y-3 px-4 py-3.5 pb-6">
-
-          {/* ── Profile Card ──────────────────────── */}
-          <div
-            className="overflow-hidden rounded-[20px] p-4 shadow-sm"
-            style={{ background: 'linear-gradient(135deg, #fff0f5 0%, #ffd6e8 100%)' }}
+        <div className="mt-7">
+          <button
+            type="button"
+            onClick={() => navigate('/profile/edit')}
+            className="flex w-full items-center gap-4 text-left transition active:scale-[0.99]"
           >
-            <div className="flex items-start gap-3.5">
-              {/* Avatar */}
-              <div className="h-[68px] w-[68px] shrink-0 overflow-hidden rounded-full border-[3px] border-white shadow-md">
-                {user.avatar_url ? (
-                  <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-pink-400 to-purple-500 text-xl font-black text-white">
-                    {initials}
-                  </div>
-                )}
-              </div>
-              {/* Info */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-black text-gray-950">{displayName}</p>
-                    <p className="mt-0.5 truncate text-xs text-gray-500">{email}</p>
-                    <p className="truncate text-xs text-gray-500">{phone}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-600">
-                        <CheckCircle2 size={10} /> {t('profile.verified')}
-                      </span>
-                      <span className="text-[10px] text-gray-400">{t('profile.memberSince')} {memberSince}</span>
-                    </div>
-                  </div>
-                  {/* Edit button */}
-                  <button
-                    onClick={() => setActiveModal('personal')}
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-pink-300 bg-white px-3 py-1.5 text-xs font-bold text-pink-600 shadow-sm transition active:scale-95"
-                  >
-                    <Pencil size={11} /> {t('common.edit')}
-                  </button>
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-gray-100">
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-pink-300 to-rose-400 text-lg font-black text-white">
+                  {initials}
                 </div>
-              </div>
+              )}
             </div>
-          </div>
-
-          {/* ── My Points Card ────────────────────── */}
-          <div className="rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-            <div className="mb-3 flex items-center gap-1.5">
-              <Gift size={15} className="text-pink-500" />
-              <span className="text-sm font-black text-pink-500">{t('profile.myPoints')}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-base font-black text-[#202A44]">{displayName}</p>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-400">{email}</p>
             </div>
-            <div className="flex items-end justify-between">
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-black text-pink-600">{rewardPoints.toLocaleString()}</span>
-                <span className="text-sm font-bold text-gray-400">pts</span>
-              </div>
-              <div className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5">
-                <div className="h-4 w-4 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 shadow-sm" />
-                <span className="text-xs font-bold text-gray-600">{membershipLevel} Member</span>
-              </div>
-            </div>
-            {ptsToNext > 0 && (
-              <p className="mt-2 text-xs text-gray-400">{t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}</p>
-            )}
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            <div className="mt-1.5 flex justify-end">
-              <span className="text-[10px] font-semibold text-gray-400">
-                {rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} pts
-              </span>
-            </div>
-          </div>
-
-          {/* ── My Orders Tracker ─────────────────── */}
-          <div className="rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-            <div className="mb-3.5 flex items-center justify-between">
-              <h2 className="text-sm font-black text-gray-950">{t('nav.orders')}</h2>
-              <button onClick={() => navigate('/my-orders')} className="text-[13px] font-bold text-pink-500">
-                {t('common.viewAll')}
-              </button>
-            </div>
-            <div className="grid grid-cols-5 gap-1">
-              {ORDER_STATUS_ITEMS.map(({ key, label, icon: Icon }) => {
-                const count = orderCounts[key]
-                return (
-                  <button
-                    key={key}
-                    onClick={() => navigate('/my-orders')}
-                    className="flex flex-col items-center gap-1.5 transition active:scale-90"
-                  >
-                    <div className="relative flex h-12 w-12 items-center justify-center rounded-full border-2 border-pink-100 bg-pink-50 text-pink-500">
-                      <Icon size={20} />
-                      {count > 0 && (
-                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-500 px-1 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                          {count > 9 ? '9+' : count}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-center text-[10px] font-semibold leading-tight text-gray-600">{t(`orders.status.${key}`)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* ── My Shortcuts ──────────────────────── */}
-          <div>
-            <h2 className="mb-2.5 text-sm font-black text-gray-950">{t('profile.myShortcuts')}</h2>
-            <div className="grid grid-cols-3 gap-2.5">
-              {SHORTCUTS.map(({ tKey, icon: Icon, path }) => (
-                <button
-                  key={tKey}
-                  onClick={() => navigate(path)}
-                  className="flex flex-col items-center gap-2 rounded-[16px] bg-white py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition active:scale-[0.96] active:bg-pink-50"
-                >
-                  <Icon size={22} className="text-pink-500" />
-                  <span className="text-[11px] font-bold text-gray-700">{t(tKey)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Account Menu ──────────────────────── */}
-          <div>
-            <h2 className="mb-2.5 text-sm font-black text-gray-950">{t('profile.accountMenu')}</h2>
-            <div className="overflow-hidden rounded-[20px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-              {mobileMenuItems.map(({ icon: Icon, label, desc, action, danger }, idx) => (
-                <button
-                  key={label}
-                  onClick={action}
-                  className={cn(
-                    'flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition active:bg-gray-50',
-                    idx < mobileMenuItems.length - 1 && 'border-b border-gray-50'
-                  )}
-                >
-                  <div className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl',
-                    danger ? 'bg-red-50' : 'bg-pink-50'
-                  )}>
-                    <Icon size={18} className={danger ? 'text-red-500' : 'text-pink-500'} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={cn('text-sm font-black', danger ? 'text-red-500' : 'text-gray-950')}>{label}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">{desc}</p>
-                  </div>
-                  <ChevronRight size={14} className={danger ? 'text-red-200' : 'text-gray-300'} />
-                </button>
-              ))}
-            </div>
-          </div>
-
+          </button>
         </div>
+
+        <div className="mt-8 overflow-hidden rounded-xl bg-slate-50">
+          <div className="grid grid-cols-3">
+            {mobileQuickActions.map(({ icon: Icon, label, action, color }, index) => (
+              <button
+                key={label}
+                type="button"
+                onClick={action}
+                className={cn(
+                  'flex h-[74px] flex-col items-center justify-center gap-2 transition active:bg-slate-100',
+                  index > 0 && 'border-l border-slate-200'
+                )}
+              >
+                <Icon size={20} strokeWidth={1.8} className={color} />
+                <span className="text-[10px] font-black text-slate-500">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <MobileSettingsGroup title="General Setting">
+          {mobileGeneralSettings.map((item) => (
+            <MobileSettingsRow key={item.label} {...item} />
+          ))}
+        </MobileSettingsGroup>
+
+        <MobileSettingsGroup title="Other">
+          {mobileOtherSettings.map((item) => (
+            <MobileSettingsRow key={item.label} {...item} />
+          ))}
+        </MobileSettingsGroup>
+
+        <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-black text-slate-500">Member since</span>
+            <span className="font-black text-[#202A44]">{memberSince}</span>
+          </div>
+        </div>
+
       </div>
 
       {/* ═══════════════════════════════════════════
@@ -798,15 +825,15 @@ export default function Profile() {
               { label: t('nav.orders'),              icon: ClipboardList, view: 'orders',    badge: accountOrders.length },
               { label: t('profile.addresses'),       icon: MapPin,        view: 'addresses' },
               { label: t('wishlist.title'),           icon: Heart,         view: 'wishlist' },
-              { label: t('profile.rewards'),          icon: Gift,          view: 'rewards' },
+              { label: t('profile.rewards'),          icon: Gift,          view: 'rewards', path: '/profile/rewards' },
               { label: t('profile.coupons'),          icon: Percent,       view: 'coupons' },
               { label: t('profile.reviews'),          icon: Star,          view: 'reviews' },
-            ].map(({ label, icon: Icon, view, badge }) => {
+            ].map(({ label, icon: Icon, view, badge, path }) => {
               const isActive = activeView === view
               return (
                 <button
                   key={view}
-                  onClick={() => setActiveView(view)}
+                  onClick={() => path ? navigate(path) : setActiveView(view)}
                   className={cn(
                     'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
                     isActive ? 'bg-pink-50 font-bold text-pink-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -826,7 +853,7 @@ export default function Profile() {
           <div className="border-t border-gray-100 p-3 pb-4">
             <p className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">{t('profile.accountMenu')}</p>
             {[
-              { label: t('profile.editProfile'),      icon: User,       view: null,            action: () => setActiveModal('personal') },
+              { label: t('profile.editProfile'),      icon: User,       view: null,            action: () => navigate('/profile/edit') },
               { label: t('profile.passwordSecurity'), icon: Lock,       view: null,            action: () => setActiveModal('password') },
               { label: t('profile.paymentMethods'),   icon: CreditCard, view: 'payment',       action: () => setActiveView('payment') },
               { label: t('profile.notifications'),    icon: Bell,       view: 'notifications', action: () => setActiveView('notifications') },
@@ -890,7 +917,7 @@ export default function Profile() {
                         </div>
                       </div>
                       <button
-                        onClick={() => setActiveModal('personal')}
+                        onClick={() => navigate('/profile/edit')}
                         className="flex shrink-0 items-center gap-1.5 rounded-full border border-pink-300 px-4 py-2 text-sm font-bold text-pink-600 transition hover:bg-pink-50"
                       >
                         <Pencil size={13} /> {t('profile.editProfile')}
@@ -967,12 +994,12 @@ export default function Profile() {
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <h3 className="mb-5 text-base font-black text-gray-950">My Shortcuts</h3>
                 <div className="flex items-start gap-5">
-                  {SHORTCUTS.map(({ label, icon: Icon, path }) => (
-                    <button key={label} onClick={() => navigate(path)} className="flex flex-col items-center gap-2 transition hover:opacity-70 active:scale-95">
+                  {SHORTCUTS.map(({ tKey, icon: Icon, path }) => (
+                    <button key={tKey} onClick={() => navigate(path)} className="flex flex-col items-center gap-2 transition hover:opacity-70 active:scale-95">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-pink-100 bg-pink-50 text-pink-500">
                         <Icon size={19} />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-600">{label}</span>
+                      <span className="text-[11px] font-semibold text-gray-600">{t(tKey)}</span>
                     </button>
                   ))}
                 </div>
@@ -985,13 +1012,14 @@ export default function Profile() {
                 <h3 className="mb-4 text-base font-black text-gray-950">Account Menu</h3>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                   {[
-                    { icon: User,       label: 'Edit Profile',        desc: 'Update your personal info',    action: () => setActiveModal('personal') },
-                    { icon: Percent,    label: 'Coupons',              desc: 'Your discount coupons',        action: () => {} },
+                    { icon: User,       label: 'Edit Profile',        desc: 'Update your personal info',    action: () => navigate('/profile/edit') },
+                    { icon: Gift,       label: 'Exchange Rewards',     desc: 'Redeem points for rewards',    action: () => navigate('/profile/rewards') },
+                    { icon: Percent,    label: 'Coupons',              desc: 'Your discount coupons',        action: () => setActiveView('coupons') },
                     { icon: Lock,       label: 'Password & Security',  desc: 'Change password and security', action: () => setActiveModal('password') },
-                    { icon: Star,       label: 'Reviews',              desc: 'Your product reviews',         action: () => {} },
-                    { icon: CreditCard, label: 'Payment Methods',      desc: 'Manage your payment cards',    action: () => {} },
-                    { icon: HelpCircle, label: 'Help Center',          desc: 'FAQs and Support',             action: () => {} },
-                    { icon: Bell,       label: 'Notifications',        desc: 'Manage notification settings', action: () => {} },
+                    { icon: Star,       label: 'Reviews',              desc: 'Your product reviews',         action: () => setActiveView('reviews') },
+                    { icon: CreditCard, label: 'Payment Methods',      desc: 'Manage your payment cards',    action: () => setActiveView('payment') },
+                    { icon: HelpCircle, label: 'Help Center',          desc: 'FAQs and Support',             action: () => setActiveView('help') },
+                    { icon: Bell,       label: 'Notifications',        desc: 'Manage notification settings', action: () => setActiveView('notifications') },
                     { icon: LogOut,     label: 'Logout',               desc: 'Sign out from your account',   action: handleLogout, danger: true },
                   ].map(({ icon: Icon, label, desc, action, danger }) => (
                     <button
@@ -1226,11 +1254,20 @@ export default function Profile() {
                 </div>
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <p className="font-black text-gray-950">Rewards Catalog</p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-black text-gray-950">Rewards Catalog</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile/rewards')}
+                    className="rounded-xl bg-pink-600 px-4 py-2 text-sm font-black text-white transition hover:bg-pink-700"
+                  >
+                    Open Exchange
+                  </button>
+                </div>
                 <div className="py-10 text-center">
                   <Gift size={36} className="mx-auto mb-3 text-gray-200" />
-                  <p className="font-semibold text-gray-400">Coming Soon</p>
-                  <p className="mt-1 text-xs text-gray-400">Redeem your points for exclusive rewards</p>
+                  <p className="font-semibold text-gray-400">Exchange coupons and rewards</p>
+                  <p className="mt-1 text-xs text-gray-400">Use your points for discounts and delivery rewards</p>
                 </div>
               </div>
             </div>
@@ -1240,11 +1277,40 @@ export default function Profile() {
           {activeView === 'coupons' && (
             <div className="space-y-4">
               <h2 className="text-xl font-black text-gray-950">My Coupons</h2>
-              <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
-                <Percent size={36} className="mx-auto mb-3 text-gray-200" />
-                <p className="font-semibold text-gray-400">No coupons available</p>
-                <p className="mt-1 text-xs text-gray-400">Check back soon for exclusive discounts</p>
-              </div>
+              {rewardRedemptions.filter((item) => item.coupon_code).length === 0 ? (
+                <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
+                  <Percent size={36} className="mx-auto mb-3 text-gray-200" />
+                  <p className="font-semibold text-gray-400">No coupons available</p>
+                  <p className="mt-1 text-xs text-gray-400">Exchange reward points to create coupon codes</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile/rewards')}
+                    className="mt-4 rounded-xl bg-pink-600 px-5 py-2.5 text-sm font-black text-white"
+                  >
+                    Exchange Rewards
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {rewardRedemptions.filter((item) => item.coupon_code).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-gray-950">{item.reward_name}</p>
+                          <p className="mt-1 text-xs font-semibold text-gray-400">{formatDate(item.created_at)}</p>
+                        </div>
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black capitalize text-emerald-600">
+                          {item.status}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+                        <span className="text-xs font-black uppercase text-gray-400">Code</span>
+                        <span className="font-mono text-sm font-black text-gray-950">{item.coupon_code}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1338,21 +1404,10 @@ export default function Profile() {
         </div>
       </div>{/* end hidden lg:flex */}
 
-      {activeModal === 'personal' && (
-        <EditProfileModal
-          user={user}
-          addresses={addresses}
-          onEditAddress={() => {
-            setActiveModal(null)
-            navigate('/address-book')
-          }}
-          onClose={() => setActiveModal(null)}
-          onSaved={() => setActiveModal(null)}
-        />
-      )}
       {activeModal === 'password' && (
         <ChangePasswordModal onClose={() => setActiveModal(null)} />
       )}
+      {ConfirmDialog}
     </div>
   )
 }

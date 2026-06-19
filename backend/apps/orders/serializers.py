@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Customer, Order, OrderItem, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord
+from .models import (
+    Customer, Order, OrderItem, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord,
+    RewardItem, RewardRedemption, PointTransaction,
+)
 from apps.products.models import Product, ProductSet
 
 
@@ -382,10 +385,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         from apps.notifications.services import TelegramService
         transaction.on_commit(lambda: TelegramService.notify_new_order_async(order.id))
 
-        from apps.inventory.services import deduct_stock_for_order
-        if not order.is_draft:
-            deduct_stock_for_order(order, request.user)
-
         return order
 
 
@@ -410,7 +409,10 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
 
         old_product_totals = {}
         old_set_totals = {}
-        if not order.is_draft:
+        from apps.inventory.services import has_stock_deduction_for_order
+        stock_already_deducted = has_stock_deduction_for_order(order)
+
+        if stock_already_deducted:
             for item in order.items.select_related('product', 'product_set').all():
                 if item.product:
                     old_product_totals[item.product] = old_product_totals.get(item.product, 0) + item.quantity
@@ -466,23 +468,30 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                         setattr(order.customer, field, customer_info[field] or '')
                 order.customer.save()
 
-            old_is_draft = order.is_draft
+            from apps.inventory.services import has_stock_deduction_for_order
+
+            stock_already_deducted = has_stock_deduction_for_order(order)
             for field, value in validated_data.items():
                 setattr(order, field, value)
 
             old_totals = {}
-            if not old_is_draft:
-                for item in order.items.select_related('product').all():
+            if stock_already_deducted:
+                old_set_totals = {}
+                for item in order.items.select_related('product', 'product_set').all():
                     if item.product:
                         old_totals[item.product] = old_totals.get(item.product, 0) + item.quantity
+                    elif item.product_set:
+                        old_set_totals[item.product_set] = old_set_totals.get(item.product_set, 0) + item.quantity
+                for product, quantity in expand_set_component_totals(old_set_totals).items():
+                    old_totals[product] = old_totals.get(product, 0) + quantity
 
             if items_data is not None:
-                new_product_totals, _new_set_totals = self._aggregate_items(items_data)
-                new_totals = new_product_totals if not order.is_draft else {}
-                if old_is_draft and not order.is_draft:
-                    new_totals = new_product_totals
-                elif old_is_draft and order.is_draft:
-                    new_totals = {}
+                new_product_totals, new_set_totals = self._aggregate_items(items_data)
+                new_totals = {}
+                if stock_already_deducted and not order.is_draft:
+                    new_totals = dict(new_product_totals)
+                    for product, quantity in expand_set_component_totals(new_set_totals).items():
+                        new_totals[product] = new_totals.get(product, 0) + quantity
 
                 order.items.all().delete()
                 subtotal = 0
@@ -492,7 +501,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                     subtotal += item.total_price
                 order.subtotal = subtotal
 
-                if not old_is_draft or not order.is_draft:
+                if stock_already_deducted:
                     self._adjust_stock(order, old_totals, new_totals, request.user)
 
             order.save()
@@ -503,6 +512,9 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                 changed_by=request.user,
                 note='Order edited',
             )
+
+            from apps.notifications.services import TelegramService
+            transaction.on_commit(lambda: TelegramService.notify_order_edited_async(order.id))
 
             order.customer.total_orders = order.customer.orders.count()
             order.customer.total_spent = sum(o.grand_total for o in order.customer.orders.all())
@@ -589,9 +601,6 @@ class CustomerCheckoutSerializer(serializers.Serializer):
         from apps.notifications.services import TelegramService
         transaction.on_commit(lambda: TelegramService.notify_new_order_async(order.id))
 
-        from apps.inventory.services import deduct_stock_for_order
-        deduct_stock_for_order(order, user)
-
         customer.total_orders = customer.orders.count()
         customer.total_spent = sum(o.grand_total for o in customer.orders.all())
         customer.save(update_fields=['total_orders', 'total_spent'])
@@ -645,3 +654,94 @@ class CartItemSerializer(serializers.ModelSerializer):
 
     def get_subtotal(self, obj):
         return float(obj.product.retail_price * obj.quantity)
+
+
+class RewardItemSerializer(serializers.ModelSerializer):
+    can_exchange = serializers.SerializerMethodField()
+    type_label = serializers.CharField(source='get_type_display', read_only=True)
+    coupon_discount_type_label = serializers.CharField(source='get_coupon_discount_type_display', read_only=True)
+    gift_product_name = serializers.CharField(source='gift_product.name', read_only=True)
+    gift_product_code = serializers.CharField(source='gift_product.code', read_only=True)
+    gift_product_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RewardItem
+        fields = [
+            'id', 'name', 'description', 'points_required', 'type', 'type_label',
+            'coupon_discount_type', 'coupon_discount_type_label', 'coupon_value',
+            'minimum_order_amount', 'gift_product', 'gift_product_name',
+            'gift_product_code', 'gift_product_image', 'stock', 'per_customer_limit',
+            'starts_at', 'ends_at', 'is_active', 'can_exchange', 'created_at', 'updated_at',
+        ]
+
+    def get_gift_product_image(self, obj):
+        product = obj.gift_product
+        if not product:
+            return None
+        img = product.images.filter(is_primary=True).first() or product.images.first()
+        if img and img.image:
+            request = self.context.get('request')
+            return request.build_absolute_uri(img.image.url) if request else img.image.url
+        return None
+
+    def get_can_exchange(self, obj):
+        current_points = self.context.get('current_points')
+        if current_points is None:
+            return False
+        has_stock = obj.stock is None or obj.stock > 0
+        from django.utils import timezone
+        now = timezone.now()
+        in_window = (not obj.starts_at or obj.starts_at <= now) and (not obj.ends_at or obj.ends_at >= now)
+        user = self.context.get('user')
+        under_customer_limit = True
+        if user and obj.per_customer_limit:
+            used_count = RewardRedemption.objects.filter(user=user, reward_item=obj).exclude(
+                status__in=[RewardRedemption.STATUS_REJECTED, RewardRedemption.STATUS_CANCELLED]
+            ).count()
+            under_customer_limit = used_count < obj.per_customer_limit
+        return obj.is_active and has_stock and in_window and under_customer_limit and current_points >= obj.points_required
+
+
+class RewardRedemptionSerializer(serializers.ModelSerializer):
+    reward_name = serializers.CharField(source='reward_item.name', read_only=True)
+    reward_type = serializers.CharField(source='reward_item.type', read_only=True)
+    coupon_value = serializers.DecimalField(source='reward_item.coupon_value', max_digits=10, decimal_places=2, read_only=True)
+    user_name = serializers.SerializerMethodField()
+    user_phone = serializers.CharField(source='user.phone', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    gift_product_name = serializers.CharField(source='reward_item.gift_product.name', read_only=True)
+    gift_product_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RewardRedemption
+        fields = [
+            'id', 'reward_item', 'reward_name', 'reward_type', 'points_spent',
+            'coupon_code', 'coupon_value', 'status', 'created_at',
+            'user', 'user_name', 'user_phone', 'user_email',
+            'gift_product_name', 'gift_product_image',
+        ]
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+    def get_gift_product_image(self, obj):
+        product = obj.reward_item.gift_product
+        if not product:
+            return None
+        img = product.images.filter(is_primary=True).first() or product.images.first()
+        if img and img.image:
+            request = self.context.get('request')
+            return request.build_absolute_uri(img.image.url) if request else img.image.url
+        return None
+
+
+class PointTransactionSerializer(serializers.ModelSerializer):
+    order_number = serializers.CharField(source='order.order_number', read_only=True)
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PointTransaction
+        fields = ['id', 'user', 'user_name', 'order', 'order_number', 'points', 'type', 'note', 'created_at']
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username

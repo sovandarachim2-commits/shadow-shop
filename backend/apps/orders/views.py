@@ -8,13 +8,18 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
-from django.db.models import Sum
-from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord
+from django.db.models import Sum, Q
+from django.contrib.auth import get_user_model
+from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord, RewardItem, RewardRedemption, PointTransaction
 from .serializers import (
     CustomerSerializer, OrderListSerializer, OrderDetailSerializer,
     OrderCreateSerializer, CustomerCheckoutSerializer, OrderStatusHistorySerializer,
     WishlistSerializer, CartItemSerializer, PrepareRecordSerializer, OutRecordSerializer,
-    OrderAdminUpdateSerializer,
+    OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, PointTransactionSerializer,
+)
+from .rewards import (
+    award_points_for_paid_order, exchange_reward, get_member_level, get_next_tier_points,
+    get_points_balance, sync_paid_order_points,
 )
 from utils.permissions import IsStaff, IsSeller, IsCashier
 from utils.pagination import StandardPagination
@@ -204,6 +209,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
 
         if new_status == 'printed':
+            from apps.inventory.services import deduct_stock_for_order
+            deduct_stock_for_order(order, request.user)
             order.printed_at = timezone.now()
             order.printed_by = request.user
             order.save()
@@ -225,6 +232,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.payment_status = 'paid'
         order.payment_method = payment_method
         order.save()
+        award_points_for_paid_order(order)
 
         from apps.finance.models import Revenue
         Revenue.objects.get_or_create(
@@ -437,3 +445,167 @@ class CartViewSet(viewsets.ModelViewSet):
             'total_items': total_items,
             'subtotal': float(subtotal),
         })
+
+
+class RewardsViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def _summary(self, request):
+        sync_paid_order_points(request.user)
+        current_points = get_points_balance(request.user)
+        next_tier_points = get_next_tier_points(current_points)
+        progress_pct = 100 if next_tier_points <= current_points else round((current_points / next_tier_points) * 100)
+        items = RewardItem.objects.filter(is_active=True).select_related('gift_product').prefetch_related('gift_product__images').order_by('points_required', 'name')
+        redemptions = RewardRedemption.objects.filter(user=request.user).select_related('reward_item', 'reward_item__gift_product').prefetch_related('reward_item__gift_product__images')[:20]
+        transactions = PointTransaction.objects.filter(user=request.user).select_related('order')[:20]
+        return {
+            'current_points': current_points,
+            'member_level': get_member_level(current_points),
+            'next_tier_points': next_tier_points,
+            'points_to_next_level': max(0, next_tier_points - current_points),
+            'progress_pct': min(100, progress_pct),
+            'catalog': RewardItemSerializer(items, many=True, context={'current_points': current_points, 'user': request.user}).data,
+            'redemptions': RewardRedemptionSerializer(redemptions, many=True).data,
+            'transactions': PointTransactionSerializer(transactions, many=True).data,
+        }
+
+    def list(self, request):
+        return Response(self._summary(request))
+
+    @action(detail=False, methods=['post'])
+    def exchange(self, request):
+        reward_item_id = request.data.get('reward_item')
+        if not reward_item_id:
+            return Response({'detail': 'Reward item is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            redemption = exchange_reward(request.user, reward_item_id)
+        except RewardItem.DoesNotExist:
+            return Response({'detail': 'Reward not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = self._summary(request)
+        data['redemption'] = RewardRedemptionSerializer(redemption).data
+        return Response(data, status=status.HTTP_201_CREATED)
+
+
+class AdminRewardItemViewSet(viewsets.ModelViewSet):
+    queryset = RewardItem.objects.select_related('gift_product').prefetch_related('gift_product__images').order_by('-created_at')
+    serializer_class = RewardItemSerializer
+    permission_classes = [IsAuthenticated, IsStaff]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['name', 'description', 'type']
+    ordering_fields = ['created_at', 'points_required', 'stock']
+
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        reward = self.get_object()
+        reward.is_active = not reward.is_active
+        reward.save(update_fields=['is_active', 'updated_at'])
+        return Response(RewardItemSerializer(reward).data)
+
+
+class AdminRewardRedemptionViewSet(viewsets.ModelViewSet):
+    queryset = RewardRedemption.objects.select_related('user', 'reward_item', 'reward_item__gift_product').prefetch_related('reward_item__gift_product__images').order_by('-created_at')
+    serializer_class = RewardRedemptionSerializer
+    permission_classes = [IsAuthenticated, IsStaff]
+    http_method_names = ['get', 'patch', 'head', 'options']
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['status', 'reward_item', 'reward_item__type']
+    search_fields = ['coupon_code', 'user__username', 'user__first_name', 'user__last_name', 'user__phone', 'reward_item__name']
+    ordering_fields = ['created_at', 'points_spent']
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        redemption = self.get_object()
+        new_status = request.data.get('status')
+        valid_statuses = [choice[0] for choice in RewardRedemption.STATUS_CHOICES]
+        if new_status not in valid_statuses:
+            return Response({'detail': 'Invalid redemption status.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_status = redemption.status
+        redemption.status = new_status
+        redemption.save(update_fields=['status'])
+
+        if new_status in [RewardRedemption.STATUS_REJECTED, RewardRedemption.STATUS_CANCELLED] and old_status != new_status:
+            refund_exists = PointTransaction.objects.filter(
+                user=redemption.user,
+                reward_redemption=redemption,
+                type=PointTransaction.TYPE_ADJUST,
+                note__icontains='Refunded',
+            ).exists()
+            if not refund_exists:
+                PointTransaction.objects.create(
+                    user=redemption.user,
+                    reward_redemption=redemption,
+                    points=redemption.points_spent,
+                    type=PointTransaction.TYPE_ADJUST,
+                    note=f'Refunded points for rejected reward {redemption.reward_item.name}',
+                )
+
+        return Response(RewardRedemptionSerializer(redemption).data)
+
+
+class AdminRewardPointsViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated, IsStaff]
+
+    def list(self, request):
+        User = get_user_model()
+        search = (request.query_params.get('search') or '').strip()
+        users = User.objects.filter(role='customer').order_by('first_name', 'username')
+        if search:
+            users = users.filter(
+                Q(username__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+                | Q(phone__icontains=search)
+            )
+
+        data = []
+        for user in users[:300]:
+            customer = getattr(user, 'customer_profile', None)
+            data.append({
+                'user': user.id,
+                'name': user.get_full_name() or user.username,
+                'username': user.username,
+                'phone': user.phone or getattr(customer, 'phone', ''),
+                'email': user.email or getattr(customer, 'email', ''),
+                'points': get_points_balance(user),
+                'total_orders': getattr(customer, 'total_orders', 0) if customer else 0,
+                'total_spent': getattr(customer, 'total_spent', 0) if customer else 0,
+            })
+        return Response(data)
+
+    @action(detail=False, methods=['post'])
+    def adjust(self, request):
+        user_id = request.data.get('user')
+        points = request.data.get('points')
+        note = request.data.get('note', '').strip()
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Enter a valid points amount.'}, status=status.HTTP_400_BAD_REQUEST)
+        if points == 0:
+            return Response({'detail': 'Points adjustment cannot be zero.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        User = get_user_model()
+        try:
+            user = User.objects.get(pk=user_id, role='customer')
+        except User.DoesNotExist:
+            return Response({'detail': 'Customer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        current_balance = get_points_balance(user)
+        if current_balance + points < 0:
+            return Response({'detail': 'Adjustment would make customer points negative.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        transaction_obj = PointTransaction.objects.create(
+            user=user,
+            points=points,
+            type=PointTransaction.TYPE_ADJUST,
+            note=note or f'Manual adjustment by {request.user.get_full_name() or request.user.username}',
+        )
+        return Response({
+            'transaction': PointTransactionSerializer(transaction_obj).data,
+            'balance': get_points_balance(user),
+        }, status=status.HTTP_201_CREATED)

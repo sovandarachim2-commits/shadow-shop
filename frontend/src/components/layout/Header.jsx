@@ -4,10 +4,12 @@ import useAuthStore from '@/store/authStore'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollapsed }) {
   const { user, logout } = useAuthStore()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [confirm, ConfirmDialog] = useConfirm()
 
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
@@ -29,6 +31,16 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
 
   const canVisitStore = ['super_admin', 'admin'].includes(user?.role) ||
     myPerms.some((rp) => rp.permission_detail?.module === 'storefront' && rp.permission_detail?.action === 'view')
+
+  const handleLogout = async () => {
+    const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
+      confirmText: 'Logout',
+      icon: 'logout',
+    })
+    if (!ok) return
+    setShowUserMenu(false)
+    await logout()
+  }
 
   return (
     <>
@@ -99,7 +111,7 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
                   </Link>
                 )}
                 <hr className="my-1 border-gray-100" />
-                <button onClick={() => { logout(); setShowUserMenu(false) }}
+                <button onClick={handleLogout}
                   className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">
                   <LogOut size={15} /> Logout
                 </button>
@@ -170,7 +182,7 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
                     </Link>
                   )}
                   <hr className="my-1 border-gray-100" />
-                  <button onClick={() => { logout(); setShowUserMenu(false) }}
+                  <button onClick={handleLogout}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 w-full">
                     <LogOut size={16} /> Logout
                   </button>
@@ -180,6 +192,7 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
           </div>
         </div>
       </header>
+      {ConfirmDialog}
     </>
   )
 }

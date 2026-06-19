@@ -30,8 +30,11 @@ class TelegramConfigViewSet(viewsets.ModelViewSet):
         config = self.get_object()
         service = TelegramService()
         service.config = config
-        success = service.send_message('🔔 Shadow Shop Test Notification - Connection Successful!', 'test')
-        return Response({'success': success})
+        success = service.send_message('Shadow Shop test notification - connection successful.', 'test')
+        return Response({
+            'success': success,
+            'detail': 'Test message sent.' if success else service.last_error_message,
+        })
 
 
 class NotificationLogViewSet(viewsets.ReadOnlyModelViewSet):

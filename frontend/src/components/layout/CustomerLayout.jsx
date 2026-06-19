@@ -124,12 +124,12 @@ export default function CustomerLayout() {
     location.pathname === '/shop' ||
     (location.pathname === '/cart' && cartItems.length > 0) ||
     (location.pathname === '/checkout' && hasCheckoutItems) ||
-    location.pathname === '/profile' ||
+    location.pathname.startsWith('/profile') ||
     location.pathname === '/address-book' ||
     location.pathname.startsWith('/product/') ||
     location.pathname.startsWith('/product-set/') ||
     location.pathname.startsWith('/my-orders/')
-  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
+  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
   const submitSearch = (e) => {
     e.preventDefault()
     const q = headerSearch.trim()
@@ -318,7 +318,7 @@ export default function CustomerLayout() {
         )}
       </header>
 
-      <main className={cn('flex-1', isHome || location.pathname === '/address-book' || location.pathname === '/profile' ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
         <Outlet />
       </main>
 

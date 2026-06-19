@@ -582,6 +582,11 @@ export default function AddressBook() {
     if (await confirm('Remove this address?', 'This action cannot be undone.')) deleteMutation.mutate(addr.id)
   }
   const handleLogout = async () => {
+    const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
+      confirmText: 'Logout',
+      icon: 'logout',
+    })
+    if (!ok) return
     await logout()
     navigate('/login')
   }

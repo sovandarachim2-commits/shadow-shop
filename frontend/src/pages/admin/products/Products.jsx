@@ -16,7 +16,7 @@ const IMAGE_QUALITY = 0.92
 const IMAGE_COMPRESS_THRESHOLD = 2 * 1024 * 1024
 const AVAILABILITY_OPTIONS = [
   { value: 'auto', label: 'Auto by Stock' },
-  { value: 'available', label: 'Available' },
+  { value: 'available', label: 'Always Available' },
   { value: 'out_of_stock', label: 'Out of Stock' },
 ]
 
@@ -180,7 +180,7 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <p className="mt-1 text-xs font-semibold text-gray-400">Controls storefront buying without changing inventory stock.</p>
+          <p className="mt-1 text-xs font-semibold text-gray-400">Auto by Stock reduces when printed. Always Available ignores stock.</p>
         </div>
         <div>
           <label className="label">Cost Price ($)</label>
@@ -715,7 +715,7 @@ export default function Products() {
                     </span>
                     {p.availability_status !== 'auto' && (
                       <p className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-black ${isAvailableForSale(p) ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
-                        {p.availability_status === 'available' ? 'Available' : 'Out of Stock'}
+                        {p.availability_status === 'available' ? 'Always Available' : 'Out of Stock'}
                       </p>
                     )}
                   </div>

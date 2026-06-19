@@ -35,6 +35,8 @@ class NotificationLog(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     error_message = models.TextField(blank=True)
     recipient = models.CharField(max_length=100, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    telegram_message_id = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
 

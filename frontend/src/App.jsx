@@ -42,6 +42,7 @@ import Delivery from '@/pages/admin/operations/Delivery'
 import Revenue from '@/pages/admin/finance/Revenue'
 import Expenses from '@/pages/admin/finance/Expenses'
 import ProfitReport from '@/pages/admin/finance/ProfitReport'
+import RewardItemsAdmin, { RewardPointsAdmin, RewardRedemptionsAdmin } from '@/pages/admin/rewards/RewardsAdmin'
 import SalesReport from '@/pages/admin/reports/SalesReport'
 import ProductReport from '@/pages/admin/reports/ProductReport'
 import InventoryReport from '@/pages/admin/reports/InventoryReport'
@@ -60,11 +61,12 @@ import Cart from '@/pages/customer/Cart'
 import Checkout from '@/pages/customer/Checkout'
 import MyOrders from '@/pages/customer/MyOrders'
 import OrderSuccess from '@/pages/customer/OrderSuccess'
-import Profile from '@/pages/customer/Profile'
+import Profile, { EditProfilePage } from '@/pages/customer/Profile'
 import Wishlist from '@/pages/customer/Wishlist'
 import OrderTracking from '@/pages/customer/OrderTracking'
 import OrderReceipt from '@/pages/customer/OrderReceipt'
 import AddressBook from '@/pages/customer/AddressBook'
+import ExchangeRewards from '@/pages/customer/ExchangeRewards'
 import LuckyBox from '@/pages/customer/LuckyBox'
 import FlashSale from '@/pages/customer/FlashSale'
 
@@ -204,6 +206,16 @@ export default function App() {
             <Route path="my-orders/:id" element={<OrderTracking />} />
             <Route path="wishlist" element={<Wishlist />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="profile/edit" element={
+              <RequireAuth>
+                <EditProfilePage />
+              </RequireAuth>
+            } />
+            <Route path="profile/rewards" element={
+              <RequireAuth>
+                <ExchangeRewards />
+              </RequireAuth>
+            } />
             <Route path="address-book" element={
               <RequireAuth>
                 <AddressBook />
@@ -291,6 +303,11 @@ export default function App() {
             <Route path="finance/revenue" element={<Revenue />} />
             <Route path="finance/expenses" element={<Expenses />} />
             <Route path="finance/profit" element={<ProfitReport />} />
+
+            {/* Rewards */}
+            <Route path="rewards" element={<RewardItemsAdmin />} />
+            <Route path="rewards/redemptions" element={<RewardRedemptionsAdmin />} />
+            <Route path="rewards/points" element={<RewardPointsAdmin />} />
 
             {/* Reports */}
             <Route path="reports/sales" element={<SalesReport />} />

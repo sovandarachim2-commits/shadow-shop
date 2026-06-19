@@ -307,8 +307,11 @@ export default function Settings({ tab = 'general' }) {
 
   const testMutation = useMutation({
     mutationFn: (id) => client.post(`/notifications/telegram/${id}/test/`),
-    onSuccess: (data) =>
-      data.data.success ? toast.success('Test message sent!') : toast.error('Test failed — check your settings'),
+    onSuccess: ({ data }) =>
+      data.success
+        ? toast.success('Test message sent!')
+        : toast.error(data.detail || 'Test failed - check your settings'),
+    onError: (error) => toast.error(error?.response?.data?.detail || 'Test failed - check your settings'),
   })
 
   const deleteTelegramMutation = useMutation({

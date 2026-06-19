@@ -1,14 +1,36 @@
 import { useState } from 'react'
-import { Trash2, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, LogOut, Trash2 } from 'lucide-react'
 
-function ConfirmDialogUI({ message, description, onConfirm, onCancel }) {
+function ConfirmDialogUI({
+  message,
+  description,
+  onConfirm,
+  onCancel,
+  confirmText = 'Delete',
+  cancelText = 'Cancel',
+  tone = 'danger',
+  icon = 'delete',
+}) {
+  const Icon = icon === 'logout' ? LogOut : icon === 'warning' ? AlertTriangle : Trash2
+  const toneClass = tone === 'danger'
+    ? {
+        iconBg: 'bg-red-50',
+        iconText: 'text-red-500',
+        button: 'bg-red-500 hover:bg-red-600',
+      }
+    : {
+        iconBg: 'bg-purple-50',
+        iconText: 'text-purple-600',
+        button: 'bg-purple-600 hover:bg-purple-700',
+      }
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
-            <Trash2 size={24} className="text-red-500" />
+          <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${toneClass.iconBg}`}>
+            <Icon size={24} className={toneClass.iconText} />
           </div>
           <h3 className="text-base font-black text-gray-950">{message}</h3>
           {description && (
@@ -19,13 +41,13 @@ function ConfirmDialogUI({ message, description, onConfirm, onCancel }) {
               onClick={onCancel}
               className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 active:scale-[0.98]"
             >
-              Cancel
+              {cancelText}
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600 active:scale-[0.98]"
+              className={`flex-1 rounded-xl py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] ${toneClass.button}`}
             >
-              Delete
+              {confirmText}
             </button>
           </div>
         </div>
@@ -37,9 +59,9 @@ function ConfirmDialogUI({ message, description, onConfirm, onCancel }) {
 export function useConfirm() {
   const [state, setState] = useState(null)
 
-  const confirm = (message, description) =>
+  const confirm = (message, description, options = {}) =>
     new Promise((resolve) => {
-      setState({ message, description, resolve })
+      setState({ message, description, resolve, ...options })
     })
 
   const handleConfirm = () => {
@@ -56,6 +78,10 @@ export function useConfirm() {
     <ConfirmDialogUI
       message={state.message}
       description={state.description}
+      confirmText={state.confirmText}
+      cancelText={state.cancelText}
+      tone={state.tone}
+      icon={state.icon}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />

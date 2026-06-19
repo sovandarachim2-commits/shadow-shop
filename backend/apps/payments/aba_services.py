@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.finance.models import Revenue
 from apps.notifications.services import TelegramService
+from apps.orders.rewards import award_points_for_paid_order
 from .models import AbaPayment
 
 
@@ -158,6 +159,7 @@ def handle_aba_callback(payload: dict, user=None):
         payment.order.payment_status = 'paid'
         payment.order.payment_method = 'aba'
         payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+        award_points_for_paid_order(payment.order)
         Revenue.objects.get_or_create(
             order=payment.order,
             defaults={

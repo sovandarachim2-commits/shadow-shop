@@ -39,12 +39,15 @@ class DeliveryByConfigViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Telegram group not set.'}, status=400)
         try:
             from apps.notifications.services import TelegramService
-            TelegramService().send_message(
+            service = TelegramService()
+            success = service.send_message(
+                message=f'Test message from Shadow Shop - Delivery: {obj.name}',
                 chat_id=obj.telegram_group,
-                text=f'✅ Test message from Shadow Shop — Delivery: {obj.name}',
                 message_thread_id=obj.telegram_topic,
             )
-            return Response({'detail': 'Test message sent!'})
+            if success:
+                return Response({'detail': 'Test message sent!'})
+            return Response({'detail': service.last_error_message or 'Telegram test failed.'}, status=400)
         except Exception as e:
             return Response({'detail': str(e)}, status=400)
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { ClipboardList, Filter, Loader2, Printer, ReceiptText, Truck, X } from 'lucide-react'
+import { ChevronLeft, ClipboardList, Filter, Loader2, Printer, ReceiptText, Truck } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
@@ -85,7 +85,7 @@ function ReceiptQr({ orderNumber }) {
   }, [orderNumber])
 
   return (
-    <div className="flex h-[102px] w-[102px] items-center justify-center border-4 border-black bg-white">
+    <div className="flex h-20 w-20 items-center justify-center border-[3px] border-black bg-white sm:h-[102px] sm:w-[102px] sm:border-4">
       {qr ? <img src={qr} alt={`QR ${orderNumber}`} className="h-full w-full object-contain" /> : <span className="text-xs font-black">QR</span>}
     </div>
   )
@@ -106,38 +106,38 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
   const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
 
   return (
-    <div className="receipt-paper mx-auto w-full max-w-[454px] bg-white p-5 text-black md:p-6">
+    <div className="receipt-paper mx-auto w-full max-w-[454px] bg-white p-4 text-black sm:p-5 md:p-6">
       <div className="text-center">
         <PrintLogo printLogoUrl={printLogoUrl} size={printLogoSize} />
-        <div className="mt-2 text-xl font-black tracking-[0.18em]">RECEIPT</div>
+        <div className="mt-2 text-lg font-black tracking-[0.18em] sm:text-xl">RECEIPT</div>
       </div>
 
-      <div className="mt-7 grid grid-cols-[1fr_104px] items-start gap-4">
-        <div className="space-y-2 text-base font-black">
+      <div className="mt-6 grid grid-cols-[1fr_82px] items-start gap-3 sm:mt-7 sm:grid-cols-[1fr_104px] sm:gap-4">
+        <div className="min-w-0 space-y-2 text-sm font-black leading-6 sm:text-base">
           <p>Seller: {order.seller_name || 'Shadow Shop'}</p>
-          <p>Order Code: {order.order_number}</p>
+          <p className="break-words">Order Code: {order.order_number}</p>
         </div>
         <ReceiptQr orderNumber={order.order_number} />
       </div>
 
-      <div className="my-5 border-t border-dashed border-black" />
+      <div className="my-4 border-t border-dashed border-black sm:my-5" />
 
       <section>
-        <h3 className="mb-4 text-xl font-black tracking-[0.14em]">CUSTOMER</h3>
-        <div className="grid grid-cols-[88px_1fr] gap-y-3 text-lg font-black">
+        <h3 className="mb-3 text-lg font-black tracking-[0.14em] sm:mb-4 sm:text-xl">CUSTOMER</h3>
+        <div className="grid grid-cols-[74px_1fr] gap-x-2 gap-y-2 text-sm font-black leading-6 sm:grid-cols-[88px_1fr] sm:gap-y-3 sm:text-lg">
           <span>Name:</span>
-          <span>{customer.name || order.customer_name || '-'}</span>
+          <span className="min-w-0 break-words">{customer.name || order.customer_name || '-'}</span>
           <span>Phone:</span>
-          <span>{customer.phone || order.customer_phone || '-'}</span>
+          <span className="min-w-0 break-words">{customer.phone || order.customer_phone || '-'}</span>
           <span>Address:</span>
-          <span>{customer.address || customer.province || '-'}</span>
+          <span className="min-w-0 break-words">{customer.address || customer.province || '-'}</span>
         </div>
       </section>
 
-      <div className="my-5 border-t border-dashed border-black" />
+      <div className="my-4 border-t border-dashed border-black sm:my-5" />
 
       <div>
-        <p className="mb-2 text-sm font-black">ការទូទាត់</p>
+        <p className="mb-2 text-xs font-black sm:text-sm">ការទូទាត់</p>
         <div className={`inline-flex rotate-[-4deg] rounded-xl border-[3px] px-7 py-2 text-2xl font-black ${
           order.payment_status === 'paid' ? 'border-emerald-700 text-emerald-700' : 'border-red-600 text-red-600'
         }`}>
@@ -145,53 +145,53 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
         </div>
       </div>
 
-      <div className="my-5 border-t border-dashed border-black" />
+      <div className="my-4 border-t border-dashed border-black sm:my-5" />
 
-      <table className="w-full border-collapse text-center text-sm">
+      <table className="w-full table-fixed border-collapse text-center text-[11px] sm:text-sm">
         <thead>
           <tr className="bg-gray-300">
-            <th className="w-10 border border-black px-2 py-3">No</th>
-            <th className="border border-black px-2 py-3">Product</th>
-            <th className="w-12 border border-black px-2 py-3">Qty</th>
-            <th className="w-20 border border-black px-2 py-3">Price</th>
-            <th className="w-20 border border-black px-2 py-3">Amount</th>
+            <th className="w-8 border border-black px-1 py-2 sm:w-10 sm:px-2 sm:py-3">No</th>
+            <th className="border border-black px-1 py-2 sm:px-2 sm:py-3">Product</th>
+            <th className="w-9 border border-black px-1 py-2 sm:w-12 sm:px-2 sm:py-3">Qty</th>
+            <th className="w-14 border border-black px-1 py-2 sm:w-20 sm:px-2 sm:py-3">Price</th>
+            <th className="w-16 border border-black px-1 py-2 sm:w-20 sm:px-2 sm:py-3">Amount</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, index) => (
             <tr key={item.id || index}>
-              <td className="border border-black px-2 py-3">{index + 1}</td>
-              <td className="border border-black px-2 py-3 text-left">{item.product_name} ×{item.quantity}</td>
-              <td className="border border-black px-2 py-3 font-black">{item.quantity}</td>
-              <td className="border border-black px-2 py-3">{formatCurrency(item.unit_price || 0)}</td>
-              <td className="border border-black px-2 py-3 font-black">{formatCurrency(item.total_price || item.subtotal || 0)}</td>
+              <td className="border border-black px-1 py-2 sm:px-2 sm:py-3">{index + 1}</td>
+              <td className="break-words border border-black px-1 py-2 text-left sm:px-2 sm:py-3">{item.product_name} ×{item.quantity}</td>
+              <td className="border border-black px-1 py-2 font-black sm:px-2 sm:py-3">{item.quantity}</td>
+              <td className="border border-black px-1 py-2 sm:px-2 sm:py-3">{formatCurrency(item.unit_price || 0)}</td>
+              <td className="border border-black px-1 py-2 font-black sm:px-2 sm:py-3">{formatCurrency(item.total_price || item.subtotal || 0)}</td>
             </tr>
           ))}
           <tr>
-            <td className="border border-black px-2 py-3 text-right font-black" colSpan={4}>Subtotal</td>
-            <td className="border border-black px-2 py-3 font-black">{formatCurrency(subtotal)}</td>
+            <td className="border border-black px-2 py-2 text-right font-black sm:py-3" colSpan={4}>Subtotal</td>
+            <td className="border border-black px-1 py-2 font-black sm:px-2 sm:py-3">{formatCurrency(subtotal)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-2 py-3 text-right font-black" colSpan={4}>Delivery Fee</td>
-            <td className="border border-black px-2 py-3 font-black">{formatCurrency(deliveryFee)}</td>
+            <td className="border border-black px-2 py-2 text-right font-black sm:py-3" colSpan={4}>Delivery Fee</td>
+            <td className="border border-black px-1 py-2 font-black sm:px-2 sm:py-3">{formatCurrency(deliveryFee)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-2 py-3 text-right font-black" colSpan={4}>Discount</td>
-            <td className="border border-black px-2 py-3 font-black">{formatCurrency(discount)}</td>
+            <td className="border border-black px-2 py-2 text-right font-black sm:py-3" colSpan={4}>Discount</td>
+            <td className="border border-black px-1 py-2 font-black sm:px-2 sm:py-3">{formatCurrency(discount)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-2 py-4 text-right text-lg font-black" colSpan={4}>Grand Total</td>
-            <td className="border border-black px-2 py-4 text-base font-black">{formatCurrency(grandTotal)}</td>
+            <td className="border border-black px-2 py-3 text-right text-base font-black sm:py-4 sm:text-lg" colSpan={4}>Grand Total</td>
+            <td className="border border-black px-1 py-3 text-sm font-black sm:px-2 sm:py-4 sm:text-base">{formatCurrency(grandTotal)}</td>
           </tr>
           <tr>
             <td className="border border-black px-2 py-4 text-right font-black" colSpan={4}>សរុបជារៀល</td>
-            <td className="border border-black px-2 py-4 font-black">{formatRiel(grandTotal * USD_TO_KHR_RATE)}</td>
+            <td className="border border-black px-1 py-3 font-black sm:px-2 sm:py-4">{formatRiel(grandTotal * USD_TO_KHR_RATE)}</td>
           </tr>
         </tbody>
       </table>
 
-      <div className="my-5 border-t border-dashed border-black" />
-      <div className="space-y-1 text-base font-black">
+      <div className="my-4 border-t border-dashed border-black sm:my-5" />
+      <div className="space-y-1 text-sm font-black leading-6 sm:text-base">
         <p>អត្រាប្ដូរប្រាក់: 1 USD = {formatRiel(USD_TO_KHR_RATE)}</p>
         <p>Created: {formatDateTime(order.created_at)}</p>
         <p>Powered by : One Night Solution</p>
@@ -300,24 +300,25 @@ export default function MyOrders() {
                   </div>
                 </div>
 
-                <div className="mt-2 flex items-end justify-between gap-4">
-                  <p className="text-xs font-semibold text-gray-500">{order.items_count || 0} {t('cart.items')}</p>
-                  <p className="text-xl font-black text-pink-600">{formatCurrency(order.grand_total)}</p>
-                </div>
-
-                <div className="mt-3 flex justify-end gap-2">
-                  <button
-                    onClick={() => setReceiptOrderId(order.id)}
-                    className="inline-flex min-w-[118px] items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-4 py-3 text-sm font-black text-pink-600 shadow-sm"
-                  >
-                    <ReceiptText size={17} /> Receipt
-                  </button>
-                  <button
-                    onClick={() => navigate(`/my-orders/${order.id}`)}
-                    className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-pink-100"
-                  >
-                    <Truck size={17} /> {t('orders.trackOrder')}
-                  </button>
+                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <div className="flex items-end justify-between gap-4 sm:block">
+                    <p className="text-xs font-semibold text-gray-500">{order.items_count || 0} {t('cart.items')}</p>
+                    <p className="text-xl font-black text-pink-600 sm:mt-2">{formatCurrency(order.grand_total)}</p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setReceiptOrderId(order.id)}
+                      className="inline-flex min-w-[118px] items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-4 py-3 text-sm font-black text-pink-600 shadow-sm"
+                    >
+                      <ReceiptText size={17} /> Receipt
+                    </button>
+                    <button
+                      onClick={() => navigate(`/my-orders/${order.id}`)}
+                      className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-pink-100"
+                    >
+                      <Truck size={17} /> {t('orders.trackOrder')}
+                    </button>
+                  </div>
                 </div>
               </article>
             )
@@ -326,16 +327,24 @@ export default function MyOrders() {
       )}
 
       {receiptOrderId && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-gray-950/55 p-3 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-[560px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="no-print flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <div>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-white p-0 sm:bg-gray-950/55 sm:p-3 sm:backdrop-blur-sm">
+          <div className="flex h-full w-full max-w-[560px] flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[94vh] sm:rounded-3xl">
+            <div className="no-print grid grid-cols-[44px_1fr_44px] items-center gap-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:flex sm:justify-between sm:pt-3">
+              <button
+                type="button"
+                onClick={() => setReceiptOrderId(null)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-700"
+                aria-label="Back to orders"
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <div className="min-w-0 text-center sm:text-left">
                 <p className="text-xs font-black uppercase tracking-wide text-pink-600">Receipt</p>
-                <h3 className="text-base font-black text-gray-950">
+                <h3 className="truncate text-base font-black text-gray-950">
                   {receiptOrder?.order_number ? `#${receiptOrder.order_number}` : 'Loading receipt'}
                 </h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -345,17 +354,9 @@ export default function MyOrders() {
                 >
                   <Printer size={18} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setReceiptOrderId(null)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600"
-                  aria-label="Close receipt"
-                >
-                  <X size={19} />
-                </button>
               </div>
             </div>
-            <div className="print-preview-window min-h-0 flex-1 overflow-y-auto bg-gray-100 px-3 py-4">
+            <div className="print-preview-window min-h-0 flex-1 overflow-y-auto bg-gray-100 px-2 py-3 sm:px-3 sm:py-4">
               {receiptLoading || !receiptOrder ? (
                 <div className="flex min-h-[420px] items-center justify-center">
                   <Loader2 size={34} className="animate-spin text-pink-500" />

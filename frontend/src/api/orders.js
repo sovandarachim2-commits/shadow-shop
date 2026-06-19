@@ -55,6 +55,28 @@ export const ordersApi = {
     remove: (id) => client.delete(`/orders/wishlist/${id}/`),
     clear: () => client.delete('/orders/wishlist/clear/'),
   },
+  rewards: {
+    summary: () => client.get('/orders/rewards/'),
+    exchange: (rewardItemId) => client.post('/orders/rewards/exchange/', { reward_item: rewardItemId }),
+  },
+  adminRewards: {
+    items: {
+      list: (params) => client.get('/orders/admin/reward-items/', { params }),
+      get: (id) => client.get(`/orders/admin/reward-items/${id}/`),
+      create: (data) => client.post('/orders/admin/reward-items/', data),
+      update: (id, data) => client.patch(`/orders/admin/reward-items/${id}/`, data),
+      delete: (id) => client.delete(`/orders/admin/reward-items/${id}/`),
+      toggleActive: (id) => client.post(`/orders/admin/reward-items/${id}/toggle_active/`),
+    },
+    redemptions: {
+      list: (params) => client.get('/orders/admin/reward-redemptions/', { params }),
+      updateStatus: (id, status) => client.post(`/orders/admin/reward-redemptions/${id}/update_status/`, { status }),
+    },
+    points: {
+      list: (params) => client.get('/orders/admin/reward-points/', { params }),
+      adjust: (data) => client.post('/orders/admin/reward-points/adjust/', data),
+    },
+  },
   payments: {
     generateBakong: (orderId) => client.post('/payments/bakong/generate/', { order: orderId }),
     checkBakong: (paymentId) => client.post(`/payments/bakong/${paymentId}/check/`),

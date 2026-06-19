@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/utils/helpers'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
   LayoutDashboard, ShoppingCart, Package, Warehouse, Printer,
   Scan, Truck, DollarSign, BarChart3, Users, Settings,
@@ -12,7 +13,7 @@ import {
   UserCircle, Bell, Shield, Sliders, MessageCircle,
   MapPin, CreditCard, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
-  Flame,
+  Flame, Gift, Ticket, SlidersHorizontal,
 } from 'lucide-react'
 
 // `module` maps to the Permission.module value — used to check `view` access
@@ -77,6 +78,15 @@ const navItems = [
       { label: 'Revenue',      path: '/admin/finance/revenue',   icon: TrendingUp, module: 'finance' },
       { label: 'Expenses',     path: '/admin/finance/expenses',  icon: Receipt,    module: 'finance' },
       { label: 'Profit Report',path: '/admin/finance/profit',    icon: PieChart,   module: 'finance' },
+    ],
+  },
+  {
+    label: 'Rewards',
+    icon: Gift,
+    children: [
+      { label: 'Reward Items', path: '/admin/rewards', icon: Gift, module: 'rewards' },
+      { label: 'Redemptions', path: '/admin/rewards/redemptions', icon: Ticket, module: 'rewards' },
+      { label: 'Customer Points', path: '/admin/rewards/points', icon: SlidersHorizontal, module: 'rewards' },
     ],
   },
   {
@@ -201,6 +211,7 @@ function NavItem({ item, collapsed, onNavigate }) {
 
 export default function Sidebar({ collapsed, onToggle, onNavigate, className }) {
   const { user, logout } = useAuthStore()
+  const [confirm, ConfirmDialog] = useConfirm()
 
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
@@ -230,6 +241,14 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
   )
 
   const canView = (module) => isFullAccess || !module || viewableModules.has(module)
+
+  const handleLogout = async () => {
+    const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
+      confirmText: 'Logout',
+      icon: 'logout',
+    })
+    if (ok) await logout()
+  }
 
   // Show all items while loading, on error (fail-open), or for full-access roles
   const visibleItems = permsLoading || permsError || isFullAccess
@@ -295,7 +314,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
           )}
           {!collapsed && (
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="text-navy-300 hover:text-red-400 transition-colors"
               title="Logout"
             >
@@ -304,6 +323,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
           )}
         </div>
       </div>
+      {ConfirmDialog}
     </aside>
   )
 }

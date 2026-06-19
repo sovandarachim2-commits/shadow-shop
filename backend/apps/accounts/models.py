@@ -56,6 +56,7 @@ class Permission(models.Model):
         ('print', 'Print'),
         ('scanner', 'Scanner'),
         ('storefront', 'Customer Storefront'),
+        ('rewards', 'Rewards'),
     ]
 
     ACTION_CHOICES = [
@@ -65,6 +66,8 @@ class Permission(models.Model):
         ('delete', 'Delete'),
         ('export', 'Export'),
         ('print', 'Print'),
+        ('approve', 'Approve'),
+        ('adjust_points', 'Adjust Points'),
     ]
 
     module = models.CharField(max_length=50, choices=MODULE_CHOICES)

@@ -4,8 +4,8 @@ import { Shield, Loader2, Check, X, Plus, Trash2, CheckSquare, Square, RotateCcw
 import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
 
-const MODULE_ORDER = ['dashboard', 'orders', 'products', 'inventory', 'delivery', 'finance', 'reports', 'users', 'settings', 'print', 'scanner', 'storefront']
-const ACTION_ORDER = ['view', 'create', 'edit', 'delete', 'export', 'print']
+const MODULE_ORDER = ['dashboard', 'orders', 'products', 'inventory', 'delivery', 'finance', 'reports', 'rewards', 'users', 'settings', 'print', 'scanner', 'storefront']
+const ACTION_ORDER = ['view', 'create', 'edit', 'delete', 'approve', 'adjust_points', 'export', 'print']
 
 // ─── Add Role Modal ───────────────────────────────────────────────────────────
 function AddRoleModal({ onClose, onCreated }) {
