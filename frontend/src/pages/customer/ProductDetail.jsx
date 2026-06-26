@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ChevronLeft, Heart, ShoppingCart, Zap, Plus, Minus, Check,
+  ChevronLeft, ChevronRight, Heart, ShoppingCart, Zap, Plus, Minus, Check,
   PackageSearch, Store, Star, Droplet, Sparkles, ShieldCheck, Leaf,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -26,6 +26,7 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
+  const galleryDragRef = useRef({ active: false, startX: 0, moved: false })
   const addItem = useCartStore((s) => s.addItem)
   const clearSelection = useCartStore((s) => s.clearSelection)
   const toggleSelected = useCartStore((s) => s.toggleSelected)
@@ -64,6 +65,41 @@ export default function ProductDetail() {
   const saleProduct = product?.display_price ? { ...product, retail_price: product.display_price } : product
   const flashSaleMaxQty = product?.is_flash_sale_active ? Number(product?.flash_sale_max_order_qty || 0) : 0
   const maxPurchaseQty = flashSaleMaxQty > 0 ? (stock > 0 ? Math.min(stock, flashSaleMaxQty) : flashSaleMaxQty) : (stock > 0 ? stock : 9999)
+
+  useEffect(() => {
+    setActiveImg(0)
+  }, [product?.id])
+
+  const showImageAt = (index) => {
+    if (images.length === 0) return
+    setActiveImg((index + images.length) % images.length)
+  }
+
+  const handleGalleryPointerDown = (e) => {
+    if (images.length <= 1 || (e.pointerType === 'mouse' && e.button !== 0)) return
+    galleryDragRef.current = { active: true, startX: e.clientX, moved: false }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  const handleGalleryPointerMove = (e) => {
+    const drag = galleryDragRef.current
+    if (!drag.active) return
+    if (Math.abs(e.clientX - drag.startX) > 8) {
+      drag.moved = true
+      e.preventDefault()
+    }
+  }
+
+  const handleGalleryPointerEnd = (e) => {
+    const drag = galleryDragRef.current
+    if (!drag.active) return
+    drag.active = false
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    const dx = e.clientX - drag.startX
+    if (drag.moved && Math.abs(dx) > 45) {
+      showImageAt(activeImg + (dx < 0 ? 1 : -1))
+    }
+  }
 
   const handleAddToCart = () => {
     if (!product || !isInStock) return
@@ -155,36 +191,67 @@ export default function ProductDetail() {
             >
               <Heart size={21} className={isWishlisted ? 'fill-pink-500 text-pink-500' : ''} />
             </button>
-            <div className="aspect-[1/0.82] max-h-[520px] md:aspect-square">
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => showImageAt(activeImg - 1)}
+                  aria-label="Previous product image"
+                  className="absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-pink-600 shadow-lg shadow-pink-100 transition active:scale-95 md:flex"
+                >
+                  <ChevronLeft size={22} strokeWidth={3} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showImageAt(activeImg + 1)}
+                  aria-label="Next product image"
+                  className="absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-pink-600 shadow-lg shadow-pink-100 transition active:scale-95 md:flex"
+                >
+                  <ChevronRight size={22} strokeWidth={3} />
+                </button>
+              </>
+            )}
+            <div
+              className="aspect-[1/0.82] max-h-[520px] cursor-grab touch-pan-y select-none active:cursor-grabbing md:aspect-square"
+              onPointerDown={handleGalleryPointerDown}
+              onPointerMove={handleGalleryPointerMove}
+              onPointerUp={handleGalleryPointerEnd}
+              onPointerCancel={handleGalleryPointerEnd}
+            >
               {currentImage ? (
-                <img src={currentImage.image} alt={product.name} className="h-full w-full object-contain p-3" />
+                <img src={currentImage.image} alt={product.name} draggable={false} className="h-full w-full object-contain p-3" />
               ) : (
                 <CosmeticArt tone={product.tone} className="min-h-full" />
               )}
             </div>
+            {images.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-white/80 px-2 py-1 shadow-sm">
+                {images.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => showImageAt(i)}
+                    aria-label={`Show product image ${i + 1}`}
+                    className={`h-1.5 rounded-full transition-all ${i === activeImg ? 'w-5 bg-pink-600' : 'w-1.5 bg-pink-200'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="mt-3 grid grid-cols-5 gap-2.5">
+          <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {images.length > 0
-              ? images.slice(0, 4).map((img, i) => (
+              ? images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
-                  className={`aspect-square overflow-hidden rounded-2xl border-2 bg-white ${i === activeImg ? 'border-pink-500' : 'border-transparent'}`}
+                  className={`aspect-square w-20 shrink-0 overflow-hidden rounded-2xl border-2 bg-white md:w-24 ${i === activeImg ? 'border-pink-500' : 'border-transparent'}`}
                 >
                   <img src={img.image} alt="" className="h-full w-full object-contain bg-white p-1" />
                 </button>
-              )).concat(
-                images.length > 4
-                  ? [(
-                    <button key="more" className="aspect-square rounded-2xl border border-gray-100 bg-gray-50 text-base font-black text-gray-600">
-                      +{images.length - 4}
-                    </button>
-                  )]
-                  : []
-              )
+              ))
               : ['pink', 'rose', 'red', 'gold'].map((tone, i) => (
-                <button key={tone} onClick={() => setActiveImg(i)} className="aspect-square overflow-hidden rounded-2xl border border-pink-100 bg-white">
+                <button key={tone} onClick={() => setActiveImg(i)} className="aspect-square w-20 shrink-0 overflow-hidden rounded-2xl border border-pink-100 bg-white md:w-24">
                   <CosmeticArt tone={tone} className="min-h-full" />
                 </button>
               ))}

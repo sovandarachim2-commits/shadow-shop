@@ -63,8 +63,12 @@ export const ordersApi = {
     items: {
       list: (params) => client.get('/orders/admin/reward-items/', { params }),
       get: (id) => client.get(`/orders/admin/reward-items/${id}/`),
-      create: (data) => client.post('/orders/admin/reward-items/', data),
-      update: (id, data) => client.patch(`/orders/admin/reward-items/${id}/`, data),
+      create: (data) => client.post('/orders/admin/reward-items/', data, {
+        headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      }),
+      update: (id, data) => client.patch(`/orders/admin/reward-items/${id}/`, data, {
+        headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      }),
       delete: (id) => client.delete(`/orders/admin/reward-items/${id}/`),
       toggleActive: (id) => client.post(`/orders/admin/reward-items/${id}/toggle_active/`),
     },
@@ -75,6 +79,9 @@ export const ordersApi = {
     points: {
       list: (params) => client.get('/orders/admin/reward-points/', { params }),
       adjust: (data) => client.post('/orders/admin/reward-points/adjust/', data),
+    },
+    transactions: {
+      list: (params) => client.get('/orders/admin/reward-transactions/', { params }),
     },
   },
   payments: {

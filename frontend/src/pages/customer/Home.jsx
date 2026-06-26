@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ChevronRight, Star, Heart, ShoppingBag,
+  ChevronLeft, ChevronRight, Star, Heart, ShoppingBag,
   Gift, Brush, Droplet, SprayCan, Trash2, Plus, Minus, RefreshCw, Zap,
 } from 'lucide-react'
 import { productsApi } from '@/api/products'
@@ -271,11 +271,14 @@ export default function Home() {
   const countdown = useCountdown()
   const [categoryPage, setCategoryPage] = useState(0)
   const [activeBannerIndex, setActiveBannerIndex] = useState(0)
+  const [desktopBannerIndex, setDesktopBannerIndex] = useState(0)
   const [isPulling, setIsPulling] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const categoryScrollRef = useRef(null)
   const bannerScrollRef = useRef(null)
+  const desktopBannerScrollRef = useRef(null)
+  const desktopBannerDragRef = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false, blockClick: false })
   const refreshStart = useRef({ x: 0, y: 0 })
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -333,9 +336,11 @@ export default function Home() {
   }, [categories])
 
   const categoryPages = Math.max(1, Math.ceil(categoryItems.length / 10))
+  const desktopBannerPages = Math.max(1, banners.length - 2)
 
   useEffect(() => {
     setActiveBannerIndex(0)
+    setDesktopBannerIndex(0)
   }, [banners.length])
 
   useEffect(() => {
@@ -352,12 +357,97 @@ export default function Home() {
   }, [banners.length])
 
   useEffect(() => {
+    if (!desktopBannerScrollRef.current) return
+    const item = desktopBannerScrollRef.current.children[desktopBannerIndex]
+    if (!item) return
+    desktopBannerScrollRef.current.scrollTo({ left: item.offsetLeft - 24, behavior: 'smooth' })
+  }, [desktopBannerIndex, banners.length])
+
+  useEffect(() => {
+    if (!desktopBannerScrollRef.current) return
+    desktopBannerScrollRef.current.scrollTo({ left: 0, behavior: 'auto' })
+    setDesktopBannerIndex(0)
+  }, [banners.length])
+
+  useEffect(() => {
     if (banners.length < 2) return
     const interval = setInterval(() => {
       setActiveBannerIndex((current) => (current + 1) % banners.length)
     }, 5000)
     return () => clearInterval(interval)
   }, [banners.length])
+
+  useEffect(() => {
+    if (banners.length <= 3) return
+    const interval = setInterval(() => {
+      setDesktopBannerIndex((current) => (current + 1) % desktopBannerPages)
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [banners.length, desktopBannerPages])
+
+  const getDesktopBannerIndexFromScroll = () => {
+    const el = desktopBannerScrollRef.current
+    const item = el?.children?.[0]
+    if (!el || !item) return 0
+    return Math.min(
+      desktopBannerPages - 1,
+      Math.max(0, Math.round(el.scrollLeft / (item.clientWidth + 16)))
+    )
+  }
+
+  const handleDesktopBannerPointerDown = (e) => {
+    if (banners.length <= 3 || (e.pointerType === 'mouse' && e.button !== 0)) return
+    const el = desktopBannerScrollRef.current
+    if (!el) return
+    desktopBannerDragRef.current = {
+      active: true,
+      startX: e.clientX,
+      scrollLeft: el.scrollLeft,
+      moved: false,
+      blockClick: false,
+    }
+    el.style.scrollBehavior = 'auto'
+    el.setPointerCapture?.(e.pointerId)
+  }
+
+  const handleDesktopBannerPointerMove = (e) => {
+    const drag = desktopBannerDragRef.current
+    const el = desktopBannerScrollRef.current
+    if (!drag.active || !el) return
+    const dx = e.clientX - drag.startX
+    if (Math.abs(dx) > 4) drag.moved = true
+    el.scrollLeft = drag.scrollLeft - dx
+    if (drag.moved) e.preventDefault()
+  }
+
+  const finishDesktopBannerDrag = (e) => {
+    const drag = desktopBannerDragRef.current
+    const el = desktopBannerScrollRef.current
+    if (!drag.active || !el) return
+    drag.active = false
+    el.style.scrollBehavior = ''
+    el.releasePointerCapture?.(e.pointerId)
+    if (drag.moved) {
+      drag.blockClick = true
+      setDesktopBannerIndex(getDesktopBannerIndexFromScroll())
+      setTimeout(() => {
+        desktopBannerDragRef.current.blockClick = false
+      }, 80)
+    }
+  }
+
+  const handleDesktopBannerClick = (e) => {
+    if (!desktopBannerDragRef.current.blockClick) return
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const moveDesktopBanner = (direction) => {
+    setDesktopBannerIndex((current) => {
+      if (desktopBannerPages <= 1) return 0
+      return (current + direction + desktopBannerPages) % desktopBannerPages
+    })
+  }
 
   // ── Banner auto-slide ──────────────────────────────────────────────────────
   // ── Pull to refresh ────────────────────────────────────────────────────────
@@ -526,27 +616,72 @@ export default function Home() {
               <div className="w-2 shrink-0" />
             </div>
 
-            {/* Desktop — full-width grid */}
-            <div className={`hidden md:grid md:gap-4 md:px-6 ${banners.length === 1 ? 'md:grid-cols-1' : banners.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
-              {banners.map((banner, idx) => (
-                <Link
-                  key={banner.id}
-                  to={banner.button_link || '/shop'}
-                  className="group block w-full"
-                >
-                  <div className="flex aspect-[16/9] w-full items-center justify-center overflow-hidden rounded-[28px] border border-gray-100 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.07)] transition group-hover:shadow-md">
-                    {banner.image_url ? (
-                      <img src={banner.image_url} alt={banner.title || 'Promotion'} className="h-full w-full object-cover" loading={idx === 0 ? 'eager' : 'lazy'} />
-                    ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600">
-                        <ShoppingBag size={48} className="mb-2 text-white/50" />
-                        {banner.title && <p className="px-6 text-center text-xl font-black text-white">{banner.title}</p>}
-                      </div>
-                    )}
-                  </div>
-                  {banner.title && <p className="mt-2 line-clamp-1 text-base font-black leading-tight text-gray-950">{banner.title}</p>}
-                </Link>
-              ))}
+            {/* Desktop — 3-card carousel */}
+            <div className="relative hidden md:block">
+              {banners.length > 3 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => moveDesktopBanner(-1)}
+                    aria-label="Previous promotion"
+                    className="absolute left-3 top-[42%] z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-pink-100 bg-white/95 text-pink-600 shadow-lg shadow-pink-100 transition hover:bg-pink-50 active:scale-95"
+                  >
+                    <ChevronLeft size={22} strokeWidth={3} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveDesktopBanner(1)}
+                    aria-label="Next promotion"
+                    className="absolute right-3 top-[42%] z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-pink-100 bg-white/95 text-pink-600 shadow-lg shadow-pink-100 transition hover:bg-pink-50 active:scale-95"
+                  >
+                    <ChevronRight size={22} strokeWidth={3} />
+                  </button>
+                </>
+              )}
+              <div
+                ref={desktopBannerScrollRef}
+                onPointerDown={handleDesktopBannerPointerDown}
+                onPointerMove={handleDesktopBannerPointerMove}
+                onPointerUp={finishDesktopBannerDrag}
+                onPointerCancel={finishDesktopBannerDrag}
+                onPointerLeave={finishDesktopBannerDrag}
+                className="flex cursor-grab snap-x snap-mandatory touch-pan-x select-none gap-4 overflow-x-auto px-6 pb-1 scroll-smooth active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {banners.map((banner, idx) => (
+                  <Link
+                    key={banner.id}
+                    to={banner.button_link || '/shop'}
+                    onClick={handleDesktopBannerClick}
+                    draggable={false}
+                    className={`group block shrink-0 snap-start ${banners.length === 1 ? 'w-full' : banners.length === 2 ? 'w-[calc((100%_-_1rem)/2)]' : 'w-[calc((100%_-_2rem)/3)]'}`}
+                  >
+                    <div className="flex aspect-[16/9] w-full items-center justify-center overflow-hidden rounded-[28px] border border-gray-100 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.07)] transition group-hover:shadow-md">
+                      {banner.image_url ? (
+                        <img src={banner.image_url} alt={banner.title || 'Promotion'} draggable={false} className="h-full w-full object-cover" loading={idx === 0 ? 'eager' : 'lazy'} />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600">
+                          <ShoppingBag size={48} className="mb-2 text-white/50" />
+                          {banner.title && <p className="px-6 text-center text-xl font-black text-white">{banner.title}</p>}
+                        </div>
+                      )}
+                    </div>
+                    {banner.title && <p className="mt-2 line-clamp-1 text-base font-black leading-tight text-gray-950">{banner.title}</p>}
+                  </Link>
+                ))}
+              </div>
+              {banners.length > 3 && (
+                <div className="mt-3 flex justify-center gap-1.5">
+                  {Array.from({ length: desktopBannerPages }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setDesktopBannerIndex(i)}
+                      aria-label={`Go to promotion slide ${i + 1}`}
+                      className={`h-1.5 rounded-full transition-all ${i === desktopBannerIndex ? 'w-6 bg-pink-600' : 'w-2 bg-pink-100 hover:bg-pink-200'}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         )}

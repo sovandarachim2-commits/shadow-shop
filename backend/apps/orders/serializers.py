@@ -662,17 +662,34 @@ class RewardItemSerializer(serializers.ModelSerializer):
     coupon_discount_type_label = serializers.CharField(source='get_coupon_discount_type_display', read_only=True)
     gift_product_name = serializers.CharField(source='gift_product.name', read_only=True)
     gift_product_code = serializers.CharField(source='gift_product.code', read_only=True)
+    clear_reward_image = serializers.BooleanField(write_only=True, required=False)
+    reward_image_url = serializers.SerializerMethodField()
     gift_product_image = serializers.SerializerMethodField()
 
     class Meta:
         model = RewardItem
         fields = [
             'id', 'name', 'description', 'points_required', 'type', 'type_label',
+            'reward_image', 'reward_image_url', 'clear_reward_image',
             'coupon_discount_type', 'coupon_discount_type_label', 'coupon_value',
             'minimum_order_amount', 'gift_product', 'gift_product_name',
             'gift_product_code', 'gift_product_image', 'stock', 'per_customer_limit',
             'starts_at', 'ends_at', 'is_active', 'can_exchange', 'created_at', 'updated_at',
         ]
+        extra_kwargs = {'reward_image': {'write_only': True, 'required': False}}
+
+    def get_reward_image_url(self, obj):
+        if obj.reward_image:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.reward_image.url) if request else obj.reward_image.url
+        return None
+
+    def update(self, instance, validated_data):
+        clear_reward_image = validated_data.pop('clear_reward_image', False)
+        if clear_reward_image and instance.reward_image:
+            instance.reward_image.delete(save=False)
+            instance.reward_image = None
+        return super().update(instance, validated_data)
 
     def get_gift_product_image(self, obj):
         product = obj.gift_product
@@ -710,6 +727,7 @@ class RewardRedemptionSerializer(serializers.ModelSerializer):
     user_phone = serializers.CharField(source='user.phone', read_only=True)
     user_email = serializers.EmailField(source='user.email', read_only=True)
     gift_product_name = serializers.CharField(source='reward_item.gift_product.name', read_only=True)
+    reward_image_url = serializers.SerializerMethodField()
     gift_product_image = serializers.SerializerMethodField()
 
     class Meta:
@@ -718,11 +736,18 @@ class RewardRedemptionSerializer(serializers.ModelSerializer):
             'id', 'reward_item', 'reward_name', 'reward_type', 'points_spent',
             'coupon_code', 'coupon_value', 'status', 'created_at',
             'user', 'user_name', 'user_phone', 'user_email',
-            'gift_product_name', 'gift_product_image',
+            'gift_product_name', 'reward_image_url', 'gift_product_image',
         ]
 
     def get_user_name(self, obj):
         return obj.user.get_full_name() or obj.user.username
+
+    def get_reward_image_url(self, obj):
+        image = obj.reward_item.reward_image
+        if image:
+            request = self.context.get('request')
+            return request.build_absolute_uri(image.url) if request else image.url
+        return None
 
     def get_gift_product_image(self, obj):
         product = obj.reward_item.gift_product

@@ -7,8 +7,8 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 function CategoryModal({ open, editing, onClose, onSave, saving }) {
   const [form, setForm] = useState(() => editing
-    ? { name: editing.name, description: editing.description || '', parent: editing.parent || '' }
-    : { name: '', description: '', parent: '' }
+    ? { name: editing.name, description: editing.description || '', parent: editing.parent || '', is_active: editing.is_active !== false }
+    : { name: '', description: '', parent: '', is_active: true }
   )
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -30,6 +30,7 @@ function CategoryModal({ open, editing, onClose, onSave, saving }) {
     const fd = new FormData()
     fd.append('name', form.name)
     fd.append('description', form.description || '')
+    fd.append('is_active', form.is_active ? 'true' : 'false')
     if (form.parent) fd.append('parent', form.parent)
     if (imageFile) fd.append('image', imageFile)
     onSave(fd)
@@ -98,6 +99,16 @@ function CategoryModal({ open, editing, onClose, onSave, saving }) {
             <textarea className="input-field resize-none" rows={2} value={form.description}
               onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
+
+          <label className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <span className="text-sm font-semibold text-gray-700">Active on shop</span>
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => setForm(f => ({ ...f, is_active: e.target.checked }))}
+              className="h-4 w-4 accent-purple-600"
+            />
+          </label>
 
           {/* Actions */}
           <div className="flex gap-3 pt-1">
@@ -212,6 +223,9 @@ export default function Categories() {
                           Main category
                         </span>
                       )}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${cat.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                        {cat.is_active ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button className="p-1.5 text-gray-400 hover:text-purple-600" onClick={() => openEdit(cat)}>
@@ -235,6 +249,9 @@ export default function Categories() {
                           )}
                         </div>
                         <span className="text-sm">{child.name}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${child.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                          {child.is_active ? 'Active' : 'Inactive'}
+                        </span>
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button className="p-1.5 text-gray-400 hover:text-purple-600" onClick={() => openEdit(child)}>

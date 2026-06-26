@@ -13,6 +13,7 @@ router.register('rewards', views.RewardsViewSet, basename='rewards')
 router.register('admin/reward-items', views.AdminRewardItemViewSet, basename='admin-reward-items')
 router.register('admin/reward-redemptions', views.AdminRewardRedemptionViewSet, basename='admin-reward-redemptions')
 router.register('admin/reward-points', views.AdminRewardPointsViewSet, basename='admin-reward-points')
+router.register('admin/reward-transactions', views.AdminRewardTransactionViewSet, basename='admin-reward-transactions')
 
 urlpatterns = [
     path('', include(router.urls)),

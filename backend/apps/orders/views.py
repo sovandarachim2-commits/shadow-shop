@@ -493,6 +493,7 @@ class AdminRewardItemViewSet(viewsets.ModelViewSet):
     queryset = RewardItem.objects.select_related('gift_product').prefetch_related('gift_product__images').order_by('-created_at')
     serializer_class = RewardItemSerializer
     permission_classes = [IsAuthenticated, IsStaff]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ['name', 'description', 'type']
     ordering_fields = ['created_at', 'points_required', 'stock']
@@ -609,3 +610,26 @@ class AdminRewardPointsViewSet(viewsets.ViewSet):
             'transaction': PointTransactionSerializer(transaction_obj).data,
             'balance': get_points_balance(user),
         }, status=status.HTTP_201_CREATED)
+
+
+class AdminRewardTransactionViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = PointTransactionSerializer
+    permission_classes = [IsAuthenticated, IsStaff]
+    pagination_class = StandardPagination
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'user__email', 'note', 'order__order_number']
+    ordering_fields = ['created_at', 'points']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = PointTransaction.objects.select_related('user', 'order', 'reward_redemption', 'reward_redemption__reward_item')
+        tx_type = self.request.query_params.get('type')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        if tx_type:
+            queryset = queryset.filter(type=tx_type)
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+        return queryset

@@ -62,7 +62,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     ordering_fields = ['order', 'name']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'tree']:
             return [AllowAny()]
         return [IsAuthenticated(), IsAdminOrSuperAdmin()]
 

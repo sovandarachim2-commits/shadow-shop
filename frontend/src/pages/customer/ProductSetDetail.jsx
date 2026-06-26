@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Gift, Minus, PackageSearch, Plus, ShoppingCart, Store, Trash2, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Gift, Minus, PackageSearch, Plus, ShoppingCart, Store, Trash2, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
@@ -34,6 +34,8 @@ export default function ProductSetDetail() {
   const navigate = useNavigate()
   const { addItem, updateQuantity, items, clearSelection, toggleSelected } = useCartStore()
   const [imageFailed, setImageFailed] = useState(false)
+  const [activeImg, setActiveImg] = useState(0)
+  const galleryDragRef = useRef({ active: false, startX: 0, moved: false })
 
   const { data: productSet, isLoading, isError } = useQuery({
     queryKey: ['product-set-detail', id],
@@ -47,8 +49,60 @@ export default function ProductSetDetail() {
   const setStock = Number(productSet?.current_stock || 0)
   const price = Number(productSet?.discount_price || productSet?.price || 0)
   const oldPrice = productSet?.discount_price ? Number(productSet?.price || 0) : 0
-  const imageUrl = productSet?.image_url || productSet?.image
+  const galleryImages = useMemo(() => {
+    if (!productSet) return []
+    const managed = (productSet.images || [])
+      .map((img) => ({ id: img.id, image: img.image, is_primary: img.is_primary }))
+      .filter((img) => img.image)
+    const legacyUrl = productSet.image_url || productSet.image
+    const hasLegacyUrl = legacyUrl && managed.some((img) => img.image === legacyUrl)
+    const images = hasLegacyUrl || !legacyUrl ? managed : [{ id: 'legacy', image: legacyUrl, is_primary: true }, ...managed]
+    const primaryIndex = images.findIndex((img) => img.is_primary)
+    if (primaryIndex > 0) {
+      const primary = images[primaryIndex]
+      return [primary, ...images.slice(0, primaryIndex), ...images.slice(primaryIndex + 1)]
+    }
+    return images
+  }, [productSet])
+  const imageUrl = galleryImages[activeImg]?.image || productSet?.image_url || productSet?.image
   const isInStock = setStock > 0
+
+  useEffect(() => {
+    setActiveImg(0)
+    setImageFailed(false)
+  }, [productSet?.id])
+
+  const showImageAt = (index) => {
+    if (galleryImages.length === 0) return
+    setImageFailed(false)
+    setActiveImg((index + galleryImages.length) % galleryImages.length)
+  }
+
+  const handleGalleryPointerDown = (e) => {
+    if (galleryImages.length <= 1 || (e.pointerType === 'mouse' && e.button !== 0)) return
+    galleryDragRef.current = { active: true, startX: e.clientX, moved: false }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  const handleGalleryPointerMove = (e) => {
+    const drag = galleryDragRef.current
+    if (!drag.active) return
+    if (Math.abs(e.clientX - drag.startX) > 8) {
+      drag.moved = true
+      e.preventDefault()
+    }
+  }
+
+  const handleGalleryPointerEnd = (e) => {
+    const drag = galleryDragRef.current
+    if (!drag.active) return
+    drag.active = false
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    const dx = e.clientX - drag.startX
+    if (drag.moved && Math.abs(dx) > 45) {
+      showImageAt(activeImg + (dx < 0 ? 1 : -1))
+    }
+  }
 
   const addSetToCart = () => {
     if (!cartProduct || !isInStock) return
@@ -110,11 +164,39 @@ export default function ProductSetDetail() {
 
       <div className="grid gap-8 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] md:items-start">
         <section className="overflow-hidden rounded-3xl border border-pink-100 bg-white shadow-card">
-          <div className="relative aspect-square bg-pink-50">
+          <div className="relative overflow-hidden bg-pink-50">
+            {galleryImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => showImageAt(activeImg - 1)}
+                  aria-label="Previous product set image"
+                  className="absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-pink-600 shadow-lg shadow-pink-100 transition active:scale-95 md:flex"
+                >
+                  <ChevronLeft size={22} strokeWidth={3} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => showImageAt(activeImg + 1)}
+                  aria-label="Next product set image"
+                  className="absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-pink-600 shadow-lg shadow-pink-100 transition active:scale-95 md:flex"
+                >
+                  <ChevronRight size={22} strokeWidth={3} />
+                </button>
+              </>
+            )}
+            <div
+              className="aspect-square cursor-grab touch-pan-y select-none active:cursor-grabbing"
+              onPointerDown={handleGalleryPointerDown}
+              onPointerMove={handleGalleryPointerMove}
+              onPointerUp={handleGalleryPointerEnd}
+              onPointerCancel={handleGalleryPointerEnd}
+            >
             {imageUrl && !imageFailed ? (
               <img
                 src={imageUrl}
                 alt={productSet.name}
+                draggable={false}
                 onError={() => setImageFailed(true)}
                 className="h-full w-full object-contain p-4"
               />
@@ -125,10 +207,38 @@ export default function ProductSetDetail() {
                 </div>
               </div>
             )}
+            </div>
             <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm">
               PRODUCT SET
             </span>
+            {galleryImages.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-white/80 px-2 py-1 shadow-sm">
+                {galleryImages.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => showImageAt(i)}
+                    aria-label={`Show product set image ${i + 1}`}
+                    className={`h-1.5 rounded-full transition-all ${i === activeImg ? 'w-5 bg-pink-600' : 'w-1.5 bg-pink-200'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
+          {galleryImages.length > 1 && (
+            <div className="flex gap-2.5 overflow-x-auto p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {galleryImages.map((img, i) => (
+                <button
+                  key={img.id ?? i}
+                  type="button"
+                  onClick={() => showImageAt(i)}
+                  className={`aspect-square w-20 shrink-0 overflow-hidden rounded-2xl border-2 bg-white md:w-24 ${i === activeImg ? 'border-pink-500' : 'border-transparent'}`}
+                >
+                  <img src={img.image} alt="" draggable={false} className="h-full w-full object-contain bg-white p-1" />
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         <section>

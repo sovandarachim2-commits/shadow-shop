@@ -28,7 +28,7 @@ import { authApi } from '@/api/auth'
 const MOBILE_NAV_ITEMS = [
   { path: '/', key: 'nav.home', icon: Home, exact: true },
   { path: '/shop', key: 'nav.shop', icon: Grid },
-  { path: '/lucky-box', key: 'nav.luckyBox', icon: Gift, center: true },
+  { path: '/profile/rewards', key: 'profile.rewards', icon: Gift, center: true },
   { path: '/my-orders', key: 'nav.orders', icon: ClipboardList },
   { path: '/profile', key: 'nav.account', icon: User },
 ]
@@ -124,12 +124,12 @@ export default function CustomerLayout() {
     location.pathname === '/shop' ||
     (location.pathname === '/cart' && cartItems.length > 0) ||
     (location.pathname === '/checkout' && hasCheckoutItems) ||
-    location.pathname.startsWith('/profile') ||
+    (location.pathname.startsWith('/profile') && location.pathname !== '/profile/rewards') ||
     location.pathname === '/address-book' ||
     location.pathname.startsWith('/product/') ||
     location.pathname.startsWith('/product-set/') ||
     location.pathname.startsWith('/my-orders/')
-  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
+  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname.startsWith('/profile/rewards/') || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
   const submitSearch = (e) => {
     e.preventDefault()
     const q = headerSearch.trim()

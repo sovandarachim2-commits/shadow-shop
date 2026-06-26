@@ -84,9 +84,13 @@ const navItems = [
     label: 'Rewards',
     icon: Gift,
     children: [
-      { label: 'Reward Items', path: '/admin/rewards', icon: Gift, module: 'rewards' },
-      { label: 'Redemptions', path: '/admin/rewards/redemptions', icon: Ticket, module: 'rewards' },
-      { label: 'Customer Points', path: '/admin/rewards/points', icon: SlidersHorizontal, module: 'rewards' },
+      { label: 'Dashboard', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
+      { label: 'Point Rules', path: '/admin/rewards/rules', icon: Sliders, module: 'rewards' },
+      { label: 'Customers Points', path: '/admin/rewards/points', icon: Users, module: 'rewards' },
+      { label: 'Transactions', path: '/admin/rewards/transactions', icon: Activity, module: 'rewards' },
+      { label: 'Reward Products', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
+      { label: 'Exchange Orders', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards' },
+      { label: 'Settings', path: '/admin/rewards/settings', icon: Settings, module: 'rewards' },
     ],
   },
   {

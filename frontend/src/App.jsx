@@ -42,7 +42,14 @@ import Delivery from '@/pages/admin/operations/Delivery'
 import Revenue from '@/pages/admin/finance/Revenue'
 import Expenses from '@/pages/admin/finance/Expenses'
 import ProfitReport from '@/pages/admin/finance/ProfitReport'
-import RewardItemsAdmin, { RewardPointsAdmin, RewardRedemptionsAdmin } from '@/pages/admin/rewards/RewardsAdmin'
+import RewardDashboardAdmin, {
+  RewardItemsAdmin,
+  RewardPointsAdmin,
+  RewardRedemptionsAdmin,
+  RewardRulesAdmin,
+  RewardSettingsAdmin,
+  RewardTransactionsAdmin,
+} from '@/pages/admin/rewards/RewardsAdmin'
 import SalesReport from '@/pages/admin/reports/SalesReport'
 import ProductReport from '@/pages/admin/reports/ProductReport'
 import InventoryReport from '@/pages/admin/reports/InventoryReport'
@@ -67,6 +74,7 @@ import OrderTracking from '@/pages/customer/OrderTracking'
 import OrderReceipt from '@/pages/customer/OrderReceipt'
 import AddressBook from '@/pages/customer/AddressBook'
 import ExchangeRewards from '@/pages/customer/ExchangeRewards'
+import RewardDetail from '@/pages/customer/RewardDetail'
 import LuckyBox from '@/pages/customer/LuckyBox'
 import FlashSale from '@/pages/customer/FlashSale'
 
@@ -216,6 +224,11 @@ export default function App() {
                 <ExchangeRewards />
               </RequireAuth>
             } />
+            <Route path="profile/rewards/:id" element={
+              <RequireAuth>
+                <RewardDetail />
+              </RequireAuth>
+            } />
             <Route path="address-book" element={
               <RequireAuth>
                 <AddressBook />
@@ -305,9 +318,14 @@ export default function App() {
             <Route path="finance/profit" element={<ProfitReport />} />
 
             {/* Rewards */}
-            <Route path="rewards" element={<RewardItemsAdmin />} />
-            <Route path="rewards/redemptions" element={<RewardRedemptionsAdmin />} />
+            <Route path="rewards" element={<RewardDashboardAdmin />} />
+            <Route path="rewards/rules" element={<RewardRulesAdmin />} />
             <Route path="rewards/points" element={<RewardPointsAdmin />} />
+            <Route path="rewards/transactions" element={<RewardTransactionsAdmin />} />
+            <Route path="rewards/products" element={<RewardItemsAdmin />} />
+            <Route path="rewards/exchanges" element={<RewardRedemptionsAdmin />} />
+            <Route path="rewards/settings" element={<RewardSettingsAdmin />} />
+            <Route path="rewards/redemptions" element={<Navigate to="/admin/rewards/exchanges" replace />} />
 
             {/* Reports */}
             <Route path="reports/sales" element={<SalesReport />} />

@@ -323,6 +323,7 @@ class RewardItem(models.Model):
 
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True)
+    reward_image = models.ImageField(upload_to='rewards/', null=True, blank=True)
     points_required = models.PositiveIntegerField()
     type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     coupon_discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_AMOUNT)
