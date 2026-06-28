@@ -310,6 +310,11 @@ export default function Home() {
   const banners = useMemo(() => bannersData || [], [bannersData])
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => brandsData || [], [brandsData])
+  const marqueeBrands = useMemo(() => {
+    if (!brands.length) return []
+    const repeats = Math.max(1, Math.ceil(12 / brands.length))
+    return Array.from({ length: repeats }, () => brands).flat()
+  }, [brands])
   const bestSellers = useMemo(() => bestSellerData || [], [bestSellerData])
   const flashSale = useMemo(() => flashData || [], [flashData])
   const newArrivals = useMemo(() => newArrivalData || [], [newArrivalData])
@@ -745,35 +750,26 @@ export default function Home() {
                 {t('common.viewAll')} <ChevronRight size={13} />
               </Link>
             </div>
-            {/* Mobile: compact circles */}
-            <div className="flex gap-4 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden">
-              {brands.slice(0, 14).map((brand) => (
-                <Link
-                  key={brand.id}
-                  to={`/shop?brand=${brand.id}`}
-                  className="flex shrink-0 flex-col items-center gap-1.5 transition active:scale-90"
-                >
-                  <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm">
-                    <BrandLogo brand={brand} size="md" className="h-full w-full" />
+            <div className="brand-marquee overflow-hidden pb-1">
+              <div className="brand-marquee-track flex w-max">
+                {[0, 1].map((copy) => (
+                  <div key={copy} className="flex shrink-0 gap-4 pr-4" aria-hidden={copy === 1 || undefined}>
+                    {marqueeBrands.map((brand, index) => (
+                      <Link
+                        key={`${copy}-${brand.id}-${index}`}
+                        to={`/shop?brand=${brand.id}`}
+                        tabIndex={copy === 1 ? -1 : undefined}
+                        className="group flex shrink-0 flex-col items-center gap-1.5 transition active:scale-90 md:min-w-[240px] md:flex-row md:gap-5 md:rounded-2xl md:border md:border-gray-100 md:bg-white md:px-5 md:py-3 md:shadow-card md:hover:border-pink-100 md:hover:bg-pink-50"
+                      >
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm md:h-16 md:w-16">
+                          <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full transition group-hover:ring-2 group-hover:ring-pink-200" />
+                        </div>
+                        <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900 md:max-w-[135px] md:text-left md:text-base">{brand.name}</p>
+                      </Link>
+                    ))}
                   </div>
-                  <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900">{brand.name}</p>
-                </Link>
-              ))}
-            </div>
-            {/* Desktop: wide cards */}
-            <div className="hidden gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex">
-              {brands.map((brand) => (
-                <Link
-                  key={brand.id}
-                  to={`/shop?brand=${brand.id}`}
-                  className="group flex min-w-[260px] items-center gap-5 rounded-2xl border border-gray-100 bg-white px-6 py-4 shadow-card transition hover:border-pink-100 hover:bg-pink-50"
-                >
-                  <BrandLogo brand={brand} size="lg" className="h-20 w-20 rounded-full transition group-hover:ring-2 group-hover:ring-pink-200" />
-                  <div className="min-w-0">
-                    <p className="truncate text-lg font-black text-gray-950">{brand.name}</p>
-                  </div>
-                </Link>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}

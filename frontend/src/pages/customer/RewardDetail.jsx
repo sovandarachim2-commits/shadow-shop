@@ -89,7 +89,7 @@ export default function RewardDetail() {
   const pointsShort = Math.max(0, reward.points_required - currentPoints)
 
   return (
-    <div className="mx-auto w-full max-w-[760px] bg-white pb-24 md:max-w-[1500px] md:pb-0">
+    <div className="mx-auto w-full max-w-[760px] bg-white pb-24 md:max-w-[1440px] md:px-6 md:pb-0 md:pt-6">
       <div className="mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center gap-2 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
@@ -105,7 +105,7 @@ export default function RewardDetail() {
         Back to Rewards
       </button>
 
-      <div className="grid gap-7 px-4 md:px-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid gap-7 px-4 md:px-0 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-3xl bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">
           <div className="relative overflow-hidden rounded-3xl bg-white">
             <span className="absolute left-4 top-4 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black text-white shadow-lg shadow-pink-200">

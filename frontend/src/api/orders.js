@@ -21,6 +21,7 @@ export const ordersApi = {
     ),
     markPaid: (id, data) => client.post(`/orders/list/${id}/mark_paid/`, data),
     validatePrintStock: (orderIds) => client.post('/orders/list/validate_print_stock/', { order_ids: orderIds }),
+    markPrinted: (orderIds) => client.post('/orders/list/mark_printed/', { order_ids: orderIds }),
     generateQr: (id) => client.get(`/orders/list/${id}/generate_qr/`),
     today: () => client.get('/orders/list/today/'),
     kanban: () => client.get('/orders/list/kanban/'),
@@ -58,6 +59,9 @@ export const ordersApi = {
   rewards: {
     summary: () => client.get('/orders/rewards/'),
     exchange: (rewardItemId) => client.post('/orders/rewards/exchange/', { reward_item: rewardItemId }),
+    validateCoupon: (data) => client.post('/orders/rewards/validate_coupon/', data),
+    dailyCheckin: () => client.post('/orders/rewards/daily_checkin/'),
+    history: () => client.get('/orders/rewards/history/'),
   },
   adminRewards: {
     items: {
@@ -71,6 +75,7 @@ export const ordersApi = {
       }),
       delete: (id) => client.delete(`/orders/admin/reward-items/${id}/`),
       toggleActive: (id) => client.post(`/orders/admin/reward-items/${id}/toggle_active/`),
+      stats: () => client.get('/orders/admin/reward-items/stats/'),
     },
     redemptions: {
       list: (params) => client.get('/orders/admin/reward-redemptions/', { params }),
@@ -82,6 +87,10 @@ export const ordersApi = {
     },
     transactions: {
       list: (params) => client.get('/orders/admin/reward-transactions/', { params }),
+    },
+    settings: {
+      get: () => client.get('/orders/admin/reward-settings/'),
+      update: (data) => client.patch('/orders/admin/reward-settings/', data),
     },
   },
   payments: {

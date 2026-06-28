@@ -17,16 +17,16 @@ function toDatetimeLocal(value) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
-function FlashSaleForm({ products, saleProduct, onClose, onSave, saving }) {
+function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
   const [form, setForm] = useState({
-    product: saleProduct?.id ? String(saleProduct.id) : '',
+    product: saleProduct ? `${saleProduct._saleType}:${saleProduct.id}` : '',
     flash_sale_price: saleProduct?.flash_sale_price || '',
     flash_sale_max_order_qty: saleProduct?.flash_sale_max_order_qty || '',
     flash_sale_starts_at: toDatetimeLocal(saleProduct?.flash_sale_starts_at),
     flash_sale_ends_at: toDatetimeLocal(saleProduct?.flash_sale_ends_at),
   })
 
-  const selectedProduct = products.find((item) => String(item.id) === String(form.product))
+  const selectedProduct = items.find((item) => `${item._saleType}:${item.id}` === form.product)
 
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
 
@@ -62,10 +62,10 @@ function FlashSaleForm({ products, saleProduct, onClose, onSave, saving }) {
           disabled={!!saleProduct || saving}
           className="select-field"
         >
-          <option value="">- Select product -</option>
-          {products.map((product) => (
-            <option key={product.id} value={product.id}>
-              {product.name} ({product.code}) - {formatCurrency(product.retail_price)}
+          <option value="">- Select product or set -</option>
+          {items.map((product) => (
+            <option key={`${product._saleType}-${product.id}`} value={`${product._saleType}:${product.id}`}>
+              {product._saleType === 'set' ? '[SET] ' : ''}{product.name} {product.code ? `(${product.code})` : ''} - {formatCurrency(product.retail_price)}
             </option>
           ))}
         </select>
@@ -158,18 +158,36 @@ export default function FlashSales() {
     staleTime: 60000,
   })
 
+  const { data: allSets = [], isLoading: setsLoading } = useQuery({
+    queryKey: ['flash-sale-product-sets'],
+    queryFn: () => productsApi.sets.list({ page_size: 200, is_active: true }).then((r) => getListResults(r.data)),
+    staleTime: 60000,
+  })
+
+  const saleItems = useMemo(() => [
+    ...allProducts.map((product) => ({ ...product, _saleType: 'product' })),
+    ...allSets.map((productSet) => ({
+      ...productSet,
+      _saleType: 'set',
+      code: `SET-${productSet.id}`,
+      retail_price: productSet.price,
+      primary_image: productSet.image_url || productSet.image,
+      category_name: 'Product Set',
+    })),
+  ], [allProducts, allSets])
+
   const flashProducts = useMemo(() => {
     const value = search.trim().toLowerCase()
-    return allProducts
+    return saleItems
       .filter((product) => product.is_featured || product.flash_sale_price)
       .filter((product) => {
         if (!value) return true
         return `${product.name} ${product.code} ${product.category_name || ''} ${product.brand_name || ''}`.toLowerCase().includes(value)
       })
-  }, [allProducts, search])
+  }, [saleItems, search])
 
   const saveMutation = useMutation({
-    mutationFn: ({ product, form }) => productsApi.products.update(product.id, {
+    mutationFn: ({ product, form }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
       is_featured: true,
       flash_sale_price: Number(form.flash_sale_price),
       flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
@@ -178,6 +196,7 @@ export default function FlashSales() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
+      queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       setShowModal(false)
       setEditProduct(null)
@@ -187,7 +206,7 @@ export default function FlashSales() {
   })
 
   const removeMutation = useMutation({
-    mutationFn: (product) => productsApi.products.update(product.id, {
+    mutationFn: (product) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
       is_featured: false,
       flash_sale_price: null,
       flash_sale_max_order_qty: null,
@@ -196,6 +215,7 @@ export default function FlashSales() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
+      queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       toast.success('Flash sale removed')
     },
@@ -221,7 +241,7 @@ export default function FlashSales() {
     <div className="animate-fade-in">
       <PageHeader
         title="Flash Sale"
-        subtitle={`${flashProducts.length} products`}
+        subtitle={`${flashProducts.length} products and sets`}
         breadcrumbs={[{ label: 'Products' }, { label: 'Flash Sale' }]}
         actions={
           <button onClick={openCreate} className="btn-primary">
@@ -237,14 +257,14 @@ export default function FlashSales() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search flash sale products..."
+              placeholder="Search flash sale products or sets..."
               className="input-field pl-9"
             />
           </div>
           <p className="text-xs font-semibold text-gray-400">Select product, set sale price, max order qty, and choose start/end time.</p>
         </div>
 
-        {isLoading ? (
+        {isLoading || setsLoading ? (
           <div className="divide-y divide-gray-100">
             {[...Array(6)].map((_, index) => (
               <div key={index} className="grid gap-4 px-5 py-4 md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px]">
@@ -261,8 +281,8 @@ export default function FlashSales() {
         ) : flashProducts.length === 0 ? (
           <div className="py-16 text-center text-gray-400">
             <Flame size={42} className="mx-auto mb-3 text-pink-200" />
-            <p className="font-black text-gray-700">No flash sale products</p>
-            <p className="mt-1 text-sm">Create a flash sale by selecting a product.</p>
+            <p className="font-black text-gray-700">No flash sale products or sets</p>
+            <p className="mt-1 text-sm">Create a flash sale by selecting a product or product set.</p>
             <button onClick={openCreate} className="btn-primary mx-auto mt-4">
               <Plus size={15} /> Create Flash Sale
             </button>
@@ -283,7 +303,7 @@ export default function FlashSales() {
 
             {flashProducts.map((product, index) => (
               <div
-                key={product.id}
+                key={`${product._saleType}-${product.id}`}
                 className="grid gap-3 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px] md:items-center md:gap-4"
               >
                 <div className="hidden text-sm font-black text-gray-500 md:block">{index + 1}</div>
@@ -299,6 +319,7 @@ export default function FlashSales() {
                     <p className="truncate text-sm font-black text-gray-900">{product.name}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-400">
                       <span>{product.code}</span>
+                      {product._saleType === 'set' && <Badge variant="info">Product Set</Badge>}
                       {product.brand_name && <span>{product.brand_name}</span>}
                       {product.category_name && <span>{product.category_name}</span>}
                     </div>
@@ -323,8 +344,8 @@ export default function FlashSales() {
                 <div className="flex items-center justify-between rounded-xl bg-purple-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
                   <span className="text-xs font-bold uppercase text-purple-500 md:hidden">Orders</span>
                   <div>
-                    <p className="text-sm font-black text-purple-700">{product.flash_sale_order_count || 0}</p>
-                    <p className="text-[11px] font-semibold text-gray-400">{product.flash_sale_quantity_sold || 0} qty</p>
+                    <p className="text-sm font-black text-purple-700">{product._saleType === 'set' ? '—' : product.flash_sale_order_count || 0}</p>
+                    <p className="text-[11px] font-semibold text-gray-400">{product._saleType === 'set' ? 'Set' : `${product.flash_sale_quantity_sold || 0} qty`}</p>
                   </div>
                 </div>
 
@@ -375,7 +396,7 @@ export default function FlashSales() {
         size="lg"
       >
         <FlashSaleForm
-          products={allProducts}
+          items={saleItems}
           saleProduct={editProduct}
           onClose={() => setShowModal(false)}
           onSave={(product, form) => saveMutation.mutate({ product, form })}

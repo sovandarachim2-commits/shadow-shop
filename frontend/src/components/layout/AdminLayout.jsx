@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard, ClipboardList, UserCircle, MoreHorizontal, ScanLine } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import { AdminPageHeaderProvider } from './AdminPageHeaderContext'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { cn } from '@/utils/helpers'
@@ -103,6 +104,7 @@ export default function AdminLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
+    <AdminPageHeaderProvider>
     <div className="min-h-screen bg-gray-50">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
@@ -141,5 +143,6 @@ export default function AdminLayout() {
 
       <AdminBottomNav onMoreClick={() => setMobileMenuOpen(true)} />
     </div>
+    </AdminPageHeaderProvider>
   )
 }

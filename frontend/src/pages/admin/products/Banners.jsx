@@ -4,6 +4,7 @@ import { ImageIcon, Pencil, Plus, Trash2, ToggleLeft, ToggleRight, GripVertical 
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import PageHeader from '@/components/shared/PageHeader'
 
 function compressBannerImage(file, maxWidth = 1600, quality = 0.85) {
   return new Promise((resolve) => {
@@ -197,15 +198,15 @@ export default function Banners() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-gray-950">Banners</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage hero carousel banners shown on the home page.</p>
-        </div>
-        <button onClick={openNew} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> Add Banner
-        </button>
-      </div>
+      <PageHeader
+        title="Banners"
+        subtitle="Manage hero carousel banners shown on the home page."
+        actions={
+          <button onClick={openNew} className="btn-primary flex items-center gap-2">
+            <Plus size={16} /> Add Banner
+          </button>
+        }
+      />
 
       {isLoading ? (
         <div className="space-y-3">

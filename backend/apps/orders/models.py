@@ -4,6 +4,7 @@ from django.utils import timezone
 import uuid
 import secrets
 import string
+from datetime import timedelta
 
 
 def generate_order_number():
@@ -301,19 +302,30 @@ class CartItem(models.Model):
 
 
 class RewardItem(models.Model):
+    TYPE_VOUCHER = 'voucher'
     TYPE_DISCOUNT = 'discount'
     TYPE_FREE_DELIVERY = 'free_delivery'
     TYPE_GIFT = 'gift'
+    TYPE_LUCKY_BOX = 'lucky_box'
     TYPE_MANUAL = 'manual'
 
     DISCOUNT_AMOUNT = 'amount'
     DISCOUNT_PERCENT = 'percent'
 
     TYPE_CHOICES = [
+        (TYPE_VOUCHER, 'Voucher'),
         (TYPE_DISCOUNT, 'Discount Coupon'),
         (TYPE_FREE_DELIVERY, 'Free Delivery'),
         (TYPE_GIFT, 'Gift Product'),
+        (TYPE_LUCKY_BOX, 'Lucky Box'),
         (TYPE_MANUAL, 'Manual Reward'),
+    ]
+
+    TIER_CHOICES = [
+        ('all', 'All Members'),
+        ('silver', 'Silver'),
+        ('gold', 'Gold'),
+        ('platinum', 'Platinum'),
     ]
 
     DISCOUNT_TYPE_CHOICES = [
@@ -338,6 +350,7 @@ class RewardItem(models.Model):
     )
     stock = models.PositiveIntegerField(null=True, blank=True)
     per_customer_limit = models.PositiveIntegerField(null=True, blank=True)
+    member_tier_requirement = models.CharField(max_length=20, choices=TIER_CHOICES, default='all')
     is_active = models.BooleanField(default=True)
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
@@ -355,6 +368,9 @@ class RewardItem(models.Model):
 class RewardRedemption(models.Model):
     STATUS_ACTIVE = 'active'
     STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_PACKED = 'packed'
+    STATUS_SHIPPED = 'shipped'
     STATUS_PREPARED = 'prepared'
     STATUS_COMPLETED = 'completed'
     STATUS_USED = 'used'
@@ -364,6 +380,9 @@ class RewardRedemption(models.Model):
     STATUS_CHOICES = [
         (STATUS_ACTIVE, 'Active'),
         (STATUS_PENDING, 'Pending'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_PACKED, 'Packed'),
+        (STATUS_SHIPPED, 'Shipped'),
         (STATUS_PREPARED, 'Prepared'),
         (STATUS_COMPLETED, 'Completed'),
         (STATUS_USED, 'Used'),
@@ -394,6 +413,36 @@ class RewardRedemption(models.Model):
                 return code
 
 
+class RewardSettings(models.Model):
+    points_per_dollar = models.PositiveIntegerField(default=1)
+    signup_bonus = models.PositiveIntegerField(default=0)
+    referral_bonus = models.PositiveIntegerField(default=0)
+    birthday_bonus = models.PositiveIntegerField(default=0)
+    review_bonus = models.PositiveIntegerField(default=0)
+    daily_checkin_bonus = models.PositiveIntegerField(default=0)
+    points_expiry_days = models.PositiveIntegerField(default=365)
+    expiry_reminder_days = models.PositiveIntegerField(default=7)
+    expiration_enabled = models.BooleanField(default=True)
+    minimum_redeem_points = models.PositiveIntegerField(default=0)
+    maximum_points_per_order = models.PositiveIntegerField(default=0)
+    silver_min_points = models.PositiveIntegerField(default=0)
+    gold_min_points = models.PositiveIntegerField(default=2000)
+    platinum_min_points = models.PositiveIntegerField(default=5000)
+    auto_approve_points = models.BooleanField(default=True)
+    auto_apply_on_completed = models.BooleanField(default=False)
+    low_stock_alert_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reward_settings'
+        verbose_name_plural = 'reward settings'
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class PointTransaction(models.Model):
     TYPE_EARN = 'earn'
     TYPE_REDEEM = 'redeem'
@@ -418,6 +467,7 @@ class PointTransaction(models.Model):
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     note = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'point_transactions'
@@ -426,3 +476,10 @@ class PointTransaction(models.Model):
 
     def __str__(self):
         return f'{self.user} {self.type} {self.points} pts'
+
+    def save(self, *args, **kwargs):
+        if self.points > 0 and not self.expires_at:
+            reward_settings = RewardSettings.get_solo()
+            if reward_settings.expiration_enabled and reward_settings.points_expiry_days:
+                self.expires_at = self.created_at + timedelta(days=reward_settings.points_expiry_days)
+        super().save(*args, **kwargs)

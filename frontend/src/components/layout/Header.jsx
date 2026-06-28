@@ -1,15 +1,69 @@
 import { useState } from 'react'
-import { Menu, Bell, Search, ChevronDown, Settings, LogOut, UserCircle, Store } from 'lucide-react'
+import { Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store } from 'lucide-react'
 import useAuthStore from '@/store/authStore'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useAdminPageHeader } from './AdminPageHeaderContext'
+
+const ADMIN_ROUTE_TITLES = [
+  ['/admin/products/categories', 'Category Menu'],
+  ['/admin/products/flash-sale', 'Flash Sale'],
+  ['/admin/products/brands', 'Brands'],
+  ['/admin/products/sets', 'Product Sets'],
+  ['/admin/products/banners', 'Banners'],
+  ['/admin/products', 'Products'],
+  ['/admin/orders/new', 'Create New Order'],
+  ['/admin/orders/', 'Order Details'],
+  ['/admin/orders', 'Orders'],
+  ['/admin/customers', 'Customers'],
+  ['/admin/inventory/movements', 'Stock Movements'],
+  ['/admin/inventory/transfers', 'Stock Transfers'],
+  ['/admin/inventory', 'Stock Dashboard'],
+  ['/admin/customer-scanner/delivery-config', 'Delivery Configuration'],
+  ['/admin/customer-scanner/delivery', 'Customer Delivery'],
+  ['/admin/print/history', 'Print History'],
+  ['/admin/print', 'Print Center'],
+  ['/admin/scanner', 'Scanner'],
+  ['/admin/delivery', 'Delivery Management'],
+  ['/admin/finance/revenue', 'Revenue'],
+  ['/admin/finance/expenses', 'Expenses'],
+  ['/admin/finance/profit', 'Profit Report'],
+  ['/admin/rewards/transactions', 'Reward Transactions'],
+  ['/admin/rewards/exchanges', 'Exchanges'],
+  ['/admin/rewards/products', 'Reward Catalog'],
+  ['/admin/rewards/settings', 'Points Settings'],
+  ['/admin/rewards/rules', 'Points Settings'],
+  ['/admin/rewards/points', 'Reward Points'],
+  ['/admin/rewards', 'Rewards'],
+  ['/admin/reports/sales', 'Sales Report'],
+  ['/admin/reports/products', 'Product Report'],
+  ['/admin/reports/inventory', 'Inventory Report'],
+  ['/admin/profile', 'My Profile'],
+  ['/admin/users', 'Users'],
+  ['/admin/roles', 'Roles & Permissions'],
+  ['/admin/activity', 'Activity Logs'],
+  ['/admin/settings/telegram', 'Telegram Settings'],
+  ['/admin/settings/delivery', 'Delivery Settings'],
+  ['/admin/settings/payment', 'Payment Settings'],
+  ['/admin/settings/print-logo', 'Print Settings'],
+  ['/admin/settings', 'Settings'],
+  ['/admin', 'Dashboard'],
+]
+
+function getAdminRouteTitle(pathname) {
+  return ADMIN_ROUTE_TITLES.find(([path]) => (
+    pathname === path || pathname.startsWith(path.endsWith('/') ? path : `${path}/`)
+  ))?.[1] || 'Dashboard'
+}
 
 export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollapsed }) {
   const { user, logout } = useAuthStore()
+  const location = useLocation()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [confirm, ConfirmDialog] = useConfirm()
+  const { pageHeader } = useAdminPageHeader() || {}
 
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
@@ -131,15 +185,13 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
           <Menu size={20} />
         </button>
 
-        <div className="flex-1 max-w-md">
-          <div className="relative w-full">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search orders, products, customers..."
-              className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400"
-            />
-          </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-black leading-tight text-gray-950">
+            {pageHeader?.title || getAdminRouteTitle(location.pathname)}
+          </h1>
+          {pageHeader?.subtitle && (
+            <p className="mt-0.5 truncate text-xs font-semibold text-gray-500">{pageHeader.subtitle}</p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 ml-auto">

@@ -12,7 +12,7 @@ import { ProductThumb } from '@/components/customer/CustomerUi'
 
 function toCartProduct(productSet) {
   const imageUrl = productSet.image_url || productSet.image
-  const price = Number(productSet.discount_price || productSet.price || 0)
+  const price = Number(productSet.display_price || productSet.discount_price || productSet.price || 0)
   return {
     id: `set-${productSet.id}`,
     cart_key: `set-${productSet.id}`,
@@ -24,6 +24,8 @@ function toCartProduct(productSet) {
     retail_price: price,
     cost_price: 0,
     current_stock: Number(productSet.current_stock || 0),
+    is_flash_sale_active: productSet.is_flash_sale_active,
+    flash_sale_max_order_qty: productSet.flash_sale_max_order_qty,
     category_name: 'Product Set',
   }
 }
@@ -47,8 +49,8 @@ export default function ProductSetDetail() {
   const cartItem = cartProduct ? items.find((item) => item.product?.cart_key === cartProduct.cart_key) : null
   const qty = cartItem?.quantity || 0
   const setStock = Number(productSet?.current_stock || 0)
-  const price = Number(productSet?.discount_price || productSet?.price || 0)
-  const oldPrice = productSet?.discount_price ? Number(productSet?.price || 0) : 0
+  const price = Number(productSet?.display_price || productSet?.discount_price || productSet?.price || 0)
+  const oldPrice = productSet?.old_price || productSet?.discount_price ? Number(productSet?.price || 0) : 0
   const galleryImages = useMemo(() => {
     if (!productSet) return []
     const managed = (productSet.images || [])

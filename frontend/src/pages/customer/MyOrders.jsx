@@ -226,7 +226,7 @@ export default function MyOrders() {
   })
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-180px)] w-full max-w-3xl flex-col">
+    <div className="mx-auto flex min-h-[calc(100vh-180px)] w-full max-w-[1440px] flex-col">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-950">{t('orders.title')}</h1>
@@ -254,7 +254,7 @@ export default function MyOrders() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
+        <div className="grid gap-4 lg:grid-cols-2">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-40 animate-pulse rounded-3xl bg-gray-100" />
           ))}
@@ -271,7 +271,7 @@ export default function MyOrders() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
           {orders.map((order) => {
             return (
               <article

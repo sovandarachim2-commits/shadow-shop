@@ -1,11 +1,12 @@
 ﻿import { useMemo, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift } from 'lucide-react'
+import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import { authApi } from '@/api/auth'
 import { Logo } from '@/components/layout/CustomerLayout'
-import { formatCurrency } from '@/utils/helpers'
+import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
+import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import toast from 'react-hot-toast'
@@ -194,8 +195,8 @@ function ProductSetCard({ productSet }) {
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
   const imageUrl = productSet.image_url || productSet.image
-  const price = Number(productSet.discount_price || productSet.price || 0)
-  const oldPrice = productSet.discount_price ? Number(productSet.price || 0) : 0
+  const price = Number(productSet.display_price || productSet.discount_price || productSet.price || 0)
+  const oldPrice = productSet.old_price || productSet.discount_price ? Number(productSet.price || 0) : 0
   const setStock = Number(productSet.current_stock || 0)
   const cartProduct = {
     id: `set-${productSet.id}`,
@@ -208,6 +209,8 @@ function ProductSetCard({ productSet }) {
     retail_price: price,
     cost_price: 0,
     current_stock: setStock,
+    is_flash_sale_active: productSet.is_flash_sale_active,
+    flash_sale_max_order_qty: productSet.flash_sale_max_order_qty,
     category_name: 'Product Set',
   }
   const cartItem = items.find((item) => item.product?.cart_key === cartProduct.cart_key)
@@ -349,31 +352,56 @@ export default function ProductList() {
   const isGridLoading = isLoading || setsLoading
   const total = (data?.count || 0) + productSets.length
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+  const isSearchResult = Boolean(searchParams.get('search'))
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="-mx-4 -mt-4 mb-3 grid min-h-[64px] grid-cols-[1fr_auto_1fr] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm md:hidden">
-        <div className="min-w-0 justify-self-start">
-          <Logo
-            compact
-            iconOnly
-            logoUrl={siteSettings?.logo_url || null}
-            storeName={siteSettings?.store_name || 'Shadow Shop'}
-          />
-        </div>
-        <h1 className="text-xl font-black text-gray-950">{t('nav.shop')}</h1>
-        <div className="flex items-center justify-end gap-2">
-          <button onClick={() => setShowSearch((v) => !v)} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
-            {showSearch ? <X size={22} /> : <Search size={22} />}
-          </button>
-          <button onClick={() => navigate('/cart')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
-            <ShoppingCart size={22} />
-            {totalItems > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-500 px-1 text-xs font-bold text-white ring-2 ring-white">
-                {totalItems > 9 ? '9+' : totalItems}
-              </span>
-            )}
-          </button>
+      <div className="-mx-4 -mt-4 mb-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm md:hidden">
+        <div className={isSearchResult ? 'grid grid-cols-[42px_1fr_auto] items-center gap-2.5' : 'grid min-h-[48px] grid-cols-[1fr_auto_1fr] items-center'}>
+          {isSearchResult ? (
+            <>
+              <button
+                onClick={() => navigate(-1)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-900 active:scale-95"
+                aria-label={t('common.back')}
+              >
+                <ChevronLeft size={21} />
+              </button>
+              <button
+                onClick={() => navigate('/search')}
+                className="flex h-10 min-w-0 items-center gap-2.5 rounded-full border border-gray-300 bg-white px-3.5 text-left text-sm font-black text-gray-950 active:scale-[0.99]"
+              >
+                <Search size={19} className="shrink-0 text-gray-950" />
+                <span className="truncate">{search || 'Search for products'}</span>
+              </button>
+              <HeaderActionIcons />
+            </>
+          ) : (
+            <>
+              <div className="min-w-0 justify-self-start">
+                <Logo
+                  compact
+                  iconOnly
+                  logoUrl={siteSettings?.logo_url || null}
+                  storeName={siteSettings?.store_name || 'Shadow Shop'}
+                />
+              </div>
+              <h1 className="text-xl font-black text-gray-950">{t('nav.shop')}</h1>
+              <div className="flex items-center justify-end gap-2">
+                <button onClick={() => navigate('/search')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
+                  <Search size={22} />
+                </button>
+                <button onClick={() => navigate('/cart')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
+                  <ShoppingCart size={22} />
+                  {totalItems > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-500 px-1 text-xs font-bold text-white ring-2 ring-white">
+                      {totalItems > 9 ? '9+' : totalItems}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -403,7 +431,7 @@ export default function ProductList() {
       <div>
         <section>
           <div className="-mx-4 mb-4 border-b border-gray-100 bg-white px-4 pb-3 pt-1 md:mx-0 md:mb-5 md:rounded-2xl md:border md:bg-white/95 md:p-3 md:shadow-card md:backdrop-blur">
-            {showSearch && (
+            {showSearch && !isSearchResult && (
               <div className="mb-3 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm md:rounded-xl md:shadow-none">
                 <div className="relative">
                   <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -428,7 +456,12 @@ export default function ProductList() {
               </div>
             )}
 
-            <div className="grid min-w-0 grid-cols-3 gap-2">
+            <div className={cn('grid min-w-0 gap-2', isSearchResult ? 'grid-cols-[48px_1fr_1fr]' : 'grid-cols-3')}>
+              {isSearchResult && (
+                <button className="flex h-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-800">
+                  <SlidersHorizontal size={18} />
+                </button>
+              )}
               <FilterSelect
                 value={categoryId}
                 onChange={(e) => { setCategoryId(e.target.value); setPage(1) }}
@@ -438,20 +471,22 @@ export default function ProductList() {
                   <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
                 ))}
               </FilterSelect>
-              <FilterSelect
+              {!isSearchResult && (
+                <FilterSelect
                 value={brand}
                 onChange={(e) => { setBrand(e.target.value); setPage(1) }}
-              >
-                <option value="">{t('shop.allBrands')}</option>
-                {shopBrands.map((b) => (
-                  <option key={b.id} value={String(b.id)}>{b.name}</option>
-                ))}
-              </FilterSelect>
+                >
+                  <option value="">{t('shop.allBrands')}</option>
+                  {shopBrands.map((b) => (
+                    <option key={b.id} value={String(b.id)}>{b.name}</option>
+                  ))}
+                </FilterSelect>
+              )}
               <FilterSelect
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
-                <option value="-created_at">{t('shop.newest')}</option>
+                <option value="-created_at">{isSearchResult ? 'Sort by' : t('shop.newest')}</option>
                 <option value="retail_price">{t('shop.priceLowHigh')}</option>
                 <option value="-retail_price">{t('shop.priceHighLow')}</option>
                 <option value="-rating">{t('shop.bestRated')}</option>
@@ -461,7 +496,9 @@ export default function ProductList() {
 
           <div className="mb-4">
             <p className="text-sm font-semibold text-gray-500">
-              <span className="text-gray-950">{total}</span> {t('common.products')}
+              <span className="text-gray-950">{total}</span> {isSearchResult ? (
+                <>Results for <span className="text-gray-950">"{search}"</span></>
+              ) : t('common.products')}
             </p>
           </div>
 

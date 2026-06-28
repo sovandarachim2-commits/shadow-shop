@@ -15,6 +15,7 @@ const useCartStore = create(
     (set, get) => ({
       items: [],
       selectedProductIds: [],
+      appliedCoupon: null,
       addItem: (product, quantity = 1) => {
         if (!product?.id) return
 
@@ -79,9 +80,12 @@ const useCartStore = create(
         set({
           items: get().items.filter((item) => !selected.has(getProductId(item))),
           selectedProductIds: [],
+          appliedCoupon: null,
         })
       },
-      clearCart: () => set({ items: [], selectedProductIds: [] }),
+      applyCoupon: (coupon) => set({ appliedCoupon: coupon }),
+      clearCoupon: () => set({ appliedCoupon: null }),
+      clearCart: () => set({ items: [], selectedProductIds: [], appliedCoupon: null }),
       totalItems: () => get().items.reduce((sum, i) => sum + getQuantity(i), 0),
       subtotal: () => get().items.reduce((sum, i) => sum + getProductPrice(i) * getQuantity(i), 0),
     }),
@@ -93,6 +97,7 @@ const useCartStore = create(
         selectedProductIds: state.selectedProductIds.filter((id) =>
           state.items.some((item) => getProductId(item) === id)
         ),
+        appliedCoupon: state.appliedCoupon,
       }),
       version: 2,
       migrate: () => ({ items: [] }),

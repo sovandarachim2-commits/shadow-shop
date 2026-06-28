@@ -43,7 +43,13 @@ import Revenue from '@/pages/admin/finance/Revenue'
 import Expenses from '@/pages/admin/finance/Expenses'
 import ProfitReport from '@/pages/admin/finance/ProfitReport'
 import RewardDashboardAdmin, {
+  RewardAutomationAdmin,
+  RewardCampaignsAdmin,
+  RewardCategoriesAdmin,
+  RewardCouponsAdmin,
   RewardItemsAdmin,
+  RewardMemberTiersAdmin,
+  RewardNotificationsAdmin,
   RewardPointsAdmin,
   RewardRedemptionsAdmin,
   RewardRulesAdmin,
@@ -74,9 +80,14 @@ import OrderTracking from '@/pages/customer/OrderTracking'
 import OrderReceipt from '@/pages/customer/OrderReceipt'
 import AddressBook from '@/pages/customer/AddressBook'
 import ExchangeRewards from '@/pages/customer/ExchangeRewards'
+import EarnPoints from '@/pages/customer/EarnPoints'
+import PointsHistory from '@/pages/customer/PointsHistory'
+import RedeemRewards from '@/pages/customer/RedeemRewards'
+import MyCoupons from '@/pages/customer/MyCoupons'
 import RewardDetail from '@/pages/customer/RewardDetail'
 import LuckyBox from '@/pages/customer/LuckyBox'
 import FlashSale from '@/pages/customer/FlashSale'
+import SearchPage from '@/pages/customer/SearchPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -197,6 +208,7 @@ export default function App() {
           {/* Customer App */}
           <Route path="/" element={<RequireStorefront><CustomerLayout /></RequireStorefront>}>
             <Route index element={<Home />} />
+            <Route path="search" element={<SearchPage />} />
             <Route path="shop" element={<ProductList />} />
             <Route path="lucky-box" element={<LuckyBox />} />
             <Route path="flash-sale" element={<FlashSale />} />
@@ -222,6 +234,26 @@ export default function App() {
             <Route path="profile/rewards" element={
               <RequireAuth>
                 <ExchangeRewards />
+              </RequireAuth>
+            } />
+            <Route path="profile/rewards/redeem" element={
+              <RequireAuth>
+                <RedeemRewards />
+              </RequireAuth>
+            } />
+            <Route path="profile/rewards/earn" element={
+              <RequireAuth>
+                <EarnPoints />
+              </RequireAuth>
+            } />
+            <Route path="profile/rewards/history" element={
+              <RequireAuth>
+                <PointsHistory />
+              </RequireAuth>
+            } />
+            <Route path="profile/rewards/coupons" element={
+              <RequireAuth>
+                <MyCoupons />
               </RequireAuth>
             } />
             <Route path="profile/rewards/:id" element={
@@ -319,12 +351,18 @@ export default function App() {
 
             {/* Rewards */}
             <Route path="rewards" element={<RewardDashboardAdmin />} />
-            <Route path="rewards/rules" element={<RewardRulesAdmin />} />
+            <Route path="rewards/rules" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/points" element={<RewardPointsAdmin />} />
             <Route path="rewards/transactions" element={<RewardTransactionsAdmin />} />
             <Route path="rewards/products" element={<RewardItemsAdmin />} />
             <Route path="rewards/exchanges" element={<RewardRedemptionsAdmin />} />
+            <Route path="rewards/tiers" element={<Navigate to="/admin/rewards/settings" replace />} />
+            <Route path="rewards/coupons" element={<Navigate to="/admin/rewards/products" replace />} />
+            <Route path="rewards/campaigns" element={<Navigate to="/admin/rewards/settings" replace />} />
+            <Route path="rewards/categories" element={<Navigate to="/admin/rewards/products" replace />} />
             <Route path="rewards/settings" element={<RewardSettingsAdmin />} />
+            <Route path="rewards/notifications" element={<Navigate to="/admin/rewards/settings" replace />} />
+            <Route path="rewards/automation" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/redemptions" element={<Navigate to="/admin/rewards/exchanges" replace />} />
 
             {/* Reports */}

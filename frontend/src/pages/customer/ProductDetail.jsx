@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Heart, ShoppingCart, Zap, Plus, Minus, Check,
-  PackageSearch, Store, Star, Droplet, Sparkles, ShieldCheck, Leaf,
+  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
@@ -435,24 +435,37 @@ export default function ProductDetail() {
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 bg-white px-4 pb-4 pt-2 shadow-[0_-8px_25px_rgba(15,23,42,0.08)] md:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-[64px_1fr_1fr] items-center gap-2">
-          <MobileProductAction icon={Store} label={t('product.store')} onClick={() => navigate('/shop')} />
+      <div className="fixed inset-x-0 bottom-0 z-40 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-[112px_1fr] items-center gap-3">
+          <div className="flex h-12 items-center justify-between rounded-[1.35rem] border border-gray-200 bg-white px-3 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setQty((q) => Math.max(product.min_order_qty || 1, q - 1))}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 active:scale-95 disabled:text-gray-300"
+              disabled={qty <= (product.min_order_qty || 1)}
+              aria-label="Decrease quantity"
+            >
+              <Minus size={16} strokeWidth={2.5} />
+            </button>
+            <span className="min-w-6 text-center text-sm font-black text-gray-950">{qty}</span>
+            <button
+              type="button"
+              onClick={() => setQty((q) => Math.min(maxPurchaseQty, q + 1))}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-950 active:scale-95 disabled:text-gray-300"
+              disabled={!isInStock || qty >= maxPurchaseQty}
+              aria-label="Increase quantity"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+            </button>
+          </div>
+
           <button
             onClick={handleAddToCart}
             disabled={!isInStock}
-            className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gray-950 px-2 text-sm font-black text-white shadow-lg shadow-gray-200 disabled:opacity-50"
+            className="flex h-12 items-center justify-center gap-2 rounded-[1.35rem] bg-[#1f1c1a] px-4 text-sm font-black text-white shadow-lg shadow-gray-200 transition active:scale-[0.98] disabled:bg-gray-300 disabled:text-gray-500"
           >
-            <ShoppingCart size={21} />
-            {t('common.addToCart')}
-          </button>
-          <button
-            onClick={handleBuyNow}
-            disabled={!isInStock}
-            className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-pink-600 px-2 text-sm font-black text-white shadow-lg shadow-pink-200 disabled:opacity-50"
-          >
-            <Zap size={21} />
-            {t('common.buyNow')}
+            <span>{isInStock ? t('common.addToCart') : t('common.outOfStock')}</span>
+            {isInStock && <span className="opacity-90">{formatCurrency(currentPrice * qty)}</span>}
           </button>
         </div>
       </div>
@@ -468,17 +481,5 @@ function FeatureChip({ icon: Icon, label, iconClass = 'text-pink-600' }) {
       </span>
       <span className="text-[10px] font-black leading-tight text-gray-500">{label}</span>
     </div>
-  )
-}
-
-function MobileProductAction({ icon: Icon, label, onClick, active = false }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-0.5 text-xs font-black ${active ? 'text-pink-600' : 'text-gray-500'}`}
-    >
-      <Icon size={24} className={active ? 'fill-pink-100' : ''} />
-      <span>{label}</span>
-    </button>
   )
 }

@@ -8,18 +8,20 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
-from django.db.models import Sum, Q
+from django.db import transaction
+from django.db.models import Count, Sum, Q
 from django.contrib.auth import get_user_model
-from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord, RewardItem, RewardRedemption, PointTransaction
+from datetime import timedelta
+from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord, RewardItem, RewardRedemption, RewardSettings, PointTransaction
 from .serializers import (
     CustomerSerializer, OrderListSerializer, OrderDetailSerializer,
     OrderCreateSerializer, CustomerCheckoutSerializer, OrderStatusHistorySerializer,
     WishlistSerializer, CartItemSerializer, PrepareRecordSerializer, OutRecordSerializer,
-    OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, PointTransactionSerializer,
+    OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, RewardSettingsSerializer, PointTransactionSerializer,
 )
 from .rewards import (
     award_points_for_paid_order, exchange_reward, get_member_level, get_next_tier_points,
-    get_points_balance, sync_paid_order_points,
+    get_points_balance, get_coupon_discount, sync_paid_order_points,
 )
 from utils.permissions import IsStaff, IsSeller, IsCashier
 from utils.pagination import StandardPagination
@@ -73,6 +75,48 @@ def get_order_print_stock_issues(order):
                 'available': available_for_order,
                 'current_stock': current_qty,
                 'reserved_for_order': reserved_qty,
+                'availability_status': product.availability_status,
+            })
+    return issues
+
+
+def get_batch_print_stock_issues(orders):
+    from apps.inventory.services import has_stock_deduction_for_order
+    from apps.products.models import Product
+
+    requirements = {}
+    order_numbers = {}
+    for order in orders:
+        if has_stock_deduction_for_order(order):
+            continue
+        for item in order.items.select_related('product', 'product_set').prefetch_related(
+            'product_set__items__product__stock'
+        ):
+            if item.product:
+                requirements[item.product] = requirements.get(item.product, 0) + int(item.quantity or 0)
+                order_numbers.setdefault(item.product, []).append(order.order_number)
+            elif item.product_set:
+                for set_item in item.product_set.items.select_related('product', 'product__stock'):
+                    required = int(item.quantity or 0) * int(set_item.quantity or 1)
+                    requirements[set_item.product] = requirements.get(set_item.product, 0) + required
+                    order_numbers.setdefault(set_item.product, []).append(order.order_number)
+
+    issues = []
+    for product, required_qty in requirements.items():
+        if product.availability_status == Product.AVAILABILITY_AVAILABLE:
+            continue
+        try:
+            available_qty = int(product.stock.quantity or 0)
+        except Exception:
+            available_qty = 0
+        if product.availability_status == Product.AVAILABILITY_OUT_OF_STOCK or available_qty < required_qty:
+            issues.append({
+                'product_id': product.id,
+                'product_name': product.name,
+                'product_code': product.code,
+                'required': required_qty,
+                'available': available_qty,
+                'order_numbers': list(dict.fromkeys(order_numbers.get(product, []))),
                 'availability_status': product.availability_status,
             })
     return issues
@@ -214,6 +258,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             order.printed_at = timezone.now()
             order.printed_by = request.user
             order.save()
+        if new_status == Order.STATUS_COMPLETED and order.payment_status == 'paid':
+            award_points_for_paid_order(order)
 
         return Response(OrderDetailSerializer(order, context={'request': request}).data)
 
@@ -274,6 +320,81 @@ class OrderViewSet(viewsets.ModelViewSet):
             'ok': not issues and not missing_ids,
             'issues': issues,
             'missing_order_ids': missing_ids,
+        })
+
+    @action(detail=False, methods=['post'])
+    def mark_printed(self, request):
+        from apps.inventory.models import Stock
+        from apps.inventory.services import deduct_stock_for_order
+
+        order_ids = request.data.get('order_ids') or request.data.get('orders') or []
+        if not isinstance(order_ids, list) or not order_ids:
+            return Response({'detail': 'Select at least one order.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            order_ids = list(dict.fromkeys(int(order_id) for order_id in order_ids))
+        except (TypeError, ValueError):
+            return Response({'detail': 'Invalid order selected.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            orders = list(
+                self.get_queryset().select_for_update().filter(id__in=order_ids).prefetch_related(
+                    'items__product__stock',
+                    'items__product_set__items__product__stock',
+                )
+            )
+            found_ids = {order.id for order in orders}
+            missing_ids = [order_id for order_id in order_ids if order_id not in found_ids]
+            if missing_ids:
+                return Response(
+                    {'detail': 'Some selected orders were not found.', 'missing_order_ids': missing_ids},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            product_ids = set()
+            for order in orders:
+                for item in order.items.all():
+                    if item.product_id:
+                        product_ids.add(item.product_id)
+                    elif item.product_set_id:
+                        product_ids.update(
+                            item.product_set.items.values_list('product_id', flat=True)
+                        )
+            existing_stock_ids = set(Stock.objects.filter(product_id__in=product_ids).values_list('product_id', flat=True))
+            Stock.objects.bulk_create(
+                [Stock(product_id=product_id, quantity=0) for product_id in product_ids - existing_stock_ids],
+                ignore_conflicts=True,
+            )
+            list(Stock.objects.select_for_update().filter(product_id__in=product_ids))
+
+            issues = get_batch_print_stock_issues(orders)
+            if issues:
+                return Response(
+                    {
+                        'detail': 'Cannot print because selected orders need more stock than is available.',
+                        'ok': False,
+                        'issues': issues,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            printed_at = timezone.now()
+            for order in orders:
+                deduct_stock_for_order(order, request.user)
+                if order.status != Order.STATUS_PRINTED or not order.printed_at:
+                    order.status = Order.STATUS_PRINTED
+                    order.printed_at = printed_at
+                    order.printed_by = request.user
+                    order.save(update_fields=['status', 'printed_at', 'printed_by', 'updated_at'])
+                    OrderStatusHistory.objects.create(
+                        order=order,
+                        status=Order.STATUS_PRINTED,
+                        changed_by=request.user,
+                        note='Printed from Print Center',
+                    )
+
+        return Response({
+            'ok': True,
+            'printed_order_ids': order_ids,
         })
 
     @action(detail=True, methods=['get'])
@@ -453,6 +574,7 @@ class RewardsViewSet(viewsets.ViewSet):
     def _summary(self, request):
         sync_paid_order_points(request.user)
         current_points = get_points_balance(request.user)
+        reward_settings = RewardSettings.get_solo()
         next_tier_points = get_next_tier_points(current_points)
         progress_pct = 100 if next_tier_points <= current_points else round((current_points / next_tier_points) * 100)
         items = RewardItem.objects.filter(is_active=True).select_related('gift_product').prefetch_related('gift_product__images').order_by('points_required', 'name')
@@ -467,6 +589,19 @@ class RewardsViewSet(viewsets.ViewSet):
             'catalog': RewardItemSerializer(items, many=True, context={'current_points': current_points, 'user': request.user}).data,
             'redemptions': RewardRedemptionSerializer(redemptions, many=True).data,
             'transactions': PointTransactionSerializer(transactions, many=True).data,
+            'earning_rules': {
+                'points_per_dollar': reward_settings.points_per_dollar,
+                'review_bonus': reward_settings.review_bonus,
+                'referral_bonus': reward_settings.referral_bonus,
+                'birthday_bonus': reward_settings.birthday_bonus,
+                'daily_checkin_bonus': reward_settings.daily_checkin_bonus,
+            },
+            'checked_in_today': PointTransaction.objects.filter(
+                user=request.user,
+                type=PointTransaction.TYPE_EARN,
+                note='Daily check-in bonus',
+                created_at__date=timezone.localdate(),
+            ).exists(),
         }
 
     def list(self, request):
@@ -488,13 +623,76 @@ class RewardsViewSet(viewsets.ViewSet):
         data['redemption'] = RewardRedemptionSerializer(redemption).data
         return Response(data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'])
+    def validate_coupon(self, request):
+        try:
+            redemption, discount = get_coupon_discount(
+                request.user,
+                request.data.get('coupon_code'),
+                request.data.get('subtotal'),
+                request.data.get('delivery_fee'),
+            )
+        except (ValueError, TypeError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        reward = redemption.reward_item
+        return Response({
+            'coupon_code': redemption.coupon_code,
+            'name': reward.name,
+            'reward_type': reward.type,
+            'discount_type': reward.coupon_discount_type,
+            'coupon_value': reward.coupon_value,
+            'minimum_order_amount': reward.minimum_order_amount,
+            'discount': discount,
+        })
+
+    @action(detail=False, methods=['post'])
+    def daily_checkin(self, request):
+        User = get_user_model()
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=request.user.pk)
+            reward_settings = RewardSettings.get_solo()
+            bonus = reward_settings.daily_checkin_bonus
+            if bonus <= 0:
+                return Response(
+                    {'detail': 'Daily check-in rewards are not enabled yet.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if PointTransaction.objects.filter(
+                user=request.user,
+                type=PointTransaction.TYPE_EARN,
+                note='Daily check-in bonus',
+                created_at__date=timezone.localdate(),
+            ).exists():
+                return Response(
+                    {'detail': 'You already checked in today.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            PointTransaction.objects.create(
+                user=request.user,
+                points=bonus,
+                type=PointTransaction.TYPE_EARN,
+                note='Daily check-in bonus',
+            )
+        return Response(self._summary(request))
+
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        transactions = PointTransaction.objects.filter(user=request.user).select_related(
+            'order', 'reward_redemption', 'reward_redemption__reward_item'
+        ).order_by('-created_at')[:300]
+        return Response(PointTransactionSerializer(transactions, many=True).data)
+
 
 class AdminRewardItemViewSet(viewsets.ModelViewSet):
-    queryset = RewardItem.objects.select_related('gift_product').prefetch_related('gift_product__images').order_by('-created_at')
+    queryset = RewardItem.objects.select_related('gift_product').prefetch_related(
+        'gift_product__images'
+    ).annotate(redeemed_count=Count('redemptions')).order_by('-created_at')
     serializer_class = RewardItemSerializer
     permission_classes = [IsAuthenticated, IsStaff]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [SearchFilter, OrderingFilter]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['type', 'is_active', 'member_tier_requirement']
     search_fields = ['name', 'description', 'type']
     ordering_fields = ['created_at', 'points_required', 'stock']
 
@@ -505,26 +703,66 @@ class AdminRewardItemViewSet(viewsets.ModelViewSet):
         reward.save(update_fields=['is_active', 'updated_at'])
         return Response(RewardItemSerializer(reward).data)
 
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        issued = PointTransaction.objects.filter(points__gt=0).aggregate(total=Sum('points'))['total'] or 0
+        redeemed = abs(PointTransaction.objects.filter(points__lt=0).aggregate(total=Sum('points'))['total'] or 0)
+        active_members = PointTransaction.objects.values('user_id').annotate(balance=Sum('points')).filter(balance__gt=0).count()
+        pending = RewardRedemption.objects.filter(status=RewardRedemption.STATUS_PENDING).count()
+        reward_settings = RewardSettings.get_solo()
+        reminder_until = timezone.now() + timedelta(days=reward_settings.expiry_reminder_days)
+        expiring_points = PointTransaction.objects.filter(
+            points__gt=0,
+            expires_at__gte=timezone.now(),
+            expires_at__lte=reminder_until,
+        ).aggregate(total=Sum('points'))['total'] or 0
+        top_rewards = list(
+            RewardItem.objects.annotate(redeemed_count=Count('redemptions'))
+            .order_by('-redeemed_count', 'name')
+            .values('id', 'name', 'redeemed_count')[:5]
+        )
+        return Response({
+            'total_points_issued': issued,
+            'total_points_redeemed': redeemed,
+            'active_members': active_members,
+            'pending_redemptions': pending,
+            'expiring_points': expiring_points,
+            'top_redeemed_rewards': top_rewards,
+        })
+
 
 class AdminRewardRedemptionViewSet(viewsets.ModelViewSet):
     queryset = RewardRedemption.objects.select_related('user', 'reward_item', 'reward_item__gift_product').prefetch_related('reward_item__gift_product__images').order_by('-created_at')
     serializer_class = RewardRedemptionSerializer
     permission_classes = [IsAuthenticated, IsStaff]
-    http_method_names = ['get', 'patch', 'head', 'options']
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'reward_item', 'reward_item__type']
     search_fields = ['coupon_code', 'user__username', 'user__first_name', 'user__last_name', 'user__phone', 'reward_item__name']
     ordering_fields = ['created_at', 'points_spent']
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def update_status(self, request, pk=None):
-        redemption = self.get_object()
+        redemption = self.get_queryset().select_for_update().get(pk=pk)
         new_status = request.data.get('status')
         valid_statuses = [choice[0] for choice in RewardRedemption.STATUS_CHOICES]
         if new_status not in valid_statuses:
             return Response({'detail': 'Invalid redemption status.'}, status=status.HTTP_400_BAD_REQUEST)
 
         old_status = redemption.status
+        transitions = {
+            RewardRedemption.STATUS_PENDING: {RewardRedemption.STATUS_APPROVED, RewardRedemption.STATUS_REJECTED},
+            RewardRedemption.STATUS_APPROVED: {RewardRedemption.STATUS_PACKED, RewardRedemption.STATUS_REJECTED},
+            RewardRedemption.STATUS_PACKED: {RewardRedemption.STATUS_SHIPPED},
+            RewardRedemption.STATUS_SHIPPED: {RewardRedemption.STATUS_COMPLETED},
+        }
+        allowed = transitions.get(old_status)
+        if allowed is not None and new_status not in allowed:
+            return Response(
+                {'detail': f'Cannot change redemption from {old_status} to {new_status}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         redemption.status = new_status
         redemption.save(update_fields=['status'])
 
@@ -543,6 +781,40 @@ class AdminRewardRedemptionViewSet(viewsets.ModelViewSet):
                     type=PointTransaction.TYPE_ADJUST,
                     note=f'Refunded points for rejected reward {redemption.reward_item.name}',
                 )
+                reward = RewardItem.objects.select_for_update().get(pk=redemption.reward_item_id)
+                if reward.stock is not None:
+                    reward.stock += 1
+                    reward.save(update_fields=['stock', 'updated_at'])
+
+                if reward.type in {RewardItem.TYPE_GIFT, RewardItem.TYPE_LUCKY_BOX} and reward.gift_product_id:
+                    from apps.inventory.models import Stock, StockMovement
+
+                    original_reference = f'REWARD-{redemption.id}'
+                    original_movement = StockMovement.objects.filter(
+                        product_id=reward.gift_product_id,
+                        reference=original_reference,
+                        reference_type='reward_redemption',
+                    ).exists()
+                    refund_reference = f'{original_reference}-REFUND'
+                    if original_movement and not StockMovement.objects.filter(reference=refund_reference).exists():
+                        stock, _ = Stock.objects.select_for_update().get_or_create(
+                            product_id=reward.gift_product_id,
+                            defaults={'quantity': 0},
+                        )
+                        before_qty = stock.quantity
+                        stock.quantity += 1
+                        stock.save(update_fields=['quantity', 'updated_at'])
+                        StockMovement.objects.create(
+                            type=StockMovement.TYPE_RETURN,
+                            product_id=reward.gift_product_id,
+                            quantity=1,
+                            before_qty=before_qty,
+                            after_qty=stock.quantity,
+                            reference=refund_reference,
+                            reference_type='reward_redemption_refund',
+                            notes=f'Restored stock for rejected reward redemption #{redemption.id}',
+                            created_by=request.user,
+                        )
 
         return Response(RewardRedemptionSerializer(redemption).data)
 
@@ -633,3 +905,11 @@ class AdminRewardTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         if date_to:
             queryset = queryset.filter(created_at__date__lte=date_to)
         return queryset
+
+
+class AdminRewardSettingsView(generics.RetrieveUpdateAPIView):
+    serializer_class = RewardSettingsSerializer
+    permission_classes = [IsAuthenticated, IsStaff]
+
+    def get_object(self):
+        return RewardSettings.get_solo()

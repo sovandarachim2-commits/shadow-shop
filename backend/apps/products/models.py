@@ -234,6 +234,10 @@ class ProductSet(models.Model):
     image = models.ImageField(upload_to='product_sets/', null=True, blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    flash_sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    flash_sale_starts_at = models.DateTimeField(null=True, blank=True)
+    flash_sale_ends_at = models.DateTimeField(null=True, blank=True)
+    flash_sale_max_order_qty = models.PositiveIntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -248,6 +252,23 @@ class ProductSet(models.Model):
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
+
+    @property
+    def is_flash_sale_active(self):
+        if not self.is_featured or not self.flash_sale_price:
+            return False
+        now = timezone.now()
+        if self.flash_sale_starts_at and self.flash_sale_starts_at > now:
+            return False
+        if self.flash_sale_ends_at and self.flash_sale_ends_at < now:
+            return False
+        return self.flash_sale_price < self.price
+
+    @property
+    def active_price(self):
+        if self.is_flash_sale_active:
+            return self.flash_sale_price
+        return self.discount_price or self.price
 
 
 class ProductSetImage(models.Model):

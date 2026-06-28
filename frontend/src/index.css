@@ -84,6 +84,11 @@ html[lang="km"] textarea {
   .page-header {
     @apply flex items-center justify-between mb-6;
   }
+  @media (min-width: 1024px) {
+    .page-header > div:first-child > h1 {
+      display: none;
+    }
+  }
   .btn-primary {
     @apply bg-purple-600 hover:bg-purple-700 text-white font-medium px-4 py-2 rounded-xl transition-colors duration-200 flex items-center gap-2;
   }
@@ -141,6 +146,35 @@ html[lang="km"] textarea {
 .delivery-slip {
   width: 80mm;
   max-width: 100%;
+}
+
+@keyframes brand-marquee-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.brand-marquee-track {
+  animation: brand-marquee-left 32s linear infinite;
+  will-change: transform;
+}
+
+.brand-marquee:hover .brand-marquee-track,
+.brand-marquee:active .brand-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-marquee {
+    overflow-x: auto;
+  }
+
+  .brand-marquee-track {
+    animation: none;
+  }
 }
 
 @media print {

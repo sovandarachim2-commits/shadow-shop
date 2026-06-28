@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/utils/helpers'
@@ -84,13 +84,12 @@ const navItems = [
     label: 'Rewards',
     icon: Gift,
     children: [
-      { label: 'Dashboard', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
-      { label: 'Point Rules', path: '/admin/rewards/rules', icon: Sliders, module: 'rewards' },
-      { label: 'Customers Points', path: '/admin/rewards/points', icon: Users, module: 'rewards' },
-      { label: 'Transactions', path: '/admin/rewards/transactions', icon: Activity, module: 'rewards' },
-      { label: 'Reward Products', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
-      { label: 'Exchange Orders', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards' },
-      { label: 'Settings', path: '/admin/rewards/settings', icon: Settings, module: 'rewards' },
+      { label: 'Overview', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
+      { label: 'Rewards', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
+      { label: 'Redeem Requests', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards' },
+      { label: 'Earning & Tiers', path: '/admin/rewards/settings', icon: Sliders, module: 'rewards' },
+      { label: 'Point Transactions', path: '/admin/rewards/transactions', icon: Activity, module: 'rewards' },
+      { label: 'Customer Points', path: '/admin/rewards/points', icon: Award, module: 'rewards' },
     ],
   },
   {
@@ -143,6 +142,10 @@ function NavItem({ item, collapsed, onNavigate }) {
 
   const [open, setOpen] = useState(() => anyChildActive)
 
+  useEffect(() => {
+    if (anyChildActive) setOpen(true)
+  }, [anyChildActive])
+
   const isActive = item.exact
     ? location.pathname === item.path
     : item.path && location.pathname.startsWith(item.path)
@@ -165,7 +168,7 @@ function NavItem({ item, collapsed, onNavigate }) {
             </>
           )}
         </button>
-        {(open || anyChildActive) && !collapsed && (
+        {open && !collapsed && (
           <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
             {item.children.map((child) => (
               <Link

@@ -115,9 +115,17 @@ function formatTimer(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`
 }
 
+function getCouponDiscount(coupon, subtotal, deliveryFee) {
+  if (!coupon) return 0
+  if (coupon.reward_type === 'free_delivery') return Math.min(deliveryFee, subtotal + deliveryFee)
+  const value = Number(coupon.coupon_value || 0)
+  const discount = coupon.discount_type === 'percent' ? subtotal * value / 100 : value
+  return Math.min(Math.max(discount, 0), subtotal + deliveryFee)
+}
+
 export default function Checkout() {
   const navigate = useNavigate()
-  const { items, selectedProductIds, selectAll, removeSelectedItems } = useCartStore()
+  const { items, selectedProductIds, selectAll, removeSelectedItems, appliedCoupon } = useCartStore()
   const { user } = useAuthStore()
   const [paymentMethod, setPaymentMethod] = useState('aba')
   const [submitting, setSubmitting] = useState(false)
@@ -177,7 +185,8 @@ export default function Checkout() {
     : null
   const subtotal = checkoutItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
   const deliveryFee = checkoutItems.length > 0 && hasAddress ? Number(province?.fee || 0) : 0
-  const grandTotal = subtotal + deliveryFee
+  const couponDiscount = getCouponDiscount(appliedCoupon, subtotal, deliveryFee)
+  const grandTotal = subtotal + deliveryFee - couponDiscount
 
   useEffect(() => {
     if (items.length > 0 && selectedProductIds.length === 0) {
@@ -305,7 +314,7 @@ export default function Checkout() {
         payment_method: paymentMethod,
         payment_status: 'unpaid',
         delivery_fee: deliveryFee,
-        discount: 0,
+        coupon_code: appliedCoupon?.coupon_code || '',
         notes: `Home Delivery. ${info.district ? `${info.district}, ${province.label}` : province.label}`,
         items: checkoutItems.map((i) => ({
           product: i.product.item_type === 'set' ? undefined : i.product.id,
@@ -353,7 +362,8 @@ export default function Checkout() {
       removeSelectedItems()
       navigate('/order-success', { state: { orderId: order.id, orderNumber: order.order_number, bakongPayment } })
     } catch (error) {
-      toast.error('Failed to place order. Please try again.')
+      const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail
+      toast.error(Array.isArray(detail) ? detail[0] : detail || 'Failed to place order. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -493,7 +503,7 @@ export default function Checkout() {
           <div className="mt-5 space-y-2 border-t border-pink-100 pt-5 text-sm">
             <SummaryLine label="Subtotal" value={formatCurrency(subtotal)} />
             <SummaryLine label="Delivery Fee" value={formatCurrency(deliveryFee)} />
-            <SummaryLine label="Discount" value="-$0.00" success />
+            <SummaryLine label="Discount" value={`-${formatCurrency(couponDiscount)}`} success />
           </div>
           <div className="mt-5 flex justify-between border-t border-pink-100 pt-5">
             <span className="font-black text-gray-950">Total Amount</span>

@@ -19,6 +19,59 @@ const PRINT_TYPES = [
 
 const USD_TO_KHR_RATE = 4100
 
+function StockAlertCard({ alert, onClose }) {
+  if (!alert?.issues?.length) return null
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-gray-950/55 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50 px-5 py-5">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-red-600 shadow-sm">
+              <AlertTriangle size={22} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-red-700">Cannot Print: Stock Not Enough</h3>
+              <p className="mt-1 text-sm font-semibold text-red-500">Add stock or update the selected order before printing.</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-red-500 hover:bg-red-100" aria-label="Close stock warning">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[55vh] space-y-3 overflow-y-auto p-5">
+          {alert.issues.map((issue, index) => (
+            <div key={`${issue.product_id}-${index}`} className="rounded-2xl border border-red-100 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-red-500">
+                {(issue.order_numbers || [issue.order_number]).filter(Boolean).map((number) => `#${number}`).join(', ')}
+              </p>
+              <h4 className="mt-1 text-base font-black text-gray-950">{issue.product_name}</h4>
+              <p className="text-xs font-semibold text-gray-400">{issue.product_code}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <p className="text-[11px] font-bold text-gray-400">Required</p>
+                  <p className="text-lg font-black text-gray-950">{issue.required}</p>
+                </div>
+                <div className="rounded-xl bg-red-50 px-3 py-2">
+                  <p className="text-[11px] font-bold text-red-400">Available</p>
+                  <p className="text-lg font-black text-red-600">{issue.available}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-gray-100 bg-gray-50 px-5 py-4 text-right">
+          <button type="button" onClick={onClose} className="rounded-xl bg-red-600 px-6 py-2.5 text-sm font-black text-white hover:bg-red-700">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function formatRiel(amount) {
   return `${Math.round(Number(amount || 0)).toLocaleString()}រៀល`
 }
@@ -407,9 +460,7 @@ export default function PrintCenter() {
   }
 
   const markPrintedMutation = useMutation({
-    mutationFn: (orderIds) => Promise.all(
-      orderIds.map((id) => ordersApi.orders.updateStatus(id, { status: 'printed', note: 'Printed from Print Center' }))
-    ),
+    mutationFn: (orderIds) => ordersApi.orders.markPrinted(orderIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['print-orders'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
@@ -418,7 +469,6 @@ export default function PrintCenter() {
       setPreviewOrder(null)
       toast.success('Selected orders marked as printed')
     },
-    onError: () => toast.error('Printed, but failed to update order status'),
   })
 
   const handlePrint = async () => {
@@ -432,25 +482,23 @@ export default function PrintCenter() {
     }
     setCheckingStock(true)
     try {
-      const { data: stockCheck } = await ordersApi.orders.validatePrintStock(selectedOrders)
-      if (!stockCheck.ok || stockCheck.issues?.length) {
-        setStockAlert(stockCheck)
-        toast.error('Cannot print. Some products do not have enough stock.')
-        return
-      }
+      await markPrintedMutation.mutateAsync(selectedOrders)
     } catch (error) {
       const payload = error?.response?.data
       if (payload?.stock_issues?.length || payload?.issues?.length) {
-        setStockAlert({ issues: payload.stock_issues || payload.issues })
+        setStockAlert({
+          detail: payload.detail,
+          issues: payload.stock_issues || payload.issues,
+        })
+      } else {
+        toast.error(payload?.detail || 'Could not check stock before printing')
       }
-      toast.error(payload?.detail || 'Could not check stock before printing')
       return
     } finally {
       setCheckingStock(false)
     }
     toast.success(`Printing ${selectedOrders.length} ${printType}(s)...`)
     window.open(`/admin/print-preview?type=${printType}&ids=${selectedOrders.join(',')}`, '_blank', 'noopener,noreferrer')
-    markPrintedMutation.mutate(selectedOrders)
   }
 
   return (
@@ -623,6 +671,7 @@ export default function PrintCenter() {
           </div>
         </div>
       )}
+      <StockAlertCard alert={stockAlert} onClose={() => setStockAlert(null)} />
     </div>
     <div className="print-only print-document-root">
       {printOrders.map((order) => (

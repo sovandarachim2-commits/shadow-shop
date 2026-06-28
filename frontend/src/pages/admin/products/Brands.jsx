@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { Badge } from '@/components/ui/Badge'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import PageHeader from '@/components/shared/PageHeader'
 
 const emptyForm = {
   name: '',
@@ -195,15 +196,15 @@ export default function Brands() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1 className="text-2xl font-bold text-navy-900">Brands</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Create and manage product brands with logos</p>
-        </div>
-        <button className="btn-primary flex items-center gap-2" onClick={openNew}>
-          <Plus size={16} /> Add Brand
-        </button>
-      </div>
+      <PageHeader
+        title="Brands"
+        subtitle="Create and manage product brands with logos"
+        actions={
+          <button className="btn-primary flex items-center gap-2" onClick={openNew}>
+            <Plus size={16} /> Add Brand
+          </button>
+        }
+      />
 
       {showForm && (
         <BrandFormModal

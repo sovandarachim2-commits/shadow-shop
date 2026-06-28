@@ -267,6 +267,9 @@ class ProductSetSerializer(serializers.ModelSerializer):
     images = ProductSetImageSerializer(many=True, read_only=True)
     image_url = serializers.SerializerMethodField()
     current_stock = serializers.SerializerMethodField()
+    display_price = serializers.DecimalField(source='active_price', max_digits=12, decimal_places=2, read_only=True)
+    old_price = serializers.SerializerMethodField()
+    is_flash_sale_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ProductSet
@@ -303,6 +306,9 @@ class ProductSetSerializer(serializers.ModelSerializer):
             available_sets.append(product_stock // required_qty)
 
         return min(available_sets) if available_sets else 999999
+
+    def get_old_price(self, obj):
+        return obj.price if obj.is_flash_sale_active else None
 
 
 class PromotionSerializer(serializers.ModelSerializer):

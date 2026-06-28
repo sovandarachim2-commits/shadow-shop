@@ -16,5 +16,6 @@ router.register('admin/reward-points', views.AdminRewardPointsViewSet, basename=
 router.register('admin/reward-transactions', views.AdminRewardTransactionViewSet, basename='admin-reward-transactions')
 
 urlpatterns = [
+    path('admin/reward-settings/', views.AdminRewardSettingsView.as_view(), name='admin-reward-settings'),
     path('', include(router.urls)),
 ]

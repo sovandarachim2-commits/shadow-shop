@@ -52,6 +52,27 @@ class ProductFilter(filters.FilterSet):
         )
 
 
+class ProductSetFilter(filters.FilterSet):
+    active_flash_sale = filters.BooleanFilter(method='filter_active_flash_sale')
+
+    class Meta:
+        model = ProductSet
+        fields = ['is_active', 'is_featured']
+
+    def filter_active_flash_sale(self, queryset, name, value):
+        if not value:
+            return queryset
+        now = timezone.now()
+        return queryset.filter(
+            is_featured=True,
+            flash_sale_price__isnull=False,
+            flash_sale_price__lt=F('price'),
+        ).filter(
+            Q(flash_sale_starts_at__isnull=True) | Q(flash_sale_starts_at__lte=now),
+            Q(flash_sale_ends_at__isnull=True) | Q(flash_sale_ends_at__gte=now),
+        )
+
+
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().prefetch_related('children')
     serializer_class = CategorySerializer
@@ -205,7 +226,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSetSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['is_active', 'is_featured']
+    filterset_class = ProductSetFilter
     search_fields = ['name']
     ordering_fields = ['name', 'price', 'created_at']
     ordering = ['-created_at']

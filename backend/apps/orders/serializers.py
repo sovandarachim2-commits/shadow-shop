@@ -1,7 +1,8 @@
 from rest_framework import serializers
+from django.db import transaction
 from .models import (
     Customer, Order, OrderItem, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord,
-    RewardItem, RewardRedemption, PointTransaction,
+    RewardItem, RewardRedemption, RewardSettings, PointTransaction,
 )
 from apps.products.models import Product, ProductSet
 
@@ -125,6 +126,9 @@ def validate_order_target_stock(items, old_product_totals=None, old_set_totals=N
         available = get_product_set_stock(product_set) + old_set_totals.get(product_set, 0)
         if quantity > available:
             errors.append(f'{product_set.name} has only {available} sets in stock.')
+        max_qty = getattr(product_set, 'flash_sale_max_order_qty', None)
+        if product_set.is_flash_sale_active and max_qty and quantity > max_qty:
+            errors.append(f'{product_set.name} flash sale maximum order quantity is {max_qty}.')
 
     return errors
 
@@ -537,7 +541,7 @@ class CustomerCheckoutSerializer(serializers.Serializer):
         default='unpaid',
     )
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
-    discount = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
+    coupon_code = serializers.CharField(required=False, allow_blank=True, write_only=True, default='')
     items = OrderItemWriteSerializer(many=True)
 
     def validate(self, attrs):
@@ -546,10 +550,12 @@ class CustomerCheckoutSerializer(serializers.Serializer):
             raise serializers.ValidationError({'items': errors})
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
         request = self.context['request']
         user = request.user
         items_data = validated_data.pop('items')
+        coupon_code = validated_data.pop('coupon_code', '').strip()
 
         customer_defaults = {
             'name': validated_data.pop('name'),
@@ -576,7 +582,7 @@ class CustomerCheckoutSerializer(serializers.Serializer):
             payment_method=validated_data['payment_method'],
             payment_status=validated_data.get('payment_status', 'unpaid'),
             delivery_fee=validated_data['delivery_fee'],
-            discount=validated_data.get('discount', 0),
+            discount=0,
             notes=order_notes,
         )
 
@@ -585,6 +591,22 @@ class CustomerCheckoutSerializer(serializers.Serializer):
             apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price
+
+        if coupon_code:
+            from .rewards import get_coupon_discount
+            try:
+                redemption, discount = get_coupon_discount(
+                    user,
+                    coupon_code,
+                    subtotal,
+                    order.delivery_fee,
+                    lock=True,
+                )
+            except ValueError as exc:
+                raise serializers.ValidationError({'coupon_code': str(exc)}) from exc
+            order.discount = discount
+            redemption.status = RewardRedemption.STATUS_USED
+            redemption.save(update_fields=['status'])
 
         order.subtotal = subtotal
         order.grand_total = subtotal + order.delivery_fee - order.discount
@@ -665,6 +687,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
     clear_reward_image = serializers.BooleanField(write_only=True, required=False)
     reward_image_url = serializers.SerializerMethodField()
     gift_product_image = serializers.SerializerMethodField()
+    redeemed_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = RewardItem
@@ -674,6 +697,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
             'coupon_discount_type', 'coupon_discount_type_label', 'coupon_value',
             'minimum_order_amount', 'gift_product', 'gift_product_name',
             'gift_product_code', 'gift_product_image', 'stock', 'per_customer_limit',
+            'member_tier_requirement', 'redeemed_count',
             'starts_at', 'ends_at', 'is_active', 'can_exchange', 'created_at', 'updated_at',
         ]
         extra_kwargs = {'reward_image': {'write_only': True, 'required': False}}
@@ -722,7 +746,10 @@ class RewardItemSerializer(serializers.ModelSerializer):
 class RewardRedemptionSerializer(serializers.ModelSerializer):
     reward_name = serializers.CharField(source='reward_item.name', read_only=True)
     reward_type = serializers.CharField(source='reward_item.type', read_only=True)
+    coupon_discount_type = serializers.CharField(source='reward_item.coupon_discount_type', read_only=True)
     coupon_value = serializers.DecimalField(source='reward_item.coupon_value', max_digits=10, decimal_places=2, read_only=True)
+    minimum_order_amount = serializers.DecimalField(source='reward_item.minimum_order_amount', max_digits=10, decimal_places=2, read_only=True)
+    ends_at = serializers.DateTimeField(source='reward_item.ends_at', read_only=True)
     user_name = serializers.SerializerMethodField()
     user_phone = serializers.CharField(source='user.phone', read_only=True)
     user_email = serializers.EmailField(source='user.email', read_only=True)
@@ -734,7 +761,8 @@ class RewardRedemptionSerializer(serializers.ModelSerializer):
         model = RewardRedemption
         fields = [
             'id', 'reward_item', 'reward_name', 'reward_type', 'points_spent',
-            'coupon_code', 'coupon_value', 'status', 'created_at',
+            'coupon_code', 'coupon_discount_type', 'coupon_value',
+            'minimum_order_amount', 'ends_at', 'status', 'created_at',
             'user', 'user_name', 'user_phone', 'user_email',
             'gift_product_name', 'reward_image_url', 'gift_product_image',
         ]
@@ -766,7 +794,32 @@ class PointTransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PointTransaction
-        fields = ['id', 'user', 'user_name', 'order', 'order_number', 'points', 'type', 'note', 'created_at']
+        fields = ['id', 'user', 'user_name', 'order', 'order_number', 'points', 'type', 'note', 'created_at', 'expires_at']
 
     def get_user_name(self, obj):
         return obj.user.get_full_name() or obj.user.username
+
+
+class RewardSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RewardSettings
+        fields = [
+            'points_per_dollar', 'signup_bonus', 'referral_bonus', 'birthday_bonus',
+            'review_bonus', 'daily_checkin_bonus', 'points_expiry_days', 'expiry_reminder_days',
+            'expiration_enabled',
+            'minimum_redeem_points', 'maximum_points_per_order', 'updated_at',
+            'silver_min_points', 'gold_min_points', 'platinum_min_points',
+            'auto_approve_points', 'auto_apply_on_completed', 'low_stock_alert_enabled',
+        ]
+        read_only_fields = ['updated_at']
+
+    def validate(self, attrs):
+        instance = self.instance or RewardSettings.get_solo()
+        silver = attrs.get('silver_min_points', instance.silver_min_points)
+        gold = attrs.get('gold_min_points', instance.gold_min_points)
+        platinum = attrs.get('platinum_min_points', instance.platinum_min_points)
+        if not silver <= gold < platinum:
+            raise serializers.ValidationError(
+                'Member tiers must increase from Silver to Gold to Platinum.'
+            )
+        return attrs

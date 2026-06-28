@@ -36,6 +36,7 @@ const MOBILE_NAV_ITEMS = [
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
   { path: '/shop', key: 'nav.shop' },
+  { path: '/profile/rewards', key: 'profile.rewards' },
   { path: '/flash-sale', key: 'home.flashSale' },
   { path: '/shop?filter=new_arrival', key: 'nav.newArrivals' },
 ]
@@ -49,10 +50,10 @@ export function Logo({ compact = false, inverse = false, iconOnly = false, logoU
   return (
     <Link to="/" className="flex items-center gap-3">
       {logoUrl ? (
-        <img src={logoUrl} alt={storeName} className={cn('object-contain rounded-2xl', compact ? 'h-8 w-8' : 'h-10 w-10')} />
+        <img src={logoUrl} alt={storeName} className={cn('object-contain rounded-2xl', compact ? 'h-11 w-11' : 'h-10 w-10')} />
       ) : (
-        <div className={cn('flex items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-200', compact ? 'h-8 w-8' : 'h-10 w-10')}>
-          <ShoppingBag size={compact ? 17 : 21} />
+        <div className={cn('flex items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-200', compact ? 'h-11 w-11' : 'h-10 w-10')}>
+          <ShoppingBag size={compact ? 19 : 21} />
         </div>
       )}
       {!iconOnly && (
@@ -73,6 +74,7 @@ export function Logo({ compact = false, inverse = false, iconOnly = false, logoU
 
 function isItemActive(location, item) {
   if (item.exact) return location.pathname === item.path
+  if (item.path === '/profile/rewards') return location.pathname.startsWith('/profile/rewards')
   const [path, query] = item.path.split('?')
   if (query) return location.pathname === path && location.search === `?${query}`
   return location.pathname === path && !location.search
@@ -122,14 +124,17 @@ export default function CustomerLayout() {
   const hasCheckoutItems = cartItems.some((item) => selectedProductIds.includes(item.product.id))
   const hideMobileHeader =
     location.pathname === '/shop' ||
+    location.pathname === '/search' ||
+    location.pathname === '/flash-sale' ||
+    location.pathname === '/wishlist' ||
     (location.pathname === '/cart' && cartItems.length > 0) ||
     (location.pathname === '/checkout' && hasCheckoutItems) ||
-    (location.pathname.startsWith('/profile') && location.pathname !== '/profile/rewards') ||
+    location.pathname.startsWith('/profile') ||
     location.pathname === '/address-book' ||
     location.pathname.startsWith('/product/') ||
     location.pathname.startsWith('/product-set/') ||
     location.pathname.startsWith('/my-orders/')
-  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname.startsWith('/profile/rewards/') || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
+  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/search' || location.pathname === '/wishlist' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
   const submitSearch = (e) => {
     e.preventDefault()
     const q = headerSearch.trim()
@@ -272,14 +277,14 @@ export default function CustomerLayout() {
               </Link>
               <button
                 type="button"
-                onClick={() => setShowMobileSearch((open) => !open)}
+                onClick={() => navigate('/search')}
                 aria-label={t('common.search')}
                 className={cn(
                   'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:scale-90',
-                  showMobileSearch ? 'bg-pink-600 text-white shadow-sm shadow-pink-100' : 'bg-gray-100 text-gray-600'
+                  'bg-gray-100 text-gray-600'
                 )}
               >
-                {showMobileSearch ? <X size={19} /> : <Search size={19} />}
+                <Search size={19} />
               </button>
               <Link to="/wishlist" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-90">
                 <Heart size={19} />
