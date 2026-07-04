@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Component, lazy, Suspense, useEffect } from 'react'
+import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -29,15 +29,58 @@ import StockDashboard from '@/pages/admin/inventory/StockDashboard'
 import StockMovements from '@/pages/admin/inventory/StockMovements'
 import StockTransfers from '@/pages/admin/inventory/StockTransfers'
 import PrintCenter, { PrintHistory, PrintPreviewPage } from '@/pages/admin/operations/PrintCenter'
-const Scanner = lazy(() => import('@/pages/admin/operations/Scanner'))
-const PrepareItems = lazy(() => import('@/pages/admin/operations/PrepareItems'))
-const PrepareSet = lazy(() => import('@/pages/admin/operations/PrepareSet'))
-const PrepareSetHistory = lazy(() => import('@/pages/admin/operations/PrepareSetHistory'))
-const PrepareItemsHistory = lazy(() => import('@/pages/admin/operations/PrepareItemsHistory'))
-const OutItems = lazy(() => import('@/pages/admin/operations/OutItems'))
-const OutItemsHistory = lazy(() => import('@/pages/admin/operations/OutItemsHistory'))
-const DeliveryCustomer = lazy(() => import('@/pages/admin/operations/DeliveryCustomer'))
-const DeliveryByConfig = lazy(() => import('@/pages/admin/operations/DeliveryByConfig'))
+function lazyWithReload(importer) {
+  return lazy(() =>
+    importer()
+      .then((module) => {
+        sessionStorage.removeItem('shadow-shop-chunk-reload')
+        return module
+      })
+      .catch((error) => {
+        const message = String(error?.message || error || '')
+        const isChunkLoadError =
+          message.includes('Failed to fetch dynamically imported module') ||
+          message.includes('Importing a module script failed') ||
+          message.includes('ChunkLoadError') ||
+          message.includes('error loading dynamically imported module') ||
+          message.includes('Load failed')
+
+        if (isChunkLoadError && sessionStorage.getItem('shadow-shop-chunk-reload') !== '1') {
+          sessionStorage.setItem('shadow-shop-chunk-reload', '1')
+          window.location.reload()
+        }
+
+        throw error
+      }),
+  )
+}
+
+function getAppErrorMessage(error) {
+  if (typeof error === 'string' && error.trim()) return error
+  if (error?.message) return String(error.message)
+  if (error?.response?.data?.detail) return String(error.response.data.detail)
+  if (error?.reason?.message) return String(error.reason.message)
+
+  try {
+    const serialized = JSON.stringify(error)
+    if (serialized && serialized !== '{}') return serialized
+  } catch {
+    // Fall through to a stable message for non-serializable thrown values.
+  }
+
+  return 'The browser could not load this page component. Reload to fetch the latest app files.'
+}
+
+const Scanner = lazyWithReload(() => import('@/pages/admin/operations/Scanner'))
+const ScannerOrders = lazyWithReload(() => import('@/pages/admin/operations/ScannerOrders'))
+const PrepareItems = lazyWithReload(() => import('@/pages/admin/operations/PrepareItems'))
+const PrepareSet = lazyWithReload(() => import('@/pages/admin/operations/PrepareSet'))
+const PrepareSetHistory = lazyWithReload(() => import('@/pages/admin/operations/PrepareSetHistory'))
+const PrepareItemsHistory = lazyWithReload(() => import('@/pages/admin/operations/PrepareItemsHistory'))
+const OutItems = lazyWithReload(() => import('@/pages/admin/operations/OutItems'))
+const OutItemsHistory = lazyWithReload(() => import('@/pages/admin/operations/OutItemsHistory'))
+const DeliveryCustomer = lazyWithReload(() => import('@/pages/admin/operations/DeliveryCustomer'))
+const DeliveryByConfig = lazyWithReload(() => import('@/pages/admin/operations/DeliveryByConfig'))
 import Delivery from '@/pages/admin/operations/Delivery'
 import Revenue from '@/pages/admin/finance/Revenue'
 import Expenses from '@/pages/admin/finance/Expenses'
@@ -106,6 +149,20 @@ class AppErrorBoundary extends Component {
     return { error }
   }
 
+  handleReload = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((key) => caches.delete(key)))
+      }
+      sessionStorage.removeItem('shadow-shop-chunk-reload')
+    } catch {
+      // Reload should still work even if cache cleanup is unavailable.
+    }
+
+    window.location.reload()
+  }
+
   render() {
     if (!this.state.error) return this.props.children
 
@@ -117,11 +174,11 @@ class AppErrorBoundary extends Component {
             The page opened, but the app hit an error while starting.
           </p>
           <pre className="mt-4 max-h-40 overflow-auto rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">
-            {this.state.error?.message || 'Unknown error'}
+            {getAppErrorMessage(this.state.error)}
           </pre>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={this.handleReload}
             className="mt-4 w-full rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white"
           >
             Reload
@@ -195,12 +252,67 @@ function LazyPage({ children }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>
 }
 
+function ScrollToTop() {
+  const { pathname, search } = useLocation()
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [pathname, search])
+
+  return null
+}
+
+const ADMIN_FALLBACK_ROUTES = [
+  { module: 'dashboard', path: '/admin' },
+  { module: 'orders', path: '/admin/orders' },
+  { module: 'products', path: '/admin/products' },
+  { module: 'product_brands', path: '/admin/products/brands' },
+  { module: 'product_categories', path: '/admin/products/categories' },
+  { module: 'product_sets', path: '/admin/products/sets' },
+  { module: 'product_flash_sale', path: '/admin/products/flash-sale' },
+  { module: 'product_banners', path: '/admin/products/banners' },
+  { module: 'inventory', path: '/admin/inventory' },
+  { module: 'print', path: '/admin/print' },
+  { module: 'scanner', path: '/admin/scanner' },
+  { module: 'scanner_delivery_config', path: '/admin/customer-scanner/delivery-config' },
+  { module: 'delivery', path: '/admin/delivery' },
+  { module: 'finance', path: '/admin/finance/revenue' },
+  { module: 'rewards', path: '/admin/rewards' },
+  { module: 'reports', path: '/admin/reports/sales' },
+  { module: 'users', path: '/admin/users' },
+  { module: 'settings', path: '/admin/settings' },
+]
+
+function AdminIndexRedirect() {
+  const { user } = useAuthStore()
+  const { data: myPerms = [], isLoading } = useQuery({
+    queryKey: ['role-perms', user?.role],
+    queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
+    enabled: !!user?.role,
+    staleTime: 2 * 60 * 1000,
+  })
+
+  if (['super_admin', 'admin'].includes(user?.role)) return <Dashboard />
+  if (isLoading) return <PageLoader />
+
+  const viewable = new Set(
+    myPerms
+      .filter((rp) => rp.permission_detail?.action === 'view')
+      .map((rp) => rp.permission_detail?.module)
+  )
+  const firstAllowed = ADMIN_FALLBACK_ROUTES.find((route) => viewable.has(route.module))
+
+  if (!firstAllowed || firstAllowed.path === '/admin') return <Dashboard />
+  return <Navigate to={firstAllowed.path} replace />
+}
+
 export default function App() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthBootstrap />
+          <ScrollToTop />
           <Routes>
           {/* Auth */}
           <Route path="/login" element={<Login />} />
@@ -313,7 +425,7 @@ export default function App() {
               <AdminLayout />
             </RequireAuth>
           }>
-            <Route index element={<Dashboard />} />
+            <Route index element={<AdminIndexRedirect />} />
 
             {/* Sales */}
             <Route path="orders/new" element={<NewOrder />} />
@@ -342,6 +454,7 @@ export default function App() {
             <Route path="print" element={<PrintCenter />} />
             <Route path="print/history" element={<PrintHistory />} />
             <Route path="scanner" element={<LazyPage><Scanner /></LazyPage>} />
+            <Route path="scanner/orders" element={<LazyPage><ScannerOrders /></LazyPage>} />
             <Route path="delivery" element={<Delivery />} />
 
             {/* Finance */}

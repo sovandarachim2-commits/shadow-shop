@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
   ArrowLeft, History, Camera, QrCode,
-  Phone, DollarSign, Gift, Shield, Save, CheckCircle2,
+  Phone, Gift, Shield, Save, CheckCircle2, ScanLine,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 import { ordersApi } from '@/api/orders'
 import { compressImageForUpload } from '@/utils/imageUpload'
 import { getListResults } from '@/utils/apiData'
+import FullscreenQrScanner, { fullscreenQrBox } from '@/components/scanner/FullscreenQrScanner'
 
 export default function PrepareItems() {
   const navigate = useNavigate()
@@ -17,8 +18,6 @@ export default function PrepareItems() {
 
   const [order, setOrder] = useState(null)
   const [phoneNumber, setPhoneNumber] = useState('')
-  const [amount, setAmount] = useState('')
-  const [paymentStatus, setPaymentStatus] = useState('')
   const [setType, setSetType] = useState('not_set')
   const [invoicePhoto, setInvoicePhoto] = useState(null)
   const [packagePhoto, setPackagePhoto] = useState(null)
@@ -64,8 +63,6 @@ export default function PrepareItems() {
         setOrder(found)
         setManualOrderNum(found.order_number)
         setPhoneNumber(found.customer_phone || '')
-        setAmount(found.grand_total ? parseFloat(found.grand_total).toFixed(2) : '')
-        setPaymentStatus(found.payment_status)
         setLookupStatus(`Loaded order #${found.order_number}`)
         if (!options.silent) setOrderPopup(found)
         return found
@@ -104,12 +101,16 @@ export default function PrepareItems() {
       html5QrRef.current = qr
       await qr.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 160, height: 160 } },
+        { fps: 12, qrbox: fullscreenQrBox },
         async (text) => {
           await qr.stop().catch(() => {})
           html5QrRef.current = null
           setIsScanning(false)
-          await loadOrder(text)
+          const found = await loadOrder(text, { silent: true })
+          if (!found) {
+            setManualOrderNum(text.replace('SS-ORDER:', '').trim())
+            toast.error('This QR code is not in the system')
+          }
         },
         () => {}
       )
@@ -134,7 +135,10 @@ export default function PrepareItems() {
 
   const capturePhoto = async (type, file) => {
     if (!file) return
-    const uploadFile = await compressImageForUpload(file)
+    const uploadFile = await compressImageForUpload(file, {
+      maxSize: 900,
+      targetSize: 80 * 1024,
+    })
     const url = URL.createObjectURL(uploadFile)
     if (type === 'invoice') {
       setInvoicePhoto(url)
@@ -160,8 +164,6 @@ export default function PrepareItems() {
   const resetPrepareForm = () => {
     setOrder(null)
     setPhoneNumber('')
-    setAmount('')
-    setPaymentStatus('')
     setSetType('not_set')
     setInvoicePhoto(null)
     setPackagePhoto(null)
@@ -181,7 +183,7 @@ export default function PrepareItems() {
       setQrRef.current = qr
       await qr.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 180, height: 180 } },
+        { fps: 12, qrbox: fullscreenQrBox },
         async (text) => {
           updateSetQrRow(rowId, text.trim())
           await qr.stop().catch(() => {})
@@ -237,14 +239,6 @@ export default function PrepareItems() {
       showRequiredAlert('Enter Phone Number')
       return
     }
-    if (!paymentStatus) {
-      showRequiredAlert('Select Paid / Unpaid')
-      return
-    }
-    if (!amount || Number.parseFloat(amount) <= 0) {
-      showRequiredAlert('Enter Amount')
-      return
-    }
     if (!invoicePhotoFile) {
       showRequiredAlert('Take INV Photo')
       return
@@ -283,10 +277,10 @@ export default function PrepareItems() {
     try {
       const payload = new FormData()
       const setQrValues = setQrRows.map((row) => row.value.trim()).filter(Boolean)
-      if (invoicePhotoFile) payload.append('prepare_invoice_photo', invoicePhotoFile)
-      if (packagePhotoFile) payload.append('prepare_package_photo', packagePhotoFile)
 
       if (orderToSave) {
+        if (invoicePhotoFile) payload.append('prepare_invoice_photo', invoicePhotoFile)
+        if (packagePhotoFile) payload.append('prepare_package_photo', packagePhotoFile)
         payload.append('status', 'preparing')
         payload.append(
           'note',
@@ -295,12 +289,12 @@ export default function PrepareItems() {
             setType === 'set' ? `Set QR: ${setQrValues.join(', ') || 'Set'}` : 'Set Type: Not Set',
           ].join(' | ')
         )
-        await ordersApi.orders.updateStatus(orderToSave.id, payload)
+        await ordersApi.orders.updateStatus(orderToSave.id, payload, { params: { compact: 1 } })
       } else {
         payload.append('code', typedCode)
         payload.append('phone', phoneNumber)
-        payload.append('payment_status', paymentStatus || 'unpaid')
-        payload.append('amount', amount || '0')
+        payload.append('payment_status', orderToSave?.payment_status || 'unpaid')
+        payload.append('amount', orderToSave?.grand_total || '0')
         payload.append('set_type', setType)
         payload.append('set_qr_values', JSON.stringify(setQrValues))
         if (invoicePhotoFile) payload.append('invoice_photo', invoicePhotoFile)
@@ -311,7 +305,6 @@ export default function PrepareItems() {
         title: orderToSave ? 'Prepare Package Saved' : 'Manual Prepare Package Saved',
         code: orderToSave?.order_number || typedCode,
         phone: phoneNumber,
-        amount,
       })
       resetPrepareForm()
     } catch (error) {
@@ -394,10 +387,6 @@ export default function PrepareItems() {
                 <span className="text-gray-500">Phone</span>
                 <span className="font-bold text-gray-900">{successPopup.phone || '-'}</span>
               </div>
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-gray-500">Amount</span>
-                <span className="font-bold text-gray-900">${parseFloat(successPopup.amount || 0).toFixed(2)}</span>
-              </div>
             </div>
 
             <button
@@ -414,7 +403,7 @@ export default function PrepareItems() {
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white shadow-sm">
         <div
-          className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-4 py-3.5"
+          className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3"
           style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
         >
           <button
@@ -423,19 +412,19 @@ export default function PrepareItems() {
           >
             <ArrowLeft size={18} /> Back
           </button>
-          <h1 className="text-base font-black text-gray-900">Prepare Package</h1>
+          <h1 className="hidden text-base font-black text-gray-900 lg:block">Prepare Package</h1>
           <button
             onClick={() => navigate('/admin/prepare/history')}
-            className="flex items-center gap-1.5 rounded-lg border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50"
+            className="flex items-center gap-1.5 rounded-xl border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50"
           >
             <History size={14} /> History
           </button>
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1500px] space-y-4 p-4 pb-32">
+      <div className="mx-auto w-full max-w-2xl space-y-3 p-3 pb-24 sm:p-4">
         {/* QR Scanner Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-5">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-4">
           <div className="pointer-events-none absolute right-4 top-4 grid grid-cols-3 gap-1.5 opacity-20">
             {[...Array(9)].map((_, i) => <div key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}
           </div>
@@ -443,57 +432,18 @@ export default function PrepareItems() {
             {[...Array(9)].map((_, i) => <div key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}
           </div>
 
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
-              <QrCode size={20} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-black tracking-widest text-white">SCAN INVOICE QR</p>
-              <p className="text-xs text-purple-200">Scan the invoice QR code to load order details</p>
-            </div>
-          </div>
-
           {/* Scanner viewport — always mounted so Html5Qrcode can attach */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative">
-              {/* The actual camera feed div — always in DOM */}
-              <div
-                id="qr-scan-box"
-                className={`overflow-hidden rounded-2xl transition-all ${isScanning ? 'h-48 w-48' : 'h-0 w-0'}`}
-              />
-              {/* Tap-to-scan button shown when idle */}
-              {!isScanning && (
-                <button
-                  onClick={startScan}
-                  className="flex h-44 w-44 flex-col items-center justify-center gap-3 rounded-2xl bg-white shadow-inner transition hover:shadow-md"
-                >
-                  <div className="relative flex h-20 w-20 items-center justify-center">
-                    <div className="absolute left-0 top-0 h-5 w-5 border-l-[3px] border-t-[3px] border-purple-600" />
-                    <div className="absolute right-0 top-0 h-5 w-5 border-r-[3px] border-t-[3px] border-purple-600" />
-                    <div className="absolute bottom-0 left-0 h-5 w-5 border-b-[3px] border-l-[3px] border-purple-600" />
-                    <div className="absolute bottom-0 right-0 h-5 w-5 border-b-[3px] border-r-[3px] border-purple-600" />
-                    <div className="h-px w-10 bg-purple-400 opacity-60" />
-                  </div>
-                  <p className="text-xs font-medium text-gray-400">
-                    {order ? 'Tap to scan again' : 'Tap to open camera'}
-                  </p>
-                </button>
-              )}
-            </div>
-
-            {isScanning && (
-              <button
-                onClick={stopScan}
-                className="rounded-full bg-white/20 px-5 py-1.5 text-xs font-semibold text-white backdrop-blur hover:bg-white/30"
-              >
-                Cancel
-              </button>
-            )}
-
+          <div className="flex flex-col gap-3">
+            <FullscreenQrScanner
+              active={isScanning}
+              scannerId="qr-scan-box"
+              onClose={stopScan}
+              title="Scan package QR"
+            />
             {/* QR code / order number input */}
-            <div className="mt-1 w-full space-y-2">
-              <div className="relative">
-                <QrCode size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-purple-300" />
+            <div className="w-full space-y-2">
+              <div className="relative flex h-12 items-center rounded-2xl border border-white/20 bg-white/10 shadow-inner shadow-white/10 backdrop-blur">
+                <QrCode size={19} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-purple-200" />
                 <input
                   type="text"
                   value={manualOrderNum}
@@ -514,9 +464,17 @@ export default function PrepareItems() {
                       handleManualSearch()
                     }
                   }}
-                  placeholder="Fill or scan QR code here…"
-                  className="w-full rounded-xl border border-white/20 bg-white/10 py-2 pl-8 pr-3 text-sm text-white placeholder-purple-300 focus:border-white/40 focus:outline-none"
+                  placeholder="Enter or paste QR code here..."
+                  className="h-full w-full bg-transparent py-2 pl-12 pr-12 text-sm font-semibold text-white outline-none placeholder:text-purple-200"
                 />
+                <button
+                  type="button"
+                  onClick={isScanning ? stopScan : startScan}
+                  className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-white transition hover:bg-white/10 active:scale-95"
+                  aria-label={isScanning ? 'Stop scanning' : 'Scan QR code'}
+                >
+                  <ScanLine size={22} />
+                </button>
               </div>
               {manualOrderNum.trim() && (
                 <p className={`text-center text-[11px] font-semibold ${order ? 'text-green-200' : lookupStatus.includes('Checking') ? 'text-purple-100' : 'text-yellow-200'}`}>
@@ -528,10 +486,10 @@ export default function PrepareItems() {
         </div>
 
         {/* Order Information */}
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl bg-white p-3 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50">
-              <QrCode size={14} className="text-purple-700" />
+              <QrCode size={13} className="text-purple-700" />
             </div>
             <h2 className="text-xs font-black uppercase tracking-widest text-purple-700">Order Information</h2>
           </div>
@@ -551,7 +509,7 @@ export default function PrepareItems() {
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="Enter phone number"
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                  className="h-11 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                 />
                 <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors">
                   <Camera size={17} className="text-white" />
@@ -560,57 +518,18 @@ export default function PrepareItems() {
               </div>
             </div>
 
-            {/* Payment Status */}
-            <div>
-              <label className="mb-2 flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100">
-                  <DollarSign size={14} className="text-purple-600" />
-                </div>
-                <span className="text-sm font-bold text-gray-600 uppercase tracking-wide">Paid / Unpaid</span>
-              </label>
-              <select
-                value={paymentStatus}
-                onChange={(e) => setPaymentStatus(e.target.value)}
-                className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3.5 text-base font-medium text-gray-800 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
-              >
-                <option value="">- Please select -</option>
-                <option value="paid">Paid</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="partial">Partial</option>
-              </select>
-            </div>
-
-            {/* Amount */}
-            <div>
-              <label className="mb-1.5 flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100">
-                  <DollarSign size={12} className="text-purple-600" />
-                </div>
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Amount</span>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
-              />
-            </div>
-
             {/* Set Type */}
             <div>
               <label className="mb-2 flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100">
-                  <Gift size={14} className="text-purple-600" />
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100">
+                  <Gift size={13} className="text-purple-600" />
                 </div>
-                <span className="text-sm font-bold text-gray-600 uppercase tracking-wide">Set Type</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Set Type</span>
               </label>
               <select
                 value={setType}
                 onChange={(e) => setSetType(e.target.value)}
-                className="w-full rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3.5 text-base font-medium text-gray-800 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 text-sm font-semibold text-gray-800 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
               >
                 <option value="not_set">Not Set</option>
                 <option value="set">Set</option>
@@ -632,7 +551,7 @@ export default function PrepareItems() {
                 <button
                   type="button"
                   onClick={addSetQrRow}
-                  className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-700 to-purple-900 py-3 text-sm font-black text-white shadow-sm shadow-purple-200 hover:opacity-95"
+                  className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-700 to-purple-900 py-2.5 text-sm font-black text-white shadow-sm shadow-purple-200 hover:opacity-95"
                 >
                   <QrCode size={17} /> Add Set
                 </button>
@@ -654,45 +573,32 @@ export default function PrepareItems() {
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <FullscreenQrScanner
+                        active={scanningSetRowId === row.id}
+                        scannerId={`set-qr-scan-box-${row.id}`}
+                        onClose={stopSetQrScan}
+                        title={`Scan Set #${index + 1} QR`}
+                      />
+
+                      <div className="relative flex h-12 items-center rounded-2xl border border-purple-200 bg-purple-50 shadow-inner shadow-purple-100">
+                        <QrCode size={19} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-purple-500" />
                         <input
                           type="text"
                           value={row.value}
                           onChange={(e) => updateSetQrRow(row.id, e.target.value)}
-                          placeholder="Type or scan any text"
-                          className="h-12 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                          placeholder="Enter or paste QR code here..."
+                          className="h-full w-full min-w-0 bg-transparent py-2 pl-12 pr-12 text-sm font-semibold text-gray-900 outline-none placeholder:text-purple-300"
                         />
                         <button
                           type="button"
-                          onClick={() => startSetQrScan(row.id)}
-                          disabled={!!scanningSetRowId}
-                          className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-400 text-gray-950 shadow-sm shadow-orange-100 hover:bg-orange-300"
-                          title="Scan Set QR"
+                          onClick={() => scanningSetRowId === row.id ? stopSetQrScan() : startSetQrScan(row.id)}
+                          disabled={!!scanningSetRowId && scanningSetRowId !== row.id}
+                          className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-purple-700 transition hover:bg-purple-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label={scanningSetRowId === row.id ? 'Stop scanning set QR' : 'Scan set QR'}
                         >
-                          <QrCode size={22} />
+                          <ScanLine size={22} />
                         </button>
                       </div>
-
-                      {scanningSetRowId === row.id && (
-                        <div className="mt-3 rounded-xl bg-gray-950 p-3">
-                          <div className="mb-3 flex items-center justify-between">
-                            <span className="text-xs font-bold text-white">Scanning any QR text...</span>
-                            <button
-                              type="button"
-                              onClick={stopSetQrScan}
-                              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                          <div className="flex justify-center">
-                            <div
-                              id={`set-qr-scan-box-${row.id}`}
-                              className="h-56 w-56 overflow-hidden rounded-xl bg-black"
-                            />
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -702,10 +608,10 @@ export default function PrepareItems() {
         </div>
 
         {/* Photos */}
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl bg-white p-3 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50">
-              <Camera size={14} className="text-purple-700" />
+              <Camera size={13} className="text-purple-700" />
             </div>
             <h2 className="text-xs font-black uppercase tracking-widest text-purple-700">Photos</h2>
           </div>
@@ -718,12 +624,12 @@ export default function PrepareItems() {
               <div key={key}>
                 <p className="mb-0.5 text-xs font-bold text-gray-700">{label}</p>
                 <p className="mb-2 text-[11px] text-gray-400">{hint}</p>
-                <label className={`flex h-32 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed transition-colors ${src ? 'border-purple-300' : 'border-gray-200 hover:border-orange-300'}`}>
+                <label className={`flex h-28 cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 border-dashed transition-colors ${src ? 'border-purple-300' : 'border-gray-200 hover:border-orange-300'}`}>
                   {src ? (
                     <img src={src} alt={label} className="h-full w-full object-cover" />
                   ) : (
                     <>
-                      <Camera size={26} className="text-orange-400" />
+                      <Camera size={23} className="text-orange-400" />
                       <span className="text-xs font-semibold text-orange-500">Take Photo</span>
                     </>
                   )}
@@ -741,14 +647,14 @@ export default function PrepareItems() {
         </div>
 
         {/* System Information */}
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="rounded-2xl bg-white p-3 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50">
-              <Shield size={14} className="text-purple-700" />
+              <Shield size={13} className="text-purple-700" />
             </div>
             <h2 className="text-xs font-black uppercase tracking-widest text-purple-700">System Information</h2>
           </div>
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Prepared By</span>
               <span className="font-semibold text-gray-900">
@@ -765,14 +671,14 @@ export default function PrepareItems() {
 
       {/* Save button */}
       <div
-        className="fixed bottom-0 left-0 right-0 bg-white/80 p-4 backdrop-blur"
-        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+        className="fixed bottom-0 left-0 right-0 bg-white/80 p-3 backdrop-blur"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
-        <div className="mx-auto w-full max-w-[1500px]">
+        <div className="mx-auto w-full max-w-2xl">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-purple-900 py-4 text-sm font-black text-white shadow-lg shadow-purple-300/40 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-purple-900 py-3.5 text-sm font-black text-white shadow-lg shadow-purple-300/40 disabled:opacity-60"
           >
             <Save size={18} /> {saving ? 'Saving...' : 'Save Prepare Package'}
           </button>

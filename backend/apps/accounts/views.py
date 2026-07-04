@@ -358,10 +358,31 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
     def by_role(self, request):
         role = request.query_params.get('role')
         if role:
+            if request.user.role not in ['super_admin', 'admin'] and role != request.user.role:
+                return Response({'detail': 'You can only view your own role permissions.'}, status=403)
             perms = RolePermission.objects.filter(role=role, granted=True).select_related('permission')
             serializer = self.get_serializer(perms, many=True)
             return Response(serializer.data)
         return Response([])
+
+    def create(self, request, *args, **kwargs):
+        role = request.data.get('role')
+        permission_id = request.data.get('permission')
+        granted = request.data.get('granted', True)
+        if not role or not permission_id:
+            return Response({'detail': 'role and permission are required.'}, status=400)
+        try:
+            permission = Permission.objects.get(pk=permission_id)
+        except Permission.DoesNotExist:
+            return Response({'permission': ['Invalid permission.']}, status=400)
+
+        role_permission, _ = RolePermission.objects.update_or_create(
+            role=role,
+            permission=permission,
+            defaults={'granted': granted},
+        )
+        serializer = self.get_serializer(role_permission)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'])
     def reset_defaults(self, request):

@@ -23,7 +23,7 @@ from .rewards import (
     award_points_for_paid_order, exchange_reward, get_member_level, get_next_tier_points,
     get_points_balance, get_coupon_discount, sync_paid_order_points,
 )
-from utils.permissions import IsStaff, IsSeller, IsCashier
+from utils.permissions import HasModulePermission, IsStaff, IsSeller, IsCashier, user_has_module_permission
 from utils.pagination import StandardPagination
 
 
@@ -190,6 +190,20 @@ class OrderViewSet(viewsets.ModelViewSet):
                 return qs.none()
         return qs
 
+    def destroy(self, request, *args, **kwargs):
+        order = self.get_object()
+        if order.status in [Order.STATUS_PREPARING, Order.STATUS_SHIPPED] and not user_has_module_permission(request.user, 'scanner', 'delete'):
+            return Response(
+                {'detail': 'You do not have permission to delete scanner records.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not user_has_module_permission(request.user, 'orders', 'delete'):
+            return Response(
+                {'detail': 'You do not have permission to delete orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser, JSONParser])
     def update_status(self, request, pk=None):
         order = self.get_object()
@@ -201,6 +215,20 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
 
         old_status = order.status
+        if new_status in [Order.STATUS_PREPARING, Order.STATUS_SHIPPED]:
+            can_scan_save = user_has_module_permission(request.user, 'scanner', 'create')
+            can_edit_orders = user_has_module_permission(request.user, 'orders', 'edit')
+            if not (can_scan_save or can_edit_orders):
+                return Response(
+                    {'detail': 'You do not have permission to save scanner records.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif not user_has_module_permission(request.user, 'orders', 'edit'):
+            return Response(
+                {'detail': 'You do not have permission to update order status.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if new_status == Order.STATUS_PRINTED:
             stock_issues = get_order_print_stock_issues(order)
             if stock_issues:
@@ -260,6 +288,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             order.save()
         if new_status == Order.STATUS_COMPLETED and order.payment_status == 'paid':
             award_points_for_paid_order(order)
+
+        if request.query_params.get('compact') in ('1', 'true', 'yes'):
+            return Response({
+                'id': order.id,
+                'order_number': order.order_number,
+                'status': order.status,
+            })
 
         return Response(OrderDetailSerializer(order, context={'request': request}).data)
 
@@ -428,15 +463,28 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def operation_summary(self, request):
+        today = timezone.now().date()
         qs = self.get_queryset()
-        manual_prepare_qs = PrepareRecord.objects.filter(set_type='not_set')
-        set_prepare_qs = PrepareRecord.objects.filter(set_type='set')
-        manual_out_qs = OutRecord.objects.all()
+        manual_prepare_qs = PrepareRecord.objects.filter(set_type='not_set', created_at__date=today)
+        set_prepare_qs = PrepareRecord.objects.filter(set_type='set', created_at__date=today)
+        manual_out_qs = OutRecord.objects.filter(created_at__date=today)
+        prepared_order_ids = OrderStatusHistory.objects.filter(
+            status=Order.STATUS_PREPARING,
+            created_at__date=today,
+        ).values('order_id')
+        shipped_order_ids = OrderStatusHistory.objects.filter(
+            status=Order.STATUS_SHIPPED,
+            created_at__date=today,
+        ).values('order_id')
+        cancelled_order_ids = OrderStatusHistory.objects.filter(
+            status=Order.STATUS_CANCELLED,
+            created_at__date=today,
+        ).values('order_id')
         return Response({
-            'packed': qs.filter(status=Order.STATUS_PREPARING).count() + manual_prepare_qs.count(),
-            'shipped': qs.filter(status=Order.STATUS_SHIPPED).count() + manual_out_qs.count(),
+            'packed': qs.filter(id__in=prepared_order_ids).count() + manual_prepare_qs.count(),
+            'shipped': qs.filter(id__in=shipped_order_ids).count() + manual_out_qs.count(),
             'sets': set_prepare_qs.count(),
-            'returned': qs.filter(status=Order.STATUS_CANCELLED).count(),
+            'returned': qs.filter(id__in=cancelled_order_ids).count(),
             'unpaid': qs.filter(payment_status='unpaid').count(),
         })
 
@@ -471,7 +519,8 @@ class PrepareRecordFilter(filters.FilterSet):
 class PrepareRecordViewSet(viewsets.ModelViewSet):
     queryset = PrepareRecord.objects.all().select_related('created_by').order_by('-created_at')
     serializer_class = PrepareRecordSerializer
-    permission_classes = [IsAuthenticated, IsStaff]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_module = 'scanner'
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = PrepareRecordFilter
@@ -507,7 +556,8 @@ class OutRecordFilter(filters.FilterSet):
 class OutRecordViewSet(viewsets.ModelViewSet):
     queryset = OutRecord.objects.all().select_related('created_by', 'prepare_record').order_by('-created_at')
     serializer_class = OutRecordSerializer
-    permission_classes = [IsAuthenticated, IsStaff]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_module = 'scanner'
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = OutRecordFilter

@@ -2672,12 +2672,14 @@ export function RewardAutomationAdmin() {
 export function RewardSettingsAdmin() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [activeSection, setActiveSection] = useState('earning')
   const { data, isLoading } = useQuery({
     queryKey: ['admin-reward-settings'],
     queryFn: () => ordersApi.adminRewards.settings.get().then((r) => r.data),
   })
   const [settings, setSettings] = useState(null)
   const values = settings || data
+  const hasChanges = settings !== null
   const set = (key, value) => setSettings((current) => ({ ...(current || data), [key]: value }))
   const saveMutation = useMutation({
     mutationFn: () => ordersApi.adminRewards.settings.update(values),
@@ -2686,13 +2688,28 @@ export function RewardSettingsAdmin() {
       setSettings(null)
       toast.success('Reward settings saved')
     },
-    onError: () => toast.error('Could not save reward settings'),
+    onError: (error) => toast.error(error?.response?.data?.detail || 'Could not save reward settings'),
   })
+  const handleSave = () => {
+    if (Number(values.silver_min_points) > Number(values.gold_min_points)
+      || Number(values.gold_min_points) > Number(values.platinum_min_points)) {
+      setActiveSection('tiers')
+      toast.error('Tier points must increase from Silver to Gold to Platinum')
+      return
+    }
+    saveMutation.mutate()
+  }
+
+  const sections = [
+    { id: 'earning', label: 'Earn Points', shortLabel: 'Earn', icon: Award },
+    { id: 'redemption', label: 'Redeem & Expiry', shortLabel: 'Redeem', icon: Gift },
+    { id: 'tiers', label: 'Tiers & Automation', shortLabel: 'Tiers', icon: Crown },
+  ]
 
   return (
     <div>
-      <div className="page-header">
-        <div>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="hidden lg:block">
           <h1 className="text-2xl font-bold text-navy-900">Reward Settings</h1>
           <p className="mt-0.5 text-sm text-gray-500">Configure earning rules, tiers, expiry, and reward automation</p>
         </div>
@@ -2701,35 +2718,55 @@ export function RewardSettingsAdmin() {
         </button>
       </div>
 
-      <div className="max-w-6xl">
+      <div className="max-w-5xl">
         {isLoading || !values ? (
           <div className="flex justify-center py-16"><Loader2 className="animate-spin text-purple-500" /></div>
         ) : (
         <>
+        <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-lg border border-gray-200 bg-white p-1">
+          {sections.map(({ id, label, shortLabel, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveSection(id)}
+              className={cn(
+                'flex min-h-11 items-center justify-center gap-2 rounded-md px-2 py-2 text-xs font-bold transition sm:text-sm',
+                activeSection === id ? 'bg-purple-700 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+              )}
+            >
+              <Icon size={16} className="shrink-0" />
+              <span className="sm:hidden">{shortLabel}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {activeSection === 'earning' && (
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="mb-5">
-          <h2 className="text-base font-black text-gray-950">Earning and bonus amounts</h2>
-          <p className="mt-1 text-xs font-semibold text-gray-400">Purchase points are automatic. Manual bonus amounts are available when adjusting customer points.</p>
+          <h2 className="text-base font-black text-gray-950">How customers earn points</h2>
+          <p className="mt-1 text-sm text-gray-500">Set the purchase rate and common bonus amounts.</p>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
           <label>
-            <span className="label">Points per dollar</span>
+            <span className="label">Points earned for every $1 spent</span>
             <input className="input-field" type="number" min="1" value={values.points_per_dollar} onChange={(e) => set('points_per_dollar', Number(e.target.value))} />
+            <span className="mt-1 block text-xs text-gray-400">$10 purchase earns {Number(values.points_per_dollar || 0) * 10} points</span>
           </label>
           <label>
-            <span className="label">Signup bonus amount (manual)</span>
+            <span className="label">New customer bonus</span>
             <input className="input-field" type="number" min="0" value={values.signup_bonus} onChange={(e) => set('signup_bonus', Number(e.target.value))} />
           </label>
           <label>
-            <span className="label">Referral bonus amount (manual)</span>
+            <span className="label">Friend referral bonus</span>
             <input className="input-field" type="number" min="0" value={values.referral_bonus} onChange={(e) => set('referral_bonus', Number(e.target.value))} />
           </label>
           <label>
-            <span className="label">Birthday bonus amount (manual)</span>
+            <span className="label">Birthday bonus</span>
             <input className="input-field" type="number" min="0" value={values.birthday_bonus} onChange={(e) => set('birthday_bonus', Number(e.target.value))} />
           </label>
           <label>
-            <span className="label">Review bonus amount (manual)</span>
+            <span className="label">Product review bonus</span>
             <input className="input-field" type="number" min="0" value={values.review_bonus} onChange={(e) => set('review_bonus', Number(e.target.value))} />
           </label>
           <label>
@@ -2738,7 +2775,10 @@ export function RewardSettingsAdmin() {
           </label>
         </div>
         </section>
-        <section className="mt-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        )}
+
+        {activeSection === 'redemption' && (
+        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="mb-5">
           <h2 className="text-base font-black text-gray-950">Redemption and expiration</h2>
           <p className="mt-1 text-xs font-semibold text-gray-400">Control redemption limits and how long unused earning balances remain available.</p>
@@ -2751,10 +2791,10 @@ export function RewardSettingsAdmin() {
             </div>
             <input type="checkbox" checked={values.expiration_enabled} onChange={(e) => set('expiration_enabled', e.target.checked)} />
           </label>
-          <label>
+          <label className={!values.expiration_enabled ? 'opacity-45' : ''}>
             <span className="label">Expire after</span>
             <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-              <input className="input-field" type="number" min="1" value={values.points_expiry_days} onChange={(e) => set('points_expiry_days', Number(e.target.value))} />
+              <input disabled={!values.expiration_enabled} className="input-field disabled:cursor-not-allowed" type="number" min="1" value={values.points_expiry_days} onChange={(e) => set('points_expiry_days', Number(e.target.value))} />
               <span className="text-sm font-black text-gray-500">days</span>
             </div>
           </label>
@@ -2772,16 +2812,19 @@ export function RewardSettingsAdmin() {
               <span className="text-sm font-black text-gray-500">points</span>
             </div>
           </label>
-          <label>
+          <label className={!values.expiration_enabled ? 'opacity-45' : ''}>
             <span className="label">Expiry reminder</span>
             <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-              <input className="input-field" type="number" min="0" value={values.expiry_reminder_days} onChange={(e) => set('expiry_reminder_days', Number(e.target.value))} />
+              <input disabled={!values.expiration_enabled} className="input-field disabled:cursor-not-allowed" type="number" min="0" value={values.expiry_reminder_days} onChange={(e) => set('expiry_reminder_days', Number(e.target.value))} />
               <span className="text-sm font-black text-gray-500">days before</span>
             </div>
           </label>
         </div>
         </section>
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        )}
+
+        {activeSection === 'tiers' && (
+        <div className="grid gap-5 lg:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h3 className="font-black text-gray-950">Member tiers</h3>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -2806,10 +2849,22 @@ export function RewardSettingsAdmin() {
             </div>
           </div>
         </div>
-        <div className="sticky bottom-4 z-10 mt-6 flex justify-end rounded-2xl border border-gray-100 bg-white/95 p-3 shadow-lg backdrop-blur">
-          <button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="btn-primary px-6 py-3 disabled:opacity-50">
+        )}
+
+        <div className="sticky bottom-20 z-10 mt-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur lg:bottom-4">
+          <span className={cn('text-xs font-bold', hasChanges ? 'text-amber-600' : 'text-gray-400')}>
+            {hasChanges ? 'Unsaved changes' : 'All changes saved'}
+          </span>
+          <div className="flex gap-2">
+            {hasChanges && (
+              <button type="button" onClick={() => setSettings(null)} disabled={saveMutation.isPending} className="btn-secondary px-4 py-2.5">
+                Reset
+              </button>
+            )}
+          <button type="button" onClick={handleSave} disabled={!hasChanges || saveMutation.isPending} className="btn-primary px-5 py-2.5 disabled:cursor-not-allowed disabled:opacity-40">
             {saveMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save Settings
           </button>
+          </div>
         </div>
         </>
         )}

@@ -2,7 +2,12 @@ from django.core.management.base import BaseCommand
 from apps.accounts.models import Permission
 
 
-MODULES = ['dashboard', 'orders', 'products', 'inventory', 'delivery', 'finance', 'reports', 'users', 'settings', 'print', 'scanner', 'storefront', 'rewards']
+MODULES = [
+    'dashboard', 'orders', 'products', 'product_brands', 'product_categories',
+    'product_sets', 'product_flash_sale', 'product_banners', 'inventory',
+    'delivery', 'finance', 'reports', 'users', 'settings', 'print',
+    'scanner', 'scanner_delivery_config', 'storefront', 'rewards',
+]
 ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'print', 'approve', 'adjust_points']
 
 

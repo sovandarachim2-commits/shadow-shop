@@ -19,6 +19,7 @@ import { inventoryApi } from '@/api/inventory'
 import { productsApi } from '@/api/products'
 import { cn, formatDate } from '@/utils/helpers'
 import { getListResults } from '@/utils/apiData'
+import PageHeader from '@/components/shared/PageHeader'
 
 const TYPE_STYLES = {
   stock_in: 'bg-green-50 text-green-700 ring-green-100',
@@ -171,33 +172,30 @@ export default function StockMovements() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-gray-950 md:text-3xl">Stock Movements</h1>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-xs font-black text-gray-400">i</span>
-          </div>
-          <p className="mt-2 text-sm font-semibold text-gray-500">Track and monitor all inventory changes in your store</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
-          >
-            <Download size={17} /> Export
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-purple-700 px-4 text-sm font-black text-white shadow-lg shadow-purple-200 transition hover:bg-purple-800"
-          >
-            <Filter size={17} /> Filters
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs text-purple-700">
-              {activeFilterCount}
-            </span>
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Stock Movements"
+        subtitle="Track and monitor all inventory changes in your store"
+        actions={(
+          <>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              <Download size={17} /> Export
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-purple-700 px-4 text-sm font-black text-white shadow-lg shadow-purple-200 transition hover:bg-purple-800"
+            >
+              <Filter size={17} /> Filters
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs text-purple-700">
+                {activeFilterCount}
+              </span>
+            </button>
+          </>
+        )}
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard

@@ -721,7 +721,7 @@ export function PrintHistory() {
     <div className="animate-fade-in space-y-4">
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-card">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="hidden lg:block">
             <h1 className="text-xl font-bold text-gray-900">Print History</h1>
             <p className="mt-1 text-xs text-gray-400">View printed orders and reprint documents when needed.</p>
           </div>

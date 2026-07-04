@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
   ArrowLeft, Camera, CheckCircle2, Gift, History,
-  PackageCheck, QrCode, Save, Shield,
+  PackageCheck, QrCode, Save, ScanLine, Shield,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
@@ -12,6 +12,7 @@ import { productsApi } from '@/api/products'
 import useAuthStore from '@/store/authStore'
 import { compressImageForUpload } from '@/utils/imageUpload'
 import { getListResults } from '@/utils/apiData'
+import FullscreenQrScanner, { fullscreenQrBox } from '@/components/scanner/FullscreenQrScanner'
 
 function normalizeCode(value) {
   return value.replace('SS-ORDER:', '').trim()
@@ -83,12 +84,18 @@ export default function PrepareSet() {
       scannerRef.current = qr
       await qr.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 160, height: 160 } },
+        { fps: 12, qrbox: fullscreenQrBox },
         async (text) => {
           await qr.stop().catch(() => {})
           scannerRef.current = null
           setIsScanning(false)
-          handleCodeChange(text)
+          const found = await lookupOrder(text)
+          if (!found) {
+            setCode(normalizeCode(text))
+            toast.error('This QR code is not in the system')
+            return
+          }
+          setCode(found.order_number)
         },
         () => {}
       )
@@ -192,7 +199,7 @@ export default function PrepareSet() {
           >
             <ArrowLeft size={18} /> Back
           </button>
-          <h1 className="text-base font-black text-gray-900">Prepare Set</h1>
+          <h1 className="hidden text-base font-black text-gray-900 lg:block">Prepare Set</h1>
           <button
             onClick={() => navigate('/admin/prepare-set/history')}
             className="flex items-center gap-1.5 rounded-xl border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50"
@@ -202,70 +209,45 @@ export default function PrepareSet() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1500px] space-y-4 p-4 pb-44">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-5">
+      <div className="mx-auto w-full max-w-2xl space-y-3 p-3 pb-24 sm:p-4">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-4">
           <div className="pointer-events-none absolute right-4 top-4 grid grid-cols-3 gap-1.5 opacity-20">
             {[...Array(9)].map((_, i) => <div key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}
           </div>
-
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
-              <QrCode size={20} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-black tracking-widest text-white">SCAN INVOICE QR</p>
-              <p className="text-xs text-purple-200">Scan the invoice QR code to create a prepared set</p>
-            </div>
+          <div className="pointer-events-none absolute bottom-4 left-4 grid grid-cols-3 gap-1.5 opacity-20">
+            {[...Array(9)].map((_, i) => <div key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}
           </div>
 
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative">
-              <div
-                id="prepare-set-scan-box"
-                className={`overflow-hidden rounded-2xl transition-all ${isScanning ? 'h-48 w-48' : 'h-0 w-0'}`}
-              />
-              {!isScanning && (
-                <button
-                  onClick={startScan}
-                  className="flex h-44 w-44 flex-col items-center justify-center gap-3 rounded-2xl bg-white shadow-inner transition hover:shadow-md"
-                >
-                  <div className="relative flex h-20 w-20 items-center justify-center">
-                    <div className="absolute left-0 top-0 h-5 w-5 border-l-[3px] border-t-[3px] border-purple-600" />
-                    <div className="absolute right-0 top-0 h-5 w-5 border-r-[3px] border-t-[3px] border-purple-600" />
-                    <div className="absolute bottom-0 left-0 h-5 w-5 border-b-[3px] border-l-[3px] border-purple-600" />
-                    <div className="absolute bottom-0 right-0 h-5 w-5 border-b-[3px] border-r-[3px] border-purple-600" />
-                    <div className="h-px w-10 bg-purple-400 opacity-60" />
-                  </div>
-                  <p className="text-xs font-medium text-gray-400">
-                    {code ? 'Tap to scan again' : 'Tap to open camera'}
-                  </p>
-                </button>
-              )}
-            </div>
+          <div className="flex flex-col gap-3">
+            <FullscreenQrScanner
+              active={isScanning}
+              scannerId="prepare-set-scan-box"
+              onClose={stopScan}
+              title="Scan invoice QR"
+            />
 
-            {isScanning && (
-              <button
-                onClick={stopScan}
-                className="rounded-full bg-white/20 px-5 py-1.5 text-xs font-semibold text-white backdrop-blur hover:bg-white/30"
-              >
-                Cancel
-              </button>
-            )}
-
-            <div className="mt-1 w-full space-y-2">
-              <div className="relative">
-                <QrCode size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-purple-300" />
+            <div className="w-full space-y-2">
+              <div className="relative flex h-12 items-center rounded-2xl border border-white/20 bg-white/10 shadow-inner shadow-white/10 backdrop-blur">
+                <QrCode size={19} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-purple-200" />
                 <input
                   type="text"
                   value={code}
                   onChange={(e) => handleCodeChange(e.target.value)}
                   onBlur={() => lookupOrder(code)}
-                  placeholder="Fill or scan QR code here..."
-                  className="w-full rounded-xl border border-white/20 bg-white/10 py-2 pl-8 pr-3 text-sm text-white placeholder-purple-300 focus:border-white/40 focus:outline-none"
+                  placeholder="Enter or paste QR code here..."
+                  className="h-full w-full bg-transparent py-2 pl-12 pr-12 text-sm font-semibold text-white outline-none placeholder:text-purple-200"
                 />
+                <button
+                  type="button"
+                  onClick={isScanning ? stopScan : startScan}
+                  className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-white transition hover:bg-white/10 active:scale-95"
+                  aria-label={isScanning ? 'Stop scanning' : 'Scan QR code'}
+                >
+                  <ScanLine size={22} />
+                </button>
               </div>
               <p className="text-center text-[11px] text-purple-300">
-                Use camera above - type order number - or plug in a QR scanner
+                Scan the invoice QR or enter the order number
               </p>
               {orderInfo && (
                 <p className="text-center text-[11px] font-semibold text-green-200">

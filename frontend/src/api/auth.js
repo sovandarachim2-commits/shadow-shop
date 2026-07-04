@@ -30,6 +30,7 @@ export const authApi = {
   roles: {
     list: () => client.get('/auth/roles/'),
     create: (data) => client.post('/auth/roles/', data),
+    update: (id, data) => client.patch(`/auth/roles/${id}/`, data),
     delete: (id) => client.delete(`/auth/roles/${id}/`),
   },
   rolePermissions: (role) => client.get('/auth/role-permissions/by_role/', { params: { role } }),

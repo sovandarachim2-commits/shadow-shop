@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 import { productsApi } from '@/api/products'
 import { getListCount, getListResults, getSettledData, getSettledError } from '@/utils/apiData'
+import { useRolePermission } from '@/utils/permissions'
 
 const LIMIT_OPTIONS = [
   { value: 50, label: 'Show Top 50' },
@@ -20,11 +21,6 @@ function formatDateTime(value) {
   if (!value) return '-'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString()
-}
-
-function formatAmount(value) {
-  const amount = Number.parseFloat(value ?? 0)
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
 }
 
 function getSetQrValues(record) {
@@ -98,6 +94,7 @@ function PhotoCell({ src, label, onPreview }) {
 
 export default function PrepareItemsHistory() {
   const navigate = useNavigate()
+  const { allowed: canDeleteScanner } = useRolePermission('scanner', 'delete')
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -172,6 +169,10 @@ export default function PrepareItemsHistory() {
   ]
 
   const handleDelete = async (row) => {
+    if (!canDeleteScanner) {
+      toast.error('You do not have permission to delete scanner records')
+      return
+    }
     const ok = window.confirm(`Delete prepare package record #${row.barcode}?`)
     if (!ok) return
 
@@ -189,7 +190,7 @@ export default function PrepareItemsHistory() {
   }
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#1f1f1f] text-white">
+    <div className="mx-auto w-full max-w-[1500px] animate-fade-in">
       {previewImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewImage(null)}>
           <div className="max-h-full w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
@@ -211,21 +212,22 @@ export default function PrepareItemsHistory() {
           </div>
         </div>
       )}
-      <div className="mx-auto w-full max-w-[1480px] px-3 pb-5 pt-[max(1rem,env(safe-area-inset-top))] sm:px-4 sm:pt-5">
-        <div className="sticky top-0 z-20 -mx-3 mb-3 grid grid-cols-[auto_1fr_auto] items-center gap-2 border-b border-white/10 bg-[#1f1f1f]/95 px-3 py-3 backdrop-blur sm:static sm:mx-0 sm:mb-2 sm:border-0 sm:bg-transparent sm:p-0">
+      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 p-4">
+          <div className="mb-4 grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <button
             onClick={() => navigate('/admin/prepare')}
-            className="flex h-10 items-center gap-1 rounded-lg pr-2 text-sm font-semibold text-gray-300 hover:text-white sm:h-auto"
+            className="flex h-10 items-center gap-1 rounded-lg pr-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
           >
             <ArrowLeft size={18} /> Back
           </button>
-          <h1 className="min-w-0 text-center text-[22px] font-normal leading-tight text-orange-400 sm:text-3xl">
+          <h1 className="min-w-0 text-center text-xl font-black text-gray-950">
             Prepare Package History
           </h1>
           <div className="flex items-center justify-end gap-1">
             <button
               onClick={() => setShowSearch((v) => !v)}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10 sm:h-8 sm:w-8 sm:rounded-md ${showSearch ? 'bg-white/10 text-orange-300' : ''}`}
+              className={`flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 ${showSearch ? 'bg-purple-50 text-purple-700' : ''}`}
               title="Search"
             >
               <Search size={16} />
@@ -233,7 +235,7 @@ export default function PrepareItemsHistory() {
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-300 hover:bg-white/10 disabled:opacity-40 sm:h-8 sm:w-8 sm:rounded-md"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-40"
               title="Refresh"
             >
               <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
@@ -241,9 +243,9 @@ export default function PrepareItemsHistory() {
           </div>
         </div>
 
-        <div className="mb-3 rounded-xl border border-white/10 bg-[#202528] p-3 sm:border-0 sm:bg-transparent sm:p-0">
+        <div>
           {showSearch && (
-          <div className="mb-3 max-w-xl sm:mb-3">
+          <div className="mb-3 max-w-xl">
             <div className="relative min-w-0">
               <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -251,30 +253,30 @@ export default function PrepareItemsHistory() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search barcode, phone, user"
-                className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-base text-gray-900 outline-none placeholder:text-gray-500 focus:border-orange-400 focus:ring-2 focus:ring-orange-300/40 sm:h-10 sm:rounded-md sm:text-sm"
+                className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
               />
             </div>
           </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 text-base sm:flex sm:flex-wrap sm:items-center">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:flex sm:flex-wrap sm:items-center">
           <div className="grid grid-cols-[4rem_1fr] items-center gap-2 sm:flex">
-            <label className="font-medium text-orange-400">From:</label>
+            <label className="font-bold text-gray-600">From:</label>
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-300/40 sm:h-10 sm:w-[180px] sm:rounded-md sm:text-sm"
+              className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 sm:w-[180px]"
             />
           </div>
 
           <div className="grid grid-cols-[4rem_1fr] items-center gap-2 sm:flex">
-            <label className="font-medium text-orange-400">To:</label>
+            <label className="font-bold text-gray-600">To:</label>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-300/40 sm:h-10 sm:w-[180px] sm:rounded-md sm:text-sm"
+              className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 sm:w-[180px]"
             />
           </div>
 
@@ -282,44 +284,45 @@ export default function PrepareItemsHistory() {
             <select
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
-              className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-base text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-300/40 sm:h-10 sm:w-[180px] sm:rounded-md sm:text-sm"
+              className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 sm:w-[180px]"
             >
               {LIMIT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
 
-            <span className="whitespace-nowrap text-base font-black text-yellow-400">Total Items: {total}</span>
+            <span className="whitespace-nowrap text-sm font-black text-gray-600">Total Items: {total}</span>
           </div>
           </div>
         </div>
 
-        <div className="mb-4 px-1 text-sm font-medium text-gray-300 sm:mb-9 sm:text-base">
+        <div className="mt-3 px-1 text-sm font-semibold text-gray-500">
           {setNames.length > 0 ? `Set names in current filter: ${setNames.join(', ')}` : 'No set names in current filter.'}
+        </div>
         </div>
 
         {hasLoadError && (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm font-semibold text-yellow-100">
+          <div className="m-4 flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-semibold text-yellow-700">
             <AlertCircle size={17} className="mt-0.5 shrink-0" />
             Some prepare history data could not load. Showing the records that are available; press refresh to try again.
           </div>
         )}
 
-        <div className="mb-2 flex items-center justify-between text-xs text-gray-400 sm:hidden">
+        <div className="mx-4 mb-2 flex items-center justify-between text-xs text-gray-500 sm:hidden">
           <span>Swipe table left/right</span>
           <span>{orders.length} shown</span>
         </div>
 
-        <div className="w-full overflow-x-auto border border-[#3b3f42] bg-[#202528] [-webkit-overflow-scrolling:touch]">
-          <table className="w-full min-w-[1320px] border-collapse text-center text-sm">
-            <thead>
-              <tr className="bg-[#202528]">
+        <div className="w-full overflow-x-auto bg-[#202529] [-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[1100px] border-collapse text-center text-sm">
+            <thead className="bg-purple-800 text-white">
+              <tr>
                 {[
-                  'No', 'Barcode', 'Phone', 'Status', 'Amount',
+                  'No', 'Barcode', 'Phone',
                   'INV Photo', 'Full Photo', 'User', 'Date/Time',
-                  'Set QR', 'Set Name', 'Actions',
+                  'Set QR', 'Set Name', ...(canDeleteScanner ? ['Actions'] : []),
                 ].map((heading) => (
-                  <th key={heading} className="border border-[#3b3f42] px-3 py-3 text-sm font-black text-white">
+                  <th key={heading} className="border-r border-purple-700 px-3 py-3 text-sm font-black uppercase text-white">
                     {heading}
                   </th>
                 ))}
@@ -329,65 +332,65 @@ export default function PrepareItemsHistory() {
               {isLoading ? (
                 [...Array(6)].map((_, index) => (
                   <tr key={index}>
-                    <td colSpan={12} className="border border-[#3b3f42] px-4 py-8">
+                    <td colSpan={canDeleteScanner ? 10 : 9} className="border-b border-[#30363d] px-4 py-8">
                       <div className="mx-auto h-5 w-1/2 animate-pulse rounded bg-white/10" />
                     </td>
                   </tr>
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="border border-[#3b3f42] px-4 py-16 text-gray-300">
+                  <td colSpan={canDeleteScanner ? 10 : 9} className="bg-white px-4 py-16 text-gray-500">
                     <ClipboardList size={38} className="mx-auto mb-3 opacity-40" />
                     No prepare package records found
                   </td>
                 </tr>
               ) : (
                 orders.map((order, index) => (
-                  <tr key={`${order.source}-${order.id}`} className="hover:bg-[#252b2f]">
-                    <td className="border border-[#3b3f42] px-3 py-2">{index + 1}</td>
-                    <td className="border border-[#3b3f42] px-3 py-2 text-left font-medium text-white">{order.barcode}</td>
-                    <td className="border border-[#3b3f42] px-3 py-2">{order.phone || '-'}</td>
-                    <td className="border border-[#3b3f42] px-3 py-2 capitalize">{order.payment_status || '-'}</td>
-                    <td className="border border-[#3b3f42] px-3 py-2 font-medium">{formatAmount(order.amount)}</td>
-                    <td className="border border-[#3b3f42] px-3 py-2">
+                  <tr key={`${order.source}-${order.id}`} className="border-b border-[#30363d] bg-[#202529] text-white transition hover:bg-[#252b30]">
+                    <td className="px-3 py-3">{index + 1}</td>
+                    <td className="px-3 py-3 text-left font-bold text-white">{order.barcode}</td>
+                    <td className="px-3 py-3">{order.phone || '-'}</td>
+                    <td className="px-3 py-3">
                       <PhotoCell src={order.invoice_photo} label="Invoice Photo (INV)" onPreview={(src, label) => setPreviewImage({ src, label })} />
                     </td>
-                    <td className="border border-[#3b3f42] px-3 py-2">
+                    <td className="px-3 py-3">
                       <PhotoCell src={order.package_photo} label="Package Photo (Full)" onPreview={(src, label) => setPreviewImage({ src, label })} />
                     </td>
-                    <td className="border border-[#3b3f42] px-3 py-2">{order.user_name || '-'}</td>
-                    <td className="whitespace-nowrap border border-[#3b3f42] px-3 py-2 text-gray-100">
+                    <td className="px-3 py-3">{order.user_name || '-'}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-gray-100">
                       {formatDateTime(order.date_time)}
                     </td>
-                    <td className="max-w-[220px] border border-[#3b3f42] px-3 py-2 text-gray-300">
+                    <td className="max-w-[220px] px-3 py-3 text-gray-300">
                       <NumberedListCell values={order.set_qr_values} />
                     </td>
-                    <td className="max-w-[220px] border border-[#3b3f42] px-3 py-2 text-gray-300">
+                    <td className="max-w-[220px] px-3 py-3 text-gray-300">
                       <NumberedListCell values={order.set_name_values} />
                     </td>
-                    <td className="border border-[#3b3f42] px-3 py-2">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => order.source === 'order' ? navigate(`/admin/orders/${order.id}`) : toast('Manual record has no order detail page')}
-                          className="inline-flex items-center gap-1 rounded-md bg-yellow-400 px-3 py-2 text-sm font-medium text-gray-950 hover:bg-yellow-300"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(order)}
-                          className="inline-flex items-center gap-1 rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-400"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+                    {canDeleteScanner && (
+                      <td className="px-3 py-3">
+                        <div className="flex justify-center gap-2">
+                          <button
+                            onClick={() => order.source === 'order' ? navigate(`/admin/orders/${order.id}`) : toast('Manual record has no order detail page')}
+                            className="inline-flex items-center gap-1 rounded-md bg-yellow-400 px-3 py-2 text-sm font-medium text-gray-950 hover:bg-yellow-300"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(order)}
+                            className="inline-flex items-center gap-1 rounded-md bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-400"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   )
 }

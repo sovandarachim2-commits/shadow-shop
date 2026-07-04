@@ -213,6 +213,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     payment_status = serializers.SerializerMethodField()
     status_changed_by_name = serializers.SerializerMethodField()
     status_changed_at = serializers.SerializerMethodField()
+    prepared_at = serializers.SerializerMethodField()
+    out_at = serializers.SerializerMethodField()
     delivery_by = serializers.SerializerMethodField()
 
     class Meta:
@@ -223,6 +225,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'grand_total', 'items_count', 'preview_image', 'preview_name',
             'items_preview', 'is_draft', 'printed_at', 'printed_by_name', 'created_at',
             'updated_at', 'status_changed_by_name', 'status_changed_at',
+            'prepared_at', 'out_at',
             'prepare_invoice_photo', 'prepare_package_photo',
             'out_invoice_photo', 'out_package_photo', 'out_delivery_by', 'delivery_by',
         ]
@@ -282,6 +285,18 @@ class OrderListSerializer(serializers.ModelSerializer):
     def get_status_changed_at(self, obj):
         history = self._latest_current_status_history(obj)
         return history.created_at if history else obj.updated_at
+
+    def get_prepared_at(self, obj):
+        for item in obj.status_history.all():
+            if item.status == Order.STATUS_PREPARING:
+                return item.created_at
+        return None
+
+    def get_out_at(self, obj):
+        for item in obj.status_history.all():
+            if item.status == Order.STATUS_SHIPPED:
+                return item.created_at
+        return None
 
     def get_delivery_by(self, obj):
         if obj.out_delivery_by:

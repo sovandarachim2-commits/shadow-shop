@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Shield, UserCheck, UserX, Key } from 'lucide-react'
+import { Plus, Edit, Shield, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
@@ -16,6 +16,91 @@ const ROLE_COLORS = {
   delivery: 'orange', customer: 'pink',
 }
 
+const getApiError = (error, fallback) => {
+  const data = error?.response?.data
+  if (!data) return fallback
+  if (typeof data === 'string') return data
+  if (data.detail) return data.detail
+  const firstKey = Object.keys(data)[0]
+  const firstValue = firstKey ? data[firstKey] : null
+  if (Array.isArray(firstValue)) return `${firstKey}: ${firstValue[0]}`
+  if (typeof firstValue === 'string') return `${firstKey}: ${firstValue}`
+  return fallback
+}
+
+function StatusSwitch({ active, disabled, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={active}
+      className={`inline-flex h-8 w-[76px] items-center rounded-full p-1 transition disabled:opacity-50 ${
+        active ? 'justify-start bg-green-600 text-white' : 'justify-end bg-gray-300 text-gray-600'
+      }`}
+      title={active ? 'Active - click to turn off' : 'Inactive - click to turn on'}
+    >
+      <span className={`px-1.5 text-[11px] font-black uppercase leading-none ${active ? 'order-1' : 'order-2'}`}>
+        {active ? 'ON' : 'OFF'}
+      </span>
+      <span className={`h-6 w-6 rounded-full bg-white shadow ${active ? 'order-2 ml-auto' : 'order-1 mr-auto'}`} />
+    </button>
+  )
+}
+
+function UserAvatar({ user, size = 'md' }) {
+  const sizeClass = size === 'lg' ? 'h-16 w-16 text-lg' : 'h-9 w-9 text-xs'
+  const initial = (user?.first_name || user?.username || 'U')[0]?.toUpperCase()
+
+  if (user?.avatar_url) {
+    return <img src={user.avatar_url} alt={user.full_name || user.username} className={`${sizeClass} rounded-full object-cover`} />
+  }
+
+  return (
+    <div className={`${sizeClass} flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-400 to-pink-400`}>
+      <span className="font-bold text-white">{initial}</span>
+    </div>
+  )
+}
+
+function UserProfileModal({ user, roleConfig, onClose }) {
+  if (!user) return null
+
+  const rows = [
+    ['Full Name', user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username],
+    ['Username', `@${user.username}`],
+    ['Email', user.email || '-'],
+    ['Phone', user.phone || '-'],
+    ['Telegram', user.telegram_username ? `@${user.telegram_username}` : user.telegram_id || '-'],
+    ['Joined', formatDateTime(user.created_at)],
+  ]
+
+  return (
+    <Modal isOpen={!!user} onClose={onClose} title="User Profile" size="md">
+      <div className="p-6">
+        <div className="flex items-center gap-4 rounded-2xl bg-gray-50 p-4">
+          <UserAvatar user={user} size="lg" />
+          <div className="min-w-0">
+            <p className="truncate text-lg font-bold text-gray-950">{rows[0][1]}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant={roleConfig.color}>{roleConfig.label}</Badge>
+              <Badge variant={user.is_active ? 'success' : 'default'}>{user.is_active ? 'Active' : 'Inactive'}</Badge>
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 divide-y divide-gray-100 rounded-xl border border-gray-100">
+          {rows.map(([label, value]) => (
+            <div key={label} className="grid grid-cols-[120px_1fr] gap-3 px-4 py-3 text-sm">
+              <span className="font-semibold text-gray-500">{label}</span>
+              <span className="min-w-0 break-words text-gray-900">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function UserForm({ user, roles, onSave, onClose }) {
   const [form, setForm] = useState({
     first_name: user?.first_name || '',
@@ -29,6 +114,10 @@ function UserForm({ user, roles, onSave, onClose }) {
   })
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const isEdit = !!user
+  const hasCurrentRole = roles.some((r) => r.name === form.role)
+  const roleOptions = hasCurrentRole
+    ? roles
+    : [{ name: form.role, display_name: form.role || 'Current Role' }, ...roles]
 
   return (
     <div className="p-6 space-y-4">
@@ -56,7 +145,7 @@ function UserForm({ user, roles, onSave, onClose }) {
         <div className="col-span-2">
           <label className="label">Role</label>
           <select className="select-field" value={form.role} onChange={(e) => set('role', e.target.value)}>
-            {roles.filter((r) => r.name !== 'customer').map((r) => <option key={r.name} value={r.name}>{r.display_name}</option>)}
+            {roleOptions.map((r) => <option key={r.name} value={r.name}>{r.display_name}</option>)}
           </select>
         </div>
         {!isEdit && (
@@ -88,6 +177,7 @@ export default function Users() {
   const [roleFilter, setRoleFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editUser, setEditUser] = useState(null)
+  const [profileUser, setProfileUser] = useState(null)
 
   const { data: rolesData = [] } = useQuery({
     queryKey: ['roles'],
@@ -102,20 +192,26 @@ export default function Users() {
 
   const createMutation = useMutation({
     mutationFn: authApi.users.create,
-    onSuccess: () => { queryClient.invalidateQueries(['users']); setShowModal(false); toast.success('User created!') },
-    onError: (e) => toast.error(e.response?.data?.username?.[0] || 'Failed to create user'),
+    onSuccess: () => { queryClient.invalidateQueries(['users']); closeUserModal(); toast.success('User created!') },
+    onError: (e) => toast.error(getApiError(e, 'Failed to create user')),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => authApi.users.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries(['users']); setShowModal(false); toast.success('User updated!') },
-    onError: () => toast.error('Failed to update user'),
+    onSuccess: () => { queryClient.invalidateQueries(['users']); closeUserModal(); toast.success('User updated!') },
+    onError: (e) => toast.error(getApiError(e, 'Failed to update user')),
   })
 
   const toggleMutation = useMutation({
     mutationFn: authApi.users.toggleActive,
     onSuccess: () => { queryClient.invalidateQueries(['users']); toast.success('Status toggled!') },
+    onError: (e) => toast.error(getApiError(e, 'Failed to update status')),
   })
+
+  const closeUserModal = () => {
+    setShowModal(false)
+    setEditUser(null)
+  }
 
   const handleSave = (form) => {
     if (editUser) {
@@ -159,7 +255,9 @@ export default function Users() {
         <Table>
           <Thead>
             <tr>
+              <Th className="w-16">No</Th>
               <Th>User</Th>
+              <Th>Email</Th>
               <Th>Username</Th>
               <Th>Role</Th>
               <Th>Phone</Th>
@@ -169,39 +267,41 @@ export default function Users() {
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={7} />}
-            {!isLoading && users.map((u) => {
+            {isLoading && <LoadingRows cols={9} />}
+            {!isLoading && users.map((u, index) => {
               const roleConf = getRoleConfig(u.role)
               return (
                 <Tr key={u.id}>
+                  <Td className="font-semibold text-gray-500">{index + 1}</Td>
                   <Td>
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center shrink-0">
-                        <span className="text-white text-xs font-bold">
-                          {(u.first_name || u.username)[0]?.toUpperCase()}
-                        </span>
-                      </div>
+                      <UserAvatar user={u} />
                       <div>
-                        <p className="font-medium text-sm text-gray-900">{u.first_name} {u.last_name}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
+                        <p className="font-medium text-sm text-gray-900">{u.full_name || `${u.first_name} ${u.last_name}`.trim() || u.username}</p>
                       </div>
                     </div>
                   </Td>
+                  <Td><span className="text-sm">{u.email || '-'}</span></Td>
                   <Td><span className="font-mono text-sm">@{u.username}</span></Td>
                   <Td><Badge variant={roleConf.color}>{roleConf.label}</Badge></Td>
                   <Td><span className="text-sm">{u.phone || '—'}</span></Td>
-                  <Td><Badge variant={u.is_active ? 'success' : 'default'}>{u.is_active ? 'Active' : 'Inactive'}</Badge></Td>
+                  <Td>
+                    <StatusSwitch
+                      active={u.is_active}
+                      disabled={toggleMutation.isPending}
+                      onToggle={() => toggleMutation.mutate(u.id)}
+                    />
+                  </Td>
                   <Td><span className="text-xs text-gray-500">{formatDateTime(u.created_at)}</span></Td>
                   <Td>
                     <div className="flex gap-1">
+                      <button onClick={() => setProfileUser(u)}
+                        className="p-1.5 hover:bg-purple-50 rounded-lg text-purple-500 transition-colors" title="View profile">
+                        <Eye size={14} />
+                      </button>
                       <button onClick={() => { setEditUser(u); setShowModal(true) }}
                         className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500 transition-colors" title="Edit">
                         <Edit size={14} />
-                      </button>
-                      <button onClick={() => toggleMutation.mutate(u.id)}
-                        className={`p-1.5 rounded-lg transition-colors ${u.is_active ? 'hover:bg-red-50 text-red-500' : 'hover:bg-green-50 text-green-500'}`}
-                        title={u.is_active ? 'Deactivate' : 'Activate'}>
-                        {u.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
                       </button>
                     </div>
                   </Td>
@@ -209,14 +309,20 @@ export default function Users() {
               )
             })}
             {!isLoading && users.length === 0 && (
-              <tr><td colSpan={7}><EmptyState message="No users found" icon={Shield} /></td></tr>
+              <tr><td colSpan={9}><EmptyState message="No users found" icon={Shield} /></td></tr>
             )}
           </Tbody>
         </Table>
       </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editUser ? 'Edit User' : 'Add User'} size="md">
-        <UserForm user={editUser} roles={rolesData} onSave={handleSave} onClose={() => setShowModal(false)} />
+      <UserProfileModal
+        user={profileUser}
+        roleConfig={profileUser ? getRoleConfig(profileUser.role) : { label: '', color: 'default' }}
+        onClose={() => setProfileUser(null)}
+      />
+
+      <Modal isOpen={showModal} onClose={closeUserModal} title={editUser ? 'Edit User' : 'Add User'} size="md">
+        <UserForm user={editUser} roles={rolesData} onSave={handleSave} onClose={closeUserModal} />
       </Modal>
     </div>
   )

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store } from 'lucide-react'
+import { ArrowLeft, Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store, Search } from 'lucide-react'
 import useAuthStore from '@/store/authStore'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -25,6 +25,13 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/customer-scanner/delivery', 'Customer Delivery'],
   ['/admin/print/history', 'Print History'],
   ['/admin/print', 'Print Center'],
+  ['/admin/prepare-set/history', 'Prepare Set History'],
+  ['/admin/prepare-set', 'Prepare Set'],
+  ['/admin/prepare/history', 'Prepare Package History'],
+  ['/admin/prepare', 'Prepare Package'],
+  ['/admin/out-items/history', 'Out Package History'],
+  ['/admin/out-items', 'Out Package'],
+  ['/admin/scanner/orders', 'Order Search'],
   ['/admin/scanner', 'Scanner'],
   ['/admin/delivery', 'Delivery Management'],
   ['/admin/finance/revenue', 'Revenue'],
@@ -33,8 +40,8 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/rewards/transactions', 'Reward Transactions'],
   ['/admin/rewards/exchanges', 'Exchanges'],
   ['/admin/rewards/products', 'Reward Catalog'],
-  ['/admin/rewards/settings', 'Points Settings'],
-  ['/admin/rewards/rules', 'Points Settings'],
+  ['/admin/rewards/settings', 'Reward Settings'],
+  ['/admin/rewards/rules', 'Reward Settings'],
   ['/admin/rewards/points', 'Reward Points'],
   ['/admin/rewards', 'Rewards'],
   ['/admin/reports/sales', 'Sales Report'],
@@ -61,15 +68,10 @@ function getAdminRouteTitle(pathname) {
 export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollapsed }) {
   const { user, logout } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [confirm, ConfirmDialog] = useConfirm()
   const { pageHeader } = useAdminPageHeader() || {}
-
-  const { data: siteSettings } = useQuery({
-    queryKey: ['site-settings'],
-    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
-  })
 
   const { data: myPerms = [] } = useQuery({
     queryKey: ['role-perms', user?.role],
@@ -78,13 +80,16 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
     staleTime: 2 * 60 * 1000,
   })
 
-  const logoUrl = siteSettings?.logo_url || null
-  const storeName = siteSettings?.store_name || 'Shadow Shop'
   const initial = (user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()
   const desktopOffset = sidebarCollapsed ? 'lg:left-16' : 'lg:left-64'
+  const currentPageTitle = pageHeader?.title || getAdminRouteTitle(location.pathname)
+  const isOrderSearch = location.pathname === '/admin/scanner/orders'
 
-  const canVisitStore = ['super_admin', 'admin'].includes(user?.role) ||
-    myPerms.some((rp) => rp.permission_detail?.module === 'storefront' && rp.permission_detail?.action === 'view')
+  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
+  const canViewModule = (module) => isFullAccess ||
+    myPerms.some((rp) => rp.permission_detail?.module === module && rp.permission_detail?.action === 'view')
+  const canVisitStore = canViewModule('storefront')
+  const canOpenSettings = canViewModule('settings')
 
   const handleLogout = async () => {
     const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
@@ -104,32 +109,46 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
         <div style={{ height: 'env(safe-area-inset-top)' }} />
 
         <div className="flex items-center gap-2 px-3 py-2">
-          {/* Hamburger */}
-          <button
-            onClick={onMobileMenuToggle}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100"
-            aria-label="Open menu"
-          >
-            <Menu size={22} />
-          </button>
+          {isOrderSearch ? (
+            <button
+              onClick={() => navigate('/admin/scanner')}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100"
+              aria-label="Back to scanner"
+            >
+              <ArrowLeft size={22} />
+            </button>
+          ) : (
+            <button
+              onClick={onMobileMenuToggle}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100"
+              aria-label="Open menu"
+            >
+              <Menu size={22} />
+            </button>
+          )}
 
-          {/* Logo + store name */}
-          <Link to="/admin" className="flex flex-1 items-center gap-2">
-            {logoUrl ? (
-              <img src={logoUrl} alt={storeName} className="h-8 w-8 rounded-xl object-contain" />
-            ) : (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500">
-                <span className="text-xs font-bold text-white">{storeName[0]}</span>
-              </div>
-            )}
-            <p className="text-[15px] font-black text-gray-950">{storeName}</p>
-          </Link>
+          {/* Current page */}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[16px] font-black text-gray-950">{currentPageTitle}</p>
+          </div>
 
-          {/* Bell */}
-          <button className="relative flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100">
-            <Bell size={20} />
-            <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-pink-500" />
-          </button>
+          {!location.pathname.startsWith('/admin/scanner') && (
+            <button className="relative flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100">
+              <Bell size={20} />
+              <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-pink-500" />
+            </button>
+          )}
+
+          {!isOrderSearch && (
+            <Link
+              to="/admin/scanner/orders"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100"
+              aria-label="Search orders"
+              title="Search orders"
+            >
+              <Search size={20} />
+            </Link>
+          )}
 
           {/* Avatar */}
           <button
@@ -154,10 +173,12 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
                   <UserCircle size={15} className="text-gray-400" /> My Profile
                 </Link>
-                <Link to="/admin/settings" onClick={() => setShowUserMenu(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                  <Settings size={15} className="text-gray-400" /> Settings
-                </Link>
+                {canOpenSettings && (
+                  <Link to="/admin/settings" onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                    <Settings size={15} className="text-gray-400" /> Settings
+                  </Link>
+                )}
                 {canVisitStore && (
                   <Link to="/" onClick={() => setShowUserMenu(false)}
                     className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-purple-600 hover:bg-purple-50">
@@ -187,7 +208,7 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
 
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-black leading-tight text-gray-950">
-            {pageHeader?.title || getAdminRouteTitle(location.pathname)}
+            {currentPageTitle}
           </h1>
           {pageHeader?.subtitle && (
             <p className="mt-0.5 truncate text-xs font-semibold text-gray-500">{pageHeader.subtitle}</p>
@@ -195,10 +216,23 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
-          <button className="relative p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-500">
-            <Bell size={20} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
-          </button>
+          {!location.pathname.startsWith('/admin/scanner') && (
+            <button className="relative rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100">
+              <Bell size={20} />
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-pink-500" />
+            </button>
+          )}
+
+          {!isOrderSearch && (
+            <Link
+              to="/admin/scanner/orders"
+              className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100"
+              aria-label="Search orders"
+              title="Search orders"
+            >
+              <Search size={20} />
+            </Link>
+          )}
 
           <div className="relative">
             <button
@@ -223,10 +257,12 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
                     className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
                     <UserCircle size={16} /> My Profile
                   </Link>
-                  <Link to="/admin/settings" onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                    <Settings size={16} /> Settings
-                  </Link>
+                  {canOpenSettings && (
+                    <Link to="/admin/settings" onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                      <Settings size={16} /> Settings
+                    </Link>
+                  )}
                   {canVisitStore && (
                     <Link to="/" onClick={() => setShowUserMenu(false)}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm text-purple-600 hover:bg-purple-50">

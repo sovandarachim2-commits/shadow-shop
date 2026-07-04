@@ -108,7 +108,7 @@ export default function DeliveryCustomer() {
         >
           <ArrowLeft size={18} /> Back
         </button>
-        <h1 className="text-base font-black text-gray-900">Delivery Customer</h1>
+        <h1 className="hidden text-base font-black text-gray-900 lg:block">Delivery Customer</h1>
         <button
           onClick={() => navigate('/admin/orders')}
           className="flex items-center gap-1.5 rounded-xl border border-purple-200 px-3 py-1.5 text-xs font-bold text-purple-600 hover:bg-purple-50"

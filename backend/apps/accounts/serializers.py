@@ -24,6 +24,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
+    role = serializers.CharField(required=False)
 
     class Meta:
         model = User
@@ -45,10 +46,16 @@ class UserSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.avatar.url)
         return None
 
+    def validate_role(self, value):
+        if not Role.objects.filter(name=value).exists():
+            raise serializers.ValidationError('Select a valid role.')
+        return value
+
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
+    role = serializers.CharField(required=False)
 
     class Meta:
         model = User
@@ -61,6 +68,11 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs.pop('confirm_password'):
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
         return attrs
+
+    def validate_role(self, value):
+        if not Role.objects.filter(name=value).exists():
+            raise serializers.ValidationError('Select a valid role.')
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -116,6 +128,21 @@ class RoleSerializer(serializers.ModelSerializer):
         model = Role
         fields = ['id', 'name', 'display_name', 'is_system']
         read_only_fields = ['is_system']
+
+    def validate_name(self, value):
+        value = str(value or '').strip().lower()
+        if not value:
+            raise serializers.ValidationError('Role key is required.')
+        if len(value) > 20:
+            raise serializers.ValidationError('Role key must be 20 characters or fewer.')
+        if not value.replace('_', '').isalnum() or not value[0].isalpha():
+            raise serializers.ValidationError('Use lowercase letters, numbers, and underscores; start with a letter.')
+        return value
+
+    def validate(self, attrs):
+        if self.instance and 'name' in attrs and attrs['name'] != self.instance.name:
+            raise serializers.ValidationError({'name': 'Role key cannot be changed after creation.'})
+        return attrs
 
 
 class RolePermissionSerializer(serializers.ModelSerializer):

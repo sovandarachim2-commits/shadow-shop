@@ -296,7 +296,7 @@ export default function Home() {
   })
   const { data: bestSellerData, isLoading: bestLoading, refetch: refetchBestSellers } = useQuery({
     queryKey: ['best-sellers'],
-    queryFn: () => productsApi.products.list({ is_best_seller: true, page_size: 8 }).then((r) => r.data.results),
+    queryFn: () => productsApi.products.list({ is_best_seller: true, page_size: 12 }).then((r) => r.data.results),
   })
   const { data: flashData, isLoading: flashLoading, refetch: refetchFlash } = useQuery({
     queryKey: ['flash-sale'],
@@ -304,7 +304,7 @@ export default function Home() {
   })
   const { data: newArrivalData, isLoading: newLoading, refetch: refetchNewArrivals } = useQuery({
     queryKey: ['new-arrivals'],
-    queryFn: () => productsApi.products.list({ is_new_arrival: true, page_size: 8 }).then((r) => r.data.results),
+    queryFn: () => productsApi.products.list({ is_new_arrival: true, page_size: 12 }).then((r) => r.data.results),
   })
 
   const banners = useMemo(() => bannersData || [], [bannersData])
@@ -792,10 +792,10 @@ export default function Home() {
                 {t('common.seeAll')} <ChevronRight size={13} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 justify-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
               {bestLoading
-                ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
-                : bestSellers.slice(0, 6).map((p) => <ProductCard key={p.id} product={p} badge={t('home.bestBadge')} />)
+                ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
+                : bestSellers.slice(0, 12).map((p) => <ProductCard key={p.id} product={p} badge={t('home.bestBadge')} />)
               }
             </div>
           </div>
@@ -819,10 +819,10 @@ export default function Home() {
                 {t('common.seeAll')} <ChevronRight size={13} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 justify-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
               {newLoading
-                ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
-                : newArrivals.slice(0, 6).map((p) => <ProductCard key={p.id} product={p} badge={t('common.new')} />)
+                ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
+                : newArrivals.slice(0, 12).map((p) => <ProductCard key={p.id} product={p} badge={t('common.new')} />)
               }
             </div>
           </div>

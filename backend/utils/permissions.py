@@ -57,3 +57,37 @@ class IsScanner(BasePermission):
 class IsDelivery(BasePermission):
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in [ROLE_DELIVERY, ROLE_ADMIN, ROLE_SUPER_ADMIN]
+
+
+def user_has_module_permission(user, module, action):
+    if not user or not user.is_authenticated:
+        return False
+    if user.role in ADMIN_ROLES:
+        return True
+
+    from apps.accounts.models import RolePermission
+
+    return RolePermission.objects.filter(
+        role=user.role,
+        permission__module=module,
+        permission__action=action,
+        granted=True,
+    ).exists()
+
+
+class HasModulePermission(BasePermission):
+    module = None
+    action_map = {
+        'list': 'view',
+        'retrieve': 'view',
+        'create': 'create',
+        'update': 'edit',
+        'partial_update': 'edit',
+        'destroy': 'delete',
+    }
+
+    def has_permission(self, request, view):
+        module = getattr(view, 'permission_module', None) or self.module
+        action_map = getattr(view, 'permission_action_map', None) or self.action_map
+        action = action_map.get(getattr(view, 'action', None), 'view')
+        return user_has_module_permission(request.user, module, action)

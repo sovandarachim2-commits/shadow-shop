@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Trash2, Package, Image, ToggleLeft, ToggleRight, Upload, X, Award, Star, Images, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Edit, Trash2, Package, Image, Upload, X, Award, Star, Images, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Modal } from '@/components/ui/Modal'
-import { Badge } from '@/components/ui/Badge'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
@@ -19,6 +18,28 @@ const AVAILABILITY_OPTIONS = [
   { value: 'available', label: 'Always Available' },
   { value: 'out_of_stock', label: 'Out of Stock' },
 ]
+
+function ProductStatusSwitch({ active, disabled, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={active}
+      aria-label={active ? 'Turn product off' : 'Turn product on'}
+      className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full px-1.5 text-[10px] font-black uppercase shadow-sm transition disabled:cursor-wait disabled:opacity-70 ${
+        active ? 'justify-start bg-green-600 text-white' : 'justify-end bg-gray-300 text-gray-700'
+      }`}
+    >
+      <span className={active ? 'pr-5' : 'pl-5'}>{active ? 'ON' : 'OFF'}</span>
+      <span
+        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+          active ? 'right-0.5' : 'left-0.5'
+        }`}
+      />
+    </button>
+  )
+}
 
 function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
@@ -542,6 +563,15 @@ export default function Products() {
     onError: () => toast.error('Failed to update product'),
   })
 
+  const statusMutation = useMutation({
+    mutationFn: ({ id, is_active }) => productsApi.products.update(id, { is_active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['products'])
+      toast.success('Product status updated')
+    },
+    onError: () => toast.error('Failed to update product status'),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: productsApi.products.delete,
     onSuccess: () => { queryClient.invalidateQueries(['products']); toast.success('Product deleted') },
@@ -721,7 +751,11 @@ export default function Products() {
                   </div>
                 </Td>
                 <Td>
-                  <Badge variant={p.is_active ? 'success' : 'default'}>{p.is_active ? 'Active' : 'Inactive'}</Badge>
+                  <ProductStatusSwitch
+                    active={p.is_active}
+                    disabled={statusMutation.isPending && statusMutation.variables?.id === p.id}
+                    onToggle={() => statusMutation.mutate({ id: p.id, is_active: !p.is_active })}
+                  />
                 </Td>
                 <Td>
                   <div className="flex gap-1">

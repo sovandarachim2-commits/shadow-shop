@@ -14,11 +14,21 @@ export const ordersApi = {
     update: (id, data) => client.patch(`/orders/list/${id}/`, data),
     adminUpdate: (id, data) => client.post(`/orders/list/${id}/admin_update/`, data),
     delete: (id) => client.delete(`/orders/list/${id}/`),
-    updateStatus: (id, data) => client.post(
-      `/orders/list/${id}/update_status/`,
-      data,
-      data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined
-    ),
+    updateStatus: (id, data, config = {}) => {
+      const formConfig = data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {}
+      return client.post(
+        `/orders/list/${id}/update_status/`,
+        data,
+        {
+          ...formConfig,
+          ...config,
+          headers: {
+            ...formConfig.headers,
+            ...config.headers,
+          },
+        },
+      )
+    },
     markPaid: (id, data) => client.post(`/orders/list/${id}/mark_paid/`, data),
     validatePrintStock: (orderIds) => client.post('/orders/list/validate_print_stock/', { order_ids: orderIds }),
     markPrinted: (orderIds) => client.post('/orders/list/mark_printed/', { order_ids: orderIds }),

@@ -49,6 +49,26 @@ html[lang="km"] textarea {
 }
 
 @layer components {
+  @keyframes qr-scanner-line-move {
+    0%, 100% {
+      top: 8%;
+      opacity: 0.65;
+    }
+    50% {
+      top: 92%;
+      opacity: 1;
+    }
+  }
+
+  .qr-scanner-line {
+    top: 8%;
+    animation: qr-scanner-line-move 2.2s ease-in-out infinite;
+  }
+
+  #qr-shaded-region {
+    display: none !important;
+  }
+
   .sidebar-nav-item {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer;
   }
@@ -83,6 +103,15 @@ html[lang="km"] textarea {
   }
   .page-header {
     @apply flex items-center justify-between mb-6;
+  }
+  @media (max-width: 1023px) {
+    .page-header > div:first-child:has(h1) {
+      display: none;
+    }
+
+    .page-header {
+      margin-bottom: 1rem;
+    }
   }
   @media (min-width: 1024px) {
     .page-header > div:first-child > h1 {

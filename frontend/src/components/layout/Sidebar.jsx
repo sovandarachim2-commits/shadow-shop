@@ -38,11 +38,11 @@ const navItems = [
     icon: Package,
     children: [
       { label: 'Products',          path: '/admin/products',            icon: Tag,          module: 'products' },
-      { label: 'Brands',            path: '/admin/products/brands',     icon: Award,        module: 'products' },
-      { label: 'Main Category Menu',path: '/admin/products/categories', icon: Boxes,        module: 'products' },
-      { label: 'Product Sets',      path: '/admin/products/sets',       icon: PackageCheck, module: 'products' },
-      { label: 'Flash Sale',        path: '/admin/products/flash-sale', icon: Flame,        module: 'products' },
-      { label: 'Banners',           path: '/admin/products/banners',    icon: Image,        module: 'products' },
+      { label: 'Brands',            path: '/admin/products/brands',     icon: Award,        module: 'product_brands' },
+      { label: 'Main Category Menu',path: '/admin/products/categories', icon: Boxes,        module: 'product_categories' },
+      { label: 'Product Sets',      path: '/admin/products/sets',       icon: PackageCheck, module: 'product_sets' },
+      { label: 'Flash Sale',        path: '/admin/products/flash-sale', icon: Flame,        module: 'product_flash_sale' },
+      { label: 'Banners',           path: '/admin/products/banners',    icon: Image,        module: 'product_banners' },
     ],
   },
   {
@@ -68,7 +68,7 @@ const navItems = [
     label: 'Scanner Config',
     icon: UserCheck,
     children: [
-      { label: 'Delivery By Config', path: '/admin/customer-scanner/delivery-config', icon: Settings, module: 'scanner' },
+      { label: 'Delivery By Config', path: '/admin/customer-scanner/delivery-config', icon: Settings, module: 'scanner_delivery_config' },
     ],
   },
   {
@@ -170,24 +170,6 @@ function NavItem({ item, collapsed, onNavigate }) {
         </button>
         {open && !collapsed && (
           <div className="ml-4 mt-1 space-y-0.5 border-l border-white/10 pl-3">
-            {item.children.map((child) => (
-              <Link
-                key={child.path}
-                to={child.path}
-                onClick={onNavigate}
-                className={cn(
-                  'sidebar-nav-item text-xs',
-                  isChildActive(child.path, item.children, location.pathname) ? 'active' : ''
-                )}
-              >
-                <child.icon size={14} className="shrink-0" />
-                {child.label}
-              </Link>
-            ))}
-          </div>
-        )}
-        {collapsed && anyChildActive && (
-          <div className="absolute left-16 top-0 w-48 bg-navy-800 rounded-xl shadow-xl border border-white/10 p-2 z-50">
             {item.children.map((child) => (
               <Link
                 key={child.path}
