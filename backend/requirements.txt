@@ -22,3 +22,4 @@ channels==4.1.0
 channels-redis==4.2.0
 phonenumbers==8.13.44
 whitenoise==6.7.0
+django-extensions==3.2.3
