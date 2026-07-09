@@ -141,13 +141,13 @@ export default function OrderTracking() {
 
   return (
     <div className="mx-auto max-w-3xl pb-24 md:pb-0">
-      <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:border-0 md:px-0 md:pt-0">
-        <button onClick={() => navigate('/my-orders')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
-          <ChevronLeft size={22} />
+      <div className="-mx-4 -mt-4 mb-4 grid min-h-[48px] grid-cols-[40px_1fr_40px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:border-0 md:px-0 md:pt-0">
+        <button onClick={() => navigate('/my-orders')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+          <ChevronLeft size={20} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('orders.details')}</h1>
-        <button className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
-          <Headphones size={20} />
+        <button className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+          <Headphones size={18} />
         </button>
       </div>
 

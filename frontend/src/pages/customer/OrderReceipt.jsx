@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Loader2, Printer, ReceiptText, ShoppingBag } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { formatFullAddressKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
 
 function Row({ label, value, strong = false }) {
   return (
@@ -57,6 +58,7 @@ export default function OrderReceipt() {
   }
 
   const customer = order.customer_detail || {}
+  const customerAddress = formatFullAddressKhmer(customer)
   const items = order.items || []
   const subtotal = Number(order.subtotal || 0)
   const deliveryFee = Number(order.delivery_fee || 0)
@@ -66,13 +68,13 @@ export default function OrderReceipt() {
 
   return (
     <div className="print-preview-window mx-auto max-w-2xl pb-8">
-      <div className="no-print -mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:border-0 md:px-0 md:pt-0">
-        <button onClick={() => navigate('/my-orders')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
-          <ChevronLeft size={22} />
+      <div className="no-print -mx-4 -mt-4 mb-4 grid min-h-[48px] grid-cols-[40px_1fr_40px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:border-0 md:px-0 md:pt-0">
+        <button onClick={() => navigate('/my-orders')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+          <ChevronLeft size={20} />
         </button>
         <h1 className="text-center text-base font-black text-gray-950">Receipt</h1>
-        <button onClick={() => window.print()} className="flex h-11 w-11 items-center justify-center rounded-full bg-pink-50 text-pink-600 active:scale-95">
-          <Printer size={20} />
+        <button onClick={() => window.print()} className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 text-pink-600 active:scale-95">
+          <Printer size={18} />
         </button>
       </div>
 
@@ -111,7 +113,7 @@ export default function OrderReceipt() {
           <p className="mb-2 text-xs font-black uppercase tracking-wide text-gray-400">Customer</p>
           <p className="text-sm font-black text-gray-950">{customer.name || order.customer_name || '-'}</p>
           <p className="mt-1 text-xs font-semibold text-gray-500">{customer.phone || order.customer_phone || '-'}</p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">{customer.address || '-'}</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-gray-500" style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</p>
         </div>
 
         <div className="border-b border-dashed border-gray-200 py-4">

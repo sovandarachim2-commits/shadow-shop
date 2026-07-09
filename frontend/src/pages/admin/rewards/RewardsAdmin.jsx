@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
+  AlertCircle,
   Award,
   Archive,
   BellRing,
@@ -171,18 +172,33 @@ const emptyReward = {
   minimum_order_amount: '0.00',
   gift_product: '',
   stock: '',
-  sku: '',
-  weight: '',
   per_customer_limit: '',
   member_tier_requirement: 'all',
   starts_at: '',
   ends_at: '',
   is_active: true,
-  featured_reward: false,
 }
 
 function unwrapList(data) {
   return data?.results ?? data ?? []
+}
+
+function formatApiError(data, fallback = 'Could not save reward') {
+  if (!data) return fallback
+  if (typeof data === 'string') return data
+  if (data.detail) return String(data.detail)
+  if (data.message) return String(data.message)
+  if (Array.isArray(data)) return data.map((item) => String(item)).join(', ')
+  if (typeof data === 'object') {
+    const messages = Object.entries(data).flatMap(([field, value]) => {
+      const label = field.replaceAll('_', ' ')
+      if (Array.isArray(value)) return value.map((item) => `${label}: ${item}`)
+      if (value && typeof value === 'object') return [`${label}: ${formatApiError(value, '')}`].filter(Boolean)
+      return [`${label}: ${value}`]
+    })
+    return messages.filter(Boolean).join(' | ') || fallback
+  }
+  return fallback
 }
 
 function toDateInput(value) {
@@ -1070,9 +1086,6 @@ function RewardFormModal({ reward, onClose }) {
   const [form, setForm] = useState(() => ({
     ...emptyReward,
     ...reward,
-    sku: reward?.gift_product_code || '',
-    weight: reward?.weight || '',
-    featured_reward: reward?.featured_reward || false,
     points_required: reward?.points_required ?? emptyReward.points_required,
     coupon_value: reward?.coupon_value ?? emptyReward.coupon_value,
     minimum_order_amount: reward?.minimum_order_amount ?? emptyReward.minimum_order_amount,
@@ -1085,6 +1098,7 @@ function RewardFormModal({ reward, onClose }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(reward?.reward_image_url || null)
   const [clearRewardImage, setClearRewardImage] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const { data: productsData } = useQuery({
     queryKey: ['reward-gift-products'],
@@ -1093,26 +1107,40 @@ function RewardFormModal({ reward, onClose }) {
   })
   const products = unwrapList(productsData)
   const selectedProduct = products.find((product) => String(product.id) === String(form.gift_product))
+  const isPhysicalReward = ['gift', 'lucky_box'].includes(form.type)
+  const isCouponReward = ['voucher', 'discount'].includes(form.type)
+  const isDeliveryReward = form.type === 'free_delivery'
+  const usesOrderCondition = isCouponReward || isDeliveryReward
 
   const saveMutation = useMutation({
     mutationFn: (payload) => isEdit
       ? ordersApi.adminRewards.items.update(reward.id, payload)
       : ordersApi.adminRewards.items.create(payload),
+    onMutate: () => setSaveError(''),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-reward-items'] })
       toast.success(isEdit ? 'Reward updated' : 'Reward created')
       onClose()
     },
-    onError: (error) => toast.error(error.response?.data?.detail || 'Could not save reward'),
+    onError: (error) => {
+      const message = formatApiError(error.response?.data)
+      setSaveError(message)
+      toast.error(message)
+    },
   })
 
-  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+  const set = (key, value) => {
+    setSaveError('')
+    setForm((current) => ({ ...current, [key]: value }))
+  }
 
   const setRewardType = (value) => {
+    setSaveError('')
     setForm((current) => ({
       ...current,
       type: value,
       gift_product: ['gift', 'lucky_box'].includes(value) ? current.gift_product : '',
+      coupon_value: ['voucher', 'discount'].includes(value) ? current.coupon_value : '0.00',
     }))
   }
 
@@ -1130,22 +1158,23 @@ function RewardFormModal({ reward, onClose }) {
 
   const handleSubmit = (event) => {
     event.preventDefault()
+    setSaveError('')
     const values = {
       name: form.name,
       description: form.description || '',
       type: form.type,
       is_active: form.is_active,
-      coupon_discount_type: form.coupon_discount_type,
+      coupon_discount_type: isCouponReward ? form.coupon_discount_type : 'amount',
       points_required: Number(form.points_required || 0),
-      coupon_value: form.coupon_value || '0.00',
-      minimum_order_amount: form.minimum_order_amount || '0.00',
+      coupon_value: isCouponReward ? form.coupon_value || '0.00' : '0.00',
+      minimum_order_amount: usesOrderCondition ? form.minimum_order_amount || '0.00' : '0.00',
       member_tier_requirement: form.member_tier_requirement || 'all',
     }
     const payload = new FormData()
     Object.entries(values).forEach(([key, value]) => {
       payload.append(key, value)
     })
-    if (['gift', 'lucky_box'].includes(form.type) && form.gift_product) payload.append('gift_product', Number(form.gift_product))
+    if (isPhysicalReward && form.gift_product) payload.append('gift_product', Number(form.gift_product))
     if (form.stock !== '') payload.append('stock', Number(form.stock))
     if (form.per_customer_limit !== '') payload.append('per_customer_limit', Number(form.per_customer_limit))
     if (form.starts_at) payload.append('starts_at', toApiDate(form.starts_at))
@@ -1168,7 +1197,7 @@ function RewardFormModal({ reward, onClose }) {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EC3F8F]">Shadow Shop Rewards Admin</p>
               <h2 className="mt-1 text-xl font-black text-gray-950">{isEdit ? 'Edit Reward' : 'Create New Reward'}</h2>
-              <p className="mt-1 text-sm font-semibold text-gray-400">Fill the reward details below, then save. Required fields are name, type, and points.</p>
+              <p className="mt-1 text-sm font-semibold text-gray-400">Only the fields needed for this reward type are shown.</p>
             </div>
             <button type="button" onClick={onClose} className="rounded-xl bg-gray-100 p-2 text-gray-500 hover:bg-pink-50 hover:text-[#EC3F8F]">
               <X size={18} />
@@ -1176,9 +1205,6 @@ function RewardFormModal({ reward, onClose }) {
           </div>
         </div>
       <form onSubmit={handleSubmit} className="grid flex-1 gap-4 overflow-y-auto bg-[#F8F9FC] p-6 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <h3 className="text-sm font-black uppercase tracking-[0.14em] text-gray-400">Basic Information</h3>
-        </div>
         <label className="md:col-span-2">
           <span className="label">Reward name</span>
           <input className="input-field" value={form.name} onChange={(e) => set('name', e.target.value)} required />
@@ -1219,35 +1245,36 @@ function RewardFormModal({ reward, onClose }) {
                   <X size={13} /> Remove
                 </button>
               )}
-              <p className="mt-2 text-xs font-semibold text-gray-400">Shown on customer exchange rewards. PNG or JPG works best.</p>
+              <p className="mt-2 text-xs font-semibold text-gray-400">Optional image for the customer reward card.</p>
             </div>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickImage} />
           </div>
         </div>
         <div className="md:col-span-2">
-          <h3 className="mt-2 text-sm font-black uppercase tracking-[0.14em] text-gray-400">Reward Setup</h3>
-        </div>
-        <div className="md:col-span-2">
           <span className="label">Reward Type</span>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { value: 'voucher', label: 'Voucher' },
-              { value: 'gift', label: 'Physical Product' },
-              { value: 'free_delivery', label: 'Shipping Reward' },
-              { value: 'discount', label: 'Discount Coupon' },
-              { value: 'lucky_box', label: 'Lucky Box' },
+              { value: 'discount', label: 'Discount', note: 'Money or percent off' },
+              { value: 'free_delivery', label: 'Free Delivery', note: 'Shipping coupon' },
+              { value: 'gift', label: 'Gift Product', note: 'Exchange for product' },
+              { value: 'voucher', label: 'Voucher', note: 'Coupon code' },
+              { value: 'lucky_box', label: 'Lucky Box', note: 'Physical reward' },
+              { value: 'manual', label: 'Manual', note: 'Staff handled reward' },
             ].map((type) => (
               <button
                 key={type.value}
                 type="button"
                 onClick={() => setRewardType(type.value)}
                 className={cn(
-                  'flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-xs font-black transition',
+                  'flex items-start gap-2 rounded-xl border px-3 py-3 text-left transition',
                   form.type === type.value ? 'border-[#EC3F8F] bg-pink-50 text-[#EC3F8F]' : 'border-gray-200 bg-white text-gray-600 hover:border-pink-200'
                 )}
               >
-                <span className={cn('h-3 w-3 rounded-full border', form.type === type.value ? 'border-[#EC3F8F] bg-[#EC3F8F]' : 'border-gray-300')} />
-                {type.label}
+                <span className={cn('mt-0.5 h-3 w-3 shrink-0 rounded-full border', form.type === type.value ? 'border-[#EC3F8F] bg-[#EC3F8F]' : 'border-gray-300')} />
+                <span>
+                  <span className="block text-xs font-black">{type.label}</span>
+                  <span className="mt-0.5 block text-[11px] font-semibold opacity-70">{type.note}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -1257,23 +1284,13 @@ function RewardFormModal({ reward, onClose }) {
           <input className="input-field" type="number" min="1" value={form.points_required} onChange={(e) => set('points_required', e.target.value)} required />
         </label>
         <label>
-          <span className="label">SKU</span>
-          <input className="input-field" value={form.sku} onChange={(e) => set('sku', e.target.value)} placeholder="Optional display SKU" />
+          <span className="label">Status</span>
+          <select className="select-field" value={form.is_active ? 'active' : 'archived'} onChange={(e) => set('is_active', e.target.value === 'active')}>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </select>
         </label>
-        <label>
-          <span className="label">Weight (kg)</span>
-          <input className="input-field" type="number" min="0" step="0.01" value={form.weight} onChange={(e) => set('weight', e.target.value)} placeholder="Optional shipping weight" />
-        </label>
-        <label className="md:col-span-2">
-          <span className="label">Gallery</span>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="flex h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-500 hover:border-[#EC3F8F] hover:text-[#EC3F8F]">
-            <Upload size={16} /> Add gallery images
-          </button>
-        </label>
-        <div className="md:col-span-2">
-          <h3 className="mt-2 text-sm font-black uppercase tracking-[0.14em] text-gray-400">Conditions and Availability</h3>
-        </div>
-        {['gift', 'lucky_box'].includes(form.type) && (
+        {isPhysicalReward && (
           <label className="md:col-span-2">
             <span className="label">Gift product for display</span>
             <div className="grid gap-3 md:grid-cols-[1fr_220px]">
@@ -1301,19 +1318,23 @@ function RewardFormModal({ reward, onClose }) {
             </div>
           </label>
         )}
-        <label>
-          <span className="label">Coupon amount / percent</span>
-          <div className="grid grid-cols-[130px_1fr] gap-2">
-            <select className="select-field" value={form.coupon_discount_type} onChange={(e) => set('coupon_discount_type', e.target.value)}>
-              {DISCOUNT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </select>
-            <input className="input-field" type="number" min="0" step="0.01" value={form.coupon_value} onChange={(e) => set('coupon_value', e.target.value)} />
-          </div>
-        </label>
-        <label>
-          <span className="label">Minimum order amount</span>
-          <input className="input-field" type="number" min="0" step="0.01" value={form.minimum_order_amount} onChange={(e) => set('minimum_order_amount', e.target.value)} />
-        </label>
+        {isCouponReward && (
+          <label>
+            <span className="label">Coupon value</span>
+            <div className="grid grid-cols-[130px_1fr] gap-2">
+              <select className="select-field" value={form.coupon_discount_type} onChange={(e) => set('coupon_discount_type', e.target.value)}>
+                {DISCOUNT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+              </select>
+              <input className="input-field" type="number" min="0" step="0.01" value={form.coupon_value} onChange={(e) => set('coupon_value', e.target.value)} />
+            </div>
+          </label>
+        )}
+        {usesOrderCondition && (
+          <label>
+            <span className="label">Minimum order amount</span>
+            <input className="input-field" type="number" min="0" step="0.01" value={form.minimum_order_amount} onChange={(e) => set('minimum_order_amount', e.target.value)} />
+          </label>
+        )}
         <label>
           <span className="label">Stock quantity</span>
           <input className="input-field" type="number" min="0" placeholder="Blank means no limit" value={form.stock} onChange={(e) => set('stock', e.target.value)} />
@@ -1339,22 +1360,13 @@ function RewardFormModal({ reward, onClose }) {
           <span className="label">End date</span>
           <input className="input-field" type="datetime-local" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} />
         </label>
-        <label className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
-          <input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} />
-          <span className="text-sm font-semibold text-gray-700">Visible</span>
-        </label>
-        <label className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
-          <input type="checkbox" checked={form.featured_reward} onChange={(e) => set('featured_reward', e.target.checked)} />
-          <span className="text-sm font-semibold text-gray-700">Featured Reward</span>
-        </label>
-        <label>
-          <span className="label">Status</span>
-          <select className="select-field" value={form.is_active ? 'active' : 'archived'} onChange={(e) => set('is_active', e.target.value === 'active')}>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-        </label>
-        <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-wrap justify-end gap-2 border-t border-gray-100 bg-white px-6 py-4 md:col-span-2">
+        <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-white px-6 py-4 md:col-span-2">
+          {saveError && (
+            <div className="mr-auto flex min-w-0 max-w-full items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 md:max-w-[62%]">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 break-words">{saveError}</span>
+            </div>
+          )}
           <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
           <button type="submit" disabled={saveMutation.isPending} className="rounded-xl bg-[#EC3F8F] px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-pink-200 transition hover:bg-pink-600 disabled:opacity-50">
             {saveMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}

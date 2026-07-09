@@ -19,23 +19,38 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 
 const ACCOUNT_MENU_ITEMS = [
-  { icon: User, label: 'Profile', description: 'Edit name, phone, and photo', view: 'profile' },
-  { icon: Package, label: 'Orders', description: 'View orders and tracking', view: 'orders', path: '/my-orders' },
-  { icon: MapPin, label: 'Addresses', description: 'Manage delivery addresses', view: 'addresses', path: '/address-book' },
-  { icon: Gift, label: 'Exchange Rewards', description: 'Redeem points', view: 'rewards', path: '/profile/rewards' },
-  { icon: Percent, label: 'Coupons', description: 'Reward coupon codes', view: 'coupons' },
-  { icon: Bell, label: 'Notifications', description: 'Account alerts', view: 'notifications' },
-  { icon: Heart, label: 'Wishlist', description: 'Saved products', view: 'wishlist', path: '/wishlist' },
-  { icon: Shield, label: 'Password', description: 'Change account password', view: 'password' },
+  { icon: User, labelKey: 'profile.menuProfile', descKey: 'profile.menuProfileDesc', view: 'profile' },
+  { icon: Package, labelKey: 'profile.myOrders', descKey: 'profile.menuOrdersDesc', view: 'orders', path: '/my-orders' },
+  { icon: MapPin, labelKey: 'profile.addresses', descKey: 'profile.menuAddressesDesc', view: 'addresses', path: '/address-book' },
+  { icon: Gift, labelKey: 'profile.exchangeRewards', descKey: 'profile.menuRewardsDesc', view: 'rewards', path: '/profile/rewards' },
+  { icon: Percent, labelKey: 'profile.coupons', descKey: 'profile.menuCouponsDesc', view: 'coupons' },
+  { icon: Bell, labelKey: 'profile.notifications', descKey: 'profile.menuNotificationsDesc', view: 'notifications' },
+  { icon: Heart, labelKey: 'profile.wishlist', descKey: 'profile.menuWishlistDesc', view: 'wishlist', path: '/wishlist' },
+  { icon: Shield, labelKey: 'profile.password', descKey: 'profile.menuPasswordDesc', view: 'password' },
 ]
 
 const ORDER_STATUS_ITEMS = [
-  { key: 'pending',   label: 'Pending',   icon: ClipboardList },
-  { key: 'preparing', label: 'Preparing', icon: Package },
-  { key: 'packed',    label: 'Packed',    icon: PackageCheck },
-  { key: 'shipped',   label: 'Shipped',   icon: Truck },
-  { key: 'completed', label: 'Completed', icon: CheckCircle2 },
+  { key: 'pending', icon: ClipboardList },
+  { key: 'preparing', icon: Package },
+  { key: 'packed', icon: PackageCheck },
+  { key: 'shipped', icon: Truck },
+  { key: 'completed', icon: CheckCircle2 },
 ]
+
+function orderStatusLabel(t, status) {
+  const STATUS_KEY = {
+    new: 'pending',
+    pending: 'pending',
+    printed: 'preparing',
+    preparing: 'preparing',
+    packed: 'packed',
+    shipped: 'shipped',
+    completed: 'delivered',
+    cancelled: 'cancelled',
+  }
+  const key = STATUS_KEY[status]
+  return key ? t(`orders.status.${key}`) : status
+}
 
 const SHORTCUTS = [
   { tKey: 'nav.orders',       icon: ShoppingBag, path: '/my-orders' },
@@ -45,17 +60,6 @@ const SHORTCUTS = [
   { tKey: 'profile.coupons',  icon: Percent,     path: '/profile' },
   { tKey: 'profile.reviews',  icon: Star,        path: '/my-orders' },
 ]
-
-const STATUS_LABELS = {
-  new: 'Pending',
-  pending: 'Pending',
-  printed: 'Preparing',
-  preparing: 'Processing',
-  packed: 'Packed',
-  shipped: 'Shipped',
-  completed: 'Delivered',
-  cancelled: 'Cancelled',
-}
 
 const STATUS_STYLES = {
   new: 'bg-yellow-50 text-yellow-700',
@@ -91,6 +95,7 @@ function compressImage(file, maxPx = 400, quality = 0.82) {
 }
 
 function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSaved, asPage = false }) {
+  const { t } = useTranslation()
   const updateUser = useAuthStore((s) => s.updateUser)
   const fileInputRef = useRef(null)
   const [avatarFile, setAvatarFile] = useState(null)
@@ -104,18 +109,18 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
 
   const initials = [user.first_name, user.last_name].filter(Boolean).map((n) => n[0]).join('').toUpperCase() || user.username?.[0]?.toUpperCase() || '?'
   const memberId = `#SS${String(user.id || 0).padStart(6, '0')}`
-  const memberSince = user.created_at ? formatDate(user.created_at, 'MMMM yyyy') : 'New member'
+  const memberSince = user.created_at ? formatDate(user.created_at, 'MMMM yyyy') : t('profile.newMember')
   const defaultAddress = addresses.find((addr) => addr.is_default) || addresses[0]
 
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file')
+      toast.error(t('profile.chooseImage'))
       return
     }
     if (file.size > 6 * 1024 * 1024) {
-      toast.error('Profile photo must be under 6 MB')
+      toast.error(t('profile.photoTooLarge'))
       return
     }
     const previewUrl = URL.createObjectURL(file)
@@ -128,12 +133,12 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     mutationFn: (data) => authApi.updateMe(data),
     onSuccess: ({ data }) => {
       updateUser(data)
-      toast.success('Profile updated')
+      toast.success(t('profile.profileUpdated'))
       onSaved()
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.email?.[0] || body?.phone?.[0] || body?.detail || 'Failed to update profile'
+      const message = body?.email?.[0] || body?.phone?.[0] || body?.detail || t('profile.updateProfileFailed')
       toast.error(message)
     },
   })
@@ -150,10 +155,10 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     const cleanEmail = form.email.trim()
     const cleanPhone = form.phone.trim()
 
-    if (!cleanName) nextErrors.full_name = 'Enter your full name'
-    if (!cleanEmail) nextErrors.email = 'Enter your email address'
+    if (!cleanName) nextErrors.full_name = t('profile.enterFullName')
+    if (!cleanEmail) nextErrors.email = t('profile.enterEmail')
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      nextErrors.email = 'Enter a valid email address'
+      nextErrors.email = t('profile.enterValidEmail')
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -192,20 +197,20 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
             type="button"
             onClick={onClose}
             className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-700 transition hover:bg-gray-100 active:scale-95"
-            aria-label="Back"
+            aria-label={t('common.back')}
           >
             <ArrowLeft size={20} />
           </button>
           <div className="text-center">
-            <h2 className="text-base font-black text-gray-950">Edit Profile</h2>
-            <p className="text-xs font-semibold text-gray-400">Keep your checkout details up to date</p>
+            <h2 className="text-base font-black text-gray-950">{t('profile.editProfile')}</h2>
+            <p className="text-xs font-semibold text-gray-400">{t('profile.editProfileSubtitle')}</p>
           </div>
           <button
             type="submit"
             disabled={saveMutation.isPending}
             className="flex h-10 min-w-[66px] items-center justify-center rounded-xl bg-[#E91E63] px-3 text-sm font-black text-white shadow-sm transition hover:bg-pink-600 active:scale-95 disabled:opacity-60"
           >
-            {saveMutation.isPending ? <Loader2 size={17} className="animate-spin" /> : 'Save'}
+            {saveMutation.isPending ? <Loader2 size={17} className="animate-spin" /> : t('common.save')}
           </button>
         </div>
 
@@ -223,14 +228,14 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#E91E63] text-white shadow-lg transition hover:bg-pink-600 active:scale-95"
-                    aria-label="Change profile photo"
+                    aria-label={t('profile.changePhoto')}
                   >
                     <Camera size={17} />
                   </button>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-black text-gray-950">{form.full_name || user.username || 'Your profile'}</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-gray-500">{form.email || 'Add your email address'}</p>
+                  <p className="truncate text-lg font-black text-gray-950">{form.full_name || user.username || t('profile.yourProfile')}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-gray-500">{form.email || t('profile.addYourEmail')}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {avatarPreview && avatarPreview !== user.avatar_url && (
                       <button
@@ -242,7 +247,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
                         }}
                         className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 active:scale-[0.98]"
                       >
-                        Reset
+                        {t('profile.reset')}
                       </button>
                     )}
                   </div>
@@ -252,29 +257,29 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
           </section>
 
-          <ProfileSection title="Personal Information" icon={User}>
-            <ProfileField label="Full Name" value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} error={errors.full_name} autoComplete="name" />
+          <ProfileSection title={t('profile.personalInfo')} icon={User}>
+            <ProfileField label={t('profile.fullName')} value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} error={errors.full_name} autoComplete="name" />
             <div className="grid gap-3 sm:grid-cols-2">
-              <ProfileField label="Phone Number" value={form.phone} onChange={(v) => set('phone', v)} icon={Phone} autoComplete="tel" />
-              <ProfileField label="Email Address" type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} error={errors.email} autoComplete="email" />
+              <ProfileField label={t('profile.phoneNumber')} value={form.phone} onChange={(v) => set('phone', v)} icon={Phone} autoComplete="tel" />
+              <ProfileField label={t('profile.emailAddress')} type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} error={errors.email} autoComplete="email" />
             </div>
           </ProfileSection>
 
-          <ProfileSection title="Address" icon={MapPin}>
+          <ProfileSection title={t('profile.address')} icon={MapPin}>
             <div className="rounded-2xl border border-pink-100 bg-pink-50/60 p-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#E91E63] shadow-sm">
                   <MapPin size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black uppercase tracking-wide text-gray-400">Default Address</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-gray-400">{t('profile.defaultAddress')}</p>
                   <p className="mt-1 text-sm font-black leading-5 text-gray-950">
-                    {defaultAddress ? defaultAddress.address_line1 : 'No default address yet'}
+                    {defaultAddress ? defaultAddress.address_line1 : t('profile.noDefaultAddress')}
                   </p>
                   <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
                     {defaultAddress
                       ? [defaultAddress.address_line2, defaultAddress.city, defaultAddress.state, defaultAddress.postal_code].filter(Boolean).join(', ')
-                      : 'Add your delivery address for faster checkout.'}
+                      : t('profile.addDeliveryAddressHint')}
                   </p>
                 </div>
               </div>
@@ -283,17 +288,17 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
                 onClick={onEditAddress}
                 className="mt-4 h-11 w-full rounded-xl border border-[#E91E63]/20 bg-white text-sm font-black text-[#E91E63] shadow-sm transition hover:bg-white/80 active:scale-[0.98]"
               >
-                {defaultAddress ? 'Edit Default Address' : 'Add Delivery Address'}
+                {defaultAddress ? t('profile.editDefaultAddress') : t('profile.addDeliveryAddress')}
               </button>
             </div>
           </ProfileSection>
 
-          <ProfileSection title="Account Information" icon={IdCard}>
-            <ProfileInfoRow label="Member ID" value={memberId} />
-            <ProfileInfoRow label="Member Since" value={memberSince} />
+          <ProfileSection title={t('profile.accountInfo')} icon={IdCard}>
+            <ProfileInfoRow label={t('profile.memberId')} value={memberId} />
+            <ProfileInfoRow label={t('profile.memberSince')} value={memberSince} />
             <ProfileInfoRow
-              label="Verification Status"
-              value={<span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-600"><CheckCircle2 size={13} /> Verified</span>}
+              label={t('profile.verificationStatus')}
+              value={<span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-600"><CheckCircle2 size={13} /> {t('profile.verified')}</span>}
             />
           </ProfileSection>
         </div>
@@ -316,17 +321,18 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
 }
 
 function ChangePasswordModal({ onClose }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState({ old_password: '', new_password: '', confirm_password: '' })
 
   const saveMutation = useMutation({
     mutationFn: (data) => authApi.changePassword(data),
     onSuccess: () => {
-      toast.success('Password changed successfully')
+      toast.success(t('profile.passwordChanged'))
       onClose()
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.old_password?.[0] || body?.new_password?.[0] || body?.detail || 'Failed to change password'
+      const message = body?.old_password?.[0] || body?.new_password?.[0] || body?.detail || t('profile.passwordChangeFailed')
       toast.error(message)
     },
   })
@@ -336,31 +342,31 @@ function ChangePasswordModal({ onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (form.new_password !== form.confirm_password) {
-      toast.error('New passwords do not match')
+      toast.error(t('profile.passwordsNoMatch'))
       return
     }
     saveMutation.mutate({ old_password: form.old_password, new_password: form.new_password })
   }
 
   return (
-    <Modal isOpen onClose={onClose} title="Change Password" size="md">
+    <Modal isOpen onClose={onClose} title={t('profile.changePassword')} size="md">
       <form onSubmit={handleSubmit} className="space-y-4 p-6">
         <ProfileField
-          label="Current Password"
+          label={t('profile.currentPassword')}
           type="password"
           value={form.old_password}
           onChange={(v) => set('old_password', v)}
           required
         />
         <ProfileField
-          label="New Password"
+          label={t('profile.newPassword')}
           type="password"
           value={form.new_password}
           onChange={(v) => set('new_password', v)}
           required
         />
         <ProfileField
-          label="Confirm New Password"
+          label={t('profile.confirmNewPassword')}
           type="password"
           value={form.confirm_password}
           onChange={(v) => set('confirm_password', v)}
@@ -368,10 +374,10 @@ function ChangePasswordModal({ onClose }) {
         />
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="shop-btn-outline flex-1">
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" disabled={saveMutation.isPending} className="shop-btn-primary flex-1">
-            {saveMutation.isPending ? <Loader2 size={18} className="mx-auto animate-spin" /> : 'Update Password'}
+            {saveMutation.isPending ? <Loader2 size={18} className="mx-auto animate-spin" /> : t('profile.updatePassword')}
           </button>
         </div>
       </form>
@@ -464,6 +470,7 @@ function MobileSettingsRow({ icon: Icon, label, action, danger }) {
 }
 
 function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang }) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-full flex-col">
       <nav className="flex-1 space-y-2 p-4">
@@ -472,7 +479,7 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
           const isActive = item.view === activeView
           return (
             <button
-              key={item.label}
+              key={item.labelKey}
               onClick={() => onSelect(item)}
               className={cn(
                 'flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-bold transition',
@@ -480,7 +487,7 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
               )}
             >
               <Icon size={20} />
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{t(item.labelKey)}</span>
               <ChevronRight size={16} className={isActive ? 'text-pink-300' : 'text-gray-300'} />
             </button>
           )
@@ -490,7 +497,7 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
           className="flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left text-sm font-bold text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
         >
           <Languages size={20} />
-          <span className="flex-1">{isKhmer ? 'English' : 'ភាសាខ្មែរ'}</span>
+          <span className="flex-1">{isKhmer ? t('profile.englishLang') : t('profile.khmerLang')}</span>
           <span className="rounded-full bg-pink-50 px-2 py-0.5 text-xs font-bold text-pink-600">
             {isKhmer ? 'EN' : 'KM'}
           </span>
@@ -500,7 +507,7 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 transition hover:bg-red-50"
         >
           <LogOut size={18} />
-          Logout
+          {t('profile.logout')}
         </button>
       </nav>
     </div>
@@ -509,6 +516,7 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
 
 export function EditProfilePage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { user, fetchMe } = useAuthStore()
 
   useEffect(() => {
@@ -527,9 +535,9 @@ export function EditProfilePage() {
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-pink-50 text-pink-600">
           <User size={36} />
         </div>
-        <h2 className="mt-5 text-xl font-black text-gray-950">Sign in to edit your profile</h2>
+        <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signInEditProfile')}</h2>
         <button onClick={() => navigate('/login')} className="shop-btn-primary mt-6 px-10">
-          Login
+          {t('auth.login')}
         </button>
       </div>
     )
@@ -560,8 +568,8 @@ export default function Profile() {
   const isKhmer = i18n.language === 'km'
   const toggleLang = () => i18n.changeLanguage(isKhmer ? 'en' : 'km')
   const currentLanguage = isKhmer
-    ? { code: 'km', label: 'Khmer', flag: '🇰🇭' }
-    : { code: 'en', label: 'English', flag: '🇺🇸' }
+    ? { code: 'km', label: t('profile.khmer'), flag: '🇰🇭' }
+    : { code: 'en', label: t('profile.english'), flag: '🇺🇸' }
 
   const selectLanguage = (language) => {
     i18n.changeLanguage(language)
@@ -606,8 +614,8 @@ export default function Profile() {
   })
 
   const handleLogout = async () => {
-    const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
-      confirmText: 'Logout',
+    const ok = await confirm(t('profile.logoutTitle'), t('profile.logoutConfirm'), {
+      confirmText: t('profile.logout'),
       icon: 'logout',
     })
     if (!ok) return
@@ -673,26 +681,26 @@ export default function Profile() {
   }, [accountOrders])
 
   const mobileQuickActions = [
-    { icon: ClipboardList, label: 'My Orders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },
-    { icon: Percent, label: 'Coupons', action: () => setActiveView('coupons'), color: 'text-rose-400' },
-    { icon: Heart, label: 'Following', action: () => navigate('/wishlist'), color: 'text-amber-400' },
+    { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },
+    { icon: Percent, labelKey: 'profile.coupons', action: () => setActiveView('coupons'), color: 'text-rose-400' },
+    { icon: Heart, labelKey: 'profile.following', action: () => navigate('/wishlist'), color: 'text-amber-400' },
   ]
 
   const mobileGeneralSettings = [
-    { icon: User, label: 'My account', action: () => navigate('/profile/edit') },
-    { icon: ClipboardList, label: 'My Orders', action: () => navigate('/my-orders') },
-    { icon: MapPin, label: 'My Address', action: () => navigate('/address-book') },
-    { icon: Gift, label: 'Exchange Rewards', action: () => navigate('/profile/rewards') },
-    { icon: Percent, label: 'Coupons', action: () => setActiveView('coupons') },
-    { icon: Bell, label: 'Notifications', action: () => setActiveView('notifications') },
+    { icon: User, labelKey: 'profile.myAccount', action: () => navigate('/profile/edit') },
+    { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders') },
+    { icon: MapPin, labelKey: 'profile.myAddress', action: () => navigate('/address-book') },
+    { icon: Gift, labelKey: 'profile.exchangeRewards', action: () => navigate('/profile/rewards') },
+    { icon: Percent, labelKey: 'profile.coupons', action: () => setActiveView('coupons') },
+    { icon: Bell, labelKey: 'profile.notifications', action: () => setActiveView('notifications') },
   ]
 
   const mobileOtherSettings = [
-    { icon: Headphones, label: 'Contact preferences', action: () => setActiveView('help') },
-    { icon: ClipboardList, label: 'Terms & Conditions', action: () => setActiveView('help') },
-    { icon: Shield, label: 'Privacy policy', action: () => setActiveView('help') },
-    { icon: Lock, label: 'Password & Security', action: () => setActiveModal('password') },
-    { icon: LogOut, label: 'Logout', action: handleLogout, danger: true },
+    { icon: Headphones, labelKey: 'profile.contactPreferences', action: () => setActiveView('help') },
+    { icon: ClipboardList, labelKey: 'profile.termsConditions', action: () => setActiveView('help') },
+    { icon: Shield, labelKey: 'profile.privacyPolicy', action: () => setActiveView('help') },
+    { icon: Lock, labelKey: 'profile.passwordSecurity', action: () => setActiveModal('password') },
+    { icon: LogOut, labelKey: 'profile.logout', action: handleLogout, danger: true },
   ]
 
   return (
@@ -703,14 +711,14 @@ export default function Profile() {
       ═══════════════════════════════════════════ */}
       <div className="min-h-screen bg-white px-5 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:hidden">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-black text-[#202A44]">Profile</h1>
+          <h1 className="text-lg font-black text-[#202A44]">{t('profile.title')}</h1>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
                 onClick={() => setIsLanguageMenuOpen((open) => !open)}
                 className="flex h-9 items-center gap-1.5 rounded-full bg-white px-2 text-sm font-black text-gray-700 transition active:scale-95"
                 aria-expanded={isLanguageMenuOpen}
-                aria-label="Choose language"
+                aria-label={t('profile.chooseLanguage')}
               >
                 <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-50 text-base">
                   {currentLanguage.flag}
@@ -724,8 +732,8 @@ export default function Profile() {
               {isLanguageMenuOpen && (
                 <div className="absolute right-0 top-11 z-30 w-40 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl">
                   {[
-                    { code: 'en', label: 'English', flag: '🇺🇸' },
-                    { code: 'km', label: 'Khmer', flag: '🇰🇭' },
+                    { code: 'en', label: t('profile.english'), flag: '🇺🇸' },
+                    { code: 'km', label: t('profile.khmer'), flag: '🇰🇭' },
                   ].map((language) => {
                     const isActive = i18n.language === language.code
                     return (
@@ -790,9 +798,9 @@ export default function Profile() {
 
         <div className="mt-8 overflow-hidden rounded-xl bg-slate-50">
           <div className="grid grid-cols-3">
-            {mobileQuickActions.map(({ icon: Icon, label, action, color }, index) => (
+            {mobileQuickActions.map(({ icon: Icon, labelKey, action, color }, index) => (
               <button
-                key={label}
+                key={labelKey}
                 type="button"
                 onClick={action}
                 className={cn(
@@ -801,27 +809,27 @@ export default function Profile() {
                 )}
               >
                 <Icon size={20} strokeWidth={1.8} className={color} />
-                <span className="text-[10px] font-black text-slate-500">{label}</span>
+                <span className="text-[10px] font-black text-slate-500">{t(labelKey)}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <MobileSettingsGroup title="General Setting">
+        <MobileSettingsGroup title={t('profile.generalSetting')}>
           {mobileGeneralSettings.map((item) => (
-            <MobileSettingsRow key={item.label} {...item} />
+            <MobileSettingsRow key={item.labelKey} icon={item.icon} label={t(item.labelKey)} action={item.action} />
           ))}
         </MobileSettingsGroup>
 
-        <MobileSettingsGroup title="Other">
+        <MobileSettingsGroup title={t('profile.other')}>
           {mobileOtherSettings.map((item) => (
-            <MobileSettingsRow key={item.label} {...item} />
+            <MobileSettingsRow key={item.labelKey} icon={item.icon} label={t(item.labelKey)} action={item.action} danger={item.danger} />
           ))}
         </MobileSettingsGroup>
 
         <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-black text-slate-500">Member since</span>
+            <span className="font-black text-slate-500">{t('profile.memberLabel')}</span>
             <span className="font-black text-[#202A44]">{memberSince}</span>
           </div>
         </div>
@@ -892,7 +900,7 @@ export default function Profile() {
                   <div>
                     <div className="flex items-baseline gap-1">
                       <span className="text-4xl font-black text-pink-600">{rewardPoints.toLocaleString()}</span>
-                      <span className="text-sm font-bold text-gray-400">pts</span>
+                      <span className="text-sm font-bold text-gray-400">{t('profile.ptsLabel')}</span>
                     </div>
                     {ptsToNext > 0 && (
                       <p className="mt-0.5 text-xs text-gray-400">{t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}</p>
@@ -901,9 +909,9 @@ export default function Profile() {
                   <div className="text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <div className="h-4 w-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-400" />
-                      <span className="text-sm font-black text-gray-700">{membershipLevel} Member</span>
+                      <span className="text-sm font-black text-gray-700">{t('profile.memberLevel', { level: membershipLevel })}</span>
                     </div>
-                    <p className="mt-0.5 text-xs text-gray-400">Enjoy exclusive benefits</p>
+                    <p className="mt-0.5 text-xs text-gray-400">{t('profile.enjoyBenefits')}</p>
                     <button className="mt-1 text-xs font-bold text-pink-500 hover:text-pink-600">{t('profile.viewBenefits')}</button>
                   </div>
                 </div>
@@ -911,7 +919,7 @@ export default function Profile() {
                   <div className="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all" style={{ width: `${progressPct}%` }} />
                 </div>
                 <p className="mt-1.5 text-right text-[11px] font-semibold text-gray-400">
-                  {rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} pts
+                  {rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} {t('profile.ptsLabel')}
                 </p>
               </div>
             </div>
@@ -926,7 +934,7 @@ export default function Profile() {
                   </button>
                 </div>
                 <div className="flex items-center justify-between">
-                  {ORDER_STATUS_ITEMS.map(({ key, label, icon: Icon }, idx) => (
+                  {ORDER_STATUS_ITEMS.map(({ key, icon: Icon }, idx) => (
                     <div key={key} className="flex items-center">
                       <button onClick={() => navigate('/my-orders')} className="flex flex-col items-center gap-2 transition active:scale-95">
                         <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-pink-500 ring-1 ring-pink-100">
@@ -948,7 +956,7 @@ export default function Profile() {
               </div>
 
               <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
-                <h3 className="mb-5 text-base font-black text-gray-950">My Shortcuts</h3>
+                <h3 className="mb-5 text-base font-black text-gray-950">{t('profile.myShortcuts')}</h3>
                 <div className="flex items-start gap-5">
                   {SHORTCUTS.map(({ tKey, icon: Icon, path }) => (
                     <button key={tKey} onClick={() => navigate(path)} className="flex flex-col items-center gap-2 transition hover:opacity-70 active:scale-95">
@@ -966,13 +974,13 @@ export default function Profile() {
             <div className="grid grid-cols-1 gap-5">
               <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-base font-black text-gray-950">Recent Orders</h3>
+                  <h3 className="text-base font-black text-gray-950">{t('profile.recentOrders')}</h3>
                   <button onClick={() => navigate('/my-orders')} className="flex items-center gap-0.5 text-[13px] font-bold text-pink-500 hover:text-pink-600">
-                    View All <ChevronRight size={13} />
+                    {t('profile.viewAll')} <ChevronRight size={13} />
                   </button>
                 </div>
                 {accountOrders.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-gray-400">No orders yet.</div>
+                  <div className="py-8 text-center text-sm text-gray-400">{t('profile.noOrdersYet')}</div>
                 ) : (
                   <div className="grid gap-1 xl:grid-cols-2">
                     {accountOrders.slice(0, 4).map((order) => (
@@ -986,10 +994,10 @@ export default function Profile() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-black text-gray-950">#{order.order_number}</p>
-                          <p className="mt-0.5 text-xs text-gray-400">{formatDate(order.created_at)} • {order.items_count ?? 0} Items</p>
+                          <p className="mt-0.5 text-xs text-gray-400">{formatDate(order.created_at)} • {t('profile.itemsCount', { count: order.items_count ?? 0 })}</p>
                         </div>
                         <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-bold', STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500')}>
-                          {STATUS_LABELS[order.status] || order.status}
+                          {orderStatusLabel(t, order.status)}
                         </span>
                         <p className="shrink-0 text-sm font-black text-gray-950">{formatCurrency(order.grand_total)}</p>
                         <ChevronRight size={14} className="shrink-0 text-gray-300" />
@@ -1003,18 +1011,18 @@ export default function Profile() {
             {/* Row 4 — Trust Badges */}
             <div className="grid grid-cols-4 gap-4 pb-2">
               {[
-                { icon: Shield,     title: '100% Authentic',   desc: 'All products are 100% authentic' },
-                { icon: Truck,      title: 'Fast Delivery',     desc: 'Delivery within 1–3 working days' },
-                { icon: Lock,       title: 'Secure Payment',    desc: '100% secure payment' },
-                { icon: Headphones, title: 'Customer Support',  desc: '24/7 customer support' },
-              ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex items-center gap-3.5 rounded-3xl border border-gray-100 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                { icon: Shield, titleKey: 'profile.authenticTitle', descKey: 'profile.authenticDesc' },
+                { icon: Truck, titleKey: 'profile.fastDeliveryTitle', descKey: 'profile.fastDeliveryDesc' },
+                { icon: Lock, titleKey: 'profile.securePaymentTitle', descKey: 'profile.securePaymentDesc' },
+                { icon: Headphones, titleKey: 'profile.supportTitle', descKey: 'profile.supportDesc' },
+              ].map(({ icon: Icon, titleKey, descKey }) => (
+                <div key={titleKey} className="flex items-center gap-3.5 rounded-3xl border border-gray-100 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-50 text-pink-500">
                     <Icon size={20} />
                   </div>
                   <div>
-                    <p className="text-sm font-black text-gray-900">{title}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">{desc}</p>
+                    <p className="text-sm font-black text-gray-900">{t(titleKey)}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">{t(descKey)}</p>
                   </div>
                 </div>
               ))}
@@ -1026,16 +1034,16 @@ export default function Profile() {
           {activeView === 'orders' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-gray-950">My Orders</h2>
+                <h2 className="text-xl font-black text-gray-950">{t('profile.myOrders')}</h2>
                 <button onClick={() => navigate('/my-orders')} className="flex items-center gap-1 text-sm font-bold text-pink-500 hover:text-pink-600">
-                  Open Full Page <ChevronRight size={14} />
+                  {t('profile.openFullPage')} <ChevronRight size={14} />
                 </button>
               </div>
               <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                 {accountOrders.length === 0 ? (
                   <div className="py-16 text-center">
                     <ShoppingBag size={40} className="mx-auto mb-3 text-gray-200" />
-                    <p className="font-semibold text-gray-400">No orders yet</p>
+                    <p className="font-semibold text-gray-400">{t('profile.noOrdersYet')}</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-50">
@@ -1050,10 +1058,10 @@ export default function Profile() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-black text-gray-950">#{order.order_number}</p>
-                          <p className="mt-0.5 text-xs text-gray-400">{formatDate(order.created_at)} • {order.items_count ?? 0} Items</p>
+                          <p className="mt-0.5 text-xs text-gray-400">{formatDate(order.created_at)} • {t('profile.itemsCount', { count: order.items_count ?? 0 })}</p>
                         </div>
                         <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-bold', STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500')}>
-                          {STATUS_LABELS[order.status] || order.status}
+                          {orderStatusLabel(t, order.status)}
                         </span>
                         <p className="shrink-0 text-sm font-black text-gray-950">{formatCurrency(order.grand_total)}</p>
                         <ChevronRight size={14} className="shrink-0 text-gray-300" />
@@ -1069,16 +1077,16 @@ export default function Profile() {
           {activeView === 'addresses' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-gray-950">My Addresses</h2>
+                <h2 className="text-xl font-black text-gray-950">{t('profile.myAddresses')}</h2>
                 <button onClick={() => navigate('/address-book')} className="flex items-center gap-1 text-sm font-bold text-pink-500 hover:text-pink-600">
-                  Manage <ChevronRight size={14} />
+                  {t('profile.manage')} <ChevronRight size={14} />
                 </button>
               </div>
               {addresses.length === 0 ? (
                 <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
                   <MapPin size={36} className="mx-auto mb-3 text-gray-200" />
-                  <p className="font-semibold text-gray-400">No saved addresses yet</p>
-                  <button onClick={() => navigate('/address-book')} className="mt-4 rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-black text-white">Add Address</button>
+                  <p className="font-semibold text-gray-400">{t('profile.noSavedAddresses')}</p>
+                  <button onClick={() => navigate('/address-book')} className="mt-4 rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-black text-white">{t('profile.addAddress')}</button>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
@@ -1088,11 +1096,11 @@ export default function Profile() {
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 text-pink-500"><MapPin size={18} /></div>
                           <div>
-                            <p className="font-black capitalize text-gray-950">{addr.label || 'Home'}</p>
-                            {addr.is_default && <span className="text-[11px] font-bold text-pink-500">Default</span>}
+                            <p className="font-black capitalize text-gray-950">{addr.label || t('profile.home')}</p>
+                            {addr.is_default && <span className="text-[11px] font-bold text-pink-500">{t('profile.default')}</span>}
                           </div>
                         </div>
-                        <button onClick={() => navigate('/address-book')} className="text-xs font-bold text-gray-400 hover:text-pink-500">Edit</button>
+                        <button onClick={() => navigate('/address-book')} className="text-xs font-bold text-gray-400 hover:text-pink-500">{t('common.edit')}</button>
                       </div>
                       <div className="mt-3 space-y-0.5 text-sm leading-5 text-gray-500">
                         <p className="font-semibold text-gray-700">{addr.full_name}</p>
@@ -1111,16 +1119,16 @@ export default function Profile() {
           {activeView === 'wishlist' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black text-gray-950">My Wishlist</h2>
+                <h2 className="text-xl font-black text-gray-950">{t('profile.myWishlist')}</h2>
                 <button onClick={() => navigate('/wishlist')} className="flex items-center gap-1 text-sm font-bold text-pink-500 hover:text-pink-600">
-                  View Full Page <ChevronRight size={14} />
+                  {t('profile.viewFullPage')} <ChevronRight size={14} />
                 </button>
               </div>
               {wishlistItems.length === 0 ? (
                 <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
                   <Heart size={36} className="mx-auto mb-3 text-gray-200" />
-                  <p className="font-semibold text-gray-400">Your wishlist is empty</p>
-                  <button onClick={() => navigate('/shop')} className="mt-4 rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-black text-white">Browse Products</button>
+                  <p className="font-semibold text-gray-400">{t('wishlist.empty')}</p>
+                  <button onClick={() => navigate('/shop')} className="mt-4 rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-black text-white">{t('common.browseProducts')}</button>
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-4 md:grid-cols-4">
@@ -1149,28 +1157,28 @@ export default function Profile() {
           {/* ══ REWARDS ══ */}
           {activeView === 'rewards' && (
             <div className="space-y-5">
-              <h2 className="text-xl font-black text-gray-950">Rewards & Points</h2>
+              <h2 className="text-xl font-black text-gray-950">{t('profile.rewardsAndPoints')}</h2>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-bold text-gray-500">Total Points</p>
+                    <p className="text-sm font-bold text-gray-500">{t('profile.totalPoints')}</p>
                     <div className="mt-1 flex items-baseline gap-1">
                       <span className="text-5xl font-black text-pink-600">{rewardPoints.toLocaleString()}</span>
-                      <span className="text-base font-bold text-gray-400">pts</span>
+                      <span className="text-base font-bold text-gray-400">{t('profile.ptsLabel')}</span>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="inline-flex items-center gap-2 rounded-2xl bg-gray-100 px-4 py-2">
                       <div className="h-5 w-5 rounded-full bg-gradient-to-br from-gray-300 to-gray-400" />
-                      <span className="font-black text-gray-700">{membershipLevel} Member</span>
+                      <span className="font-black text-gray-700">{t('profile.memberLevel', { level: membershipLevel })}</span>
                     </div>
                     <p className="mt-2 text-xs text-gray-400">{t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}</p>
                   </div>
                 </div>
                 <div className="mt-6">
                   <div className="mb-2 flex justify-between text-xs font-semibold text-gray-500">
-                    <span>{rewardPoints.toLocaleString()} pts</span>
-                    <span>Gold: {nextTierPoints.toLocaleString()} pts</span>
+                    <span>{rewardPoints.toLocaleString()} {t('profile.ptsLabel')}</span>
+                    <span>{t('profile.goldTarget', { count: nextTierPoints.toLocaleString() })}</span>
                   </div>
                   <div className="h-3 overflow-hidden rounded-full bg-gray-100">
                     <div className="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all" style={{ width: `${progressPct}%` }} />
@@ -1179,19 +1187,19 @@ export default function Profile() {
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-black text-gray-950">Rewards Catalog</p>
+                  <p className="font-black text-gray-950">{t('profile.rewardsCatalog')}</p>
                   <button
                     type="button"
                     onClick={() => navigate('/profile/rewards')}
                     className="rounded-xl bg-pink-600 px-4 py-2 text-sm font-black text-white transition hover:bg-pink-700"
                   >
-                    Open Exchange
+                    {t('profile.openExchange')}
                   </button>
                 </div>
                 <div className="py-10 text-center">
                   <Gift size={36} className="mx-auto mb-3 text-gray-200" />
-                  <p className="font-semibold text-gray-400">Exchange coupons and rewards</p>
-                  <p className="mt-1 text-xs text-gray-400">Use your points for discounts and delivery rewards</p>
+                  <p className="font-semibold text-gray-400">{t('profile.exchangeCoupons')}</p>
+                  <p className="mt-1 text-xs text-gray-400">{t('profile.exchangeCouponsHint')}</p>
                 </div>
               </div>
             </div>
@@ -1200,18 +1208,18 @@ export default function Profile() {
           {/* ══ COUPONS ══ */}
           {activeView === 'coupons' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-black text-gray-950">My Coupons</h2>
+              <h2 className="text-xl font-black text-gray-950">{t('profile.myCoupons')}</h2>
               {rewardRedemptions.filter((item) => item.coupon_code).length === 0 ? (
                 <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
                   <Percent size={36} className="mx-auto mb-3 text-gray-200" />
-                  <p className="font-semibold text-gray-400">No coupons available</p>
-                  <p className="mt-1 text-xs text-gray-400">Exchange reward points to create coupon codes</p>
+                  <p className="font-semibold text-gray-400">{t('profile.noCoupons')}</p>
+                  <p className="mt-1 text-xs text-gray-400">{t('profile.couponExchangeHint')}</p>
                   <button
                     type="button"
                     onClick={() => navigate('/profile/rewards')}
                     className="mt-4 rounded-xl bg-pink-600 px-5 py-2.5 text-sm font-black text-white"
                   >
-                    Exchange Rewards
+                    {t('profile.exchangeRewards')}
                   </button>
                 </div>
               ) : (
@@ -1228,7 +1236,7 @@ export default function Profile() {
                         </span>
                       </div>
                       <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
-                        <span className="text-xs font-black uppercase text-gray-400">Code</span>
+                        <span className="text-xs font-black uppercase text-gray-400">{t('profile.code')}</span>
                         <span className="font-mono text-sm font-black text-gray-950">{item.coupon_code}</span>
                       </div>
                     </div>
@@ -1241,11 +1249,11 @@ export default function Profile() {
           {/* ══ REVIEWS ══ */}
           {activeView === 'reviews' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-black text-gray-950">My Reviews</h2>
+              <h2 className="text-xl font-black text-gray-950">{t('profile.myReviews')}</h2>
               <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
                 <Star size={36} className="mx-auto mb-3 text-gray-200" />
-                <p className="font-semibold text-gray-400">No reviews yet</p>
-                <p className="mt-1 text-xs text-gray-400">Reviews you write for products will appear here</p>
+                <p className="font-semibold text-gray-400">{t('profile.noReviews')}</p>
+                <p className="mt-1 text-xs text-gray-400">{t('profile.reviewsHint')}</p>
               </div>
             </div>
           )}
@@ -1253,18 +1261,18 @@ export default function Profile() {
           {/* ══ PAYMENT METHODS ══ */}
           {activeView === 'payment' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-black text-gray-950">Payment Methods</h2>
+              <h2 className="text-xl font-black text-gray-950">{t('profile.paymentMethods')}</h2>
               <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                 {[
-                  { icon: CreditCard, title: 'Visa Debit Card',   desc: '**** **** **** 4242 · Default', cls: 'bg-blue-50 text-blue-500' },
-                  { icon: ShoppingBag, title: 'ABA Mobile',        desc: 'Linked account',               cls: 'bg-orange-50 text-orange-500' },
-                  { icon: Package,     title: 'Cash on Delivery',  desc: 'Available at checkout',        cls: 'bg-green-50 text-green-500' },
-                ].map(({ icon: Icon, title, desc, cls }) => (
-                  <div key={title} className="flex items-center gap-4 border-b border-gray-50 p-4 last:border-0">
+                  { icon: CreditCard, titleKey: 'profile.visaCard', descKey: 'profile.visaCardDesc', cls: 'bg-blue-50 text-blue-500' },
+                  { icon: ShoppingBag, titleKey: 'profile.abaMobile', descKey: 'profile.abaMobileDesc', cls: 'bg-orange-50 text-orange-500' },
+                  { icon: Package, titleKey: 'profile.cod', descKey: 'profile.codDesc', cls: 'bg-green-50 text-green-500' },
+                ].map(({ icon: Icon, titleKey, descKey, cls }) => (
+                  <div key={titleKey} className="flex items-center gap-4 border-b border-gray-50 p-4 last:border-0">
                     <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', cls)}><Icon size={19} /></div>
                     <div className="flex-1">
-                      <p className="font-black text-gray-950">{title}</p>
-                      <p className="text-xs text-gray-400">{desc}</p>
+                      <p className="font-black text-gray-950">{t(titleKey)}</p>
+                      <p className="text-xs text-gray-400">{t(descKey)}</p>
                     </div>
                     <ChevronRight size={14} className="text-gray-300" />
                   </div>
@@ -1276,18 +1284,18 @@ export default function Profile() {
           {/* ══ NOTIFICATIONS ══ */}
           {activeView === 'notifications' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-black text-gray-950">Notifications</h2>
+              <h2 className="text-xl font-black text-gray-950">{t('profile.notifications')}</h2>
               <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                 {[
-                  { title: 'Order Updates',       desc: 'Get notified about your order status changes', on: true },
-                  { title: 'Promotions & Deals',  desc: 'Receive news about discounts and flash sales', on: true },
-                  { title: 'New Arrivals',         desc: 'Be the first to know about new products',     on: false },
-                  { title: 'Account Activity',     desc: 'Important alerts about your account',         on: true },
-                ].map(({ title, desc, on }) => (
-                  <div key={title} className="flex items-center justify-between gap-4 border-b border-gray-50 p-4 last:border-0">
+                  { titleKey: 'profile.orderUpdates', descKey: 'profile.orderUpdatesDesc', on: true },
+                  { titleKey: 'profile.promotionsDeals', descKey: 'profile.promotionsDealsDesc', on: true },
+                  { titleKey: 'profile.newArrivalsNotif', descKey: 'profile.newArrivalsNotifDesc', on: false },
+                  { titleKey: 'profile.accountActivity', descKey: 'profile.accountActivityDesc', on: true },
+                ].map(({ titleKey, descKey, on }) => (
+                  <div key={titleKey} className="flex items-center justify-between gap-4 border-b border-gray-50 p-4 last:border-0">
                     <div>
-                      <p className="font-black text-gray-950">{title}</p>
-                      <p className="text-xs text-gray-400">{desc}</p>
+                      <p className="font-black text-gray-950">{t(titleKey)}</p>
+                      <p className="text-xs text-gray-400">{t(descKey)}</p>
                     </div>
                     <div className={cn('relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition', on ? 'bg-pink-500' : 'bg-gray-200')}>
                       <div className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all', on ? 'right-0.5' : 'left-0.5')} />
@@ -1301,25 +1309,25 @@ export default function Profile() {
           {/* ══ HELP CENTER ══ */}
           {activeView === 'help' && (
             <div className="space-y-4">
-              <h2 className="text-xl font-black text-gray-950">Help Center</h2>
+              <h2 className="text-xl font-black text-gray-950">{t('profile.helpCenter')}</h2>
               <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                 {[
-                  { q: 'How do I track my order?',           a: 'Go to My Orders and click on your order to see real-time tracking.' },
-                  { q: 'How do I return a product?',          a: 'Contact our support team within 7 days of delivery to initiate a return.' },
-                  { q: 'What payment methods are accepted?',  a: 'We accept Visa, MasterCard, ABA Mobile, and Cash on Delivery.' },
-                  { q: 'How long does delivery take?',        a: 'Standard delivery takes 1–3 business days within Phnom Penh.' },
-                  { q: 'How do I earn reward points?',        a: 'You earn 1 point for every $1 spent. Points can be redeemed for discounts.' },
-                ].map(({ q, a }, i) => (
+                  { qKey: 'profile.faqTrackOrder', aKey: 'profile.faqTrackOrderA' },
+                  { qKey: 'profile.faqReturn', aKey: 'profile.faqReturnA' },
+                  { qKey: 'profile.faqPayment', aKey: 'profile.faqPaymentA' },
+                  { qKey: 'profile.faqDelivery', aKey: 'profile.faqDeliveryA' },
+                  { qKey: 'profile.faqPoints', aKey: 'profile.faqPointsA' },
+                ].map(({ qKey, aKey }, i) => (
                   <div key={i} className="border-b border-gray-50 p-4 last:border-0">
-                    <p className="font-black text-gray-950">{q}</p>
-                    <p className="mt-1 text-sm text-gray-500">{a}</p>
+                    <p className="font-black text-gray-950">{t(qKey)}</p>
+                    <p className="mt-1 text-sm text-gray-500">{t(aKey)}</p>
                   </div>
                 ))}
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm">
-                <p className="font-black text-gray-950">Still need help?</p>
-                <p className="mt-1 text-sm text-gray-400">Our support team is available 24/7</p>
-                <button className="mt-3 rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-black text-white transition hover:bg-pink-700">Contact Support</button>
+                <p className="font-black text-gray-950">{t('profile.stillNeedHelp')}</p>
+                <p className="mt-1 text-sm text-gray-400">{t('profile.supportAvailable')}</p>
+                <button className="mt-3 rounded-xl bg-pink-600 px-6 py-2.5 text-sm font-black text-white transition hover:bg-pink-700">{t('profile.contactSupport')}</button>
               </div>
             </div>
           )}

@@ -33,6 +33,8 @@ import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
+import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
+import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 
 const MOBILE_NAV_ITEMS = [
   { path: '/', key: 'nav.home', icon: Home, exact: true },
@@ -363,26 +365,12 @@ export default function CustomerLayout() {
           <div className={cn('px-3 pb-2.5 pt-[calc(0.5rem+env(safe-area-inset-top))] md:hidden', isMyOrdersPage && 'px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]')}>
             {isMyOrdersPage ? (
               <div className="space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <h1 className="text-left text-[28px] font-black leading-tight text-gray-950">{t('orders.title')}</h1>
-                  <div className="flex items-center gap-2">
-                    <Link to="/wishlist" className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-95">
-                      <Heart size={21} strokeWidth={2.2} />
-                      {wishlistCount > 0 && (
-                        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                          {wishlistCount > 9 ? '9+' : wishlistCount}
-                        </span>
-                      )}
-                    </Link>
-                    <Link to="/cart" className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm shadow-pink-100 transition active:scale-95">
-                      <ShoppingCart size={21} strokeWidth={2.4} />
-                      {totalItems > 0 && (
-                        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                          {totalItems > 9 ? '9+' : totalItems}
-                        </span>
-                      )}
-                    </Link>
+                <div className="flex min-h-[48px] items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <HeaderBrandMark />
+                    <h1 className="min-w-0 truncate text-left text-xl font-black text-gray-950">{t('orders.title')}</h1>
                   </div>
+                  <HeaderActionIcons size="md" />
                 </div>
                 <div className="grid grid-cols-2 rounded-lg bg-gray-200 p-1">
                   {[
@@ -467,7 +455,7 @@ export default function CustomerLayout() {
         )}
       </header>
 
-      <main className={cn('flex-1', isHome || isMyOrdersPage || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
         <Outlet />
       </main>
 

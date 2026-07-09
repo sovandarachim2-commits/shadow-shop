@@ -492,19 +492,37 @@ class OrderViewSet(viewsets.ModelViewSet):
     def checkout(self, request):
         if request.user.role != 'customer':
             return Response({'detail': 'Only customers can use this checkout endpoint.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.notifications.services import ONLINE_PAY_NOW_METHODS
+        payment_method = request.data.get('payment_method')
+        if payment_method in ONLINE_PAY_NOW_METHODS:
+            from apps.payments.checkout_flow import prepare_online_checkout
+            result = prepare_online_checkout(request, request.data)
+            return Response(result, status=status.HTTP_201_CREATED)
+
         serializer = CustomerCheckoutSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         data = OrderDetailSerializer(order, context={'request': request}).data
-        if order.payment_method == 'bakong':
-            from apps.payments.serializers import BakongPaymentSerializer
-            from apps.payments.services import create_or_refresh_bakong_payment
-            payment = create_or_refresh_bakong_payment(order)
-            data['bakong_payment'] = BakongPaymentSerializer(payment, context={'request': request}).data
         return Response(
             data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=False, methods=['get'])
+    def checkout_status(self, request):
+        if request.user.role != 'customer':
+            return Response({'detail': 'Only customers can use this endpoint.'}, status=status.HTTP_403_FORBIDDEN)
+        reference = request.query_params.get('reference')
+        if not reference:
+            return Response({'detail': 'reference is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.payments.models import PendingCheckout
+        from apps.payments.checkout_flow import get_pending_checkout_status
+        try:
+            data = get_pending_checkout_status(request, reference)
+        except PendingCheckout.DoesNotExist:
+            return Response({'detail': 'Checkout session not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(data)
 
 
 class PrepareRecordFilter(filters.FilterSet):

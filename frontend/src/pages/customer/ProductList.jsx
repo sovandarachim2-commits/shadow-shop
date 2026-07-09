@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
+import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
@@ -165,7 +166,7 @@ function ProductCard({ product, priority = false }) {
             {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
           </div>
           {!available ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">Sold Out</span>
+            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
           ) : qty === 0 ? (
             <button onClick={handleAdd} className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4">
               <span className="md:hidden">{t('common.add')}</span>
@@ -209,7 +210,7 @@ function ProductSetCard({ productSet }) {
     current_stock: setStock,
     is_flash_sale_active: productSet.is_flash_sale_active,
     flash_sale_max_order_qty: productSet.flash_sale_max_order_qty,
-    category_name: 'Product Set',
+    category_name: t('product.productSet'),
   }
   const cartItem = items.find((item) => item.product?.cart_key === cartProduct.cart_key)
   const qty = cartItem?.quantity || 0
@@ -232,20 +233,20 @@ function ProductSetCard({ productSet }) {
           <ProductArt tone="set" />
         )}
         <span className="absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-xs font-black text-pink-600 shadow-sm">
-          SET
+          {t('product.productSetBadge')}
         </span>
       </div>
       <div className="p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
-          <span className="truncate">Product Set</span>
+          <span className="truncate">{t('product.productSet')}</span>
           <span className="shrink-0 text-gray-300">/</span>
-          <span className="truncate">{productSet.items?.length || 0} items inside</span>
+          <span className="truncate">{t('product.itemsInside', { count: productSet.items?.length || 0 })}</span>
         </div>
         <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
         <div className="mt-2 flex items-center gap-1">
           <Gift size={13} className="text-pink-500" />
           <span className="text-xs font-semibold text-gray-500">
-            {setStock > 0 ? t('common.inStock') : 'Sold Out'}
+            {setStock > 0 ? t('common.inStock') : t('common.soldOut')}
           </span>
         </div>
         <div className="mt-3 flex items-center justify-between gap-2">
@@ -254,14 +255,14 @@ function ProductSetCard({ productSet }) {
             {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
           </div>
           {setStock <= 0 ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">Sold Out</span>
+            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
           ) : qty === 0 ? (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); addItem(cartProduct, 1) }}
               className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4"
             >
-              Add
+              {t('common.add')}
             </button>
           ) : (
             <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
@@ -364,13 +365,16 @@ export default function ProductList() {
                 className="flex h-10 min-w-0 items-center gap-2.5 rounded-full border border-gray-300 bg-white px-3.5 text-left text-sm font-black text-gray-950 active:scale-[0.99]"
               >
                 <Search size={19} className="shrink-0 text-gray-950" />
-                <span className="truncate">{search || 'Search for products'}</span>
+                <span className="truncate">{search || t('shop.searchForProducts')}</span>
               </button>
               <HeaderActionIcons />
             </>
           ) : (
             <>
-              <h1 className="min-w-0 flex-1 truncate text-left text-xl font-black text-gray-950">{t('common.products')}</h1>
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <HeaderBrandMark />
+                <h1 className="min-w-0 truncate text-left text-xl font-black text-gray-950">{t('common.products')}</h1>
+              </div>
               <div className="flex items-center justify-end gap-2">
                 <button onClick={() => navigate('/search')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
                   <Search size={22} />
@@ -470,7 +474,7 @@ export default function ProductList() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
-                <option value="-created_at">{isSearchResult ? 'Sort by' : t('shop.newest')}</option>
+                <option value="-created_at">{isSearchResult ? t('shop.sortBy') : t('shop.newest')}</option>
                 <option value="retail_price">{t('shop.priceLowHigh')}</option>
                 <option value="-retail_price">{t('shop.priceHighLow')}</option>
                 <option value="-rating">{t('shop.bestRated')}</option>
@@ -480,8 +484,8 @@ export default function ProductList() {
 
           <div className="mb-4">
             <p className="text-sm font-semibold text-gray-500">
-              <span className="text-gray-950">{total}</span> {isSearchResult ? (
-                <>Results for <span className="text-gray-950">"{search}"</span></>
+              <span className="text-gray-950">{total}</span>               {isSearchResult ? (
+                <>{t('shop.resultsFor', { query: search })}</>
               ) : t('common.products')}
             </p>
           </div>

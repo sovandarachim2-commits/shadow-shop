@@ -24,6 +24,22 @@ export function formatDateTime(dateStr) {
   return formatDate(dateStr, 'MMM dd, yyyy HH:mm')
 }
 
+export function getUserContactDefaults(user) {
+  if (!user) return { full_name: '', phone: '' }
+
+  const full_name = (
+    user.full_name?.trim()
+    || [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+    || user.username
+    || ''
+  )
+
+  return {
+    full_name,
+    phone: user.phone?.trim() || '',
+  }
+}
+
 export const ORDER_STATUS_COLORS = {
   new: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
   printed: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-500' },

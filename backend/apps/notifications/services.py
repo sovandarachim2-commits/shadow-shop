@@ -2,9 +2,13 @@ import requests
 import logging
 from threading import Thread
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
 from .models import TelegramConfig, NotificationLog
 
 logger = logging.getLogger(__name__)
+
+ONLINE_PAY_NOW_METHODS = frozenset({'bakong', 'aba', 'acleda', 'wing'})
 
 
 class TelegramService:
@@ -142,18 +146,25 @@ class TelegramService:
         self.config = current_config
         return sent
 
+    @staticmethod
+    def should_notify_new_order_on_placement(payment_method: str) -> bool:
+        return payment_method not in ONLINE_PAY_NOW_METHODS
+
     def notify_new_order(self, order) -> bool:
         configs = self.get_configs_for('notify_new_order')
         if not configs.exists():
             return False
+        from apps.orders.serializers import display_seller_name
+
         source = 'Customer Checkout' if getattr(order.seller, 'role', '') == 'customer' else 'Admin/Staff Order'
         item_lines = [
             f"- {item.product_name} x{item.quantity} @ ${item.unit_price}"
             for item in order.items.all()[:10]
         ]
         items_text = "\n".join(item_lines) if item_lines else "-"
+        title = '🛍️ <b>New Order!</b>'
         message = (
-            f"🛍️ <b>New Order!</b>\n"
+            f"{title}\n"
             f"Order: <code>#{order.order_number}</code>\n"
             f"Source: {source}\n"
             f"Customer: {order.customer.name}\n"
@@ -161,7 +172,7 @@ class TelegramService:
             f"Items:\n{items_text}\n"
             f"Total: ${order.grand_total}\n"
             f"Payment: {order.get_payment_status_display()}\n"
-            f"Seller: {order.seller.get_full_name() if order.seller else 'N/A'}"
+            f"Seller: {display_seller_name(order)}"
         )
         return self.send_to_configs(configs, message, 'new_order', reference=order.order_number)
 
@@ -224,6 +235,30 @@ class TelegramService:
 
         Thread(target=send, daemon=True).start()
 
+    @classmethod
+    def confirm_order_after_payment_async(cls, order_id, user_id=None) -> None:
+        def send():
+            try:
+                from apps.orders.models import Order, OrderStatusHistory
+                order = Order.objects.select_related('customer', 'seller').prefetch_related('items').get(pk=order_id)
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    status=order.status,
+                    changed_by_id=user_id,
+                    note='Payment confirmed - order confirmed',
+                )
+                already_sent = NotificationLog.objects.filter(
+                    event_type='new_order',
+                    reference=order.order_number,
+                    status='sent',
+                ).exists()
+                if not already_sent:
+                    cls().notify_new_order(order)
+            except Exception as e:
+                logger.error(f"Async order confirmation after payment failed: {e}")
+
+        Thread(target=send, daemon=True).start()
+
     def notify_low_stock(self, product, qty: int) -> bool:
         configs = self.get_configs_for('notify_low_stock')
         if not configs.exists():
@@ -240,14 +275,81 @@ class TelegramService:
         configs = self.get_configs_for('notify_payment')
         if not configs.exists():
             return False
+
+        if NotificationLog.objects.filter(
+            event_type='payment',
+            reference=order.order_number,
+            status='sent',
+        ).exists():
+            return False
+
+        transaction_id, paid_at = self._get_payment_details(order)
+        paid_time = self._format_payment_time(paid_at)
+        method = order.get_payment_method_display() if order.payment_method else 'N/A'
+        amount = f"${order.grand_total:.2f}"
+
         message = (
             f"💰 <b>Payment Received!</b>\n"
-            f"Order: <code>#{order.order_number}</code>\n"
-            f"Amount: ${order.grand_total}\n"
-            f"Method: {order.get_payment_method_display()}\n"
-            f"Customer: {order.customer.name}"
+            f"📦 Order: <code>#{order.order_number}</code>\n"
+            f"💵 Amount: {amount}\n"
+            f"💳 Method: {method}\n"
+            f"👤 Customer: {order.customer.name}\n"
+            f"🕓 Time: {paid_time}\n"
+            f"✅ Status: Payment Successful\n"
+            f"🔢 Transaction ID: <code>{transaction_id}</code>"
         )
-        return self.send_to_configs(configs, message, 'payment')
+        return self.send_to_configs(configs, message, 'payment', reference=order.order_number)
+
+    @staticmethod
+    def _format_payment_time(dt):
+        if not dt:
+            return '-'
+        local = timezone.localtime(dt)
+        return f"{local.day}-{local.strftime('%b-%Y')} | {local.strftime('%I:%M:%S %p')}"
+
+    @staticmethod
+    def _get_payment_details(order):
+        transaction_id = ''
+        paid_at = None
+
+        try:
+            payment = order.bakong_payment
+            if payment.status == 'paid':
+                response_data = payment.response_data if isinstance(payment.response_data, dict) else {}
+                inner = response_data.get('data')
+                if isinstance(inner, dict):
+                    transaction_id = (
+                        inner.get('hash')
+                        or inner.get('transactionId')
+                        or inner.get('transaction_id')
+                        or payment.md5
+                    )
+                else:
+                    transaction_id = payment.md5
+                paid_at = payment.paid_at
+        except ObjectDoesNotExist:
+            pass
+
+        if not transaction_id:
+            try:
+                payment = order.aba_payment
+                if payment.status == 'paid':
+                    transaction_id = payment.apv or payment.tran_id
+                    paid_at = payment.paid_at
+            except ObjectDoesNotExist:
+                pass
+
+        try:
+            revenue = order.revenue
+            transaction_id = transaction_id or revenue.reference
+            paid_at = paid_at or revenue.received_at
+        except ObjectDoesNotExist:
+            pass
+
+        if not transaction_id:
+            transaction_id = order.order_number
+
+        return transaction_id, paid_at or order.updated_at
 
     def notify_delivery_update(self, delivery) -> bool:
         configs = self.get_configs_for('notify_delivery')

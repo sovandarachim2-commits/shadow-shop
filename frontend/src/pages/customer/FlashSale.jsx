@@ -365,54 +365,19 @@ export default function FlashSale() {
         </div>
       </header>
 
-      <section className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-pink-600 via-rose-600 to-pink-500 p-5 text-white shadow-[0_18px_45px_rgba(236,63,143,0.22)] md:p-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_30%,rgba(255,255,255,0.24),transparent_28%),radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.16),transparent_28%)]" />
-        <Zap className="absolute right-8 top-8 rotate-12 fill-yellow-300 text-yellow-300 drop-shadow-lg md:right-20 md:top-14" size={34} />
-        <Zap className="absolute right-6 top-36 -rotate-12 fill-yellow-300 text-yellow-300 drop-shadow-lg md:right-16 md:top-48" size={26} />
-
-        <div className="relative grid gap-6 md:grid-cols-[1fr_420px] md:items-center">
-          <div>
-            <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-black text-pink-600 shadow-sm">
-              <Zap size={18} className="fill-pink-600" /> New deals every day
+      <section className="rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3 text-pink-700 md:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-base font-black text-gray-950">
+              <Zap size={18} className="shrink-0 fill-pink-600 text-pink-600" />
+              Today&apos;s Flash Sale
             </p>
-            <h2 className="max-w-md text-[32px] font-black leading-tight md:text-5xl">
-              Limited Time. <br /> Unbeatable Deals!
-            </h2>
-            <p className="mt-4 max-w-sm text-base font-semibold leading-7 text-white/90 md:text-lg">
-              Grab your favorites at the lowest prices before the time runs out.
-            </p>
-            <div className="mt-5 rounded-2xl bg-rose-950/20 p-4 backdrop-blur md:max-w-lg">
-              <p className="mb-3 flex items-center gap-2 text-sm font-black text-white">
-                <Clock3 size={17} /> Sale ends in
-              </p>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                {[
-                  ['00', 'DAYS'],
-                  [countdown.h, 'HRS'],
-                  [countdown.m, 'MINS'],
-                  [countdown.s, 'SECS'],
-                ].map(([value, label]) => (
-                  <div key={label}>
-                    <span className="block rounded-xl bg-white px-2 py-2 text-xl font-black tabular-nums text-pink-600 md:text-2xl">{value}</span>
-                    <span className="mt-1 block text-[10px] font-black text-white/85">{label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="mt-1 text-sm font-semibold text-pink-700">Limited deals before the day ends.</p>
           </div>
 
-          <div className="hidden justify-center md:flex">
-            <div className="relative h-80 w-80">
-              <div className="absolute bottom-0 left-1/2 h-16 w-52 -translate-x-1/2 rounded-[50%] bg-pink-800/25 blur-sm" />
-              <div className="absolute bottom-8 left-1/2 h-16 w-56 -translate-x-1/2 rounded-[50%] bg-pink-300/60" />
-              <div className="absolute left-1/2 top-14 flex h-48 w-48 -translate-x-1/2 items-center justify-center rounded-full border-[14px] border-pink-300 bg-pink-50 shadow-2xl">
-                <div className="absolute -top-9 left-2 h-14 w-20 -rotate-12 rounded-full bg-pink-400" />
-                <div className="absolute -top-9 right-2 h-14 w-20 rotate-12 rounded-full bg-pink-400" />
-                <div className="absolute bottom-7 left-1/2 h-20 w-1 -translate-x-1/2 origin-bottom rotate-45 rounded-full bg-pink-500" />
-                <div className="absolute bottom-7 left-1/2 h-14 w-1 -translate-x-1/2 origin-bottom -rotate-45 rounded-full bg-pink-500" />
-                <div className="h-4 w-4 rounded-full bg-pink-600" />
-              </div>
-            </div>
+          <div className="flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-black shadow-sm">
+            <Clock3 size={16} className="text-pink-600" />
+            <span className="tabular-nums text-gray-950">{countdown.h}:{countdown.m}:{countdown.s}</span>
           </div>
         </div>
       </section>

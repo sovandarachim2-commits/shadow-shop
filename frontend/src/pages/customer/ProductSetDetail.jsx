@@ -10,7 +10,7 @@ import useCartStore from '@/store/cartStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 
-function toCartProduct(productSet) {
+function toCartProduct(productSet, categoryLabel) {
   const imageUrl = productSet.image_url || productSet.image
   const price = Number(productSet.display_price || productSet.discount_price || productSet.price || 0)
   return {
@@ -26,7 +26,7 @@ function toCartProduct(productSet) {
     current_stock: Number(productSet.current_stock || 0),
     is_flash_sale_active: productSet.is_flash_sale_active,
     flash_sale_max_order_qty: productSet.flash_sale_max_order_qty,
-    category_name: 'Product Set',
+    category_name: categoryLabel,
   }
 }
 
@@ -45,7 +45,7 @@ export default function ProductSetDetail() {
     enabled: !!id,
   })
 
-  const cartProduct = useMemo(() => productSet ? toCartProduct(productSet) : null, [productSet])
+  const cartProduct = useMemo(() => productSet ? toCartProduct(productSet, t('product.productSet')) : null, [productSet, t])
   const cartItem = cartProduct ? items.find((item) => item.product?.cart_key === cartProduct.cart_key) : null
   const qty = cartItem?.quantity || 0
   const setStock = Number(productSet?.current_stock || 0)
@@ -109,7 +109,7 @@ export default function ProductSetDetail() {
   const addSetToCart = () => {
     if (!cartProduct || !isInStock) return
     addItem(cartProduct, 1)
-    toast.success('Product set added to cart')
+    toast.success(t('product.productSetAdded'))
   }
 
   const buyNow = () => {
@@ -137,9 +137,9 @@ export default function ProductSetDetail() {
     return (
       <div className="mx-auto max-w-lg py-20 text-center">
         <PackageSearch size={52} className="mx-auto mb-4 text-gray-200" />
-        <h1 className="text-xl font-black text-gray-950">Product set not found</h1>
+        <h1 className="text-xl font-black text-gray-950">{t('product.productSetNotFound')}</h1>
         <button onClick={() => navigate('/shop')} className="shop-btn-primary mt-6 px-8">
-          Browse Products
+          {t('common.browseProducts')}
         </button>
       </div>
     )
@@ -211,7 +211,7 @@ export default function ProductSetDetail() {
             )}
             </div>
             <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm">
-              PRODUCT SET
+              {t('product.productSet').toUpperCase()}
             </span>
             {galleryImages.length > 1 && (
               <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-white/80 px-2 py-1 shadow-sm">
@@ -244,10 +244,10 @@ export default function ProductSetDetail() {
         </section>
 
         <section>
-          <p className="text-xs font-black uppercase tracking-wide text-pink-600">Product Set</p>
+          <p className="text-xs font-black uppercase tracking-wide text-pink-600">{t('product.productSet')}</p>
           <h1 className="mt-2 text-3xl font-black leading-tight text-gray-950 md:text-4xl">{productSet.name}</h1>
           <p className="mt-3 text-sm font-semibold text-gray-500">
-            {productSet.items?.length || 0} products inside
+            {t('product.productsInsideCount', { count: productSet.items?.length || 0 })}
           </p>
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -265,7 +265,7 @@ export default function ProductSetDetail() {
           </div>
 
           <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
-            {productSet.description || 'This set includes selected products with special bundle pricing.'}
+            {productSet.description || t('product.setDescriptionFallback')}
           </p>
 
 
@@ -276,7 +276,7 @@ export default function ProductSetDetail() {
                 disabled={!isInStock}
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-pink-500 bg-white py-4 text-base font-black text-pink-600 transition hover:bg-pink-50 disabled:border-gray-200 disabled:text-gray-400"
               >
-                <ShoppingCart size={19} /> Add to Cart
+                <ShoppingCart size={19} /> {t('common.addToCart')}
               </button>
             ) : (
               <div className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-pink-100 bg-pink-50 py-3">
@@ -290,12 +290,12 @@ export default function ProductSetDetail() {
               </div>
             )}
             <button onClick={buyNow} disabled={!isInStock} className="shop-btn-primary flex-1 py-4 text-base disabled:opacity-50">
-              <Zap size={19} /> Buy Now
+              <Zap size={19} /> {t('common.buyNow')}
             </button>
           </div>
 
           <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-5 shadow-card">
-            <h2 className="text-lg font-black text-gray-950">Products Inside</h2>
+            <h2 className="text-lg font-black text-gray-950">{t('product.productsInside')}</h2>
             <div className="mt-4 space-y-3">
               {(productSet.items || []).map((item) => (
                 <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-gray-100 p-3">
@@ -322,7 +322,7 @@ export default function ProductSetDetail() {
             className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-gray-950 px-2 text-sm font-black text-white shadow-lg shadow-gray-200 disabled:opacity-50"
           >
             <ShoppingCart size={21} />
-            Add to Cart
+            {t('common.addToCart')}
           </button>
           <button
             onClick={buyNow}
@@ -330,7 +330,7 @@ export default function ProductSetDetail() {
             className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-pink-600 px-2 text-sm font-black text-white shadow-lg shadow-pink-200 disabled:opacity-50"
           >
             <Zap size={21} />
-            Buy Now
+            {t('common.buyNow')}
           </button>
         </div>
       </div>

@@ -1,19 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, Gift, Loader2, Package, Percent, ShoppingCart, Star, Ticket, Truck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 import useCartStore from '@/store/cartStore'
 import { cn } from '@/utils/helpers'
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'vouchers', label: 'Vouchers' },
-  { key: 'products', label: 'Products' },
-  { key: 'discounts', label: 'Discounts' },
-  { key: 'shipping', label: 'Shipping' },
-]
+const FILTER_KEYS = ['all', 'vouchers', 'products', 'discounts', 'shipping']
 
 const TYPE_ICON = {
   voucher: Ticket,
@@ -24,7 +19,7 @@ const TYPE_ICON = {
   manual: Gift,
 }
 
-function RewardTile({ reward, currentPoints, busy, onRedeem, onView }) {
+function RewardTile({ reward, currentPoints, busy, onRedeem, onView, t }) {
   const Icon = TYPE_ICON[reward.type] || Gift
   const image = reward.reward_image_url || reward.gift_product_image
   const hasStock = reward.stock == null || reward.stock > 0
@@ -42,13 +37,13 @@ function RewardTile({ reward, currentPoints, busy, onRedeem, onView }) {
       <div className="p-3">
         <h3 className="truncate text-sm font-black text-gray-950">{reward.name}</h3>
         <p className="mt-0.5 line-clamp-1 text-[11px] font-semibold text-gray-400">
-          {reward.gift_product_name || reward.description || 'Redeem this reward'}
+          {reward.gift_product_name || reward.description || t('rewardsPage.redeem.redeemThisReward')}
         </p>
         <div className="mt-2 flex items-center gap-1.5 text-xs font-black text-gray-950">
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-white">
             <Star size={10} fill="currentColor" />
           </span>
-          {Number(reward.points_required).toLocaleString()} pts
+          {Number(reward.points_required).toLocaleString()} {t('rewardsPage.pts')}
         </div>
         <button
           type="button"
@@ -56,7 +51,7 @@ function RewardTile({ reward, currentPoints, busy, onRedeem, onView }) {
           onClick={onRedeem}
           className="mt-3 flex h-9 w-full items-center justify-center rounded-lg bg-pink-600 text-xs font-black text-white shadow-sm shadow-pink-100 disabled:bg-gray-100 disabled:text-gray-400"
         >
-          {busy ? <Loader2 size={15} className="animate-spin" /> : canRedeem ? 'Redeem' : currentPoints < reward.points_required ? 'More points needed' : 'Unavailable'}
+          {busy ? <Loader2 size={15} className="animate-spin" /> : canRedeem ? t('rewardsPage.redeemBtn') : currentPoints < reward.points_required ? t('rewardsPage.morePointsNeeded') : t('rewardsPage.unavailable')}
         </button>
       </div>
     </article>
@@ -64,6 +59,7 @@ function RewardTile({ reward, currentPoints, busy, onRedeem, onView }) {
 }
 
 export default function RedeemRewards() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const cartCount = useCartStore((state) => state.items.reduce((total, item) => total + item.quantity, 0))
@@ -81,9 +77,9 @@ export default function RedeemRewards() {
     onSuccess: (nextData) => {
       queryClient.setQueryData(['customer-rewards-summary'], nextData)
       const code = nextData.redemption?.coupon_code
-      toast.success(code ? `Redeemed. Code: ${code}` : 'Reward redeemed')
+      toast.success(code ? t('rewardsPage.toast.redeemedWithCode', { code }) : t('rewardsPage.toast.redeemed'))
     },
-    onError: (error) => toast.error(error.response?.data?.detail || 'Could not redeem reward'),
+    onError: (error) => toast.error(error.response?.data?.detail || t('rewardsPage.toast.redeemFailed')),
     onSettled: () => setRedeemingId(null),
   })
 
@@ -92,23 +88,23 @@ export default function RedeemRewards() {
     const vouchers = catalog.filter((reward) => ['voucher', 'discount', 'free_delivery'].includes(reward.type))
     const products = catalog.filter((reward) => ['gift', 'lucky_box'].includes(reward.type))
     const other = catalog.filter((reward) => !['voucher', 'discount', 'free_delivery', 'gift', 'lucky_box'].includes(reward.type))
-    if (activeFilter === 'vouchers') return [{ title: 'Vouchers', rewards: vouchers }]
-    if (activeFilter === 'products') return [{ title: 'Products', rewards: products }]
-    if (activeFilter === 'discounts') return [{ title: 'Discounts', rewards: catalog.filter((reward) => ['voucher', 'discount'].includes(reward.type)) }]
-    if (activeFilter === 'shipping') return [{ title: 'Shipping', rewards: catalog.filter((reward) => reward.type === 'free_delivery') }]
+    if (activeFilter === 'vouchers') return [{ title: t('rewardsPage.redeem.sectionVouchers'), rewards: vouchers }]
+    if (activeFilter === 'products') return [{ title: t('rewardsPage.redeem.sectionProducts'), rewards: products }]
+    if (activeFilter === 'discounts') return [{ title: t('rewardsPage.redeem.sectionDiscounts'), rewards: catalog.filter((reward) => ['voucher', 'discount'].includes(reward.type)) }]
+    if (activeFilter === 'shipping') return [{ title: t('rewardsPage.redeem.sectionShipping'), rewards: catalog.filter((reward) => reward.type === 'free_delivery') }]
     return [
-      { title: 'Vouchers', rewards: vouchers },
-      { title: 'Products', rewards: products },
-      { title: 'Other Rewards', rewards: other },
+      { title: t('rewardsPage.redeem.sectionVouchers'), rewards: vouchers, filterKey: 'vouchers' },
+      { title: t('rewardsPage.redeem.sectionProducts'), rewards: products, filterKey: 'products' },
+      { title: t('rewardsPage.redeem.sectionOther'), rewards: other, filterKey: 'all' },
     ]
-  }, [activeFilter, catalog])
+  }, [activeFilter, catalog, t])
 
   if (isLoading) {
     return <div className="flex min-h-[70vh] items-center justify-center"><Loader2 size={26} className="animate-spin text-pink-600" /></div>
   }
 
   if (isError) {
-    return <div className="px-5 py-20 text-center text-sm font-bold text-gray-500">Rewards could not load.</div>
+    return <div className="px-5 py-20 text-center text-sm font-bold text-gray-500">{t('rewardsPage.loadError')}</div>
   }
 
   return (
@@ -119,8 +115,8 @@ export default function RedeemRewards() {
             <ChevronLeft size={23} />
           </button>
           <div className="min-w-0 text-center md:text-left">
-            <h1 className="text-lg font-black text-gray-950 md:text-2xl">Redeem Rewards</h1>
-            <p className="mt-1 hidden text-xs font-semibold text-gray-500 md:block">Use your points for coupons, shipping, and products.</p>
+            <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.redeem.title')}</h1>
+            <p className="mt-1 hidden text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.redeem.subtitle')}</p>
           </div>
           <button type="button" onClick={() => navigate('/cart')} className="relative flex h-10 w-10 items-center justify-center justify-self-end rounded-full text-gray-950">
             <ShoppingCart size={22} />
@@ -133,17 +129,17 @@ export default function RedeemRewards() {
         </header>
 
         <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] md:mb-4 md:mt-0 [&::-webkit-scrollbar]:hidden">
-          {FILTERS.map((filter) => (
+          {FILTER_KEYS.map((key) => (
             <button
-              key={filter.key}
+              key={key}
               type="button"
-              onClick={() => setActiveFilter(filter.key)}
+              onClick={() => setActiveFilter(key)}
               className={cn(
                 'shrink-0 rounded-xl px-4 py-2.5 text-xs font-black transition',
-                activeFilter === filter.key ? 'bg-pink-600 text-white shadow-sm shadow-pink-100' : 'bg-gray-50 text-gray-500'
+                activeFilter === key ? 'bg-pink-600 text-white shadow-sm shadow-pink-100' : 'bg-gray-50 text-gray-500'
               )}
             >
-              {filter.label}
+              {t(`rewardsPage.filter.${key}`)}
             </button>
           ))}
         </nav>
@@ -153,8 +149,8 @@ export default function RedeemRewards() {
             <section key={section.title}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-black text-gray-950">{section.title}</h2>
-                <button type="button" onClick={() => setActiveFilter(section.title === 'Products' ? 'products' : section.title === 'Vouchers' ? 'vouchers' : 'all')} className="flex items-center gap-0.5 text-xs font-black text-pink-600">
-                  View All <ChevronRight size={14} />
+                <button type="button" onClick={() => setActiveFilter(section.filterKey || 'all')} className="flex items-center gap-0.5 text-xs font-black text-pink-600">
+                  {t('rewardsPage.viewAll')} <ChevronRight size={14} />
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -166,6 +162,7 @@ export default function RedeemRewards() {
                     busy={redeemingId === reward.id}
                     onView={() => navigate(`/profile/rewards/${reward.id}`)}
                     onRedeem={() => redeemMutation.mutate(reward.id)}
+                    t={t}
                   />
                 ))}
               </div>
@@ -174,7 +171,7 @@ export default function RedeemRewards() {
           {catalog.length === 0 && (
             <div className="rounded-2xl border border-dashed border-gray-200 py-16 text-center md:py-24">
               <Gift size={34} className="mx-auto text-gray-200" />
-              <p className="mt-3 text-sm font-black text-gray-500">No rewards available yet</p>
+              <p className="mt-3 text-sm font-black text-gray-500">{t('rewardsPage.redeem.noRewards')}</p>
             </div>
           )}
         </div>

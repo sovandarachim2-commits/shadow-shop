@@ -49,9 +49,9 @@ export default function ProductDetail() {
       setReviewComment('')
       queryClient.invalidateQueries({ queryKey: ['product-reviews', id] })
       queryClient.invalidateQueries({ queryKey: ['product', id] })
-      toast.success('Review saved')
+      toast.success(t('product.reviewSaved'))
     },
-    onError: () => toast.error('Could not save review'),
+    onError: () => toast.error(t('product.reviewSaveFailed')),
   })
 
   const images = product?.images?.length > 0 ? product.images : []
@@ -122,7 +122,7 @@ export default function ProductDetail() {
   const handleSubmitReview = (e) => {
     e.preventDefault()
     if (!loggedIn) {
-      toast.error('Please login to write a review')
+      toast.error(t('product.loginToReview'))
       navigate('/login', { state: { from: `/product/${id}` } })
       return
     }
@@ -312,7 +312,7 @@ export default function ProductDetail() {
                 <Plus size={15} />
               </button>
             </div>
-            {flashSaleMaxQty > 0 && <span className="text-sm font-black text-pink-600">Max {flashSaleMaxQty} per order</span>}
+            {flashSaleMaxQty > 0 && <span className="text-sm font-black text-pink-600">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</span>}
             {!isInStock && <span className="text-sm font-black text-red-500">{t('common.outOfStock')}</span>}
           </div>
 
@@ -342,7 +342,7 @@ export default function ProductDetail() {
                 { key: 'description', label: t('product.description') },
                 { key: 'benefits', label: t('product.benefits') },
                 { key: 'how_to_use', label: t('product.howToUse') },
-                { key: 'reviews', label: t('profile.reviews') || 'Reviews' },
+                { key: 'reviews', label: t('product.reviews') },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -362,8 +362,8 @@ export default function ProductDetail() {
                   <form onSubmit={handleSubmitReview} className="rounded-2xl bg-gray-50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-sm font-black text-gray-950">Rate this product</p>
-                        <p className="text-xs font-semibold text-gray-400">Share your experience for other customers.</p>
+                        <p className="text-sm font-black text-gray-950">{t('product.rateProduct')}</p>
+                        <p className="text-xs font-semibold text-gray-400">{t('product.reviewHint')}</p>
                       </div>
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((value) => (
@@ -387,7 +387,7 @@ export default function ProductDetail() {
                       onChange={(e) => setReviewComment(e.target.value)}
                       rows={3}
                       className="mt-3 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
-                      placeholder="Write your comment..."
+                      placeholder={t('product.reviewPlaceholder')}
                     />
                     <div className="mt-3 flex justify-end">
                       <button
@@ -395,7 +395,7 @@ export default function ProductDetail() {
                         disabled={reviewMutation.isPending}
                         className="rounded-full bg-pink-600 px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
                       >
-                        {reviewMutation.isPending ? 'Saving...' : 'Submit Review'}
+                        {reviewMutation.isPending ? t('product.saving') : t('product.submitReview')}
                       </button>
                     </div>
                   </form>
@@ -403,13 +403,13 @@ export default function ProductDetail() {
                   <div className="space-y-3">
                     {reviews.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center">
-                        <p className="text-sm font-black text-gray-500">No reviews yet</p>
+                        <p className="text-sm font-black text-gray-500">{t('product.noReviewsYet')}</p>
                       </div>
                     ) : reviews.map((review) => (
                       <div key={review.id} className="rounded-2xl border border-gray-100 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-black text-gray-950">{review.user_name || 'Customer'}</p>
+                            <p className="text-sm font-black text-gray-950">{review.user_name || t('product.customer')}</p>
                             <div className="mt-1 flex gap-0.5">
                               {[1, 2, 3, 4, 5].map((value) => (
                                 <Star

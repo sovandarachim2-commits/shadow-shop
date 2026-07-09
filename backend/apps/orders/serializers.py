@@ -12,7 +12,7 @@ def resolve_product_image_url(product, request=None):
         return ''
     img = product.images.filter(is_primary=True).first() or product.images.first()
     if img and img.image:
-        if request:
+        if request and hasattr(request, 'build_absolute_uri'):
             return request.build_absolute_uri(img.image.url)
         return img.image.url
     return ''
@@ -21,7 +21,7 @@ def resolve_product_image_url(product, request=None):
 def resolve_product_set_image_url(product_set, request=None):
     if not product_set or not product_set.image:
         return ''
-    if request:
+    if request and hasattr(request, 'build_absolute_uri'):
         return request.build_absolute_uri(product_set.image.url)
     return product_set.image.url
 
@@ -557,6 +557,7 @@ class CustomerCheckoutSerializer(serializers.Serializer):
     address = serializers.CharField()
     province = serializers.CharField(max_length=50)
     district = serializers.CharField(required=False, allow_blank=True, default='')
+    address_detail = serializers.CharField(required=False, allow_blank=True, default='')
     notes = serializers.CharField(required=False, allow_blank=True, default='')
     payment_method = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_METHOD_CHOICES])
     payment_status = serializers.ChoiceField(
@@ -586,6 +587,7 @@ class CustomerCheckoutSerializer(serializers.Serializer):
             'email': validated_data.pop('email', ''),
             'address': validated_data.pop('address'),
             'province': validated_data.pop('province'),
+            'notes': validated_data.pop('address_detail', ''),
         }
         validated_data.pop('district', None)
 
@@ -644,7 +646,8 @@ class CustomerCheckoutSerializer(serializers.Serializer):
 
         from django.db import transaction
         from apps.notifications.services import TelegramService
-        transaction.on_commit(lambda: TelegramService.notify_new_order_async(order.id))
+        if TelegramService.should_notify_new_order_on_placement(order.payment_method):
+            transaction.on_commit(lambda: TelegramService.notify_new_order_async(order.id))
 
         customer.total_orders = customer.orders.count()
         customer.total_spent = sum(o.grand_total for o in customer.orders.all())

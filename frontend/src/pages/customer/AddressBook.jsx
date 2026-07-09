@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronDown, ChevronRight, Home, MapPin,
@@ -8,6 +9,9 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
+import useAuthStore from '@/store/authStore'
+import { formatAddressRecordKhmer, formatAddressLocationKhmer } from '@/utils/addressHelpers'
+import { getUserContactDefaults } from '@/utils/helpers'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import cambodiaAdmin from '@/data/cambodia_admin.json'
 
@@ -94,11 +98,60 @@ const KH = cambodiaAdmin?.provinces?.length ? cambodiaAdmin : FALLBACK_KH
 
 const KHMER_LOCATION_LABELS = KH.labels || {}
 
+// Province names also appear as districts/communes in labels — use explicit province names at top level.
+const PROVINCE_KHMER_LABELS = {
+  'Banteay Meanchey': 'ខេត្តបន្ទាយមានជ័យ',
+  Battambang: 'ខេត្តបាត់ដំបង',
+  'Kampong Cham': 'ខេត្តកំពង់ចាម',
+  'Kampong Chhnang': 'ខេត្តកំពង់ឆ្នាំង',
+  'Kampong Speu': 'ខេត្តកំពង់ស្ពឺ',
+  'Kampong Thom': 'ខេត្តកំពង់ធំ',
+  Kampot: 'ខេត្តកំពត',
+  Kandal: 'ខេត្តកណ្ដាល',
+  'Koh Kong': 'ខេត្តកោះកុង',
+  Kratie: 'ខេត្តក្រចេះ',
+  'Mondul Kiri': 'ខេត្តមណ្ឌលគិរី',
+  Mondulkiri: 'ខេត្តមណ្ឌលគិរី',
+  'Phnom Penh': 'រាជធានីភ្នំពេញ',
+  'Preah Vihear': 'ខេត្តព្រះវិហារ',
+  'Prey Veng': 'ខេត្តព្រៃវែង',
+  Pursat: 'ខេត្តពោធិ៍សាត់',
+  'Ratanak Kiri': 'ខេត្តរតនគិរី',
+  Ratanakiri: 'ខេត្តរតនគិរី',
+  Siemreap: 'ខេត្តសៀមរាប',
+  'Siem Reap': 'ខេត្តសៀមរាប',
+  'Preah Sihanouk': 'ខេត្តព្រះសីហនុ',
+  'Stung Treng': 'ខេត្តស្ទឹងត្រែង',
+  'Svay Rieng': 'ខេត្តស្វាយរៀង',
+  Takeo: 'ខេត្តតាកែវ',
+  'Oddar Meanchey': 'ខេត្តឧត្ដរមានជ័យ',
+  Kep: 'ខេត្តកែប',
+  Pailin: 'ខេត្តប៉ៃលិន',
+  'Tboung Khmum': 'ខេត្តត្បូងឃ្មុំ',
+}
+
+const PROVINCE_SET = new Set([...KH.provinces, ...Object.keys(PROVINCE_KHMER_LABELS)])
+
 const KHMER_FONT_FAMILY = "'Khmer OS Siemreap', 'Khmer OS', 'Noto Sans Khmer', 'Battambang', sans-serif"
 
+const COUNTRY_OPTIONS = [
+  { value: 'Cambodia', key: 'cambodia' },
+  { value: 'Thailand', key: 'thailand' },
+  { value: 'Vietnam', key: 'vietnam' },
+  { value: 'Laos', key: 'laos' },
+  { value: 'Myanmar', key: 'myanmar' },
+  { value: 'Other', key: 'other' },
+]
+
 function getLocationLabel(name, pathParts = []) {
+  if (!pathParts.length && PROVINCE_SET.has(name) && PROVINCE_KHMER_LABELS[name]) {
+    return PROVINCE_KHMER_LABELS[name]
+  }
   const key = [...pathParts, name].filter(Boolean).join('|')
-  return KHMER_LOCATION_LABELS[key] || KHMER_LOCATION_LABELS[name] || name
+  if (KHMER_LOCATION_LABELS[key]) {
+    return KHMER_LOCATION_LABELS[key]
+  }
+  return KHMER_LOCATION_LABELS[name] || name
 }
 
 function KhmerLocationName({ name, pathParts = [], className = '' }) {
@@ -162,6 +215,7 @@ function FlatInput({ required, value, onChange, placeholder, type = 'text', pref
 
 // ─── LocationPicker ──────────────────────────────────────────────────────────
 function LocationPicker({ onSelect, onClose }) {
+  const { t } = useTranslation()
   const [level, setLevel] = useState('province')
   const [sel, setSel] = useState({ province: '', district: '', commune: '', village: '' })
   const [search, setSearch] = useState('')
@@ -205,10 +259,10 @@ function LocationPicker({ onSelect, onClose }) {
   )
 
   const titleMap = {
-    province: 'ជ្រើសរើសខេត្ត / រាជធានី',
-    district: 'ជ្រើសរើសស្រុក / ខណ្ឌ',
-    commune: 'ជ្រើសរើសឃុំ / សង្កាត់',
-    village: 'ជ្រើសរើសភូមិ',
+    province: t('addressBook.locationPicker.province'),
+    district: t('addressBook.locationPicker.district'),
+    commune: t('addressBook.locationPicker.commune'),
+    village: t('addressBook.locationPicker.village'),
   }
 
   const goBack = () => {
@@ -281,8 +335,8 @@ function LocationPicker({ onSelect, onClose }) {
             type="button"
             onClick={goBack}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-pink-100 text-pink-600 transition hover:bg-pink-200 active:scale-95"
-            aria-label={level === 'district' ? 'Back to provinces' : 'Back to districts'}
-            title={level === 'district' ? 'Back to provinces' : 'Back to districts'}
+            aria-label={level === 'district' ? t('addressBook.locationPicker.backToProvinces') : t('addressBook.locationPicker.backToDistricts')}
+            title={level === 'district' ? t('addressBook.locationPicker.backToProvinces') : t('addressBook.locationPicker.backToDistricts')}
           >
             <ChevronLeft size={21} />
           </button>
@@ -340,13 +394,13 @@ function LocationPicker({ onSelect, onClose }) {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="ស្វែងរក..."
+              placeholder={t('addressBook.locationPicker.search')}
               className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
               style={{ fontFamily: KHMER_FONT_FAMILY }}
             />
           </div>
           <button type="button" className="rounded-full bg-pink-600 px-5 py-2 text-sm font-semibold text-white">
-            ស្វែងរក
+            {t('addressBook.locationPicker.searchButton')}
           </button>
         </div>
       </div>
@@ -354,7 +408,7 @@ function LocationPicker({ onSelect, onClose }) {
       {/* Alphabetical list */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="py-16 text-center text-sm text-gray-400" style={{ fontFamily: KHMER_FONT_FAMILY }}>រកមិនឃើញ</p>
+          <p className="py-16 text-center text-sm text-gray-400" style={{ fontFamily: KHMER_FONT_FAMILY }}>{t('addressBook.locationPicker.noResults')}</p>
         ) : (
           Object.keys(grouped).sort().map((letter) => (
             <div key={letter} className="flex items-start gap-4 border-b border-gray-50 px-5 py-2">
@@ -382,11 +436,17 @@ function LocationPicker({ onSelect, onClose }) {
 }
 
 // ─── AddressForm ─────────────────────────────────────────────────────────────
-function AddressForm({ address, onSave, onClose, isSaving }) {
+function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose, isSaving }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState(() =>
     address
       ? { label: address.label, full_name: address.full_name, phone: address.phone, address_line1: address.address_line1, address_line2: address.address_line2 || '', city: address.city, state: address.state || '', postal_code: address.postal_code || '', country: address.country, is_default: address.is_default }
-      : { ...emptyForm, is_default: false }
+      : {
+          ...emptyForm,
+          full_name: defaultContact?.full_name || '',
+          phone: defaultContact?.phone || '',
+          is_default: isFirstAddress,
+        }
   )
   const [showPicker, setShowPicker] = useState(false)
 
@@ -424,9 +484,9 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-black text-gray-950 md:text-lg">
-                  {address ? 'Edit delivery address' : 'Add delivery address'}
+                  {address ? t('addressBook.editTitle') : t('addressBook.addTitle')}
                 </h3>
-                <p className="mt-0.5 text-xs font-semibold text-gray-500">Save accurate delivery details for faster checkout.</p>
+                <p className="mt-0.5 text-xs font-semibold text-gray-500">{t('addressBook.formSubtitle')}</p>
               </div>
               <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm transition hover:text-pink-600">
                 <X size={20} />
@@ -442,7 +502,7 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
                 required
                 value={form.full_name}
                 onChange={(v) => set('full_name', v)}
-                placeholder="Full name (first and last)"
+                placeholder={t('addressBook.fullNamePlaceholder')}
               />
 
               {/* Phone */}
@@ -456,7 +516,7 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
                   type="tel"
                   value={form.phone}
                   onChange={(e) => set('phone', e.target.value)}
-                  placeholder="Enter phone number"
+                  placeholder={t('addressBook.phonePlaceholder')}
                   className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
                 />
               </div>
@@ -469,12 +529,9 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
                   onChange={(e) => { set('country', e.target.value); set('state', ''); set('city', ''); set('address_line2', '') }}
                   className="flex-1 appearance-none bg-transparent text-sm text-gray-800 outline-none"
                 >
-                  <option>Cambodia</option>
-                  <option>Thailand</option>
-                  <option>Vietnam</option>
-                  <option>Laos</option>
-                  <option>Myanmar</option>
-                  <option>Other</option>
+                  {COUNTRY_OPTIONS.map((country) => (
+                    <option key={country.value} value={country.value}>{t(`addressBook.countries.${country.key}`)}</option>
+                  ))}
                 </select>
                 <ChevronDown size={15} className="shrink-0 text-gray-400" />
               </div>
@@ -490,14 +547,14 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
                   {locationSummary ? (
                     <span className="flex-1 text-sm text-gray-800" style={{ fontFamily: KHMER_FONT_FAMILY }}>{locationSummary}</span>
                   ) : (
-                    <span className="flex-1 text-sm text-gray-400">Province › District › Commune</span>
+                    <span className="flex-1 text-sm text-gray-400" style={{ fontFamily: KHMER_FONT_FAMILY }}>{t('addressBook.locationPlaceholder')}</span>
                   )}
                   <ChevronRight size={15} className="shrink-0 text-gray-400" />
                 </button>
               ) : (
                 <>
-                  <FlatInput required value={form.state} onChange={(v) => set('state', v)} placeholder="Province / State" />
-                  <FlatInput required value={form.city} onChange={(v) => set('city', v)} placeholder="City / District" />
+                  <FlatInput required value={form.state} onChange={(v) => set('state', v)} placeholder={t('addressBook.provinceState')} />
+                  <FlatInput required value={form.city} onChange={(v) => set('city', v)} placeholder={t('addressBook.cityDistrict')} />
                 </>
               )}
 
@@ -506,7 +563,7 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
                 required
                 value={form.address_line1}
                 onChange={(v) => set('address_line1', v)}
-                placeholder="Street, Number, Apt, Suite, Floor, etc."
+                placeholder={t('addressBook.streetPlaceholder')}
               />
 
             </div>
@@ -514,7 +571,7 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
             {/* Sticky bottom */}
             <div className="border-t border-gray-100 bg-white px-5 pb-8 pt-4 md:px-6 md:pb-5">
               <div className="mb-4 flex items-center justify-between">
-                <span className="text-sm text-gray-800">Set as default address</span>
+                <span className="text-sm text-gray-800">{t('addressBook.setDefault')}</span>
                 <Toggle checked={form.is_default} onChange={(v) => set('is_default', v)} />
               </div>
               <button
@@ -522,7 +579,7 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
                 disabled={isSaving}
                 className="w-full rounded-full bg-pink-600 py-4 text-sm font-semibold text-white transition hover:bg-pink-700 disabled:opacity-70"
               >
-                {isSaving ? 'Saving...' : 'Save'}
+                {isSaving ? t('addressBook.saving') : t('common.save')}
               </button>
             </div>
           </form>
@@ -540,7 +597,8 @@ function AddressForm({ address, onSave, onClose, isSaving }) {
 }
 
 function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending }) {
-  const label = addr.label || 'Other'
+  const { t } = useTranslation()
+  const label = addr.label || t('addressBook.other')
   const Icon = label.toLowerCase().includes('home') ? Home : MapPin
 
   return (
@@ -556,12 +614,13 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
                 <span className="rounded-md bg-pink-50 px-2.5 py-0.5 text-xs font-black uppercase text-pink-600">{label}</span>
                 {addr.is_default && (
                   <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2.5 py-0.5 text-xs font-black text-green-600">
-                    <Star size={11} className="fill-green-600" /> Default
+                    <Star size={11} className="fill-green-600" /> {t('addressBook.default')}
                   </span>
                 )}
               </div>
-              <h3 className="truncate text-sm font-bold text-gray-950">{addr.address_line1}</h3>
-              <p className="mt-0.5 text-sm text-gray-600">{[addr.city, addr.state].filter(Boolean).join(', ')}</p>
+              <p className="text-sm font-bold leading-snug text-gray-950" style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                {formatAddressRecordKhmer(addr) || addr.address_line1 || '-'}
+              </p>
               <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-500">
                 <span className="inline-flex items-center gap-1.5"><User size={13} /> {addr.full_name}</span>
                 <span>{addr.phone}</span>
@@ -575,10 +634,10 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
           <div className="mt-4 flex items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <button onClick={() => onEdit(addr)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-pink-500 px-4 py-2 text-sm font-black text-pink-600">
-                <Pencil size={14} /> Edit
+                <Pencil size={14} /> {t('addressBook.edit')}
               </button>
               <button onClick={() => onDelete(addr)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-black text-gray-600">
-                <Trash2 size={14} /> Delete
+                <Trash2 size={14} /> {t('addressBook.delete')}
               </button>
             </div>
             {!addr.is_default && (
@@ -587,7 +646,7 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
                 disabled={defaultPending}
                 className="shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-black text-pink-600 hover:border-pink-300 hover:bg-pink-100 disabled:opacity-60"
               >
-                <Star size={14} /> Set as Default
+                <Star size={14} /> {t('addressBook.setAsDefault')}
               </button>
             )}
           </div>
@@ -599,8 +658,11 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
 
 // ─── AddressBook page ────────────────────────────────────────────────────────
 export default function AddressBook() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const defaultContact = useMemo(() => getUserContactDefaults(user), [user])
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirm, ConfirmDialog] = useConfirm()
@@ -615,29 +677,29 @@ export default function AddressBook() {
       editing ? authApi.addresses.update(editing.id, payload) : authApi.addresses.create(payload),
     onSuccess: () => {
       qc.invalidateQueries(['my-addresses'])
-      toast.success(editing ? 'Address updated' : 'Address saved')
+      toast.success(editing ? t('addressBook.toast.updated') : t('addressBook.toast.saved'))
       setShowForm(false)
       setEditing(null)
     },
-    onError: () => toast.error('Failed to save address'),
+    onError: () => toast.error(t('addressBook.toast.saveFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id) => authApi.addresses.delete(id),
-    onSuccess: () => { qc.invalidateQueries(['my-addresses']); toast.success('Address removed') },
-    onError: () => toast.error('Failed to delete address'),
+    onSuccess: () => { qc.invalidateQueries(['my-addresses']); toast.success(t('addressBook.toast.removed')) },
+    onError: () => toast.error(t('addressBook.toast.deleteFailed')),
   })
 
   const defaultMutation = useMutation({
     mutationFn: (id) => authApi.addresses.setDefault(id),
-    onSuccess: () => { qc.invalidateQueries(['my-addresses']); toast.success('Default address updated') },
-    onError: () => toast.error('Failed to update default'),
+    onSuccess: () => { qc.invalidateQueries(['my-addresses']); toast.success(t('addressBook.toast.defaultUpdated')) },
+    onError: () => toast.error(t('addressBook.toast.defaultFailed')),
   })
 
   const openNew = () => { setEditing(null); setShowForm(true) }
   const openEdit = (addr) => { setEditing(addr); setShowForm(true) }
   const removeAddress = async (addr) => {
-    if (await confirm('Remove this address?', 'This action cannot be undone.')) deleteMutation.mutate(addr.id)
+    if (await confirm(t('addressBook.confirmRemove'), t('addressBook.confirmRemoveBody'))) deleteMutation.mutate(addr.id)
   }
   return (
     <>
@@ -645,11 +707,11 @@ export default function AddressBook() {
         <main className="min-w-0 flex-1 p-6">
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-black text-gray-950">My Addresses</h1>
-              <p className="mt-1 text-sm text-gray-500">Manage your saved addresses for faster checkout.</p>
+              <h1 className="text-2xl font-black text-gray-950">{t('addressBook.myAddresses')}</h1>
+              <p className="mt-1 text-sm text-gray-500">{t('addressBook.subtitle')}</p>
             </div>
             <button onClick={openNew} className="inline-flex items-center gap-2 rounded-xl bg-pink-600 px-5 py-2.5 text-sm font-black text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700">
-              <Plus size={16} /> Add New Address
+              <Plus size={16} /> {t('addressBook.addNew')}
             </button>
           </div>
 
@@ -660,8 +722,8 @@ export default function AddressBook() {
               ) : addresses.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-24 text-center">
                   <MapPin size={42} className="mx-auto text-pink-300" />
-                  <p className="mt-4 text-lg font-black text-gray-700">No addresses yet</p>
-                  <button onClick={openNew} className="mt-5 rounded-xl bg-pink-600 px-6 py-3 text-sm font-black text-white">Add Address</button>
+                  <p className="mt-4 text-lg font-black text-gray-700">{t('addressBook.noAddresses')}</p>
+                  <button onClick={openNew} className="mt-5 rounded-xl bg-pink-600 px-6 py-3 text-sm font-black text-white">{t('addressBook.add')}</button>
                 </div>
               ) : (
                 addresses.map((addr) => (
@@ -681,8 +743,8 @@ export default function AddressBook() {
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-pink-100 text-pink-600">
                 <MapPin size={36} />
               </div>
-              <h2 className="mt-8 text-2xl font-black text-pink-600">Need help?</h2>
-              <p className="mt-5 text-lg font-semibold leading-8 text-gray-600">You can add up to 10 addresses to your account.</p>
+              <h2 className="mt-8 text-2xl font-black text-pink-600">{t('addressBook.needHelp')}</h2>
+              <p className="mt-5 text-lg font-semibold leading-8 text-gray-600">{t('addressBook.maxAddresses')}</p>
             </aside>
           </div>
         </main>
@@ -695,10 +757,10 @@ export default function AddressBook() {
         <button onClick={() => navigate('/profile')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={22} />
         </button>
-        <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">Addresses</h1>
+        <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('addressBook.title')}</h1>
         <div className="flex items-center justify-end gap-2">
           <button className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-500 active:scale-95"><Search size={19} /></button>
-          <button onClick={openNew} className="h-11 rounded-full bg-pink-600 px-4 text-sm font-black text-white shadow-sm shadow-pink-100 active:scale-95">Add</button>
+          <button onClick={openNew} className="h-11 rounded-full bg-pink-600 px-4 text-sm font-black text-white shadow-sm shadow-pink-100 active:scale-95">{t('addressBook.add')}</button>
         </div>
       </div>
 
@@ -712,13 +774,13 @@ export default function AddressBook() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-pink-50">
             <MapPin size={28} className="text-pink-400" />
           </div>
-          <p className="font-semibold text-gray-800">No addresses yet</p>
-          <p className="mt-1 text-sm text-gray-400">Add a delivery address to speed up checkout.</p>
+          <p className="font-semibold text-gray-800">{t('addressBook.noAddresses')}</p>
+          <p className="mt-1 text-sm text-gray-400">{t('addressBook.noAddressesHint')}</p>
           <button
             onClick={openNew}
             className="mt-6 rounded-full bg-pink-600 px-8 py-3 text-sm font-semibold text-white hover:bg-pink-700"
           >
-            Add Address
+            {t('addressBook.add')}
           </button>
         </div>
       ) : (
@@ -727,18 +789,15 @@ export default function AddressBook() {
             <div key={addr.id} className="border-b border-gray-100 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="mb-1 text-xs text-gray-400">
-                    {addr.country}{addr.state ? ` · ${addr.state}` : ''}{addr.city ? ` · ${addr.city}` : ''}
-                  </p>
-                  <p className="text-sm font-bold leading-snug text-gray-900">
-                    {addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ''}
+                  <p className="text-sm font-bold leading-snug text-gray-900" style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                    {formatAddressRecordKhmer(addr) || addr.address_line1 || '-'}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span className="text-sm text-gray-700">{addr.full_name}</span>
                     <span className="text-sm text-gray-500">{addr.phone}</span>
                     {addr.is_default && (
                       <span className="rounded bg-pink-50 px-1.5 py-0.5 text-[11px] font-semibold text-pink-600">
-                        Default
+                        {t('addressBook.default')}
                       </span>
                     )}
                   </div>
@@ -749,13 +808,13 @@ export default function AddressBook() {
                         disabled={defaultMutation.isPending}
                         className="inline-flex items-center justify-center gap-1.5 rounded-full bg-pink-50 px-3 py-1.5 text-xs font-black text-pink-600 active:scale-95 disabled:opacity-50"
                       >
-                        <Star size={12} /> Set as default
+                        <Star size={12} /> {t('addressBook.setAsDefaultShort')}
                       </button>
                       <button
                         onClick={() => removeAddress(addr)}
                         className="rounded-full px-2 py-1.5 text-xs font-semibold text-gray-400 underline-offset-2 hover:text-red-500 hover:underline"
                       >
-                        Remove
+                        {t('addressBook.remove')}
                       </button>
                     </div>
                   )}
@@ -769,7 +828,7 @@ export default function AddressBook() {
               </div>
             </div>
           ))}
-          <p className="py-8 text-center text-sm text-gray-400">You've reached the end</p>
+          <p className="py-8 text-center text-sm text-gray-400">{t('addressBook.endOfList')}</p>
         </div>
       )}
 
@@ -778,6 +837,8 @@ export default function AddressBook() {
       {showForm && (
         <AddressForm
           address={editing}
+          defaultContact={defaultContact}
+          isFirstAddress={!editing && addresses.length === 0}
           onSave={(payload) => saveMutation.mutate(payload)}
           onClose={() => { setShowForm(false); setEditing(null) }}
           isSaving={saveMutation.isPending}

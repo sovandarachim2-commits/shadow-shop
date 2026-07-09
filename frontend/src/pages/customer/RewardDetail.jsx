@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import {
   BadgeCheck,
@@ -17,27 +18,31 @@ import { ordersApi } from '@/api/orders'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { cn, formatDate } from '@/utils/helpers'
 
-const TYPE_META = {
-  discount: { label: 'Coupon', icon: Percent, tone: 'bg-pink-50 text-pink-600' },
-  free_delivery: { label: 'Free Delivery', icon: Truck, tone: 'bg-sky-50 text-sky-600' },
-  gift: { label: 'Gift', icon: Gift, tone: 'bg-amber-50 text-amber-600' },
-  manual: { label: 'Manual', icon: BadgeCheck, tone: 'bg-violet-50 text-violet-600' },
+function getTypeMeta(t) {
+  return {
+    discount: { label: t('rewardsPage.type.coupon'), icon: Percent, tone: 'bg-pink-50 text-pink-600' },
+    free_delivery: { label: t('rewardsPage.type.freeDelivery'), icon: Truck, tone: 'bg-sky-50 text-sky-600' },
+    gift: { label: t('rewardsPage.type.gift'), icon: Gift, tone: 'bg-amber-50 text-amber-600' },
+    manual: { label: t('rewardsPage.type.manual'), icon: BadgeCheck, tone: 'bg-violet-50 text-violet-600' },
+  }
 }
 
-function rewardValueText(reward, meta) {
+function rewardValueText(reward, meta, t) {
   if (reward.type === 'discount') {
     return reward.coupon_discount_type === 'percent'
-      ? `${Number(reward.coupon_value)}% discount`
-      : `$${Number(reward.coupon_value).toFixed(2)} discount`
+      ? t('rewardsPage.detail.percentDiscount', { value: Number(reward.coupon_value) })
+      : t('rewardsPage.detail.amountDiscount', { value: Number(reward.coupon_value).toFixed(2) })
   }
-  if (reward.type === 'free_delivery') return 'Free delivery reward'
+  if (reward.type === 'free_delivery') return t('rewardsPage.detail.freeDeliveryReward')
   return reward.gift_product_name || meta.label
 }
 
 export default function RewardDetail() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const TYPE_META = getTypeMeta(t)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -49,11 +54,11 @@ export default function RewardDetail() {
     onSuccess: (nextData) => {
       queryClient.setQueryData(['customer-rewards-summary'], nextData)
       const code = nextData.redemption?.coupon_code
-      toast.success(code ? `Reward exchanged. Code: ${code}` : 'Reward exchanged')
+      toast.success(code ? t('rewardsPage.toast.exchangedWithCode', { code }) : t('rewardsPage.toast.exchanged'))
       navigate('/profile/rewards')
     },
     onError: (error) => {
-      toast.error(error.response?.data?.detail || 'Could not exchange reward')
+      toast.error(error.response?.data?.detail || t('rewardsPage.toast.exchangeFailed'))
     },
   })
 
@@ -72,10 +77,10 @@ export default function RewardDetail() {
     return (
       <div className="mx-auto max-w-lg py-20 text-center">
         <PackageSearch size={52} className="mx-auto mb-4 text-gray-200" />
-        <h1 className="text-xl font-black text-gray-950">Reward not found</h1>
-        <p className="mt-2 text-sm font-semibold text-gray-400">This reward may no longer be available.</p>
+        <h1 className="text-xl font-black text-gray-950">{t('rewardsPage.detail.notFound')}</h1>
+        <p className="mt-2 text-sm font-semibold text-gray-400">{t('rewardsPage.detail.notFoundHint')}</p>
         <button onClick={() => navigate('/profile/rewards')} className="mt-6 rounded-lg bg-pink-600 px-6 py-3 text-sm font-black text-white">
-          Back to Rewards
+          {t('rewardsPage.backToRewards')}
         </button>
       </div>
     )
@@ -87,7 +92,11 @@ export default function RewardDetail() {
   const hasStock = reward.stock === null || reward.stock === undefined || reward.stock > 0
   const canExchange = reward.can_exchange && hasStock
   const pointsShort = Math.max(0, reward.points_required - currentPoints)
-  const unavailableText = !hasStock ? 'Out of stock' : pointsShort > 0 ? `${pointsShort.toLocaleString()} pts short` : 'Unavailable'
+  const unavailableText = !hasStock
+    ? t('rewardsPage.outOfStock')
+    : pointsShort > 0
+      ? t('rewardsPage.ptsShort', { count: pointsShort.toLocaleString() })
+      : t('rewardsPage.unavailable')
 
   return (
     <div className="mx-auto w-full max-w-[760px] bg-white pb-24 md:max-w-[1440px] md:px-6 md:pb-0 md:pt-6">
@@ -95,7 +104,7 @@ export default function RewardDetail() {
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
         </button>
-        <h1 className="min-w-0 truncate text-center text-lg font-black leading-tight text-gray-950">Reward Detail</h1>
+        <h1 className="min-w-0 truncate text-center text-lg font-black leading-tight text-gray-950">{t('rewardsPage.detail.title')}</h1>
         <HeaderActionIcons />
       </div>
 
@@ -103,14 +112,14 @@ export default function RewardDetail() {
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700">
           <ChevronLeft size={20} />
         </span>
-        Back to Rewards
+        {t('rewardsPage.backToRewards')}
       </button>
 
       <div className="grid gap-7 px-4 md:px-0 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-3xl bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">
           <div className="relative overflow-hidden rounded-3xl bg-white">
             <span className="absolute left-4 top-4 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black text-white shadow-lg shadow-pink-200">
-              {Number(reward.points_required).toLocaleString()} pts
+              {Number(reward.points_required).toLocaleString()} {t('rewardsPage.pts')}
             </span>
             <div className="flex aspect-[1/0.82] max-h-[520px] items-center justify-center md:aspect-square">
               {rewardImage ? (
@@ -131,51 +140,51 @@ export default function RewardDetail() {
             </span>
             <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-black uppercase', hasStock ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500')}>
               <span className={cn('h-2 w-2 rounded-full', hasStock ? 'bg-green-500' : 'bg-red-500')} />
-              {hasStock ? 'Available' : 'Out of stock'}
+              {hasStock ? t('rewardsPage.detail.available') : t('rewardsPage.outOfStock')}
             </span>
           </div>
 
           <h1 className="text-[28px] font-black leading-[1.12] text-gray-950 md:text-5xl">{reward.name}</h1>
           <p className="mt-4 max-w-2xl text-[17px] leading-8 text-gray-600 md:text-base md:leading-7">
-            {reward.description || reward.gift_product_name || 'Exchange points for this reward.'}
+            {reward.description || reward.gift_product_name || t('rewardsPage.main.exchangeHint')}
           </p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl bg-pink-50 p-5">
-              <p className="text-[11px] font-black uppercase leading-none text-pink-500">Points required</p>
+              <p className="text-[11px] font-black uppercase leading-none text-pink-500">{t('rewardsPage.detail.pointsRequired')}</p>
               <p className="mt-3 text-[34px] font-black leading-none text-pink-600">{Number(reward.points_required).toLocaleString()}</p>
             </div>
             <div className="rounded-2xl bg-gray-50 p-5">
-              <p className="text-[11px] font-black uppercase leading-none text-gray-400">Reward value</p>
-              <p className="mt-3 text-base font-black leading-tight text-gray-900">{rewardValueText(reward, meta)}</p>
+              <p className="text-[11px] font-black uppercase leading-none text-gray-400">{t('rewardsPage.detail.rewardValue')}</p>
+              <p className="mt-3 text-base font-black leading-tight text-gray-900">{rewardValueText(reward, meta, t)}</p>
             </div>
             <div className="rounded-2xl bg-gray-50 p-5">
-              <p className="text-[11px] font-black uppercase leading-none text-gray-400">Stock</p>
+              <p className="text-[11px] font-black uppercase leading-none text-gray-400">{t('rewardsPage.detail.stock')}</p>
               <p className="mt-3 text-base font-black leading-tight text-gray-900">
-                {reward.stock === null || reward.stock === undefined ? 'No limit' : `${reward.stock} left`}
+                {reward.stock === null || reward.stock === undefined ? t('rewardsPage.detail.noLimit') : t('rewardsPage.detail.left', { count: reward.stock })}
               </p>
             </div>
             {Number(reward.minimum_order_amount || 0) > 0 && (
               <div className="rounded-2xl bg-gray-50 p-5">
-                <p className="text-[11px] font-black uppercase leading-none text-gray-400">Minimum order</p>
+                <p className="text-[11px] font-black uppercase leading-none text-gray-400">{t('rewardsPage.detail.minimumOrder')}</p>
                 <p className="mt-3 text-base font-black leading-tight text-gray-900">${Number(reward.minimum_order_amount).toFixed(2)}</p>
               </div>
             )}
             {(reward.starts_at || reward.ends_at) && (
               <div className="rounded-2xl bg-gray-50 p-5 sm:col-span-2">
-                <p className="flex items-center gap-1.5 text-[11px] font-black uppercase leading-none text-gray-400"><CalendarDays size={13} /> Available</p>
+                <p className="flex items-center gap-1.5 text-[11px] font-black uppercase leading-none text-gray-400"><CalendarDays size={13} /> {t('rewardsPage.detail.availablePeriod')}</p>
                 <p className="mt-3 text-base font-black leading-tight text-gray-900">
-                  {reward.starts_at ? formatDate(reward.starts_at) : 'Now'} - {reward.ends_at ? formatDate(reward.ends_at) : 'No end date'}
+                  {reward.starts_at ? formatDate(reward.starts_at) : t('rewardsPage.detail.now')} - {reward.ends_at ? formatDate(reward.ends_at) : t('rewardsPage.detail.noEndDate')}
                 </p>
               </div>
             )}
           </div>
 
           <div className="mt-7 rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-base font-black text-gray-950">Your points</p>
+            <p className="text-base font-black text-gray-950">{t('rewardsPage.detail.yourPoints')}</p>
             <div className="mt-2 flex items-end gap-2">
               <span className="text-[42px] font-black leading-none text-pink-600">{currentPoints.toLocaleString()}</span>
-              <span className="pb-1 text-sm font-black text-gray-400">pts</span>
+              <span className="pb-1 text-sm font-black text-gray-400">{t('rewardsPage.pts')}</span>
             </div>
           </div>
 
@@ -189,7 +198,7 @@ export default function RewardDetail() {
             )}
           >
             {exchangeMutation.isPending ? <Loader2 size={19} className="animate-spin" /> : <Ticket size={19} />}
-            {canExchange ? 'Exchange Reward' : unavailableText}
+            {canExchange ? t('rewardsPage.detail.exchangeReward') : unavailableText}
           </button>
         </section>
       </div>
@@ -205,7 +214,7 @@ export default function RewardDetail() {
           )}
         >
           {exchangeMutation.isPending ? <Loader2 size={19} className="animate-spin" /> : <Ticket size={19} />}
-          {canExchange ? 'Exchange Reward' : unavailableText}
+          {canExchange ? t('rewardsPage.detail.exchangeReward') : unavailableText}
         </button>
       </div>
     </div>

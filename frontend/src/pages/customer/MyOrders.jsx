@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { ChevronLeft, ClipboardList, Heart, Loader2, Printer, ReceiptText, ShoppingCart } from 'lucide-react'
+import { ChevronLeft, ClipboardList, Loader2, Printer, ReceiptText } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { formatFullAddressKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
 import { ProductThumb } from '@/components/customer/CustomerUi'
-import useCartStore from '@/store/cartStore'
-import useWishlistStore from '@/store/wishlistStore'
+import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
+import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import { useTranslation } from 'react-i18next'
 
 const USD_TO_KHR_RATE = 4100
@@ -129,6 +130,7 @@ function ReceiptQr({ orderNumber }) {
 
 function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
   const customer = order.customer_detail || {}
+  const customerAddress = formatFullAddressKhmer(customer)
   const items = order.items?.length ? order.items : [{
     id: 'preview',
     product_name: order.preview_name || 'Product',
@@ -167,7 +169,7 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
           <span>Phone:</span>
           <span className="min-w-0 break-words">{customer.phone || order.customer_phone || '-'}</span>
           <span>Address:</span>
-          <span className="min-w-0 break-words">{customer.address || customer.province || '-'}</span>
+          <span className="min-w-0 break-words" style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</span>
         </div>
       </section>
 
@@ -263,9 +265,6 @@ export default function MyOrders() {
   const location = useLocation()
   const activeTab = new URLSearchParams(location.search).get('tab') === 'completed' ? 'completed' : 'ongoing'
   const [receiptOrderId, setReceiptOrderId] = useState(null)
-  const cartItems = useCartStore((s) => s.items)
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-  const wishlistCount = useWishlistStore((s) => s.items.length)
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-orders'],
@@ -291,40 +290,19 @@ export default function MyOrders() {
   })
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[520px] flex-col bg-white pb-24 md:min-h-[calc(100vh-180px)] md:rounded-[28px] md:shadow-card">
-      <div className="hidden px-4 pb-4 pt-6 md:block">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-[28px] font-black leading-tight text-gray-950">{t('orders.title')}</h1>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate('/wishlist')}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-95"
-              aria-label="Wishlist"
-            >
-              <Heart size={21} strokeWidth={2.2} />
-              {wishlistCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                  {wishlistCount > 9 ? '9+' : wishlistCount}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/cart')}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm shadow-pink-100 transition active:scale-95"
-              aria-label="Cart"
-            >
-              <ShoppingCart size={21} strokeWidth={2.4} />
-              {totalItems > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                  {totalItems > 9 ? '9+' : totalItems}
-                </span>
-              )}
-            </button>
+    <div className="flex w-full max-w-[520px] flex-col bg-white pb-24 md:mx-0 md:max-w-none md:rounded-none md:shadow-none md:pb-0">
+      <div className="hidden md:block">
+        <div className="mb-6 flex min-h-[48px] items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <HeaderBrandMark />
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-pink-600">{t('nav.orders')}</p>
+              <h1 className="truncate text-2xl font-black tracking-tight text-gray-950">{t('orders.title')}</h1>
+            </div>
           </div>
+          <HeaderActionIcons size="md" />
         </div>
-        <div className="mt-3 grid grid-cols-2 rounded-lg bg-gray-200 p-1">
+        <div className="mb-6 grid max-w-md grid-cols-2 rounded-lg bg-gray-200 p-1">
           {[
             { key: 'ongoing', label: 'Ongoing' },
             { key: 'completed', label: 'Completed' },
@@ -344,13 +322,13 @@ export default function MyOrders() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3 px-4">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-[94px] animate-pulse rounded-lg border border-gray-100 bg-gray-100" />
+        <div className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-[180px] animate-pulse rounded-2xl border border-gray-100 bg-gray-100" />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="mx-4 flex flex-1 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-20 text-center">
+        <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-20 text-center">
           <div>
             <ClipboardList size={52} className="mx-auto mb-4 text-gray-200" />
             <p className="text-lg font-black text-gray-500">{t('orders.noOrdersFound')}</p>
@@ -361,13 +339,13 @@ export default function MyOrders() {
           </div>
         </div>
       ) : (
-        <div className="space-y-3 px-4">
+        <div className="space-y-4 md:grid md:grid-cols-2 md:gap-5 md:space-y-0 lg:grid-cols-3">
           {orders.map((order) => {
             const orderItems = getOrderItems(order)
             const statusLabel = compactStatusLabel(order.status, t)
             const statusStyle = STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500'
             return (
-              <section key={order.id} className="space-y-2">
+              <section key={order.id} className="space-y-2 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm md:p-4">
                 <div className="flex items-center justify-between gap-3 px-1">
                   <button onClick={() => navigate(`/my-orders/${order.id}`)} className="min-w-0 text-left">
                     <p className="truncate font-mono text-xs font-black text-gray-900">Order #{order.order_number}</p>
@@ -383,7 +361,7 @@ export default function MyOrders() {
                   </button>
                 </div>
                 {orderItems.map((item, index) => (
-                  <article key={item.id || `${order.id}-${index}`} className="flex min-h-[94px] gap-3 rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+                  <article key={item.id || `${order.id}-${index}`} className="flex min-h-[94px] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
                     <button onClick={() => navigate(`/my-orders/${order.id}`)} className="h-[70px] w-[70px] shrink-0 overflow-hidden rounded-md bg-gray-100 text-left">
                       {item.product_image || (index === 0 && order.preview_image) ? (
                         <img

@@ -9,6 +9,7 @@ import { authApi } from '@/api/auth'
 import { PaymentStatusBadge } from '@/components/ui/Badge'
 import { EmptyState, LoadingRows, Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/Table'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { formatFullAddressKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
 import toast from 'react-hot-toast'
 
 const PRINT_TYPES = [
@@ -226,7 +227,7 @@ function ReceiptSlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) {
   const customer = order.customer_detail || {}
   const customerName = order.customer_name || customer.name || '-'
   const customerPhone = order.customer_phone || customer.phone || '-'
-  const customerAddress = customer.address || customer.province || '-'
+  const customerAddress = formatFullAddressKhmer(customer)
   const items = order.items?.length
     ? order.items
     : [{
@@ -267,7 +268,7 @@ function ReceiptSlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) {
           <span>Phone:</span>
           <span>{customerPhone}</span>
           <span>Address:</span>
-          <span>{customerAddress}</span>
+          <span style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</span>
         </div>
       </section>
 
@@ -334,7 +335,7 @@ function DeliverySlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) 
   const customer = order.customer_detail || {}
   const customerName = order.customer_name || customer.name || '-'
   const customerPhone = order.customer_phone || customer.phone || '-'
-  const customerAddress = customer.address || customer.province || '-'
+  const customerAddress = formatFullAddressKhmer(customer)
   const items = order.items?.length
     ? order.items
     : [{ id: 'preview', product_name: order.preview_name || '-', quantity: order.items_count || 1 }]
@@ -365,7 +366,7 @@ function DeliverySlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) 
           <span>លេខទូរស័ព្ទ</span>
           <span>{customerPhone}</span>
           <span>ទីតាំង</span>
-          <span>{customerAddress}</span>
+          <span style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</span>
         </div>
       </section>
 

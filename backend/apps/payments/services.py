@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 from apps.finance.models import Revenue
 from apps.notifications.services import TelegramService
 from apps.orders.rewards import award_points_for_paid_order
-from .models import BakongPayment
+from .models import BakongPayment, PendingCheckout
 
 
 BAKONG_PROD_URL = 'https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5'
@@ -114,17 +114,18 @@ def _qr_data_url(payload):
     return f'data:image/png;base64,{encoded}'
 
 
-def generate_khqr_payload(order):
+def generate_khqr_payload_for_payment(reference, amount, expires_ms=None):
     account_id = settings.BAKONG_ACCOUNT_ID.strip()
     if not account_id:
         raise ImproperlyConfigured('BAKONG_ACCOUNT_ID is not configured.')
 
     currency = settings.BAKONG_CURRENCY if settings.BAKONG_CURRENCY in ('USD', 'KHR') else 'USD'
     now_ms = int(time.time() * 1000)
-    expires_ms = now_ms + (max(settings.BAKONG_EXPIRATION_MINUTES, 1) * 60 * 1000)
+    if expires_ms is None:
+        expires_ms = now_ms + (max(settings.BAKONG_EXPIRATION_MINUTES, 1) * 60 * 1000)
 
     merchant_account = _tlv('00', account_id)
-    additional_data = _tlv('01', order.order_number) + _tlv('08', 'Shadow Shop Order')
+    additional_data = _tlv('01', reference) + _tlv('08', 'Shadow Shop Order')
     timestamp = _tlv('00', now_ms) + _tlv('01', expires_ms)
 
     payload = ''.join([
@@ -133,7 +134,7 @@ def generate_khqr_payload(order):
         _tlv('29', merchant_account),
         _tlv('52', '5999'),
         _tlv('53', _currency_code(currency)),
-        _tlv('54', _format_amount(order.grand_total, currency)),
+        _tlv('54', _format_amount(amount, currency)),
         _tlv('58', 'KH'),
         _tlv('59', settings.BAKONG_MERCHANT_NAME[:25]),
         _tlv('60', settings.BAKONG_MERCHANT_CITY[:15]),
@@ -142,6 +143,48 @@ def generate_khqr_payload(order):
     ])
     payload_with_crc_tag = payload + '6304'
     return payload_with_crc_tag + _crc16(payload_with_crc_tag), expires_ms
+
+
+def generate_khqr_payload(order):
+    now_ms = int(time.time() * 1000)
+    expires_ms = now_ms + (max(settings.BAKONG_EXPIRATION_MINUTES, 1) * 60 * 1000)
+    return generate_khqr_payload_for_payment(order.order_number, order.grand_total, expires_ms)
+
+
+@transaction.atomic
+def create_bakong_payment_for_pending(pending_checkout):
+    existing_payment = BakongPayment.objects.filter(pending_checkout=pending_checkout).first()
+    if existing_payment and existing_payment.status == 'paid':
+        return existing_payment
+
+    expires_ms = int(pending_checkout.expires_at.timestamp() * 1000)
+    qr_payload, _ = generate_khqr_payload_for_payment(
+        pending_checkout.reference,
+        pending_checkout.amount,
+        expires_ms,
+    )
+    defaults = {
+        'amount': pending_checkout.amount,
+        'currency': settings.BAKONG_CURRENCY if settings.BAKONG_CURRENCY in ('USD', 'KHR') else 'USD',
+        'qr_payload': qr_payload,
+        'qr_image': _qr_data_url(qr_payload),
+        'md5': md5(qr_payload.encode('utf-8')).hexdigest(),
+        'status': 'pending',
+        'expires_at': pending_checkout.expires_at,
+        'paid_at': None,
+        'response_data': {},
+        'order': None,
+    }
+    if existing_payment:
+        for key, value in defaults.items():
+            setattr(existing_payment, key, value)
+        existing_payment.save()
+        return existing_payment
+
+    return BakongPayment.objects.create(
+        pending_checkout=pending_checkout,
+        **defaults,
+    )
 
 
 @transaction.atomic
@@ -169,6 +212,7 @@ def create_or_refresh_bakong_payment(order):
             'expires_at': expires_at,
             'paid_at': None,
             'response_data': {},
+            'pending_checkout': None,
         },
     )
     order.payment_method = 'bakong'
@@ -204,7 +248,9 @@ def _bakong_response_is_paid(response_data):
     )
 
 
-def _mark_bakong_paid(payment, response_data, user=None):
+def _mark_bakong_paid(payment, response_data, user=None, request=None):
+    from .checkout_flow import fulfill_pending_checkout
+
     paid_at = timezone.now()
     acknowledged_ms = response_data.get('data', {}).get('acknowledgedDateMs') if isinstance(response_data.get('data'), dict) else None
     if acknowledged_ms:
@@ -215,9 +261,19 @@ def _mark_bakong_paid(payment, response_data, user=None):
 
     payment.status = 'paid'
     payment.paid_at = paid_at
-    payment.order.payment_status = 'paid'
-    payment.order.payment_method = 'bakong'
-    payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+
+    if payment.pending_checkout_id and not payment.order_id:
+        fulfill_request = request or _request_from_user(user, payment.pending_checkout.user)
+        order = fulfill_pending_checkout(payment.pending_checkout, request=fulfill_request)
+        payment.order = order
+    elif payment.order_id:
+        payment.order.payment_status = 'paid'
+        payment.order.payment_method = 'bakong'
+        payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+
+    if not payment.order_id:
+        return
+
     award_points_for_paid_order(payment.order)
     Revenue.objects.get_or_create(
         order=payment.order,
@@ -232,13 +288,31 @@ def _mark_bakong_paid(payment, response_data, user=None):
     TelegramService().notify_payment_received(payment.order)
 
 
-def check_bakong_status(payment, user=None):
+def _request_from_user(user, fallback_user):
+    class _Request:
+        def __init__(self, checkout_user):
+            self.user = checkout_user
+
+        def build_absolute_uri(self, location=''):
+            return location
+
+    return _Request(user or fallback_user)
+
+
+def check_bakong_status(payment, user=None, request=None):
+    payment = BakongPayment.objects.select_related(
+        'order',
+        'pending_checkout',
+        'pending_checkout__user',
+    ).get(pk=payment.pk)
+
     if payment.status == 'paid':
-        if payment.order.payment_status != 'paid' or payment.order.payment_method != 'bakong':
-            payment.order.payment_status = 'paid'
-            payment.order.payment_method = 'bakong'
-            payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
-        award_points_for_paid_order(payment.order)
+        if payment.order_id:
+            if payment.order.payment_status != 'paid' or payment.order.payment_method != 'bakong':
+                payment.order.payment_status = 'paid'
+                payment.order.payment_method = 'bakong'
+                payment.order.save(update_fields=['payment_status', 'payment_method', 'updated_at'])
+            award_points_for_paid_order(payment.order)
         return payment
 
     response_data = {}
@@ -269,10 +343,27 @@ def check_bakong_status(payment, user=None):
         payment.save(update_fields=['response_data', 'updated_at'])
         return payment
 
-    payment.response_data = response_data
-    if paid:
-        _mark_bakong_paid(payment, response_data, user)
-    elif timezone.now() > payment.expires_at:
-        payment.status = 'expired'
-    payment.save(update_fields=['status', 'paid_at', 'response_data', 'updated_at'])
+    if not paid:
+        payment.response_data = response_data
+        if timezone.now() > payment.expires_at:
+            payment.status = 'expired'
+            if payment.pending_checkout_id and payment.pending_checkout.status == PendingCheckout.STATUS_PENDING:
+                payment.pending_checkout.status = PendingCheckout.STATUS_EXPIRED
+                payment.pending_checkout.save(update_fields=['status', 'updated_at'])
+        payment.save(update_fields=['status', 'response_data', 'updated_at'])
+        return payment
+
+    with transaction.atomic():
+        payment = BakongPayment.objects.select_for_update().select_related(
+            'order',
+            'pending_checkout',
+            'pending_checkout__user',
+        ).get(pk=payment.pk)
+        if payment.status == 'paid':
+            return payment
+
+        payment.response_data = response_data
+        _mark_bakong_paid(payment, response_data, user, request=request)
+        payment.save(update_fields=['status', 'paid_at', 'order', 'response_data', 'updated_at'])
+
     return payment

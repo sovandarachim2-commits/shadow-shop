@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -15,10 +16,12 @@ class BakongPaymentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = BakongPayment.objects.select_related('order', 'order__customer')
+        qs = BakongPayment.objects.select_related('order', 'order__customer', 'pending_checkout', 'pending_checkout__user')
         user = self.request.user
         if getattr(user, 'role', None) == 'customer':
-            return qs.filter(order__customer__user=user)
+            return qs.filter(
+                models.Q(order__customer__user=user) | models.Q(pending_checkout__user=user)
+            )
         if getattr(user, 'role', None) == 'seller':
             return qs.filter(order__seller=user)
         return qs
@@ -44,8 +47,12 @@ class BakongPaymentViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['post', 'get'])
     def check(self, request, pk=None):
         payment = self.get_object()
-        payment = check_bakong_status(payment, request.user)
-        return Response(BakongPaymentSerializer(payment).data)
+        payment = check_bakong_status(payment, request.user, request=request)
+        data = BakongPaymentSerializer(payment).data
+        if payment.order_id:
+            from apps.orders.serializers import OrderDetailSerializer
+            data['order'] = OrderDetailSerializer(payment.order, context={'request': request}).data
+        return Response(data)
 
 
 class AbaPaymentViewSet(viewsets.ReadOnlyModelViewSet):
@@ -53,10 +60,12 @@ class AbaPaymentViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = AbaPayment.objects.select_related('order', 'order__customer')
+        qs = AbaPayment.objects.select_related('order', 'order__customer', 'pending_checkout', 'pending_checkout__user')
         user = self.request.user
         if getattr(user, 'role', None) == 'customer':
-            return qs.filter(order__customer__user=user)
+            return qs.filter(
+                models.Q(order__customer__user=user) | models.Q(pending_checkout__user=user)
+            )
         return qs
 
     def _get_allowed_order(self, order_id):
@@ -83,4 +92,3 @@ class AbaPaymentViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'detail': 'Invalid signature.'}, status=status.HTTP_400_BAD_REQUEST)
         handle_aba_callback(payload)
         return Response({'status': 'ok'})
-

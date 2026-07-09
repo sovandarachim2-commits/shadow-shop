@@ -37,6 +37,7 @@ export const ordersApi = {
     kanban: () => client.get('/orders/list/kanban/'),
     operationSummary: () => client.get('/orders/list/operation_summary/'),
     checkout: (data) => client.post('/orders/list/checkout/', data),
+    checkoutStatus: (reference) => client.get('/orders/list/checkout_status/', { params: { reference } }),
   },
   prepareRecords: {
     list: (params) => client.get('/orders/prepare-records/', { params }),

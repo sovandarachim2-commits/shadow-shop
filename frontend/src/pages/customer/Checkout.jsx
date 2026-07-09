@@ -1,23 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, Check, MapPin, QrCode, X, Clock, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useCartStore from '@/store/cartStore'
 import useAuthStore from '@/store/authStore'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
-import { formatCurrency } from '@/utils/helpers'
+import { formatCurrency, getUserContactDefaults } from '@/utils/helpers'
+import { formatAddressLocationKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
+import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
 
-const ALL_PAYMENT_METHODS = [
-  { key: 'bakong', label: 'Bakong KHQR', badge: 'KHQR', desc: 'Scan and pay with Bakong' },
-  { key: 'aba', label: 'ABA PAY', badge: 'ABA', desc: 'Click to pay with ABA Mobile' },
-  { key: 'acleda', label: 'ACLEDA Bank', badge: 'AC', desc: 'Pay with ACLEDA Mobile' },
-  { key: 'wing', label: 'Wing', badge: 'Wing', desc: 'Pay with Wing' },
-  { key: 'cod', label: 'Cash On Delivery', badge: 'COD', desc: 'Pay when you receive' },
-  { key: 'cash', label: 'Cash', badge: 'Cash', desc: 'In-store cash payment' },
-]
+const PAYMENT_METHOD_KEYS = ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash']
 
 const DEFAULT_PROVINCE_FEES = {
   phnom_penh: 3, siem_reap: 6, battambang: 6,
@@ -36,6 +32,7 @@ const CART_PROVINCE_MAP = {
   'Battambang': 'battambang',
 }
 const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
+const ONLINE_PAYMENT_METHODS = ['bakong', 'aba', 'acleda', 'wing']
 
 function mapProvince(text) {
   const value = (text || '').toLowerCase()
@@ -72,7 +69,13 @@ function addressToInfo(addr, user) {
     email: user?.email || '',
     province: mapProvince(addr.state || addr.city),
     district: addr.city || addr.state || '',
-    address: [addr.address_line1, addr.address_line2, addr.city, addr.postal_code].filter(Boolean).join(', '),
+    address_line1: addr.address_line1 || '',
+    address: formatAddressLocationKhmer({
+      state: addr.state,
+      city: addr.city,
+      address_line2: addr.address_line2,
+      postal_code: addr.postal_code,
+    }),
   }
 }
 
@@ -83,9 +86,10 @@ function buildDeliveryInfo(addresses, user) {
   const cartAddress = readSavedCartAddress()
   if (cartAddress?.name && cartAddress?.phone && cartAddress?.address) return cartAddress
 
+  const { full_name, phone } = getUserContactDefaults(user)
   return {
-    name: user?.first_name ? `${user.first_name} ${user.last_name}` : '',
-    phone: user?.phone || '',
+    name: full_name,
+    phone,
     email: user?.email || '',
     province: 'phnom_penh',
     district: '',
@@ -124,6 +128,7 @@ function getCouponDiscount(coupon, subtotal, deliveryFee) {
 }
 
 export default function Checkout() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { items, selectedProductIds, selectAll, removeSelectedItems, appliedCoupon } = useCartStore()
   const { user } = useAuthStore()
@@ -132,6 +137,7 @@ export default function Checkout() {
   const [bakongOrder, setBakongOrder] = useState(null)
   const [bakongPayment, setBakongPayment] = useState(null)
   const [showBakongPopup, setShowBakongPopup] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(300)
   const [abaLoading, setAbaLoading] = useState(false)
   const [checkingBakong, setCheckingBakong] = useState(false)
@@ -154,10 +160,16 @@ export default function Checkout() {
   })
 
   const paymentMethods = useMemo(() => {
+    const base = PAYMENT_METHOD_KEYS.map((key) => ({
+      key,
+      label: t(`checkout.paymentMethods.${key}.label`),
+      badge: t(`checkout.paymentMethods.${key}.badge`),
+      desc: t(`checkout.paymentMethods.${key}.desc`),
+    }))
     const settings = siteSettings?.payment_methods
-    if (!settings || Object.keys(settings).length === 0) return ALL_PAYMENT_METHODS
-    return ALL_PAYMENT_METHODS.filter((m) => settings[m.key] !== false)
-  }, [siteSettings])
+    if (!settings || Object.keys(settings).length === 0) return base
+    return base.filter((m) => settings[m.key] !== false)
+  }, [siteSettings, t])
 
   const provinces = useMemo(() => {
     const fees = (siteSettings?.delivery_fees && Object.keys(siteSettings.delivery_fees).length > 0)
@@ -179,7 +191,7 @@ export default function Checkout() {
 
   const info = useMemo(() => buildDeliveryInfo(addresses, user), [addresses, user])
   const checkoutItems = items.filter((item) => selectedProductIds.includes(getCartKey(item)))
-  const hasAddress = Boolean(info.name && info.phone && info.address)
+  const hasAddress = Boolean(info.name && info.phone && (info.address || info.address_line1))
   const province = hasAddress
     ? (provinces.find((p) => p.value === info.province) || provinces.find((p) => p.is_default) || provinces[0])
     : null
@@ -201,12 +213,32 @@ export default function Checkout() {
   }, [paymentMethods])
 
   useEffect(() => {
-    if (!pendingReturnPayment?.orderId) return undefined
+    const reference = pendingReturnPayment?.reference
+    const orderId = pendingReturnPayment?.orderId
+    if (!reference && !orderId) return undefined
 
     let stopped = false
     const checkOrderPayment = async () => {
       try {
-        const { data: order } = await ordersApi.orders.get(pendingReturnPayment.orderId)
+        if (reference) {
+          const { data } = await ordersApi.orders.checkoutStatus(reference)
+          if (stopped) return
+          if (data.order_id && data.order) {
+            localStorage.removeItem(PENDING_PAYMENT_KEY)
+            setPendingReturnPayment(null)
+            removeSelectedItems()
+            navigate('/order-success', {
+              replace: true,
+              state: {
+                orderId: data.order_id,
+                orderNumber: data.order_number,
+              },
+            })
+          }
+          return
+        }
+
+        const { data: order } = await ordersApi.orders.get(orderId)
         if (stopped) return
         if (order.payment_status === 'paid') {
           localStorage.removeItem(PENDING_PAYMENT_KEY)
@@ -235,7 +267,7 @@ export default function Checkout() {
       stopped = true
       clearInterval(timer)
     }
-  }, [pendingReturnPayment?.orderId, navigate, removeSelectedItems])
+  }, [pendingReturnPayment?.reference, pendingReturnPayment?.orderId, navigate, removeSelectedItems])
 
   useEffect(() => {
     if (!bakongPayment || bakongPayment.status === 'paid' || bakongPayment.status === 'expired') {
@@ -243,21 +275,27 @@ export default function Checkout() {
     }
 
     let stopped = false
+    let failures = 0
     const checkPayment = async () => {
       setCheckingBakong(true)
       try {
         const { data } = await ordersApi.payments.checkBakong(bakongPayment.id)
         if (stopped) return
+        failures = 0
         setBakongPayment(data)
         if (data.status === 'paid') {
           stopped = true
+          if (data.order) setBakongOrder(data.order)
+          setShowBakongPopup(false)
+          setShowSuccessModal(true)
           removeSelectedItems()
-          navigate('/order-success', {
-            state: { orderId: bakongOrder?.id, orderNumber: bakongOrder?.order_number, bakongPayment: data },
-          })
         }
       } catch {
-        stopped = true
+        failures += 1
+        if (failures >= 5) {
+          stopped = true
+          toast.error(t('checkout.paymentCheckFailed'))
+        }
       } finally {
         if (!stopped) setCheckingBakong(false)
       }
@@ -270,7 +308,7 @@ export default function Checkout() {
       stopped = true
       clearInterval(timer)
     }
-  }, [bakongPayment?.id, bakongPayment?.status, bakongOrder?.order_number])
+  }, [bakongPayment?.id, bakongPayment?.status, removeSelectedItems, t])
 
   useEffect(() => {
     if (!showBakongPopup || !bakongPayment || bakongPayment.status !== 'pending') {
@@ -290,6 +328,28 @@ export default function Checkout() {
     return () => clearInterval(timer)
   }, [showBakongPopup, bakongPayment?.id, bakongPayment?.expires_at, bakongPayment?.status])
 
+  const buildCheckoutPayload = () => ({
+    name: info.name,
+    phone: info.phone,
+    email: info.email,
+    address: info.address,
+    address_detail: info.address_line1 || '',
+    province: info.province,
+    district: info.district,
+    payment_method: paymentMethod,
+    payment_status: 'unpaid',
+    delivery_fee: deliveryFee,
+    coupon_code: appliedCoupon?.coupon_code || '',
+    notes: `Home Delivery. ${info.district ? `${info.district}, ${province.label}` : province.label}`,
+    items: checkoutItems.map((i) => ({
+      product: i.product.item_type === 'set' ? undefined : i.product.id,
+      product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
+      quantity: i.quantity,
+      unit_price: i.product.retail_price,
+      cost_price: i.product.cost_price || 0,
+    })),
+  })
+
   const handlePlaceOrder = async () => {
     if (paymentMethod === 'bakong' && bakongPayment && bakongPayment.status !== 'paid') {
       setShowBakongPopup(true)
@@ -297,93 +357,91 @@ export default function Checkout() {
     }
 
     if (!hasAddress) {
-      toast.error('Please add a delivery address first')
+      toast.error(t('checkout.addAddressFirst'))
       navigate('/address-book')
       return
     }
 
     setSubmitting(true)
     try {
-      const { data: order } = await ordersApi.orders.checkout({
-        name: info.name,
-        phone: info.phone,
-        email: info.email,
-        address: info.address,
-        province: info.province,
-        district: info.district,
-        payment_method: paymentMethod,
-        payment_status: 'unpaid',
-        delivery_fee: deliveryFee,
-        coupon_code: appliedCoupon?.coupon_code || '',
-        notes: `Home Delivery. ${info.district ? `${info.district}, ${province.label}` : province.label}`,
-        items: checkoutItems.map((i) => ({
-          product: i.product.item_type === 'set' ? undefined : i.product.id,
-          product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
-          quantity: i.quantity,
-          unit_price: i.product.retail_price,
-          cost_price: i.product.cost_price || 0,
-        })),
-      })
-      let bakongPayment = null
-      if (paymentMethod === 'bakong') {
-        try {
-          const payment = order.bakong_payment || (await ordersApi.payments.generateBakong(order.id)).data
-          bakongPayment = payment
-          setBakongOrder(order)
+      const checkoutPayload = buildCheckoutPayload()
+      const { data: result } = await ordersApi.orders.checkout(checkoutPayload)
+
+      if (ONLINE_PAYMENT_METHODS.includes(paymentMethod)) {
+        const pending = result.pending_checkout
+        if (paymentMethod === 'bakong') {
+          const payment = result.bakong_payment
+          if (!payment) throw new Error('Missing Bakong payment')
+          setBakongOrder(null)
           setBakongPayment(payment)
           setShowBakongPopup(true)
-          toast.success('Scan the Bakong QR to complete payment')
+          toast.success(t('checkout.scanQrToast'))
           return
-        } catch {
-          toast.error('Order placed, but Bakong QR could not be generated. Please contact support.')
         }
-      }
-      if (paymentMethod === 'aba') {
-        setAbaLoading(true)
-        try {
-          const { data: abaData } = await ordersApi.payments.generateAba(order.id)
-          const pending = {
-            orderId: order.id,
-            orderNumber: order.order_number,
+
+        if (paymentMethod === 'aba') {
+          const abaData = result.aba_payment
+          if (!abaData) throw new Error('Missing ABA payment')
+          setAbaLoading(true)
+          const pendingState = {
+            reference: pending.reference,
             paymentMethod: 'aba',
             createdAt: Date.now(),
           }
-          localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(pending))
-          setPendingReturnPayment(pending)
+          localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(pendingState))
+          setPendingReturnPayment(pendingState)
           submitAbaForm(abaData.endpoint, abaData.params)
-        } catch {
-          toast.error('Could not initiate ABA payment. Please try another method.')
-          localStorage.removeItem(PENDING_PAYMENT_KEY)
-          setPendingReturnPayment(null)
-          setAbaLoading(false)
+          return
         }
+
+        toast.error(t('checkout.paymentUnavailable'))
         return
       }
+
+      const order = result
       removeSelectedItems()
-      navigate('/order-success', { state: { orderId: order.id, orderNumber: order.order_number, bakongPayment } })
+      navigate('/order-success', { state: { orderId: order.id, orderNumber: order.order_number } })
     } catch (error) {
       const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail
-      toast.error(Array.isArray(detail) ? detail[0] : detail || 'Failed to place order. Please try again.')
+      toast.error(Array.isArray(detail) ? detail[0] : detail || t('checkout.placeOrderFailed'))
     } finally {
       setSubmitting(false)
+      setAbaLoading(false)
     }
   }
 
-  if (items.length === 0 || checkoutItems.length === 0) {
+  const successModal = (
+    <OrderSuccessModal
+      open={showSuccessModal}
+      onTrack={() => navigate(bakongOrder?.id ? `/my-orders/${bakongOrder.id}` : '/my-orders')}
+      onBack={() => navigate('/shop')}
+    />
+  )
+
+  if ((items.length === 0 || checkoutItems.length === 0) && !showSuccessModal) {
     return (
       <div className="flex min-h-[calc(100svh-9rem)] items-center justify-center py-6 md:min-h-[520px]">
         <div className="w-full max-w-xl">
           <EmptyState
-            title="Your checkout is empty"
-            description="Select products in your cart before continuing to checkout."
+            title={t('checkout.emptyTitle')}
+            description={t('checkout.emptyText')}
             action={
               <button onClick={() => navigate(items.length > 0 ? '/cart' : '/shop')} className="shop-btn-primary mt-6 px-8">
-                {items.length > 0 ? 'Back to Cart' : 'Shop Products'}
+                {items.length > 0 ? t('checkout.backToCart') : t('checkout.shopProducts')}
               </button>
             }
           />
         </div>
       </div>
+    )
+  }
+
+  if (showSuccessModal && (items.length === 0 || checkoutItems.length === 0)) {
+    return (
+      <>
+        <div className="flex min-h-[calc(100svh-9rem)] items-center justify-center bg-white py-6 md:min-h-[520px]" />
+        {successModal}
+      </>
     )
   }
 
@@ -394,8 +452,8 @@ export default function Checkout() {
           <ChevronLeft size={20} />
         </button>
         <div className="min-w-0 text-center md:text-left">
-          <p className="text-xs font-bold uppercase tracking-wide text-pink-600">Checkout</p>
-          <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">Secure Checkout</h1>
+          <p className="text-xs font-bold uppercase tracking-wide text-pink-600">{t('checkout.title')}</p>
+          <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('checkout.secureTitle')}</h1>
         </div>
         <div className="md:hidden" />
       </div>
@@ -405,12 +463,12 @@ export default function Checkout() {
           {/* Delivery address */}
           <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-card">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-950">Delivery Address</h2>
+              <h2 className="text-sm font-bold text-gray-950">{t('checkout.deliveryAddress')}</h2>
               <button
                 onClick={() => navigate('/address-book')}
                 className="text-sm font-bold text-pink-600"
               >
-                Change
+                {t('checkout.change')}
               </button>
             </div>
 
@@ -424,20 +482,19 @@ export default function Checkout() {
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-gray-950">{info.name}</p>
                   <p className="mt-0.5 text-xs text-gray-500">{info.phone}</p>
-                  <p className="mt-1 text-xs leading-5 text-gray-600">{info.address}</p>
-                  {(info.district || province.label) && (
-                    <p className="text-xs text-gray-400">{[info.district, province.label].filter(Boolean).join(', ')}</p>
-                  )}
+                  <p className="mt-1 text-xs leading-5 text-gray-600" style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                    {[info.address_line1, info.address].filter(Boolean).join(', ')}
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-gray-200 p-6 text-center">
-                <p className="text-sm font-semibold text-gray-600">No delivery address found</p>
+                <p className="text-sm font-semibold text-gray-600">{t('checkout.noAddress')}</p>
                 <button
                   onClick={() => navigate('/address-book')}
                   className="mt-4 rounded-full bg-pink-600 px-6 py-2.5 text-sm font-bold text-white"
                 >
-                  Add Address
+                  {t('checkout.addAddress')}
                 </button>
               </div>
             )}
@@ -445,7 +502,7 @@ export default function Checkout() {
 
           {/* Payment method */}
           <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-card">
-            <h2 className="text-sm font-bold text-gray-950">Payment Method</h2>
+            <h2 className="text-sm font-bold text-gray-950">{t('checkout.paymentMethod')}</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {paymentMethods.map((method) => (
                 <button
@@ -470,14 +527,14 @@ export default function Checkout() {
 
           {/* Products */}
           <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-card lg:hidden">
-            <h2 className="text-sm font-bold text-gray-950">Order Items</h2>
+            <h2 className="text-sm font-bold text-gray-950">{t('checkout.orderItems')}</h2>
             <div className="mt-4 space-y-3">
               {checkoutItems.map((item) => (
                 <div key={getCartKey(item)} className="flex items-center gap-3 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
                   <ProductThumb product={item.product} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-gray-950">{item.product.name}</p>
-                    <p className="text-xs text-gray-400">Qty {item.quantity}</p>
+                    <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
                   </div>
                   <p className="text-sm font-black text-gray-950">{formatCurrency(item.product.retail_price * item.quantity)}</p>
                 </div>
@@ -487,26 +544,26 @@ export default function Checkout() {
         </section>
 
         <aside className="h-fit rounded-3xl border border-pink-100 bg-gradient-to-br from-white to-pink-50 p-5 shadow-soft lg:sticky lg:top-36">
-          <h2 className="text-lg font-black text-gray-950">Order Summary</h2>
+          <h2 className="text-lg font-black text-gray-950">{t('checkout.orderSummary')}</h2>
           <div className="mt-4 hidden space-y-3 lg:block">
             {checkoutItems.map((item) => (
               <div key={getCartKey(item)} className="flex items-center gap-3">
                 <ProductThumb product={item.product} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-gray-950">{item.product.name}</p>
-                  <p className="text-xs text-gray-400">Qty {item.quantity}</p>
+                  <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
                 </div>
                 <p className="text-sm font-black text-gray-950">{formatCurrency(item.product.retail_price * item.quantity)}</p>
               </div>
             ))}
           </div>
           <div className="mt-5 space-y-2 border-t border-pink-100 pt-5 text-sm">
-            <SummaryLine label="Subtotal" value={formatCurrency(subtotal)} />
-            <SummaryLine label="Delivery Fee" value={formatCurrency(deliveryFee)} />
-            <SummaryLine label="Discount" value={`-${formatCurrency(couponDiscount)}`} success />
+            <SummaryLine label={t('checkout.subtotal')} value={formatCurrency(subtotal)} />
+            <SummaryLine label={t('checkout.deliveryFee')} value={formatCurrency(deliveryFee)} />
+            <SummaryLine label={t('checkout.discount')} value={`-${formatCurrency(couponDiscount)}`} success />
           </div>
           <div className="mt-5 flex justify-between border-t border-pink-100 pt-5">
-            <span className="font-black text-gray-950">Total Amount</span>
+            <span className="font-black text-gray-950">{t('checkout.totalAmount')}</span>
             <span className="text-xl font-black text-pink-600">{formatCurrency(grandTotal)}</span>
           </div>
           <button
@@ -514,7 +571,7 @@ export default function Checkout() {
             disabled={submitting || abaLoading || !hasAddress}
             className="shop-btn-primary mt-6 hidden w-full py-4 disabled:cursor-not-allowed disabled:opacity-60 md:block"
           >
-            {(submitting || abaLoading) ? 'Please wait...' : paymentMethod === 'bakong' ? 'Generate Bakong QR' : paymentMethod === 'aba' ? 'Pay via ABA PAY' : 'Place Order'}
+            {(submitting || abaLoading) ? t('checkout.pleaseWait') : ONLINE_PAYMENT_METHODS.includes(paymentMethod) ? t('checkout.payNow') : t('checkout.placeOrder')}
           </button>
         </aside>
       </div>
@@ -523,14 +580,14 @@ export default function Checkout() {
         <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
           <div>
             <p className="text-lg font-black text-gray-950">{formatCurrency(grandTotal)}</p>
-            <p className="text-xs text-gray-400">{checkoutItems.length} item{checkoutItems.length === 1 ? '' : 's'}</p>
+            <p className="text-xs text-gray-400">{checkoutItems.length} {checkoutItems.length === 1 ? t('checkout.item') : t('checkout.items')}</p>
           </div>
           <button
             onClick={handlePlaceOrder}
             disabled={submitting || abaLoading || !hasAddress}
             className="rounded-full bg-pink-600 px-6 py-2.5 text-base font-black text-white shadow-lg shadow-pink-200 disabled:opacity-60"
           >
-            {(submitting || abaLoading) ? 'Please wait...' : paymentMethod === 'bakong' ? 'Generate QR' : paymentMethod === 'aba' ? 'Pay via ABA PAY' : 'Place Order'}
+            {(submitting || abaLoading) ? t('checkout.pleaseWait') : ONLINE_PAYMENT_METHODS.includes(paymentMethod) ? t('checkout.payNow') : t('checkout.placeOrder')}
           </button>
         </div>
       </div>
@@ -544,10 +601,14 @@ export default function Checkout() {
                   <QrCode size={19} />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-wide text-pink-600">Bakong Payment</p>
-                  <h2 className="mt-0.5 text-xl font-black text-gray-950">Scan KHQR to Pay</h2>
+                  <p className="text-[11px] font-black uppercase tracking-wide text-pink-600">{t('checkout.bakong.title')}</p>
+                  <h2 className="mt-0.5 text-xl font-black text-gray-950">{t('checkout.bakong.scanTitle')}</h2>
                   <p className="mt-0.5 text-xs font-semibold text-gray-500">
-                    {bakongOrder?.order_number ? `Order #${bakongOrder.order_number}` : 'Order pending'}
+                    {bakongPayment.reference
+                      ? t('checkout.bakong.paymentRef', { ref: bakongPayment.reference })
+                      : bakongOrder?.order_number
+                        ? t('checkout.bakong.orderNumber', { number: bakongOrder.order_number })
+                        : t('checkout.bakong.waitingPayment')}
                   </p>
                 </div>
               </div>
@@ -567,12 +628,12 @@ export default function Checkout() {
               />
               <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500">
                 <ShieldCheck size={14} className="text-pink-600" />
-                Secured by Bakong KHQR
+                {t('checkout.bakong.securedBy')}
               </div>
             </div>
 
             <div className="py-3.5 text-center">
-              <p className="text-xs font-bold text-gray-500">Total Amount</p>
+              <p className="text-xs font-bold text-gray-500">{t('checkout.totalAmount')}</p>
               <p className="mt-0.5 text-3xl font-black text-pink-600">{formatCurrency(bakongPayment.amount)}</p>
             </div>
 
@@ -597,10 +658,10 @@ export default function Checkout() {
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-black">
                       {bakongPayment.status === 'paid'
-                        ? 'Payment received'
+                        ? t('checkout.bakong.paymentReceived')
                         : bakongPayment.status === 'expired'
-                          ? 'QR expired'
-                          : checkingBakong ? 'Checking payment...' : 'Waiting for payment'}
+                          ? t('checkout.bakong.qrExpired')
+                          : checkingBakong ? t('checkout.bakong.checkingPayment') : t('checkout.bakong.waitingPayment')}
                     </p>
                     {bakongPayment.status === 'pending' && (
                       <span className="rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-sm font-black text-pink-600">
@@ -610,10 +671,10 @@ export default function Checkout() {
                   </div>
                   <p className="mt-1 text-xs font-semibold text-gray-500">
                     {bakongPayment.status === 'paid'
-                      ? 'Your order will continue automatically.'
+                      ? t('checkout.bakong.paidSuccess')
                       : bakongPayment.status === 'expired'
-                        ? 'Please create a new payment QR.'
-                        : checkingBakong ? 'Confirming with Bakong now' : 'Auto-checking your payment'}
+                        ? t('checkout.bakong.qrExpiredHint')
+                        : checkingBakong ? t('checkout.bakong.confirmingPayment') : t('checkout.bakong.payToCreate')}
                   </p>
                 </div>
               </div>
@@ -624,12 +685,14 @@ export default function Checkout() {
                 onClick={() => setShowBakongPopup(false)}
                 className="w-full rounded-full border border-gray-200 px-4 py-3 text-sm font-black text-gray-600"
               >
-                Cancel Payment
+                {t('checkout.bakong.cancelPayment')}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {successModal}
 
     </div>
   )
