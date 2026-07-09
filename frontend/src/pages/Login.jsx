@@ -403,7 +403,10 @@ export default function Login() {
       navigate(location.state?.from || '/')
     } catch (err) {
       const d = err.response?.data
-      toast.error(d?.username?.[0] || d?.phone?.[0] || d?.email?.[0] || d?.detail || 'Registration failed')
+      const firstError = d && typeof d === 'object'
+        ? Object.values(d).flat().filter(Boolean)[0]
+        : null
+      toast.error(d?.detail || firstError || 'Registration failed')
     } finally { setLoading(false) }
   }
 
