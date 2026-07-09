@@ -248,7 +248,15 @@ class OrderListSerializer(serializers.ModelSerializer):
             {
                 'id': item.id,
                 'product_name': item.product_name,
+                'product_code': item.product_code,
+                'product_image': item.product_image or (
+                    resolve_product_set_image_url(item.product_set, self.context.get('request'))
+                    if item.product_set
+                    else resolve_product_image_url(item.product, self.context.get('request'))
+                ),
                 'quantity': item.quantity,
+                'unit_price': item.unit_price,
+                'total_price': item.total_price,
             }
             for item in obj.items.all()
         ]
@@ -730,6 +738,22 @@ class RewardItemSerializer(serializers.ModelSerializer):
             instance.reward_image = None
         return super().update(instance, validated_data)
 
+    def validate(self, attrs):
+        reward_type = attrs.get('type') or getattr(self.instance, 'type', None)
+        if reward_type not in {RewardItem.TYPE_GIFT, RewardItem.TYPE_LUCKY_BOX}:
+            attrs['gift_product'] = None
+        return attrs
+
+    def _gift_product_has_inventory(self, obj):
+        if obj.type not in {RewardItem.TYPE_GIFT, RewardItem.TYPE_LUCKY_BOX} or not obj.gift_product:
+            return True
+        product = obj.gift_product
+        if not product.is_available_for_sale:
+            return False
+        if product.availability_status == Product.AVAILABILITY_AVAILABLE:
+            return True
+        return product.current_stock > 0
+
     def get_gift_product_image(self, obj):
         product = obj.gift_product
         if not product:
@@ -748,6 +772,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         now = timezone.now()
         in_window = (not obj.starts_at or obj.starts_at <= now) and (not obj.ends_at or obj.ends_at >= now)
+        gift_product_available = self._gift_product_has_inventory(obj)
         user = self.context.get('user')
         under_customer_limit = True
         if user and obj.per_customer_limit:
@@ -755,7 +780,14 @@ class RewardItemSerializer(serializers.ModelSerializer):
                 status__in=[RewardRedemption.STATUS_REJECTED, RewardRedemption.STATUS_CANCELLED]
             ).count()
             under_customer_limit = used_count < obj.per_customer_limit
-        return obj.is_active and has_stock and in_window and under_customer_limit and current_points >= obj.points_required
+        return (
+            obj.is_active
+            and has_stock
+            and in_window
+            and gift_product_available
+            and under_customer_limit
+            and current_points >= obj.points_required
+        )
 
 
 class RewardRedemptionSerializer(serializers.ModelSerializer):

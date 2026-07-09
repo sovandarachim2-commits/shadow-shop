@@ -1108,6 +1108,14 @@ function RewardFormModal({ reward, onClose }) {
 
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
 
+  const setRewardType = (value) => {
+    setForm((current) => ({
+      ...current,
+      type: value,
+      gift_product: ['gift', 'lucky_box'].includes(value) ? current.gift_product : '',
+    }))
+  }
+
   const displayImage = imagePreview || selectedProduct?.primary_image || null
 
   const pickImage = (event) => {
@@ -1232,7 +1240,7 @@ function RewardFormModal({ reward, onClose }) {
               <button
                 key={type.value}
                 type="button"
-                onClick={() => set('type', type.value)}
+                onClick={() => setRewardType(type.value)}
                 className={cn(
                   'flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-xs font-black transition',
                   form.type === type.value ? 'border-[#EC3F8F] bg-pink-50 text-[#EC3F8F]' : 'border-gray-200 bg-white text-gray-600 hover:border-pink-200'

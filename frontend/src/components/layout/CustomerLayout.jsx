@@ -8,6 +8,14 @@ import {
   User,
   Heart,
   Gift,
+  MapPin,
+  Percent,
+  Star,
+  Lock,
+  CreditCard,
+  Bell,
+  HelpCircle,
+  LogOut,
   Search,
   X,
   ShoppingBag,
@@ -16,6 +24,7 @@ import {
   Instagram,
   Youtube,
   LayoutDashboard,
+  Menu,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -39,6 +48,25 @@ const DESKTOP_NAV_KEYS = [
   { path: '/profile/rewards', key: 'profile.rewards' },
   { path: '/flash-sale', key: 'home.flashSale' },
   { path: '/shop?filter=new_arrival', key: 'nav.newArrivals' },
+]
+
+const ACCOUNT_MENU_SECTIONS = [
+  [
+    { path: '/profile', key: 'profile.accountOverview', icon: Home },
+    { path: '/my-orders', key: 'nav.orders', icon: ClipboardList },
+    { path: '/address-book', key: 'profile.addresses', icon: MapPin },
+    { path: '/wishlist', key: 'wishlist.title', icon: Heart },
+    { path: '/profile/rewards', key: 'profile.rewards', icon: Gift },
+    { path: '/profile?view=coupons', key: 'profile.coupons', icon: Percent },
+    { path: '/profile?view=reviews', key: 'profile.reviews', icon: Star },
+  ],
+  [
+    { path: '/profile/edit', key: 'profile.editProfile', icon: User },
+    { path: '/profile?view=password', key: 'profile.passwordSecurity', icon: Lock },
+    { path: '/profile?view=payment', key: 'profile.paymentMethods', icon: CreditCard },
+    { path: '/profile?view=notifications', key: 'profile.notifications', icon: Bell },
+    { path: '/profile?view=help', key: 'profile.helpCenter', icon: HelpCircle },
+  ],
 ]
 
 const LANGUAGE_OPTIONS = [
@@ -85,8 +113,9 @@ export default function CustomerLayout() {
   const navigate = useNavigate()
   const [headerSearch, setHeaderSearch] = useState('')
   const [showMobileSearch, setShowMobileSearch] = useState(false)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const { t, i18n } = useTranslation()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, logout } = useAuthStore()
   const isStaff = isAuthenticated && user?.role && user.role !== 'customer'
   const cartItems = useCartStore((s) => s.items)
   const selectedProductIds = useCartStore((s) => s.selectedProductIds)
@@ -97,6 +126,11 @@ export default function CustomerLayout() {
   const selectLanguage = (code) => {
     i18n.changeLanguage(code)
     setIsLanguageMenuOpen(false)
+  }
+  const handleLogout = async () => {
+    setIsAccountMenuOpen(false)
+    await logout()
+    navigate('/login')
   }
 
   const { data: siteSettings } = useQuery({
@@ -118,10 +152,17 @@ export default function CustomerLayout() {
       link.href = siteSettings.favicon_url
     }
   }, [siteSettings?.favicon_url])
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false)
+  }, [location.pathname, location.search])
+
   const totalItems = cartItems.reduce((sum, i) => sum + i.quantity, 0)
   const subtotal = cartItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
   const isHome = location.pathname === '/'
   const hasCheckoutItems = cartItems.some((item) => selectedProductIds.includes(item.product.id))
+  const isMyOrdersPage = location.pathname === '/my-orders'
+  const myOrdersTab = new URLSearchParams(location.search).get('tab') === 'completed' ? 'completed' : 'ongoing'
   const hideMobileHeader =
     location.pathname === '/shop' ||
     location.pathname === '/search' ||
@@ -150,7 +191,66 @@ export default function CustomerLayout() {
         hideMobileHeader && 'hidden md:block'
       )}>
         <div className="hidden md:block">
-          <div className="mx-auto flex max-w-[1500px] items-center gap-8 px-6 py-4">
+          <div className="mx-auto flex max-w-[1500px] items-center gap-5 px-6 py-4">
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsAccountMenuOpen((open) => !open)}
+                className={cn(
+                  'flex h-11 w-11 items-center justify-center rounded-2xl border text-gray-600 shadow-sm transition hover:border-pink-200 hover:text-pink-600',
+                  isAccountMenuOpen ? 'border-pink-100 bg-pink-50 text-pink-600' : 'border-gray-200 bg-white'
+                )}
+                aria-label={isAccountMenuOpen ? 'Close account menu' : 'Open account menu'}
+                aria-expanded={isAccountMenuOpen}
+                title={isAccountMenuOpen ? 'Close account menu' : 'Open account menu'}
+              >
+                <Menu size={21} strokeWidth={2.5} />
+              </button>
+
+              {isAccountMenuOpen && (
+                <div className="absolute left-0 top-full z-50 mt-3 w-[330px] overflow-hidden rounded-[24px] border border-gray-100 bg-white py-3 shadow-[0_18px_45px_rgba(15,23,42,0.16)]">
+                  {ACCOUNT_MENU_SECTIONS.map((section, sectionIndex) => (
+                    <div key={sectionIndex} className={cn('px-3', sectionIndex > 0 && 'mt-3 border-t border-gray-100 pt-3')}>
+                      {sectionIndex > 0 && (
+                        <p className="px-3 pb-2 text-[11px] font-black uppercase tracking-wider text-gray-400">
+                          {t('profile.accountMenu')}
+                        </p>
+                      )}
+                      {section.map((item) => {
+                        const Icon = item.icon
+                        const active = location.pathname + location.search === item.path
+
+                        return (
+                          <Link
+                            key={item.key}
+                            to={item.path}
+                            className={cn(
+                              'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold transition',
+                              active ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50 hover:text-pink-600'
+                            )}
+                          >
+                            <Icon size={20} />
+                            <span className="flex-1">{t(item.key)}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  ))}
+                  {isAuthenticated && (
+                    <div className="mt-3 border-t border-gray-100 px-3 pt-3">
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-red-500 transition hover:bg-red-50"
+                      >
+                        <LogOut size={20} />
+                        <span>{t('auth.logout')}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <Logo logoUrl={logoUrl} storeName={storeName} />
             <form
               onSubmit={submitSearch}
@@ -260,49 +360,93 @@ export default function CustomerLayout() {
         </div>
 
         {!hideMobileHeader && (
-          <div className="px-3 pb-2.5 pt-[calc(0.5rem+env(safe-area-inset-top))] md:hidden">
-            <div className="flex items-center gap-2">
-              <Link to="/" className="flex min-w-0 flex-1 items-center gap-2.5">
-                {logoUrl ? (
-                  <img src={logoUrl} alt={storeName} className="h-11 w-11 shrink-0 rounded-2xl object-contain shadow-sm" />
-                ) : (
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-md shadow-pink-200">
-                    <ShoppingBag size={19} />
+          <div className={cn('px-3 pb-2.5 pt-[calc(0.5rem+env(safe-area-inset-top))] md:hidden', isMyOrdersPage && 'px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]')}>
+            {isMyOrdersPage ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <h1 className="text-left text-[28px] font-black leading-tight text-gray-950">{t('orders.title')}</h1>
+                  <div className="flex items-center gap-2">
+                    <Link to="/wishlist" className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-95">
+                      <Heart size={21} strokeWidth={2.2} />
+                      {wishlistCount > 0 && (
+                        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
+                          {wishlistCount > 9 ? '9+' : wishlistCount}
+                        </span>
+                      )}
+                    </Link>
+                    <Link to="/cart" className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm shadow-pink-100 transition active:scale-95">
+                      <ShoppingCart size={21} strokeWidth={2.4} />
+                      {totalItems > 0 && (
+                        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
+                          {totalItems > 9 ? '9+' : totalItems}
+                        </span>
+                      )}
+                    </Link>
                   </div>
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-base font-black leading-tight text-gray-950">{storeName}</p>
-                  <p className="truncate text-[10px] font-bold uppercase tracking-wide text-pink-500">{t('header.limitedOffer')}</p>
                 </div>
-              </Link>
-              <button
-                type="button"
-                onClick={() => navigate('/search')}
-                aria-label={t('common.search')}
-                className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:scale-90',
-                  'bg-gray-100 text-gray-600'
-                )}
-              >
-                <Search size={19} />
-              </button>
-              <Link to="/wishlist" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-90">
-                <Heart size={19} />
-                {wishlistCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-500 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                    {wishlistCount > 9 ? '9+' : wishlistCount}
-                  </span>
-                )}
-              </Link>
-              <Link to="/cart" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm shadow-pink-200 transition active:scale-90">
-                <ShoppingCart size={18} />
-                {totalItems > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
-                    {totalItems > 9 ? '9+' : totalItems}
-                  </span>
-                )}
-              </Link>
-            </div>
+                <div className="grid grid-cols-2 rounded-lg bg-gray-200 p-1">
+                  {[
+                    { key: 'ongoing', label: 'Ongoing' },
+                    { key: 'completed', label: 'Completed' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => navigate(tab.key === 'completed' ? '/my-orders?tab=completed' : '/my-orders')}
+                      className={cn(
+                        'rounded-md py-2.5 text-sm font-black transition',
+                        myOrdersTab === tab.key ? 'bg-pink-600 text-white shadow-lg shadow-pink-100' : 'text-gray-500'
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link to="/" className="flex min-w-0 flex-1 items-center gap-2.5">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt={storeName} className="h-11 w-11 shrink-0 rounded-2xl object-contain shadow-sm" />
+                  ) : (
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-md shadow-pink-200">
+                      <ShoppingBag size={19} />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-black leading-tight text-gray-950">{storeName}</p>
+                    <p className="truncate text-[10px] font-bold uppercase tracking-wide text-pink-500">{t('header.limitedOffer')}</p>
+                  </div>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => navigate('/search')}
+                  aria-label={t('common.search')}
+                  className={cn(
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition active:scale-90',
+                    'bg-gray-100 text-gray-600'
+                  )}
+                >
+                  <Search size={19} />
+                </button>
+                <Link to="/wishlist" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-90">
+                  <Heart size={19} />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-500 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
+                      {wishlistCount > 9 ? '9+' : wishlistCount}
+                    </span>
+                  )}
+                </Link>
+                <Link to="/cart" className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm shadow-pink-200 transition active:scale-90">
+                  <ShoppingCart size={18} />
+                  {totalItems > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
+                      {totalItems > 9 ? '9+' : totalItems}
+                    </span>
+                  )}
+                </Link>
+              </div>
+            )}
             {showMobileSearch && (
               <form onSubmit={submitSearch} className="mt-2 flex items-center gap-2 rounded-2xl bg-gray-100 px-3 py-2.5 shadow-inner">
                 <Search size={16} className="shrink-0 text-gray-400" />
@@ -323,7 +467,7 @@ export default function CustomerLayout() {
         )}
       </header>
 
-      <main className={cn('flex-1', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1', isHome || isMyOrdersPage || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
         <Outlet />
       </main>
 

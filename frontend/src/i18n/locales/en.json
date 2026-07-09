@@ -216,6 +216,7 @@
     "backToCheckout": "Back to Checkout",
     "status": {
       "pending": "Pending",
+      "confirmed": "Confirmed",
       "preparing": "Preparing",
       "preparingOrder": "Preparing Order",
       "packed": "Packed",
@@ -227,8 +228,10 @@
     },
     "timeline": {
       "placed": "Order Placed",
-      "confirmed": "Cashier Confirmed",
-      "preparing": "Preparing Order"
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "shipped": "Shipped",
+      "delivered": "Delivered"
     },
     "payment": {
       "title": "Payment",

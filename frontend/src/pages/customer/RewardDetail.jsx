@@ -87,6 +87,7 @@ export default function RewardDetail() {
   const hasStock = reward.stock === null || reward.stock === undefined || reward.stock > 0
   const canExchange = reward.can_exchange && hasStock
   const pointsShort = Math.max(0, reward.points_required - currentPoints)
+  const unavailableText = !hasStock ? 'Out of stock' : pointsShort > 0 ? `${pointsShort.toLocaleString()} pts short` : 'Unavailable'
 
   return (
     <div className="mx-auto w-full max-w-[760px] bg-white pb-24 md:max-w-[1440px] md:px-6 md:pb-0 md:pt-6">
@@ -188,7 +189,7 @@ export default function RewardDetail() {
             )}
           >
             {exchangeMutation.isPending ? <Loader2 size={19} className="animate-spin" /> : <Ticket size={19} />}
-            {canExchange ? 'Exchange Reward' : hasStock ? `${pointsShort.toLocaleString()} pts short` : 'Out of stock'}
+            {canExchange ? 'Exchange Reward' : unavailableText}
           </button>
         </section>
       </div>
@@ -204,7 +205,7 @@ export default function RewardDetail() {
           )}
         >
           {exchangeMutation.isPending ? <Loader2 size={19} className="animate-spin" /> : <Ticket size={19} />}
-          {canExchange ? 'Exchange Reward' : hasStock ? `${pointsShort.toLocaleString()} pts short` : 'Out of stock'}
+          {canExchange ? 'Exchange Reward' : unavailableText}
         </button>
       </div>
     </div>

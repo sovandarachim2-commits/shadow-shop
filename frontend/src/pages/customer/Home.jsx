@@ -306,7 +306,6 @@ export default function Home() {
     queryKey: ['new-arrivals'],
     queryFn: () => productsApi.products.list({ is_new_arrival: true, page_size: 12 }).then((r) => r.data.results),
   })
-
   const banners = useMemo(() => bannersData || [], [bannersData])
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => brandsData || [], [brandsData])

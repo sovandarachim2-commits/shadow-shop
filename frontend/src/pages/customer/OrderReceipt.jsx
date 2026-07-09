@@ -13,6 +13,19 @@ function Row({ label, value, strong = false }) {
   )
 }
 
+const PAYMENT_METHOD_LABELS = {
+  aba: 'ABA Pay',
+  bakong: 'Bakong KHQR',
+  cod: 'Cash on Delivery',
+  cash: 'Cash',
+  acleda: 'ACLEDA Bank',
+  wing: 'Wing',
+}
+
+function paymentMethodLabel(method) {
+  return PAYMENT_METHOD_LABELS[method] || method || '-'
+}
+
 export default function OrderReceipt() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -49,6 +62,7 @@ export default function OrderReceipt() {
   const deliveryFee = Number(order.delivery_fee || 0)
   const discount = Number(order.discount || 0)
   const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
+  const isPaid = order.payment_status === 'paid'
 
   return (
     <div className="print-preview-window mx-auto max-w-2xl pb-8">
@@ -74,8 +88,23 @@ export default function OrderReceipt() {
         <div className="border-b border-dashed border-gray-200 py-4">
           <Row label="Order No" value={`#${order.order_number}`} strong />
           <Row label="Date" value={formatDateTime(order.created_at)} />
-          <Row label="Payment" value={order.payment_status === 'paid' ? 'Paid' : 'Unpaid'} />
-          <Row label="Method" value={order.payment_method || '-'} />
+        </div>
+
+        <div className="border-b border-dashed border-gray-200 py-4">
+          <p className="mb-3 text-xs font-black uppercase tracking-wide text-gray-400">Payment</p>
+          <div className={`rounded-2xl border p-4 ${isPaid ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-black text-gray-700">Status</span>
+              <span className={`rounded-full px-4 py-1.5 text-xs font-black ${isPaid ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+                {isPaid ? 'PAID' : 'UNPAID'}
+              </span>
+            </div>
+            <div className="mt-3 space-y-1">
+              <Row label="Method" value={paymentMethodLabel(order.payment_method)} />
+              <Row label="Amount" value={formatCurrency(grandTotal)} strong />
+              <Row label={isPaid ? 'Paid Date' : 'Created Date'} value={formatDateTime(isPaid ? order.updated_at : order.created_at)} />
+            </div>
+          </div>
         </div>
 
         <div className="border-b border-dashed border-gray-200 py-4">

@@ -3,8 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import { productsApi } from '@/api/products'
-import { authApi } from '@/api/auth'
-import { Logo } from '@/components/layout/CustomerLayout'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
@@ -294,12 +292,6 @@ export default function ProductList() {
   const [page, setPage] = useState(1)
   const [showSearch, setShowSearch] = useState(Boolean(searchParams.get('search')))
 
-  const { data: siteSettings } = useQuery({
-    queryKey: ['site-settings'],
-    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
-  })
-
   const { data: categoryData } = useQuery({
     queryKey: ['categories'],
     queryFn: () => productsApi.categories.list({ is_active: true }).then((r) => r.data.results || r.data),
@@ -357,7 +349,7 @@ export default function ProductList() {
   return (
     <div className="min-h-screen bg-white">
       <div className="-mx-4 -mt-4 mb-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm md:hidden">
-        <div className={isSearchResult ? 'grid grid-cols-[42px_1fr_auto] items-center gap-2.5' : 'grid min-h-[48px] grid-cols-[1fr_auto_1fr] items-center'}>
+        <div className={isSearchResult ? 'grid grid-cols-[42px_1fr_auto] items-center gap-2.5' : 'flex min-h-[48px] items-center justify-between gap-3'}>
           {isSearchResult ? (
             <>
               <button
@@ -378,15 +370,7 @@ export default function ProductList() {
             </>
           ) : (
             <>
-              <div className="min-w-0 justify-self-start">
-                <Logo
-                  compact
-                  iconOnly
-                  logoUrl={siteSettings?.logo_url || null}
-                  storeName={siteSettings?.store_name || 'Shadow Shop'}
-                />
-              </div>
-              <h1 className="text-xl font-black text-gray-950">{t('nav.shop')}</h1>
+              <h1 className="min-w-0 flex-1 truncate text-left text-xl font-black text-gray-950">{t('common.products')}</h1>
               <div className="flex items-center justify-end gap-2">
                 <button onClick={() => navigate('/search')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
                   <Search size={22} />

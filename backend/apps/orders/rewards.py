@@ -155,7 +155,7 @@ def sync_paid_order_points(user):
 
 @transaction.atomic
 def exchange_reward(user, reward_item_id):
-    reward = RewardItem.objects.select_for_update().get(pk=reward_item_id, is_active=True)
+    reward = RewardItem.objects.select_related('gift_product').select_for_update().get(pk=reward_item_id, is_active=True)
     now = timezone.now()
     if reward.starts_at and reward.starts_at > now:
         raise ValueError('This reward is not available yet.')
@@ -184,6 +184,22 @@ def exchange_reward(user, reward_item_id):
 
     coupon_types = {RewardItem.TYPE_VOUCHER, RewardItem.TYPE_DISCOUNT, RewardItem.TYPE_FREE_DELIVERY}
     physical_types = {RewardItem.TYPE_GIFT, RewardItem.TYPE_LUCKY_BOX, RewardItem.TYPE_MANUAL}
+    stock = None
+    if reward.type in {RewardItem.TYPE_GIFT, RewardItem.TYPE_LUCKY_BOX} and reward.gift_product_id:
+        from apps.inventory.models import Stock
+        from apps.products.models import Product
+
+        product = reward.gift_product
+        if product.availability_status == Product.AVAILABILITY_OUT_OF_STOCK:
+            raise ValueError(f'{product.name} is out of inventory.')
+        if product.availability_status == Product.AVAILABILITY_AUTO:
+            stock, _ = Stock.objects.select_for_update().get_or_create(
+                product=product,
+                defaults={'quantity': 0},
+            )
+            if stock.quantity < 1:
+                raise ValueError(f'{product.name} is out of inventory.')
+
     redemption = RewardRedemption.objects.create(
         user=user,
         reward_item=reward,
@@ -209,12 +225,11 @@ def exchange_reward(user, reward_item_id):
 
         product = reward.gift_product
         if product.availability_status != Product.AVAILABILITY_AVAILABLE:
-            stock, _ = Stock.objects.select_for_update().get_or_create(
-                product=product,
-                defaults={'quantity': 0},
-            )
-            if stock.quantity < 1:
-                raise ValueError(f'{product.name} is out of inventory.')
+            if stock is None:
+                stock, _ = Stock.objects.select_for_update().get_or_create(
+                    product=product,
+                    defaults={'quantity': 0},
+                )
             before_qty = stock.quantity
             stock.quantity -= 1
             stock.save(update_fields=['quantity', 'updated_at'])

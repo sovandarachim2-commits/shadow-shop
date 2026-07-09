@@ -1,24 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { ChevronLeft, ClipboardList, Filter, Loader2, Printer, ReceiptText, Truck } from 'lucide-react'
+import { ChevronLeft, ClipboardList, Heart, Loader2, Printer, ReceiptText, ShoppingCart } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { ProductThumb } from '@/components/customer/CustomerUi'
+import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 import { useTranslation } from 'react-i18next'
 
 const USD_TO_KHR_RATE = 4100
-
-const STATUS_TABS = [
-  { key: '', labelKey: 'common.all' },
-  { key: 'new', labelKey: 'orders.status.pending' },
-  { key: 'preparing', labelKey: 'orders.status.preparing' },
-  { key: 'packed', labelKey: 'orders.status.packed' },
-  { key: 'shipped', labelKey: 'orders.status.shipped' },
-  { key: 'completed', labelKey: 'orders.status.completed' },
-]
 
 const STATUS_STYLES = {
   new: 'bg-yellow-50 text-yellow-700',
@@ -28,22 +21,65 @@ const STATUS_STYLES = {
   packed: 'bg-blue-50 text-blue-700',
   shipped: 'bg-cyan-50 text-cyan-700',
   completed: 'bg-green-50 text-green-700',
+  delivered: 'bg-green-50 text-green-700',
   cancelled: 'bg-gray-100 text-gray-500',
 }
 
 const STATUS_LABEL_KEYS = {
   new: 'orders.status.pending',
   pending: 'orders.status.pending',
-  printed: 'orders.status.preparing',
+  printed: 'orders.status.confirmed',
   preparing: 'orders.status.preparing',
   packed: 'orders.status.packed',
   shipped: 'orders.status.shipped',
   completed: 'orders.status.delivered',
+  delivered: 'orders.status.delivered',
   cancelled: 'orders.status.cancelled',
+}
+
+const COMPLETED_STATUSES = new Set(['completed', 'delivered', 'cancelled'])
+
+const PAYMENT_METHOD_LABELS = {
+  aba: 'ABA Pay',
+  bakong: 'Bakong KHQR',
+  cod: 'Cash on Delivery',
+  cash: 'Cash',
+  acleda: 'ACLEDA Bank',
+  wing: 'Wing',
 }
 
 function formatRiel(amount) {
   return `${Math.round(Number(amount || 0)).toLocaleString()}រៀល`
+}
+
+function getOrderItems(order) {
+  if (order.items_preview?.length) return order.items_preview
+  return [{
+    id: `${order.id}-preview`,
+    product_name: order.preview_name || 'Product',
+    product_image: order.preview_image,
+    quantity: order.items_count || 1,
+    total_price: order.grand_total,
+  }]
+}
+
+function getItemPrice(order, item) {
+  const price = item.total_price ?? item.subtotal ?? item.unit_price
+  if (price !== undefined && price !== null) return price
+  const count = Math.max(1, order.items_count || getOrderItems(order).length || 1)
+  return Number(order.grand_total || 0) / count
+}
+
+function compactStatusLabel(status, t) {
+  const label = t(STATUS_LABEL_KEYS[status] || 'orders.status.unknown', { status })
+  if (status === 'shipped') return 'In Transit'
+  if (status === 'preparing') return 'Packing'
+  if (status === 'printed' || status === 'packed') return 'Picked'
+  return label
+}
+
+function paymentMethodLabel(method) {
+  return PAYMENT_METHOD_LABELS[method] || method || '-'
 }
 
 function PrintLogo({ printLogoUrl, size = 78 }) {
@@ -104,6 +140,7 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
   const deliveryFee = Number(order.delivery_fee || 0)
   const discount = Number(order.discount || 0)
   const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
+  const isPaid = order.payment_status === 'paid'
 
   return (
     <div className="receipt-paper mx-auto w-full max-w-[454px] bg-white p-4 text-black sm:p-5 md:p-6">
@@ -136,7 +173,27 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
 
       <div className="my-4 border-t border-dashed border-black sm:my-5" />
 
-      <div>
+      <section>
+        <h3 className="mb-3 text-lg font-black tracking-[0.14em] sm:mb-4 sm:text-xl">PAYMENT</h3>
+        <div className={`rounded-xl border-[3px] p-3 ${isPaid ? 'border-emerald-700' : 'border-red-600'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-black">Status</span>
+            <span className={`rounded-full px-4 py-1.5 text-base font-black ${isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
+              {isPaid ? 'PAID' : 'UNPAID'}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-[86px_1fr] gap-y-2 text-sm font-black leading-6 sm:grid-cols-[104px_1fr] sm:text-base">
+            <span>Method:</span>
+            <span className="text-right">{paymentMethodLabel(order.payment_method)}</span>
+            <span>Amount:</span>
+            <span className="text-right">{formatCurrency(grandTotal)}</span>
+            <span>Date:</span>
+            <span className="text-right">{formatDateTime(isPaid ? order.updated_at : order.created_at)}</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="hidden">
         <p className="mb-2 text-xs font-black sm:text-sm">ការទូទាត់</p>
         <div className={`inline-flex rotate-[-4deg] rounded-xl border-[3px] px-7 py-2 text-2xl font-black ${
           order.payment_status === 'paid' ? 'border-emerald-700 text-emerald-700' : 'border-red-600 text-red-600'
@@ -203,15 +260,23 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
 export default function MyOrders() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('')
+  const location = useLocation()
+  const activeTab = new URLSearchParams(location.search).get('tab') === 'completed' ? 'completed' : 'ongoing'
   const [receiptOrderId, setReceiptOrderId] = useState(null)
+  const cartItems = useCartStore((s) => s.items)
+  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+  const wishlistCount = useWishlistStore((s) => s.items.length)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['my-orders', activeTab],
-    queryFn: () => ordersApi.orders.list({ status: activeTab || undefined, page_size: 30 }).then((r) => r.data.results ?? r.data),
+    queryKey: ['my-orders'],
+    queryFn: () => ordersApi.orders.list({ page_size: 100 }).then((r) => r.data.results ?? r.data),
   })
 
-  const orders = data || []
+  const orders = (data || []).filter((order) => (
+    activeTab === 'completed'
+      ? COMPLETED_STATUSES.has(order.status)
+      : !COMPLETED_STATUSES.has(order.status)
+  ))
 
   const { data: receiptOrder, isLoading: receiptLoading } = useQuery({
     queryKey: ['my-order-receipt', receiptOrderId],
@@ -226,41 +291,66 @@ export default function MyOrders() {
   })
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-180px)] w-full max-w-[1440px] flex-col">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-black text-gray-950">{t('orders.title')}</h1>
-          <p className="mt-1 text-xs font-semibold text-gray-500">{t('orders.subtitle')}</p>
+    <div className="mx-auto flex min-h-screen w-full max-w-[520px] flex-col bg-white pb-24 md:min-h-[calc(100vh-180px)] md:rounded-[28px] md:shadow-card">
+      <div className="hidden px-4 pb-4 pt-6 md:block">
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-[28px] font-black leading-tight text-gray-950">{t('orders.title')}</h1>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/wishlist')}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition active:scale-95"
+              aria-label="Wishlist"
+            >
+              <Heart size={21} strokeWidth={2.2} />
+              {wishlistCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
+                  {wishlistCount > 9 ? '9+' : wishlistCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/cart')}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm shadow-pink-100 transition active:scale-95"
+              aria-label="Cart"
+            >
+              <ShoppingCart size={21} strokeWidth={2.4} />
+              {totalItems > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-900 px-0.5 text-[9px] font-black text-white ring-[1.5px] ring-white">
+                  {totalItems > 9 ? '9+' : totalItems}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-700 shadow-sm">
-          <Filter size={15} /> {t('orders.filter')}
-        </button>
-      </div>
-
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`shrink-0 rounded-xl px-3 py-2 text-xs font-black transition ${
-              activeTab === tab.key
-                ? 'bg-pink-600 text-white shadow-lg shadow-pink-100'
-                : 'border border-gray-100 bg-white text-gray-500 shadow-sm'
-            }`}
-          >
-            {t(tab.labelKey)}
-          </button>
-        ))}
+        <div className="mt-3 grid grid-cols-2 rounded-lg bg-gray-200 p-1">
+          {[
+            { key: 'ongoing', label: 'Ongoing' },
+            { key: 'completed', label: 'Completed' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => navigate(tab.key === 'completed' ? '/my-orders?tab=completed' : '/my-orders')}
+              className={`rounded-md py-2.5 text-sm font-black transition ${
+                activeTab === tab.key ? 'bg-pink-600 text-white shadow-lg shadow-pink-100' : 'text-gray-500'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-3xl bg-gray-100" />
+        <div className="space-y-3 px-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-[94px] animate-pulse rounded-lg border border-gray-100 bg-gray-100" />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white px-4 py-20 text-center">
+        <div className="mx-4 flex flex-1 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-20 text-center">
           <div>
             <ClipboardList size={52} className="mx-auto mb-4 text-gray-200" />
             <p className="text-lg font-black text-gray-500">{t('orders.noOrdersFound')}</p>
@@ -271,56 +361,67 @@ export default function MyOrders() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-3 px-4">
           {orders.map((order) => {
+            const orderItems = getOrderItems(order)
+            const statusLabel = compactStatusLabel(order.status, t)
+            const statusStyle = STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500'
             return (
-              <article
-                key={order.id}
-                className="rounded-2xl border border-pink-100 bg-white p-3 shadow-card"
-              >
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => navigate(`/my-orders/${order.id}`)}
-                    className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-pink-50 text-left"
-                  >
-                    {order.preview_image ? (
-                      <img src={order.preview_image} alt={order.preview_name || order.order_number} className="h-full w-full object-cover" />
-                    ) : (
-                      <ProductThumb product={{ name: order.preview_name || t('common.product') }} size="lg" className="h-20 w-20 rounded-xl" />
-                    )}
+              <section key={order.id} className="space-y-2">
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <button onClick={() => navigate(`/my-orders/${order.id}`)} className="min-w-0 text-left">
+                    <p className="truncate font-mono text-xs font-black text-gray-900">Order #{order.order_number}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-gray-400">{formatDateTime(order.created_at)}</p>
                   </button>
-                  <div className="min-w-0 flex-1">
-                    <button onClick={() => navigate(`/my-orders/${order.id}`)} className="block max-w-full truncate text-left font-mono text-sm font-black text-gray-950">
-                      #{order.order_number}
-                    </button>
-                    <p className="mt-1 text-xs font-semibold text-gray-400">{formatDateTime(order.created_at)}</p>
-                    <span className={`mt-2 inline-flex rounded-lg px-2.5 py-1 text-xs font-black ${STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500'}`}>
-                      {t(STATUS_LABEL_KEYS[order.status] || 'orders.status.unknown', { status: order.status })}
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptOrderId(order.id)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 active:scale-95"
+                    aria-label="Receipt"
+                  >
+                    <ReceiptText size={15} />
+                  </button>
                 </div>
-
-                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                  <div className="flex items-end justify-between gap-4 sm:block">
-                    <p className="text-xs font-semibold text-gray-500">{order.items_count || 0} {t('cart.items')}</p>
-                    <p className="text-xl font-black text-pink-600 sm:mt-2">{formatCurrency(order.grand_total)}</p>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setReceiptOrderId(order.id)}
-                      className="inline-flex min-w-[118px] items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-4 py-3 text-sm font-black text-pink-600 shadow-sm"
-                    >
-                      <ReceiptText size={17} /> Receipt
+                {orderItems.map((item, index) => (
+                  <article key={item.id || `${order.id}-${index}`} className="flex min-h-[94px] gap-3 rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
+                    <button onClick={() => navigate(`/my-orders/${order.id}`)} className="h-[70px] w-[70px] shrink-0 overflow-hidden rounded-md bg-gray-100 text-left">
+                      {item.product_image || (index === 0 && order.preview_image) ? (
+                        <img
+                          src={item.product_image || order.preview_image}
+                          alt={item.product_name || order.preview_name || order.order_number}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <ProductThumb product={{ name: item.product_name || order.preview_name || t('common.product') }} size="lg" className="h-[70px] w-[70px] rounded-md" />
+                      )}
                     </button>
-                    <button
-                      onClick={() => navigate(`/my-orders/${order.id}`)}
-                      className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-pink-100"
-                    >
-                      <Truck size={17} /> {t('orders.trackOrder')}
-                    </button>
-                  </div>
-                </div>
-              </article>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <button onClick={() => navigate(`/my-orders/${order.id}`)} className="block max-w-full truncate text-left text-sm font-black text-gray-950">
+                            {item.product_name || order.preview_name || t('common.product')}
+                          </button>
+                          <p className="mt-1 text-xs text-gray-400">
+                            {item.product_code ? item.product_code : `Qty ${item.quantity || 1}`}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-md px-2.5 py-1 text-[10px] font-bold ${statusStyle}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-3">
+                        <p className="text-sm font-black text-gray-950">{formatCurrency(getItemPrice(order, item))}</p>
+                        <button
+                          onClick={() => navigate(`/my-orders/${order.id}`)}
+                          className="rounded-md bg-gray-950 px-5 py-2 text-[11px] font-black text-white active:scale-95"
+                        >
+                          {t('orders.trackOrder')}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </section>
             )
           })}
         </div>

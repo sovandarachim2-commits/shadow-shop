@@ -216,6 +216,7 @@
     "backToCheckout": "ត្រឡប់ទៅបំពេញការទិញ",
     "status": {
       "pending": "កំពុងរង់ចាំ",
+      "confirmed": "បានបញ្ជាក់",
       "preparing": "កំពុងរៀបចំ",
       "preparingOrder": "កំពុងរៀបចំការបញ្ជាទិញ",
       "packed": "បានវេចខ្ចប់",
@@ -227,8 +228,10 @@
     },
     "timeline": {
       "placed": "បានដាក់ការបញ្ជាទិញ",
-      "confirmed": "អ្នកគិតលុយបានបញ្ជាក់",
-      "preparing": "កំពុងរៀបចំការបញ្ជាទិញ"
+      "confirmed": "បានបញ្ជាក់",
+      "preparing": "កំពុងរៀបចំ",
+      "shipped": "បានដឹកចេញ",
+      "delivered": "បានដឹកដល់"
     },
     "payment": {
       "title": "ការបង់ប្រាក់",

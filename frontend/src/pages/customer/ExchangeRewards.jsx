@@ -73,6 +73,7 @@ function RewardCard({ reward, currentPoints, onExchange, isExchanging, onView })
   const hasStock = reward.stock === null || reward.stock === undefined || reward.stock > 0
   const canExchange = !reward.preview && reward.can_exchange && hasStock
   const pointsShort = Math.max(0, reward.points_required - currentPoints)
+  const unavailableText = !hasStock ? 'Out of stock' : pointsShort > 0 ? `${pointsShort.toLocaleString()} pts short` : 'Unavailable'
 
   return (
     <article
@@ -128,7 +129,7 @@ function RewardCard({ reward, currentPoints, onExchange, isExchanging, onView })
       </div>
       {!canExchange && !reward.preview && (
         <p className="mt-3 text-right text-xs font-black text-gray-400">
-          {hasStock ? `${pointsShort.toLocaleString()} pts short` : 'Out of stock'}
+          {unavailableText}
         </p>
       )}
     </article>
@@ -314,22 +315,20 @@ export default function ExchangeRewards() {
   })
 
   return (
-    <div className="min-h-screen bg-white pb-24 md:pb-6">
-      <div className="mx-auto flex w-full max-w-[560px] flex-col px-4 pb-6 pt-[max(0.75rem,env(safe-area-inset-top))] md:max-w-[1440px] md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-4 grid min-h-[58px] grid-cols-[44px_1fr_44px] items-center bg-white/95 px-4 backdrop-blur md:static md:mx-0 md:mb-4 md:flex md:min-h-0 md:items-start md:justify-between md:bg-transparent md:px-0">
-          <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-950 active:scale-95 md:hidden">
-            <ChevronLeft size={24} />
-          </button>
-          <div className="min-w-0 text-center md:text-left">
-            <h1 className="text-lg font-black text-gray-950 md:text-2xl">Shadow Rewards</h1>
-            <p className="mt-1 hidden text-xs font-semibold text-gray-500 md:block">Earn points and redeem rewards.</p>
+    <div className="min-h-screen bg-gray-50 pb-24 md:bg-white md:pb-6">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col px-4 pb-6 pt-[max(0.35rem,env(safe-area-inset-top))] md:max-w-[1440px] md:px-6 md:pt-6">
+        <header className="sticky top-0 z-30 -mx-4 flex min-h-[54px] items-center justify-between gap-3 bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:mb-4 md:min-h-0 md:bg-transparent md:px-0">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-pink-500 md:hidden">Rewards</p>
+            <h1 className="text-xl font-black leading-tight text-gray-950 md:text-2xl">Shadow Rewards</h1>
+            <p className="mt-0.5 text-xs font-bold text-gray-500 md:mt-1">Earn points and redeem rewards.</p>
           </div>
-          <button className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full border border-gray-200 bg-white text-gray-950 md:h-11 md:w-11">
-            <HelpCircle size={20} />
+          <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm md:h-11 md:w-11">
+            <HelpCircle size={19} />
           </button>
         </header>
 
-        <section className="relative mt-3 overflow-hidden rounded-[20px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-5 md:rounded-[22px] md:p-6">
+        <section className="relative mt-2 overflow-hidden rounded-[22px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-5 md:rounded-[22px] md:p-6">
           <div className="absolute right-5 top-8 h-28 w-28 rotate-45 rounded-3xl bg-white/10" />
           <Sparkles className="absolute right-32 top-6 text-white/20" size={28} />
           <Sparkles className="absolute bottom-20 right-36 text-white/15" size={24} />
@@ -371,7 +370,7 @@ export default function ExchangeRewards() {
           </div>
         </section>
 
-        <section className="mt-4 grid grid-cols-2 gap-2.5 md:mt-5 md:grid-cols-4 md:gap-4">
+        <section className="mt-3 grid grid-cols-2 gap-2.5 md:mt-5 md:grid-cols-4 md:gap-4">
           {[
             { title: 'Earn Points', text: 'See how to earn', icon: Star, action: () => navigate('/profile/rewards/earn') },
             { title: 'Redeem Points', text: 'Use your points', icon: Gift, action: () => navigate('/profile/rewards/redeem') },
@@ -380,35 +379,36 @@ export default function ExchangeRewards() {
           ].map((item) => {
             const Icon = item.icon
             return (
-              <button onClick={item.action} key={item.title} className="flex min-h-[104px] flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.06)] active:scale-[0.98] md:min-h-[132px] md:p-4">
-                <Icon size={30} className="text-pink-600 md:h-[42px] md:w-[42px]" fill={item.icon === Star ? 'currentColor' : 'none'} />
-                <span className="mt-2 text-sm font-black text-gray-950 md:mt-3 md:text-lg">{item.title}</span>
+              <button type="button" onClick={item.action} key={item.title} className="flex min-h-[92px] flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.05)] active:scale-[0.98] md:min-h-[132px] md:p-4">
+                <Icon size={28} className="text-pink-600 md:h-[42px] md:w-[42px]" fill={item.icon === Star ? 'currentColor' : 'none'} />
+                <span className="mt-2 text-[13px] font-black text-gray-950 md:mt-3 md:text-lg">{item.title}</span>
                 <span className="mt-0.5 text-xs font-semibold text-gray-500 md:mt-1 md:text-sm">{item.text}</span>
               </button>
             )
           })}
         </section>
 
-        <section className="mt-4 flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-pink-50 to-rose-50 p-3.5 shadow-sm md:mt-6 md:gap-5 md:p-5">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-pink-100 text-pink-600 md:h-24 md:w-24 md:rounded-3xl">
+        <section className="mt-3 flex items-center gap-3 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-pink-100 md:mt-6 md:gap-5 md:p-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 md:h-24 md:w-24 md:rounded-3xl">
             <span className="text-3xl font-black md:text-5xl">$</span>
           </div>
           <div className="min-w-0">
             <h2 className="text-sm font-black text-gray-950 md:text-lg">More Points, More Rewards!</h2>
             <p className="mt-0.5 text-xs font-semibold leading-5 text-gray-700 md:mt-1 md:text-sm md:leading-6">Earn more points and unlock amazing rewards.</p>
-            <button className="mt-2 rounded-lg bg-pink-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-pink-100 md:mt-3 md:px-5 md:py-2.5 md:text-sm">Earn Now</button>
+            <button type="button" onClick={() => navigate('/profile/rewards/earn')} className="mt-2 rounded-lg bg-pink-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-pink-100 md:mt-3 md:px-5 md:py-2.5 md:text-sm">Earn Now</button>
           </div>
         </section>
 
-        <section className="mt-5 md:mt-7">
+        <section className="mt-5 rounded-2xl bg-white p-3 shadow-sm md:mt-7 md:bg-transparent md:p-0 md:shadow-none">
           <div className="mb-3 flex items-center justify-between md:mb-4">
             <h2 className="text-lg font-black text-gray-950 md:text-2xl">Redeem with Points</h2>
-            <button className="flex items-center gap-1 text-sm font-black text-pink-600">View All <ChevronLeft size={16} className="rotate-180" /></button>
+            <button type="button" onClick={() => navigate('/profile/rewards/redeem')} className="flex items-center gap-1 text-sm font-black text-pink-600">View All <ChevronLeft size={16} className="rotate-180" /></button>
           </div>
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 md:mb-4">
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 pr-2 [scrollbar-width:none] md:mb-4 [&::-webkit-scrollbar]:hidden">
             {CATEGORY_FILTERS.map((category) => (
               <button
                 key={category.key}
+                type="button"
                 onClick={() => setActiveCategory(category.key)}
                 className={cn(
                   'shrink-0 rounded-xl px-4 py-2.5 text-xs font-black transition md:px-5 md:py-3 md:text-sm',

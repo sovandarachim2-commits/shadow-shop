@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
@@ -549,6 +549,7 @@ export function EditProfilePage() {
 
 export default function Profile() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout, fetchMe } = useAuthStore()
   const wishlistItems = useWishlistStore((s) => s.items)
   const [confirm, ConfirmDialog] = useConfirm()
@@ -570,6 +571,21 @@ export default function Profile() {
   useEffect(() => {
     if (user) fetchMe()
   }, [user?.id])
+
+  useEffect(() => {
+    const requestedView = new URLSearchParams(location.search).get('view')
+    const profileViews = ['profile', 'orders', 'addresses', 'wishlist', 'rewards', 'coupons', 'reviews', 'payment', 'notifications', 'help']
+
+    if (!requestedView) return
+    if (requestedView === 'password') {
+      setActiveView('profile')
+      setActiveModal('password')
+      return
+    }
+    if (profileViews.includes(requestedView)) {
+      setActiveView(requestedView)
+    }
+  }, [location.search])
 
   const { data: addresses = [] } = useQuery({
     queryKey: ['my-addresses'],
@@ -818,79 +834,19 @@ export default function Profile() {
       <div className="hidden lg:flex lg:mx-auto lg:w-full lg:max-w-[1440px]">
 
         {/* ── Sidebar ──────────────────────────────── */}
-        <aside className="w-[240px] shrink-0 border-r border-gray-100 bg-white">
-          <nav className="p-3 pt-5">
-            {[
-              { label: t('profile.accountOverview'), icon: Home,          view: 'profile' },
-              { label: t('nav.orders'),              icon: ClipboardList, view: 'orders',    badge: accountOrders.length },
-              { label: t('profile.addresses'),       icon: MapPin,        view: 'addresses' },
-              { label: t('wishlist.title'),           icon: Heart,         view: 'wishlist' },
-              { label: t('profile.rewards'),          icon: Gift,          view: 'rewards', path: '/profile/rewards' },
-              { label: t('profile.coupons'),          icon: Percent,       view: 'coupons' },
-              { label: t('profile.reviews'),          icon: Star,          view: 'reviews' },
-            ].map(({ label, icon: Icon, view, badge, path }) => {
-              const isActive = activeView === view
-              return (
-                <button
-                  key={view}
-                  onClick={() => path ? navigate(path) : setActiveView(view)}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-                    isActive ? 'bg-pink-50 font-bold text-pink-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  )}
-                >
-                  <Icon size={17} className={isActive ? 'text-pink-600' : ''} />
-                  <span className="flex-1 text-left">{label}</span>
-                  {badge > 0 && (
-                    <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-pink-500 px-1 text-[10px] font-black text-white">
-                      {badge}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </nav>
-          <div className="border-t border-gray-100 p-3 pb-4">
-            <p className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">{t('profile.accountMenu')}</p>
-            {[
-              { label: t('profile.editProfile'),      icon: User,       view: null,            action: () => navigate('/profile/edit') },
-              { label: t('profile.passwordSecurity'), icon: Lock,       view: null,            action: () => setActiveModal('password') },
-              { label: t('profile.paymentMethods'),   icon: CreditCard, view: 'payment',       action: () => setActiveView('payment') },
-              { label: t('profile.notifications'),    icon: Bell,       view: 'notifications', action: () => setActiveView('notifications') },
-              { label: t('profile.helpCenter'),       icon: HelpCircle, view: 'help',          action: () => setActiveView('help') },
-              { label: t('auth.logout'),              icon: LogOut,     view: null,            action: handleLogout, danger: true },
-            ].map(({ label, icon: Icon, view, action, danger }) => {
-              const isActive = view && activeView === view
-              return (
-                <button
-                  key={label}
-                  onClick={action}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-                    danger ? 'text-red-500 hover:bg-red-50'
-                      : isActive ? 'bg-pink-50 font-bold text-pink-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  )}
-                >
-                  <Icon size={17} className={isActive ? 'text-pink-600' : ''} />
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        </aside>
-
         {/* ── Main Content ────────────────────────── */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="mx-auto max-w-[1100px] space-y-5">
+        <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 via-white to-pink-50/40 p-6">
+          <div className="mx-auto max-w-[1340px] space-y-5">
 
           {/* ══ ACCOUNT OVERVIEW ══ */}
           {activeView === 'profile' && <>
 
             {/* Row 1 — Profile card + Points card */}
-            <div className="flex gap-5">
-              <div className="flex-1 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center gap-5">
+            <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
+              <div className="relative overflow-hidden rounded-3xl border border-pink-100 bg-white p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+                <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-pink-100/60" />
+                <div className="absolute right-24 bottom-0 h-28 w-28 rounded-full bg-purple-100/50" />
+                <div className="relative flex items-center gap-5">
                   <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-pink-100 shadow-md">
                     {user.avatar_url ? (
                       <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
@@ -918,7 +874,7 @@ export default function Profile() {
                       </div>
                       <button
                         onClick={() => navigate('/profile/edit')}
-                        className="flex shrink-0 items-center gap-1.5 rounded-full border border-pink-300 px-4 py-2 text-sm font-bold text-pink-600 transition hover:bg-pink-50"
+                        className="flex shrink-0 items-center gap-1.5 rounded-full border border-pink-200 bg-white/80 px-4 py-2 text-sm font-bold text-pink-600 shadow-sm transition hover:bg-pink-50"
                       >
                         <Pencil size={13} /> {t('profile.editProfile')}
                       </button>
@@ -927,7 +883,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              <div className="w-[280px] shrink-0 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="shrink-0 rounded-3xl border border-pink-100 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
                 <div className="flex items-center gap-2">
                   <Gift size={15} className="text-pink-500" />
                   <span className="text-sm font-black text-gray-700">{t('profile.myPoints')}</span>
@@ -962,7 +918,7 @@ export default function Profile() {
 
             {/* Row 2 — Orders Status + Shortcuts */}
             <div className="grid grid-cols-2 gap-5">
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
                 <div className="mb-5 flex items-center justify-between">
                   <h3 className="text-base font-black text-gray-950">{t('profile.myOrdersStatus')}</h3>
                   <button onClick={() => navigate('/my-orders')} className="flex items-center gap-0.5 text-sm font-bold text-pink-500 hover:text-pink-600">
@@ -973,7 +929,7 @@ export default function Profile() {
                   {ORDER_STATUS_ITEMS.map(({ key, label, icon: Icon }, idx) => (
                     <div key={key} className="flex items-center">
                       <button onClick={() => navigate('/my-orders')} className="flex flex-col items-center gap-2 transition active:scale-95">
-                        <div className="relative flex h-14 w-14 items-center justify-center rounded-full border-2 border-pink-100 bg-pink-50 text-pink-500">
+                        <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-pink-500 ring-1 ring-pink-100">
                           <Icon size={21} />
                           {orderCounts[key] > 0 && (
                             <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-pink-500 px-1 text-[10px] font-black text-white ring-[1.5px] ring-white">
@@ -991,12 +947,12 @@ export default function Profile() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
                 <h3 className="mb-5 text-base font-black text-gray-950">My Shortcuts</h3>
                 <div className="flex items-start gap-5">
                   {SHORTCUTS.map(({ tKey, icon: Icon, path }) => (
                     <button key={tKey} onClick={() => navigate(path)} className="flex flex-col items-center gap-2 transition hover:opacity-70 active:scale-95">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-pink-100 bg-pink-50 text-pink-500">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-50 text-pink-500 ring-1 ring-pink-100">
                         <Icon size={19} />
                       </div>
                       <span className="text-[11px] font-semibold text-gray-600">{t(tKey)}</span>
@@ -1006,41 +962,9 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Row 3 — Account Menu + Recent Orders */}
-            <div className="grid grid-cols-2 gap-5">
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                <h3 className="mb-4 text-base font-black text-gray-950">Account Menu</h3>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                  {[
-                    { icon: User,       label: 'Edit Profile',        desc: 'Update your personal info',    action: () => navigate('/profile/edit') },
-                    { icon: Gift,       label: 'Exchange Rewards',     desc: 'Redeem points for rewards',    action: () => navigate('/profile/rewards') },
-                    { icon: Percent,    label: 'Coupons',              desc: 'Your discount coupons',        action: () => setActiveView('coupons') },
-                    { icon: Lock,       label: 'Password & Security',  desc: 'Change password and security', action: () => setActiveModal('password') },
-                    { icon: Star,       label: 'Reviews',              desc: 'Your product reviews',         action: () => setActiveView('reviews') },
-                    { icon: CreditCard, label: 'Payment Methods',      desc: 'Manage your payment cards',    action: () => setActiveView('payment') },
-                    { icon: HelpCircle, label: 'Help Center',          desc: 'FAQs and Support',             action: () => setActiveView('help') },
-                    { icon: Bell,       label: 'Notifications',        desc: 'Manage notification settings', action: () => setActiveView('notifications') },
-                    { icon: LogOut,     label: 'Logout',               desc: 'Sign out from your account',   action: handleLogout, danger: true },
-                  ].map(({ icon: Icon, label, desc, action, danger }) => (
-                    <button
-                      key={label}
-                      onClick={action}
-                      className="flex items-center gap-3 rounded-xl p-3 text-left transition hover:bg-gray-50 active:bg-pink-50"
-                    >
-                      <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl', danger ? 'bg-red-50' : 'bg-pink-50')}>
-                        <Icon size={16} className={danger ? 'text-red-500' : 'text-pink-500'} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className={cn('text-sm font-black leading-tight', danger ? 'text-red-500' : 'text-gray-900')}>{label}</p>
-                        <p className="mt-0.5 text-[11px] leading-tight text-gray-400">{desc}</p>
-                      </div>
-                      <ChevronRight size={13} className={cn('shrink-0', danger ? 'text-red-200' : 'text-gray-300')} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            {/* Row 3 — Recent Orders */}
+            <div className="grid grid-cols-1 gap-5">
+              <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-base font-black text-gray-950">Recent Orders</h3>
                   <button onClick={() => navigate('/my-orders')} className="flex items-center gap-0.5 text-[13px] font-bold text-pink-500 hover:text-pink-600">
@@ -1050,12 +974,12 @@ export default function Profile() {
                 {accountOrders.length === 0 ? (
                   <div className="py-8 text-center text-sm text-gray-400">No orders yet.</div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="grid gap-1 xl:grid-cols-2">
                     {accountOrders.slice(0, 4).map((order) => (
                       <button
                         key={order.id}
                         onClick={() => navigate(`/my-orders/${order.id}`)}
-                        className="flex w-full items-center gap-3.5 rounded-xl p-2.5 text-left transition hover:bg-gray-50"
+                        className="flex w-full items-center gap-3.5 rounded-2xl p-3 text-left transition hover:bg-pink-50/50"
                       >
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-pink-50">
                           <ShoppingBag size={17} className="text-pink-300" />
@@ -1084,7 +1008,7 @@ export default function Profile() {
                 { icon: Lock,       title: 'Secure Payment',    desc: '100% secure payment' },
                 { icon: Headphones, title: 'Customer Support',  desc: '24/7 customer support' },
               ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex items-center gap-3.5 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div key={title} className="flex items-center gap-3.5 rounded-3xl border border-gray-100 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-50 text-pink-500">
                     <Icon size={20} />
                   </div>

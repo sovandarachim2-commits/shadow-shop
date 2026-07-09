@@ -5,14 +5,11 @@ import {
   ChevronRight,
   Check,
   ClipboardList,
-  CreditCard,
   Headphones,
   Loader2,
   MapPin,
   Package,
-  PackageCheck,
   Phone,
-  ScanLine,
   ShoppingCart,
   Truck,
   User,
@@ -31,38 +28,46 @@ const STATUS_STYLES = {
   packed: 'bg-blue-50 text-blue-700',
   shipped: 'bg-cyan-50 text-cyan-700',
   completed: 'bg-green-50 text-green-700',
+  delivered: 'bg-green-50 text-green-700',
   cancelled: 'bg-red-50 text-red-600',
 }
 
 const STATUS_LABEL_KEYS = {
   new: 'orders.status.pending',
   pending: 'orders.status.pending',
-  printed: 'orders.status.preparing',
+  printed: 'orders.status.confirmed',
   preparing: 'orders.status.preparing',
   packed: 'orders.status.packed',
   shipped: 'orders.status.shipped',
   completed: 'orders.status.delivered',
+  delivered: 'orders.status.delivered',
   cancelled: 'orders.status.cancelled',
 }
 
 const TIMELINE_STEPS = [
   { key: 'new', labelKey: 'orders.timeline.placed', icon: ShoppingCart },
-  { key: 'printed', labelKey: 'orders.timeline.confirmed', icon: ShoppingCart },
+  { key: 'printed', labelKey: 'orders.timeline.confirmed', icon: ClipboardList },
   { key: 'preparing', labelKey: 'orders.timeline.preparing', icon: Package },
-  { key: 'packed', labelKey: 'orders.status.packed', icon: PackageCheck },
-  { key: 'shipped', labelKey: 'orders.status.shipped', icon: Truck },
-  { key: 'completed', labelKey: 'orders.status.delivered', icon: Check },
+  { key: 'shipped', labelKey: 'orders.timeline.shipped', icon: Truck },
+  { key: 'completed', labelKey: 'orders.timeline.delivered', icon: Check },
 ]
 
-const STATUS_ORDER = ['new', 'pending', 'printed', 'preparing', 'packed', 'shipped', 'completed']
+const TRACKING_STEP_INDEX = {
+  new: 0,
+  pending: 0,
+  printed: 1,
+  preparing: 2,
+  packed: 2,
+  shipped: 3,
+  completed: 4,
+  delivered: 4,
+}
 
 function stepDone(currentStatus, stepKey) {
   if (currentStatus === 'cancelled') return stepKey === 'new'
-  const normalized = currentStatus === 'new' || currentStatus === 'pending' ? 'new' : currentStatus
-  if (normalized === 'new') return stepKey === 'new'
-  const currentIdx = STATUS_ORDER.indexOf(normalized)
-  const stepIdx = STATUS_ORDER.indexOf(stepKey)
-  return stepIdx !== -1 && currentIdx !== -1 && stepIdx <= currentIdx
+  const currentIdx = TRACKING_STEP_INDEX[currentStatus] ?? 0
+  const stepIdx = TRACKING_STEP_INDEX[stepKey] ?? 0
+  return stepIdx <= currentIdx
 }
 
 function Card({ title, children, action }) {
@@ -155,7 +160,7 @@ export default function OrderTracking() {
           <span className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-black ${statusStyle}`}>{statusLabel}</span>
         </div>
 
-        <div className="mt-6 grid grid-cols-6 items-start">
+        <div className="mt-6 grid grid-cols-5 items-start">
           {TIMELINE_STEPS.map((step, index) => {
             const done = stepDone(order.status, step.key)
             return (
