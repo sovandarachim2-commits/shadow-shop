@@ -356,6 +356,7 @@ def check_bakong_status(payment, user=None, request=None):
                 headers={
                     'Content-Type': 'application/json',
                     'Authorization': f'Bearer {settings.BAKONG_TOKEN}',
+                    'User-Agent': 'ShadowShop/1.0 (+https://shadow-shop.online)',
                 },
                 timeout=20,
             )
