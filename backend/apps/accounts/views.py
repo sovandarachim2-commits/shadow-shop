@@ -151,10 +151,12 @@ class TelegramLoginConfigView(generics.GenericAPIView):
 
     def get(self, request):
         from apps.notifications.services import TelegramService
-        bot_username = TelegramService().get_bot_username()
+        telegram_service = TelegramService()
+        bot_username = telegram_service.get_bot_username()
+        bot_token = telegram_service.get_bot_token()
         return Response({
             'bot_username': bot_username,
-            'configured': bool(bot_username),
+            'configured': bool(bot_username and bot_token),
         })
 
 
