@@ -285,7 +285,13 @@ def _mark_bakong_paid(payment, response_data, user=None, request=None):
             'received_by': user,
         },
     )
-    TelegramService().notify_payment_received(payment.order)
+    order_id = payment.order_id
+    user_id = getattr(user, 'id', None)
+    order = payment.order
+    transaction.on_commit(
+        lambda: TelegramService.confirm_order_after_payment_async(order_id, user_id)
+    )
+    transaction.on_commit(lambda: TelegramService().notify_payment_received(order))
 
 
 def _request_from_user(user, fallback_user):
