@@ -1,5 +1,17 @@
 from django.core.management.base import BaseCommand
-from apps.accounts.models import Permission, RolePermission
+from apps.accounts.models import Permission, Role, RolePermission
+
+
+DEFAULT_ROLES = [
+    ('super_admin', 'Super Admin'),
+    ('admin', 'Admin'),
+    ('seller', 'Seller'),
+    ('cashier', 'Cashier'),
+    ('warehouse', 'Warehouse Staff'),
+    ('scanner', 'Scanner Staff'),
+    ('delivery', 'Delivery Staff'),
+    ('customer', 'Customer'),
+]
 
 DEFAULTS = {
     'super_admin': '__all__',
@@ -74,6 +86,12 @@ class Command(BaseCommand):
         parser.add_argument('--reset', action='store_true', help='Delete existing role permissions before seeding')
 
     def handle(self, *args, **options):
+        for name, display_name in DEFAULT_ROLES:
+            Role.objects.get_or_create(
+                name=name,
+                defaults={'display_name': display_name, 'is_system': True},
+            )
+
         if options['reset']:
             RolePermission.objects.filter(role__in=DEFAULTS.keys()).delete()
             self.stdout.write('Cleared existing role permissions.')
