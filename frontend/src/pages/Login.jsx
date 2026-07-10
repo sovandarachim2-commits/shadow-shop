@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Eye, EyeOff, Loader2, Lock, Send, Phone, Mail,
@@ -343,14 +343,17 @@ function Field({ label, icon: Icon, type = 'text', placeholder, value, onChange,
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, register, isAuthenticated, user } = useAuthStore()
+  const { login, register, telegramLogin, isAuthenticated, user } = useAuthStore()
   const { t } = useTranslation()
   const [mode, setMode] = useState('login')
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [telegramOpen, setTelegramOpen] = useState(false)
+  const [telegramLoading, setTelegramLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
   const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '' })
+  const telegramWidgetRef = useRef(null)
   const sl = (k, v) => setLf((f) => ({ ...f, [k]: v }))
   const sr = (k, v) => setRf((f) => ({ ...f, [k]: v }))
 
@@ -359,9 +362,18 @@ export default function Login() {
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   })
+
+  const { data: telegramConfig } = useQuery({
+    queryKey: ['telegram-login-config'],
+    queryFn: () => authApi.telegramConfig().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const storeName = siteSettings?.store_name || 'Shadow Shop'
   const name0 = (storeName || 'Shadow').split(' ')[0].toUpperCase()
   const name1 = ((storeName || 'Shadow Shop').split(' ').slice(1).join(' ') || 'BEAUTY').toUpperCase()
+  const telegramBotUsername = telegramConfig?.bot_username || ''
+  const telegramLoginEnabled = Boolean(telegramConfig?.configured && telegramBotUsername)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -377,6 +389,39 @@ export default function Login() {
     if (user?.role === 'customer') navigate(from || '/', { replace: true })
     else navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
   }, [isAuthenticated, user, navigate, location.state?.from])
+
+  useEffect(() => {
+    if (!telegramOpen || !telegramLoginEnabled || !telegramWidgetRef.current) return
+
+    const callbackName = 'shadowShopTelegramAuth'
+    window[callbackName] = async (telegramUser) => {
+      setTelegramLoading(true)
+      try {
+        const loggedInUser = await telegramLogin(telegramUser)
+        toast.success(`Welcome, ${loggedInUser.first_name || loggedInUser.username}!`)
+        setTelegramOpen(false)
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Telegram login failed')
+      } finally {
+        setTelegramLoading(false)
+      }
+    }
+
+    telegramWidgetRef.current.innerHTML = ''
+    const script = document.createElement('script')
+    script.src = 'https://telegram.org/js/telegram-widget.js?22'
+    script.async = true
+    script.setAttribute('data-telegram-login', telegramBotUsername)
+    script.setAttribute('data-size', 'large')
+    script.setAttribute('data-radius', '10')
+    script.setAttribute('data-request-access', 'write')
+    script.setAttribute('data-onauth', `${callbackName}(user)`)
+    telegramWidgetRef.current.appendChild(script)
+
+    return () => {
+      if (window[callbackName]) delete window[callbackName]
+    }
+  }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -408,6 +453,14 @@ export default function Login() {
         : null
       toast.error(d?.detail || firstError || 'Registration failed')
     } finally { setLoading(false) }
+  }
+
+  const openTelegramLogin = () => {
+    if (!telegramLoginEnabled) {
+      toast.error('Telegram login is not configured yet.')
+      return
+    }
+    setTelegramOpen(true)
   }
 
   const EyeToggle = ({ show, toggle }) => (
@@ -505,9 +558,11 @@ export default function Login() {
 
                     {/* Telegram */}
                     <button type="button"
+                      onClick={openTelegramLogin}
+                      disabled={telegramLoading}
                       className="w-full h-12 rounded-xl bg-white text-[15px] font-bold text-gray-700 flex items-center justify-center gap-3 hover:bg-blue-50/30 transition"
                       style={{ border: '1.5px solid rgba(37,150,232,0.4)' }}>
-                      <Send size={18} color="#2AABEE" fill="#2AABEE" />
+                      {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} color="#2AABEE" fill="#2AABEE" />}
                       {t('auth.loginWithTelegram')}
                     </button>
 
@@ -616,9 +671,11 @@ export default function Login() {
                     </div>
 
                     <button type="button"
+                      onClick={openTelegramLogin}
+                      disabled={telegramLoading}
                       className="w-full rounded-xl bg-white font-bold text-gray-700 flex items-center justify-center gap-3 hover:bg-sky-50/40 transition"
                       style={{ height: 52, border: '1.5px solid rgba(37,150,232,0.38)', fontSize: 15 }}>
-                      <Send size={17} color="#2AABEE" fill="#2AABEE" />
+                      {telegramLoading ? <Loader2 size={17} className="animate-spin text-sky-500" /> : <Send size={17} color="#2AABEE" fill="#2AABEE" />}
                       {t('auth.signupWithTelegram')}
                     </button>
 
@@ -634,6 +691,34 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {telegramOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-500">
+              <Send size={24} fill="#2AABEE" />
+            </div>
+            <h3 className="mt-4 text-xl font-black text-gray-950">Continue with Telegram</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-500">
+              Approve Telegram login to continue. We will create your customer account automatically if this is your first time.
+            </p>
+            <div className="mt-5 flex min-h-[48px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-3 py-4">
+              {telegramLoginEnabled ? (
+                <div ref={telegramWidgetRef} className="flex justify-center" />
+              ) : (
+                <p className="text-sm font-bold text-red-500">Telegram login is not configured.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setTelegramOpen(false)}
+              className="mt-4 h-11 w-full rounded-xl border border-gray-200 bg-white text-sm font-black text-gray-600 transition hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
