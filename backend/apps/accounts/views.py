@@ -13,8 +13,10 @@ import hmac
 import secrets
 import random
 import string
+import mimetypes
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from django.http import JsonResponse
 from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, Address, SiteSettings
 from .serializers import (
     CustomTokenObtainPairSerializer, UserSerializer, UserCreateSerializer,
@@ -512,3 +514,50 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return SiteSettings.get_solo()
+
+
+class SiteSettingsManifestView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        site_settings = SiteSettings.get_solo()
+        store_name = site_settings.store_name or 'Shadow Shop'
+
+        icon_url = None
+        if site_settings.favicon:
+            icon_url = request.build_absolute_uri(site_settings.favicon.url)
+        elif site_settings.logo:
+            icon_url = request.build_absolute_uri(site_settings.logo.url)
+
+        fallback_icon = '/app-icon-512.png'
+        icon_src = icon_url or fallback_icon
+        icon_type = mimetypes.guess_type(icon_src)[0] or 'image/png'
+        icon_sizes = 'any' if icon_type == 'image/svg+xml' else '512x512'
+
+        return JsonResponse({
+            'name': store_name,
+            'short_name': store_name[:12] or 'Shadow',
+            'description': 'Beauty and lifestyle shopping app.',
+            'start_url': '/',
+            'scope': '/',
+            'display': 'standalone',
+            'display_override': ['fullscreen', 'standalone', 'minimal-ui'],
+            'orientation': 'portrait',
+            'background_color': '#ffffff',
+            'theme_color': '#E91E63',
+            'categories': ['shopping', 'lifestyle', 'beauty'],
+            'icons': [
+                {
+                    'src': icon_src,
+                    'sizes': icon_sizes,
+                    'type': icon_type,
+                    'purpose': 'any',
+                },
+                {
+                    'src': icon_src,
+                    'sizes': icon_sizes,
+                    'type': icon_type,
+                    'purpose': 'any maskable',
+                },
+            ],
+        }, content_type='application/manifest+json')

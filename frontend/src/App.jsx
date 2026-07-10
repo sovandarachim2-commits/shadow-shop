@@ -262,6 +262,37 @@ function ScrollToTop() {
   return null
 }
 
+function AppIconSync() {
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  useEffect(() => {
+    const iconUrl = siteSettings?.favicon_url || siteSettings?.logo_url
+    if (!iconUrl) return
+
+    const ensureLink = (selector, rel, sizes) => {
+      let link = document.querySelector(selector)
+      if (!link) {
+        link = document.createElement('link')
+        link.rel = rel
+        if (sizes) link.sizes = sizes
+        document.head.appendChild(link)
+      }
+      link.href = iconUrl
+    }
+
+    ensureLink("link[rel~='icon']", 'icon')
+    ensureLink("link[rel='apple-touch-icon']", 'apple-touch-icon')
+    ensureLink("link[rel='apple-touch-icon'][sizes='180x180']", 'apple-touch-icon', '180x180')
+    ensureLink("link[rel='apple-touch-icon'][sizes='192x192']", 'apple-touch-icon', '192x192')
+  }, [siteSettings?.favicon_url, siteSettings?.logo_url])
+
+  return null
+}
+
 const ADMIN_FALLBACK_ROUTES = [
   { module: 'dashboard', path: '/admin' },
   { module: 'orders', path: '/admin/orders' },
@@ -312,6 +343,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthBootstrap />
+          <AppIconSync />
           <ScrollToTop />
           <Routes>
           {/* Auth */}
