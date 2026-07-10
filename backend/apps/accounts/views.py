@@ -16,7 +16,7 @@ import string
 import mimetypes
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.http import JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, Address, SiteSettings
 from .serializers import (
     CustomTokenObtainPairSerializer, UserSerializer, UserCreateSerializer,
@@ -523,15 +523,14 @@ class SiteSettingsManifestView(generics.GenericAPIView):
         site_settings = SiteSettings.get_solo()
         store_name = site_settings.store_name or 'Shadow Shop'
 
-        icon_url = None
+        icon_src = request.build_absolute_uri('/api/auth/site-settings/favicon/')
+        source_name = ''
         if site_settings.favicon:
-            icon_url = request.build_absolute_uri(site_settings.favicon.url)
+            source_name = site_settings.favicon.name
         elif site_settings.logo:
-            icon_url = request.build_absolute_uri(site_settings.logo.url)
+            source_name = site_settings.logo.name
 
-        fallback_icon = '/app-icon-512.png'
-        icon_src = icon_url or fallback_icon
-        icon_type = mimetypes.guess_type(icon_src)[0] or 'image/png'
+        icon_type = mimetypes.guess_type(source_name)[0] or 'image/png'
         icon_sizes = 'any' if icon_type == 'image/svg+xml' else '512x512'
 
         return JsonResponse({
@@ -561,3 +560,15 @@ class SiteSettingsManifestView(generics.GenericAPIView):
                 },
             ],
         }, content_type='application/manifest+json')
+
+
+class SiteSettingsFaviconView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        site_settings = SiteSettings.get_solo()
+        if site_settings.favicon:
+            return HttpResponseRedirect(site_settings.favicon.url)
+        if site_settings.logo:
+            return HttpResponseRedirect(site_settings.logo.url)
+        return HttpResponseRedirect('/app-icon-512.png')
