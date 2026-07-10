@@ -28,12 +28,13 @@ class AbaPaymentSerializer(serializers.ModelSerializer):
 class BakongPaymentSerializer(serializers.ModelSerializer):
     order_number = serializers.SerializerMethodField()
     reference = serializers.SerializerMethodField()
+    last_error = serializers.SerializerMethodField()
 
     class Meta:
         model = BakongPayment
         fields = [
             'id', 'order', 'order_number', 'reference', 'amount', 'currency', 'qr_payload',
-            'qr_image', 'md5', 'status', 'expires_at', 'paid_at', 'created_at',
+            'qr_image', 'md5', 'status', 'expires_at', 'paid_at', 'created_at', 'last_error',
         ]
         read_only_fields = fields
 
@@ -46,3 +47,12 @@ class BakongPaymentSerializer(serializers.ModelSerializer):
 
     def get_reference(self, obj):
         return obj.pending_checkout.reference if obj.pending_checkout_id else None
+
+    def get_last_error(self, obj):
+        data = obj.response_data if isinstance(obj.response_data, dict) else {}
+        error = data.get('error')
+        if error:
+            return str(error)
+        if data.get('success') is False and data.get('message'):
+            return str(data.get('message'))
+        return ''

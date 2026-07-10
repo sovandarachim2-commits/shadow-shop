@@ -284,6 +284,10 @@ export default function Checkout() {
         if (stopped) return
         failures = 0
         setBakongPayment(data)
+        if (data.last_error && !notifiedFailure) {
+          notifiedFailure = true
+          toast.error(data.last_error)
+        }
         if (data.status === 'paid') {
           stopped = true
           if (data.order) setBakongOrder(data.order)
