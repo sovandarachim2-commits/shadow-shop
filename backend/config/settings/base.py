@@ -188,6 +188,9 @@ TELEGRAM_BOT_USERNAME = config('TELEGRAM_BOT_USERNAME', default='')
 # Google Maps
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
+# Google Sign-In
+GOOGLE_OAUTH_CLIENT_ID = config('GOOGLE_OAUTH_CLIENT_ID', default='')
+
 # Redis / Celery
 REDIS_URL = config('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_BROKER_URL = REDIS_URL

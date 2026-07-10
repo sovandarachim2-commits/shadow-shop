@@ -11,6 +11,7 @@ const SECTION_TITLES = {
   delivery: 'Delivery Settings',
   payment:  'Payment Methods',
   printLogo: 'Print Logo',
+  loginSplash: 'Login Logo',
 }
 
 export default function Settings({ tab = 'general' }) {
@@ -23,14 +24,17 @@ export default function Settings({ tab = 'general' }) {
   const [logoFile, setLogoFile] = useState(null)
   const [faviconFile, setFaviconFile] = useState(null)
   const [printLogoFile, setPrintLogoFile] = useState(null)
+  const [loginLogoFile, setLoginLogoFile] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
   const [faviconPreview, setFaviconPreview] = useState(null)
   const [printLogoPreview, setPrintLogoPreview] = useState(null)
+  const [loginLogoPreview, setLoginLogoPreview] = useState(null)
   const [printLogoSize, setPrintLogoSize] = useState(64)
   const [printQrSize, setPrintQrSize] = useState(68)
   const logoInputRef = useRef()
   const faviconInputRef = useRef()
   const printLogoInputRef = useRef()
+  const loginLogoInputRef = useRef()
 
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
@@ -100,6 +104,20 @@ export default function Settings({ tab = 'general' }) {
       toast.success('Print logo saved!')
     },
     onError: () => toast.error('Failed to save print logo'),
+  })
+
+  const saveLoginLogoMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData()
+      if (loginLogoFile) fd.append('login_logo', loginLogoFile)
+      return authApi.siteSettings.update(fd)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      setLoginLogoFile(null)
+      toast.success('Login logo saved!')
+    },
+    onError: () => toast.error('Failed to save login logo'),
   })
 
   // ── Payment Methods ───────────────────────────────────────────────
@@ -650,6 +668,55 @@ export default function Settings({ tab = 'general' }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {tab === 'loginSplash' && (
+          <div className="space-y-5">
+            <div>
+              <label className="label">Login Logo</label>
+              <div className="flex items-center gap-4">
+                <div
+                  onClick={() => loginLogoInputRef.current?.click()}
+                  className="relative flex h-28 w-28 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-purple-400"
+                >
+                  {loginLogoPreview || siteSettings?.login_logo_url || siteSettings?.logo_url ? (
+                    <img
+                      src={loginLogoPreview || siteSettings?.login_logo_url || siteSettings?.logo_url}
+                      alt="login logo"
+                      className="h-full w-full object-contain p-3"
+                    />
+                  ) : (
+                    <Upload size={24} className="text-gray-300" />
+                  )}
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => loginLogoInputRef.current?.click()}
+                    className="btn-secondary px-4 py-2 text-sm"
+                  >
+                    {loginLogoPreview || siteSettings?.login_logo_url ? 'Change Login Logo' : 'Upload Login Logo'}
+                  </button>
+                  <p className="mt-1 text-xs text-gray-400">Shown on the customer login and sign-up screen. Square PNG works best.</p>
+                </div>
+                <input
+                  ref={loginLogoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={pickFile(setLoginLogoFile, setLoginLogoPreview)}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => saveLoginLogoMutation.mutate()}
+              disabled={saveLoginLogoMutation.isPending}
+              className="btn-primary flex items-center gap-2 disabled:opacity-60"
+            >
+              <Save size={15} /> {saveLoginLogoMutation.isPending ? 'Saving...' : 'Save Login Logo'}
+            </button>
           </div>
         )}
 

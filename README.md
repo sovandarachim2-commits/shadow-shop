@@ -117,6 +117,15 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
+
+### Run Database Migrations
+
+Run this after pulling new backend changes or deploying updates that add database fields, such as the login logo and splash screen settings:
+
+```bash
+cd backend
+python manage.py migrate
+```
 cd "C:\xampp\htdocs\Shadow Shop\backend"
 .\venv\Scripts\Activate.ps1
 python manage.py runserver 0.0.0.0:8001
@@ -213,3 +222,4 @@ sudo systemctl restart shadow_shop
 ```
 
 After this, `http://your-domain.com` redirects to `https://your-domain.com`.
+

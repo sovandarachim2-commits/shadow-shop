@@ -276,6 +276,7 @@ export default function Checkout() {
 
     let stopped = false
     let failures = 0
+    let notifiedFailure = false
     const checkPayment = async () => {
       setCheckingBakong(true)
       try {
@@ -292,8 +293,8 @@ export default function Checkout() {
         }
       } catch {
         failures += 1
-        if (failures >= 5) {
-          stopped = true
+        if (failures >= 5 && !notifiedFailure) {
+          notifiedFailure = true
           toast.error(t('checkout.paymentCheckFailed'))
         }
       } finally {

@@ -3,7 +3,26 @@ from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
-from apps.payments.services import _mark_bakong_paid
+from apps.payments.services import _bakong_response_is_paid, _mark_bakong_paid
+
+
+class BakongPaymentStatusTests(SimpleTestCase):
+    def test_production_transaction_payload_is_paid(self):
+        self.assertTrue(_bakong_response_is_paid({
+            'responseCode': 0,
+            'data': {
+                'transactionId': 'txn-123',
+                'fromAccountId': 'customer@bank',
+                'toAccountId': 'merchant@bank',
+                'amount': '12.50',
+            },
+        }))
+
+    def test_empty_success_response_is_not_paid(self):
+        self.assertFalse(_bakong_response_is_paid({
+            'responseCode': 0,
+            'data': {},
+        }))
 
 
 class BakongPaymentTelegramTests(SimpleTestCase):

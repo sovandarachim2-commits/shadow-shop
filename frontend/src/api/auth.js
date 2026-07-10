@@ -3,6 +3,8 @@ import client from './client'
 export const authApi = {
   login: (credentials) => client.post('/auth/login/', credentials),
   register: (data) => client.post('/auth/register/', data),
+  googleConfig: () => client.get('/auth/google/config/'),
+  googleLogin: (data) => client.post('/auth/google/login/', data),
   telegramConfig: () => client.get('/auth/telegram/config/'),
   telegramLogin: (data) => client.post('/auth/telegram/login/', data),
   telegramStart: (data) => client.post('/auth/telegram/start/', data),

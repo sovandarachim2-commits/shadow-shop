@@ -14,6 +14,10 @@ import { CosmeticArt, RatingRow } from '@/components/customer/CustomerUi'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 
+function cleanProductText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export default function ProductDetail() {
   const { t } = useTranslation()
   const { id } = useParams()
@@ -65,10 +69,26 @@ export default function ProductDetail() {
   const saleProduct = product?.display_price ? { ...product, retail_price: product.display_price } : product
   const flashSaleMaxQty = product?.is_flash_sale_active ? Number(product?.flash_sale_max_order_qty || 0) : 0
   const maxPurchaseQty = flashSaleMaxQty > 0 ? (stock > 0 ? Math.min(stock, flashSaleMaxQty) : flashSaleMaxQty) : (stock > 0 ? stock : 9999)
+  const productDescription = cleanProductText(product?.description)
+  const productBenefits = cleanProductText(product?.benefits)
+  const productHowToUse = cleanProductText(product?.how_to_use)
+  const detailTabs = [
+    ...(productDescription ? [{ key: 'description', label: t('product.description'), content: productDescription }] : []),
+    ...(productBenefits ? [{ key: 'benefits', label: t('product.benefits'), content: productBenefits }] : []),
+    ...(productHowToUse ? [{ key: 'how_to_use', label: t('product.howToUse'), content: productHowToUse }] : []),
+    { key: 'reviews', label: t('product.reviews') },
+  ]
+  const activeDetailTab = detailTabs.find((item) => item.key === tab) || detailTabs[0]
 
   useEffect(() => {
     setActiveImg(0)
   }, [product?.id])
+
+  useEffect(() => {
+    if (!detailTabs.some((item) => item.key === tab)) {
+      setTab(detailTabs[0]?.key || 'reviews')
+    }
+  }, [productDescription, productBenefits, productHowToUse, tab])
 
   const showImageAt = (index) => {
     if (images.length === 0) return
@@ -290,9 +310,11 @@ export default function ProductDetail() {
             )}
           </div>
 
-          <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
-            {product.description || t('product.noDescription')}
-          </p>
+          {productDescription && (
+            <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
+              {productDescription}
+            </p>
+          )}
 
           <div className="mt-5 grid grid-cols-4 overflow-hidden rounded-2xl bg-gray-50/80 py-3 shadow-sm ring-1 ring-gray-100">
             <FeatureChip icon={Droplet} label={t('product.deepHydration')} />
@@ -338,26 +360,19 @@ export default function ProductDetail() {
 
           <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-5 shadow-card">
             <div className="flex gap-4 border-b border-gray-100">
-              {[
-                { key: 'description', label: t('product.description') },
-                { key: 'benefits', label: t('product.benefits') },
-                { key: 'how_to_use', label: t('product.howToUse') },
-                { key: 'reviews', label: t('product.reviews') },
-              ].map((item) => (
+              {detailTabs.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setTab(item.key)}
-                  className={`border-b-2 px-1 pb-3 text-sm font-black ${tab === item.key ? 'border-pink-600 text-pink-600' : 'border-transparent text-gray-400'}`}
+                  className={`border-b-2 px-1 pb-3 text-sm font-black ${activeDetailTab.key === item.key ? 'border-pink-600 text-pink-600' : 'border-transparent text-gray-400'}`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
             <div className="py-5 text-sm leading-7 text-gray-600">
-              {tab === 'description' && (product.description || t('product.noDescription'))}
-              {tab === 'benefits' && (product.benefits || t('product.noBenefits'))}
-              {tab === 'how_to_use' && (product.how_to_use || t('product.noUsage'))}
-              {tab === 'reviews' && (
+              {activeDetailTab.content && <p className="whitespace-pre-line">{activeDetailTab.content}</p>}
+              {activeDetailTab.key === 'reviews' && (
                 <div className="space-y-5">
                   <form onSubmit={handleSubmitReview} className="rounded-2xl bg-gray-50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

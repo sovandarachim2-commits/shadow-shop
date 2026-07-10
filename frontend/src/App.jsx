@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -527,6 +527,8 @@ export default function App() {
             <Route path="settings/delivery" element={<Settings tab="delivery" />} />
             <Route path="settings/payment" element={<Settings tab="payment" />} />
             <Route path="settings/print-logo" element={<Settings tab="printLogo" />} />
+            <Route path="settings/login-logo" element={<Settings tab="loginSplash" />} />
+            <Route path="settings/login-splash" element={<Navigate to="/admin/settings/login-logo" replace />} />
           </Route>
 
           {/* Fallback */}

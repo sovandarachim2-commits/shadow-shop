@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -14,6 +15,7 @@ import secrets
 import random
 import string
 import mimetypes
+import requests
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import HttpResponseRedirect, JsonResponse
@@ -153,6 +155,108 @@ class TelegramLoginConfigView(generics.GenericAPIView):
         return Response({
             'bot_username': bot_username,
             'configured': bool(bot_username),
+        })
+
+
+class GoogleLoginConfigView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
+        return Response({
+            'client_id': client_id,
+            'configured': bool(client_id),
+        })
+
+
+class GoogleLoginView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        credential = str(request.data.get('credential', '')).strip()
+        client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
+
+        if not client_id:
+            return Response({'detail': 'Google login is not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not credential:
+            return Response({'detail': 'Google login credential is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            response = requests.get(
+                'https://oauth2.googleapis.com/tokeninfo',
+                params={'id_token': credential},
+                timeout=8,
+            )
+            payload = response.json()
+        except Exception:
+            return Response({'detail': 'Google login could not be verified.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if response.status_code != 200:
+            return Response({'detail': payload.get('error_description') or 'Google login is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if payload.get('aud') != client_id:
+            return Response({'detail': 'Google login client does not match this site.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        google_id = str(payload.get('sub', '')).strip()
+        email = str(payload.get('email', '')).strip().lower()
+        email_verified = str(payload.get('email_verified', '')).lower() == 'true'
+
+        if not google_id:
+            return Response({'detail': 'Google account ID is missing.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if email and not email_verified:
+            return Response({'detail': 'Google email is not verified.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        first_name = str(payload.get('given_name', '')).strip()
+        last_name = str(payload.get('family_name', '')).strip()
+        display_name = str(payload.get('name', '')).strip()
+        picture_url = str(payload.get('picture', '')).strip()
+
+        user = User.objects.filter(google_id=google_id).first()
+        if not user and email:
+            user = User.objects.filter(email__iexact=email).first()
+
+        if not user:
+            base_username = email.split('@')[0] if email else f"google_{google_id}"
+            username = base_username[:140] or f"google_{google_id}"
+            suffix = 1
+            while User.objects.filter(username=username).exists():
+                suffix += 1
+                username = f"{base_username[:130]}_{suffix}"
+
+            if not first_name and display_name:
+                first_name = display_name.split(' ', 1)[0]
+                last_name = display_name.split(' ', 1)[1] if ' ' in display_name else ''
+
+            user = User(
+                username=username,
+                email=email,
+                first_name=first_name or 'Google',
+                last_name=last_name,
+                role='customer',
+                google_id=google_id,
+            )
+            user.set_unusable_password()
+        elif not user.is_active:
+            return Response({'detail': 'This account is disabled.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.google_id = google_id
+        user.google_picture_url = picture_url
+        user.google_auth_date = timezone.now()
+        if email and not user.email:
+            user.email = email
+        if first_name:
+            user.first_name = first_name
+        if last_name:
+            user.last_name = last_name
+        user.save()
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user, context={'request': request}).data,
         })
 
 

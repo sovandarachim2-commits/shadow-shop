@@ -36,6 +36,19 @@ const useAuthStore = create(
         return data.user
       },
 
+      googleLogin: async (payload) => {
+        const { data } = await authApi.googleLogin(payload)
+        localStorage.setItem('access_token', data.access)
+        localStorage.setItem('refresh_token', data.refresh)
+        set({
+          user: data.user,
+          accessToken: data.access,
+          refreshToken: data.refresh,
+          isAuthenticated: true,
+        })
+        return data.user
+      },
+
       telegramLogin: async (payload) => {
         const { data } = await authApi.telegramLogin(payload)
         localStorage.setItem('access_token', data.access)

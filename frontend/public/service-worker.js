@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'shadow-shop-v3'
+const CACHE_VERSION = 'shadow-shop-v4'
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -37,7 +37,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       caches.match('/').then((cached) => {
-        const request = fetch(event.request)
+        const request = fetch(event.request, { cache: 'no-store' })
           .then((response) => {
             if (response.ok) {
               const copy = response.clone()
@@ -47,13 +47,28 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => cached)
 
-        return cached || request
+        return request
       }),
     )
     return
   }
 
-  if (['script', 'style', 'image', 'font'].includes(event.request.destination)) {
+  if (['script', 'style'].includes(event.request.destination)) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        return fetch(event.request, { cache: 'no-store' }).then((response) => {
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy))
+          }
+          return response
+        }).catch(() => cached)
+      }),
+    )
+    return
+  }
+
+  if (['image', 'font'].includes(event.request.destination)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached

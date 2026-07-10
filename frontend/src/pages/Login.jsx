@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Eye, EyeOff, Loader2, Lock, Send, Phone, Mail,
   ChevronLeft, ChevronRight, Globe, Headphones,
-  Sparkles, Droplets, ShieldCheck, Leaf,
+  Sparkles, Droplets, ShieldCheck, Leaf, User,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +22,17 @@ function Crown({ size = 26 }) {
       <circle cx="20" cy="3.5" r="2.5" fill="#E91E63" />
       <circle cx="38" cy="25" r="2.5" fill="#E91E63" />
       <rect x="2" y="25" width="36" height="3" rx="1.5" fill="#E91E63" opacity="0.45" />
+    </svg>
+  )
+}
+
+function GoogleMark({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.94v2.34A9 9 0 0 0 9 18z" />
+      <path fill="#FBBC05" d="M3.96 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.94H.94A9 9 0 0 0 0 9c0 1.45.34 2.82.94 4.06l3.02-2.34z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A8.65 8.65 0 0 0 9 0 9 9 0 0 0 .94 4.94l3.02 2.34C4.67 5.16 6.66 3.58 9 3.58z" />
     </svg>
   )
 }
@@ -337,13 +348,97 @@ function Field({ label, icon: Icon, type = 'text', placeholder, value, onChange,
   )
 }
 
+function AuthIllustration({ mode = 'login' }) {
+  const isRegister = mode === 'register'
+
+  return (
+    <div className="mx-auto mb-5 h-28 w-full max-w-[210px] sm:h-32">
+      <svg viewBox="0 0 260 160" className="h-full w-full" role="img" aria-label={isRegister ? 'Sign up' : 'Login'}>
+        <defs>
+          <linearGradient id={`authCard-${mode}`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#fff1f7" />
+            <stop offset="100%" stopColor="#ffe4ef" />
+          </linearGradient>
+          <linearGradient id={`authPink-${mode}`} x1="0" x2="1">
+            <stop offset="0%" stopColor="#ec4899" />
+            <stop offset="100%" stopColor="#db2777" />
+          </linearGradient>
+        </defs>
+        <ellipse cx="130" cy="143" rx="84" ry="8" fill="#fce7f3" />
+        <rect x="56" y="26" width="96" height="104" rx="14" fill={`url(#authCard-${mode})`} />
+        <rect x="72" y="44" width="58" height="8" rx="4" fill="#f9a8d4" />
+        <rect x="72" y="62" width="64" height="12" rx="6" fill="white" />
+        <rect x="72" y="84" width="64" height="12" rx="6" fill="white" />
+        {isRegister && <rect x="72" y="106" width="64" height="12" rx="6" fill="white" />}
+        <rect x="82" y={isRegister ? 128 : 106} width="44" height="8" rx="4" fill={`url(#authPink-${mode})`} />
+        <circle cx="186" cy="52" r="18" fill="#fce7f3" />
+        <circle cx="186" cy="48" r="7" fill="#ec4899" />
+        <path d="M171 73c4-12 27-12 31 0" fill="#ec4899" opacity=".9" />
+        <path d="M185 77v56" stroke="#111827" strokeWidth="5" strokeLinecap="round" />
+        <path d="M185 92l-24 16" stroke="#db2777" strokeWidth="5" strokeLinecap="round" />
+        <path d="M185 92l24 17" stroke="#db2777" strokeWidth="5" strokeLinecap="round" />
+        <path d="M184 132l-13 12" stroke="#111827" strokeWidth="5" strokeLinecap="round" />
+        <path d="M187 132l17 12" stroke="#111827" strokeWidth="5" strokeLinecap="round" />
+        <circle cx="158" cy="22" r="7" fill="#f472b6" opacity=".5" />
+        <circle cx="42" cy="94" r="5" fill="#f9a8d4" opacity=".8" />
+        <path d="M43 47c17-12 28-12 42 0" stroke="#fbcfe8" strokeWidth="7" strokeLinecap="round" opacity=".65" />
+      </svg>
+    </div>
+  )
+}
+
+function CompactField({ icon: Icon, type = 'text', placeholder, value, onChange, right, autoComplete }) {
+  return (
+    <div className="flex h-11 items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-3 transition focus-within:border-pink-300 focus-within:ring-2 focus-within:ring-pink-100">
+      <Icon size={15} className="shrink-0 text-gray-400" strokeWidth={2} />
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        className="min-w-0 flex-1 bg-transparent text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400"
+      />
+      {right}
+    </div>
+  )
+}
+
+function AuthDivider({ label }) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div className="h-px flex-1 bg-white/10" />
+      <span className="text-xs font-semibold text-gray-400">{label}</span>
+      <div className="h-px flex-1 bg-white/10" />
+    </div>
+  )
+}
+
+function LoginBrand({ storeName, logoUrl }) {
+  return (
+    <div className="flex flex-col items-center">
+      {logoUrl ? (
+        <img src={logoUrl} alt={storeName} className="h-24 w-24 object-contain drop-shadow-[0_0_22px_rgba(233,30,99,0.32)]" />
+      ) : (
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-pink-500/30 bg-pink-500/10 text-4xl font-black text-[#E91E63] shadow-[0_0_34px_rgba(233,30,99,0.24)]">
+          S
+        </div>
+      )}
+      <div className="mt-2 text-center">
+        <p className="text-2xl font-black uppercase tracking-[0.12em] text-white">{(storeName || 'Shadow Shop').split(' ')[0]}</p>
+        <p className="text-xs font-black uppercase tracking-[0.42em] text-[#E91E63]">{(storeName || 'Shadow Shop').split(' ').slice(1).join(' ') || 'SHOP'}</p>
+      </div>
+    </div>
+  )
+}
+
 /* ──────────────────────────────────────────────────
    MAIN
 ────────────────────────────────────────────────── */
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, register, telegramLogin, isAuthenticated, user } = useAuthStore()
+  const { login, register, googleLogin, telegramLogin, isAuthenticated, user } = useAuthStore()
   const { t } = useTranslation()
   const [mode, setMode] = useState('login')
   const [showPass, setShowPass] = useState(false)
@@ -351,9 +446,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [telegramOpen, setTelegramOpen] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
+  const [googleOpen, setGoogleOpen] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
   const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '' })
   const telegramWidgetRef = useRef(null)
+  const googleButtonRef = useRef(null)
   const sl = (k, v) => setLf((f) => ({ ...f, [k]: v }))
   const sr = (k, v) => setRf((f) => ({ ...f, [k]: v }))
 
@@ -369,11 +467,20 @@ export default function Login() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: googleConfig } = useQuery({
+    queryKey: ['google-login-config'],
+    queryFn: () => authApi.googleConfig().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const storeName = siteSettings?.store_name || 'Shadow Shop'
+  const loginLogoUrl = siteSettings?.login_logo_url || siteSettings?.logo_url || ''
   const name0 = (storeName || 'Shadow').split(' ')[0].toUpperCase()
   const name1 = ((storeName || 'Shadow Shop').split(' ').slice(1).join(' ') || 'BEAUTY').toUpperCase()
   const telegramBotUsername = telegramConfig?.bot_username || ''
   const telegramLoginEnabled = Boolean(telegramConfig?.configured && telegramBotUsername)
+  const googleClientId = googleConfig?.client_id || ''
+  const googleLoginEnabled = Boolean(googleConfig?.configured && googleClientId)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -423,6 +530,74 @@ export default function Login() {
     }
   }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin])
 
+  useEffect(() => {
+    if (!googleOpen || !googleLoginEnabled || !googleButtonRef.current) return
+
+    let cancelled = false
+
+    const loadGoogleScript = () => new Promise((resolve, reject) => {
+      if (window.google?.accounts?.id) {
+        resolve()
+        return
+      }
+
+      const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+      if (existing) {
+        existing.addEventListener('load', resolve, { once: true })
+        existing.addEventListener('error', reject, { once: true })
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://accounts.google.com/gsi/client'
+      script.async = true
+      script.defer = true
+      script.onload = resolve
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
+
+    loadGoogleScript()
+      .then(() => {
+        if (cancelled || !googleButtonRef.current) return
+
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: async ({ credential }) => {
+            if (!credential) {
+              toast.error('Google login did not return a credential.')
+              return
+            }
+
+            setGoogleLoading(true)
+            try {
+              const loggedInUser = await googleLogin({ credential })
+              toast.success(`Welcome, ${loggedInUser.first_name || loggedInUser.username}!`)
+              setGoogleOpen(false)
+            } catch (err) {
+              toast.error(err.response?.data?.detail || 'Google login failed')
+            } finally {
+              setGoogleLoading(false)
+            }
+          },
+        })
+
+        googleButtonRef.current.innerHTML = ''
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          shape: 'rectangular',
+          text: mode === 'register' ? 'signup_with' : 'signin_with',
+          width: 320,
+        })
+      })
+      .catch(() => toast.error('Could not load Google login.'))
+
+    return () => {
+      cancelled = true
+    }
+  }, [googleOpen, googleLoginEnabled, googleClientId, googleLogin, mode])
+
   const handleLogin = async (e) => {
     e.preventDefault()
     if (!lf.username || !lf.password) return toast.error('Please fill in all fields')
@@ -463,6 +638,14 @@ export default function Login() {
     setTelegramOpen(true)
   }
 
+  const openGoogleLogin = () => {
+    if (!googleLoginEnabled) {
+      toast.error('Google login is not configured yet.')
+      return
+    }
+    setGoogleOpen(true)
+  }
+
   const EyeToggle = ({ show, toggle }) => (
     <button type="button" onClick={toggle} className="shrink-0 text-gray-300 hover:text-gray-500 transition">
       {show ? <Eye size={17} /> : <EyeOff size={17} />}
@@ -473,7 +656,7 @@ export default function Login() {
     <div className="min-h-screen flex flex-col lg:flex-row bg-white">
 
       {/* ── Left ── */}
-      <div className="lg:w-[58%] lg:h-screen lg:sticky lg:top-0">
+      <div className="hidden lg:block lg:w-[58%] lg:h-screen lg:sticky lg:top-0">
         <LeftPanel storeName={storeName} />
       </div>
 
@@ -481,14 +664,21 @@ export default function Login() {
       <div className="lg:w-[42%] flex flex-col lg:min-h-screen bg-white">
 
         {/* Top bar — all screens */}
-        <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:px-10 lg:py-5 lg:pt-5">
-          <button onClick={() => navigate('/')} className="flex items-center gap-1 text-sm font-semibold text-gray-500 hover:text-gray-800 transition">
-            <ChevronLeft size={16} />
-            <span>Store</span>
+        <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] sm:px-5 lg:px-10 lg:py-5 lg:pt-5">
+          <button onClick={() => navigate('/')} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800 lg:hidden">
+            <ChevronLeft size={24} strokeWidth={2.4} />
           </button>
-          <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="hidden h-11 shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-5 text-sm font-black text-gray-700 shadow-sm transition hover:border-[#E91E63]/30 hover:bg-[#E91E63]/5 hover:text-[#E91E63] lg:flex"
+          >
+            Continue as guest
+            <ChevronRight size={16} strokeWidth={2.5} />
+          </button>
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <LanguagePicker />
-            <button className="flex items-center gap-1.5 border border-[#E91E63]/40 text-[#E91E63] rounded-full px-4 py-1.5 text-sm font-bold hover:bg-[#E91E63]/5 transition">
+            <button className="hidden items-center gap-1.5 border border-[#E91E63]/40 text-[#E91E63] rounded-full px-4 py-1.5 text-sm font-bold hover:bg-[#E91E63]/5 transition sm:flex">
               <Headphones size={14} /> Contact Us
             </button>
           </div>
@@ -501,12 +691,14 @@ export default function Login() {
             <div className="bg-white rounded-3xl border border-gray-100 px-6 py-8 shadow-[0_4px_24px_rgba(0,0,0,0.07)] lg:rounded-2xl lg:px-8 lg:py-9 lg:shadow-[0_8px_40px_rgba(0,0,0,0.07),0_2px_10px_rgba(233,30,99,0.04)]">
               {mode === 'login' ? (
                 <form onSubmit={handleLogin}>
-                  {/* Logo */}
                   <div className="flex flex-col items-center mb-5">
-                    <ShopLogo storeName={storeName} scale={0.9} />
+                    {loginLogoUrl ? (
+                      <img src={loginLogoUrl} alt={storeName} className="h-20 w-20 object-contain sm:h-24 sm:w-24" />
+                    ) : (
+                      <ShopLogo storeName={storeName} scale={0.9} />
+                    )}
                   </div>
 
-                  {/* Heading */}
                   <div className="text-center mb-6">
                     <h2 className="text-[1.6rem] font-black text-gray-900 tracking-tight">{t('auth.welcome')}</h2>
                     <p className="text-sm text-gray-400 mt-1">{t('auth.loginSubtitle')}</p>
@@ -556,28 +748,35 @@ export default function Login() {
                       <div className="flex-1 h-px bg-gray-200" />
                     </div>
 
-                    {/* Telegram */}
-                    <button type="button"
-                      onClick={openTelegramLogin}
-                      disabled={telegramLoading}
-                      className="w-full h-12 rounded-xl bg-white text-[15px] font-bold text-gray-700 flex items-center justify-center gap-3 hover:bg-blue-50/30 transition"
-                      style={{ border: '1.5px solid rgba(37,150,232,0.4)' }}>
-                      {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} color="#2AABEE" fill="#2AABEE" />}
-                      {t('auth.loginWithTelegram')}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button"
+                        onClick={openGoogleLogin}
+                        disabled={googleLoading}
+                        className="flex h-12 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60">
+                        {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
+                        Google
+                      </button>
 
-                    <p className="text-center text-sm text-gray-400 pt-1">
-                      {t('auth.noAccount')}{' '}
+                      <button type="button"
+                        onClick={openTelegramLogin}
+                        disabled={telegramLoading}
+                        className="flex h-12 items-center justify-center gap-2 rounded-xl border border-sky-100 bg-white text-sm font-bold text-gray-700 transition hover:bg-sky-50/40 disabled:opacity-60">
+                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} color="#2AABEE" fill="#2AABEE" />}
+                        Telegram
+                      </button>
+                    </div>
+
+                    <p className="pt-2 text-center text-sm text-gray-400">
+                      Don&apos;t have an account?{' '}
                       <button type="button" onClick={() => setMode('register')}
                         className="font-black text-[#E91E63] hover:opacity-75 transition">
-                        {t('auth.register')}
+                        Sign up
                       </button>
                     </p>
                   </div>
                 </form>
               ) : (
                 <form onSubmit={handleRegister}>
-                  {/* Register header */}
                   <div className="mb-6">
                     <h2 className="text-2xl font-black text-gray-900 tracking-tight">{t('auth.createAccount')}</h2>
                     <p className="text-sm text-gray-400 mt-0.5">{t('auth.createAccountSubtitle')}</p>
@@ -587,9 +786,8 @@ export default function Login() {
                     {/* Full Name */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.fullName')} *</label>
-                      <div className="flex items-center h-13 rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10"
-                        style={{ height: 52 }}>
-                        <Mail size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
+                      <div className="flex items-center h-13 rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10" style={{ height: 52 }}>
+                        <User size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type="text" value={rf.full_name} onChange={(e) => sr('full_name', e.target.value)}
                           placeholder={t('auth.fullName')}
                           className="flex-1 bg-transparent text-[15px] text-gray-800 outline-none placeholder:text-gray-300" />
@@ -614,7 +812,7 @@ export default function Login() {
                     </div>
 
                     {/* Email */}
-                    <div>
+                    <div className="hidden">
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.emailOptional')}</label>
                       <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10"
                         style={{ height: 52 }}>
@@ -628,8 +826,7 @@ export default function Login() {
                     {/* Password */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.password')} *</label>
-                      <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10 transition"
-                        style={{ height: 52 }}>
+                      <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10 transition" style={{ height: 52 }}>
                         <Lock size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type={showPass ? 'text' : 'password'} value={rf.password}
                           onChange={(e) => sr('password', e.target.value)} placeholder={t('auth.passwordPlaceholder')}
@@ -641,8 +838,7 @@ export default function Login() {
                     {/* Confirm Password */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.confirmPassword')} *</label>
-                      <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10 transition"
-                        style={{ height: 52 }}>
+                      <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10 transition" style={{ height: 52 }}>
                         <Lock size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type={showConfirm ? 'text' : 'password'} value={rf.confirm_password}
                           onChange={(e) => sr('confirm_password', e.target.value)} placeholder={t('auth.confirmPassword')}
@@ -651,7 +847,7 @@ export default function Login() {
                       </div>
                     </div>
 
-                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                    <label className="hidden items-center gap-3 cursor-pointer pt-1">
                       <input type="checkbox" defaultChecked className="h-4 w-4 rounded accent-[#E91E63] shrink-0 cursor-pointer" />
                       <span className="text-xs text-gray-400 leading-relaxed">
                         {t('auth.termsAgreement', { terms: t('auth.termsConditions'), privacy: t('auth.privacyPolicy') })}
@@ -670,19 +866,28 @@ export default function Login() {
                       <div className="flex-1 h-px" style={{ background: '#e8e8e8' }} />
                     </div>
 
-                    <button type="button"
-                      onClick={openTelegramLogin}
-                      disabled={telegramLoading}
-                      className="w-full rounded-xl bg-white font-bold text-gray-700 flex items-center justify-center gap-3 hover:bg-sky-50/40 transition"
-                      style={{ height: 52, border: '1.5px solid rgba(37,150,232,0.38)', fontSize: 15 }}>
-                      {telegramLoading ? <Loader2 size={17} className="animate-spin text-sky-500" /> : <Send size={17} color="#2AABEE" fill="#2AABEE" />}
-                      {t('auth.signupWithTelegram')}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button"
+                        onClick={openGoogleLogin}
+                        disabled={googleLoading}
+                        className="flex h-12 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60">
+                        {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
+                        Google
+                      </button>
+
+                      <button type="button"
+                        onClick={openTelegramLogin}
+                        disabled={telegramLoading}
+                        className="flex h-12 items-center justify-center gap-2 rounded-xl border border-sky-100 bg-white text-sm font-bold text-gray-700 transition hover:bg-sky-50/40 disabled:opacity-60">
+                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} color="#2AABEE" fill="#2AABEE" />}
+                        Telegram
+                      </button>
+                    </div>
 
                     <p className="text-center text-sm text-gray-400 pt-2">
-                      {t('auth.haveAccount')}{' '}
+                      Already have an account?{' '}
                       <button type="button" onClick={() => setMode('login')}
-                        className="font-black text-[#E91E63] hover:opacity-75 transition">{t('auth.login')}</button>
+                        className="font-black text-[#E91E63] hover:opacity-75 transition">Log in</button>
                     </p>
                   </div>
                 </form>
@@ -691,6 +896,34 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {googleOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50">
+              <GoogleMark size={26} />
+            </div>
+            <h3 className="mt-4 text-xl font-black text-gray-950">Continue with Google</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-500">
+              Choose your Google account to continue.
+            </p>
+            <div className="mt-5 flex min-h-[48px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 px-3 py-4">
+              {googleLoginEnabled ? (
+                <div ref={googleButtonRef} className="flex justify-center" />
+              ) : (
+                <p className="text-sm font-bold text-red-500">Google login is not configured.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setGoogleOpen(false)}
+              className="mt-4 h-11 w-full rounded-xl border border-gray-200 bg-white text-sm font-black text-gray-600 transition hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {telegramOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/45 px-4 py-6 backdrop-blur-sm">

@@ -179,16 +179,21 @@ class AddressSerializer(serializers.ModelSerializer):
 class SiteSettingsSerializer(serializers.ModelSerializer):
     logo_url = serializers.SerializerMethodField()
     favicon_url = serializers.SerializerMethodField()
+    login_logo_url = serializers.SerializerMethodField()
+    splash_logo_url = serializers.SerializerMethodField()
     print_logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteSettings
         fields = ['id', 'store_name', 'store_phone', 'store_address',
-                  'logo', 'favicon', 'print_logo', 'logo_url', 'favicon_url', 'print_logo_url',
-                  'print_logo_size', 'print_qr_size', 'currency', 'timezone',
+                  'logo', 'favicon', 'login_logo', 'splash_logo', 'print_logo',
+                  'logo_url', 'favicon_url', 'login_logo_url', 'splash_logo_url', 'print_logo_url',
+                  'splash_enabled', 'splash_duration_ms', 'print_logo_size', 'print_qr_size', 'currency', 'timezone',
                   'delivery_fees', 'payment_methods']
         extra_kwargs = {'logo': {'write_only': True, 'required': False},
                         'favicon': {'write_only': True, 'required': False},
+                        'login_logo': {'write_only': True, 'required': False},
+                        'splash_logo': {'write_only': True, 'required': False},
                         'print_logo': {'write_only': True, 'required': False}}
 
     def get_logo_url(self, obj):
@@ -201,6 +206,18 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         if obj.favicon:
             request = self.context.get('request')
             return request.build_absolute_uri(obj.favicon.url) if request else obj.favicon.url
+        return None
+
+    def get_login_logo_url(self, obj):
+        if obj.login_logo:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.login_logo.url) if request else obj.login_logo.url
+        return None
+
+    def get_splash_logo_url(self, obj):
+        if obj.splash_logo:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.splash_logo.url) if request else obj.splash_logo.url
         return None
 
     def get_print_logo_url(self, obj):

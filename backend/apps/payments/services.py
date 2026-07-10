@@ -236,14 +236,32 @@ def _bakong_response_is_paid(response_data):
     data = response_data.get('data')
     if data is True:
         return True
+    if isinstance(data, list):
+        return any(_bakong_response_is_paid({'responseCode': response_code, 'data': item}) for item in data)
     if not isinstance(data, dict):
         return False
 
-    data_status = str(data.get('status') or data.get('transactionStatus') or '').strip().upper()
+    data_status = str(
+        data.get('status')
+        or data.get('transactionStatus')
+        or data.get('paymentStatus')
+        or data.get('transaction_status')
+        or ''
+    ).strip().upper()
+    transaction_markers = {
+        'acknowledgedDateMs',
+        'createdDateMs',
+        'completedDateMs',
+        'hash',
+        'transactionHash',
+        'transactionId',
+        'transaction_id',
+        'externalRef',
+        'fromAccountId',
+        'toAccountId',
+    }
     return bool(
-        data.get('acknowledgedDateMs')
-        or data.get('createdDateMs')
-        or data.get('hash')
+        any(data.get(key) for key in transaction_markers)
         or data_status in {'PAID', 'SUCCESS', 'COMPLETED'}
     )
 

@@ -55,6 +55,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/settings/delivery', 'Delivery Settings'],
   ['/admin/settings/payment', 'Payment Settings'],
   ['/admin/settings/print-logo', 'Print Settings'],
+  ['/admin/settings/login-logo', 'Login Logo'],
   ['/admin/settings', 'Settings'],
   ['/admin', 'Dashboard'],
 ]
