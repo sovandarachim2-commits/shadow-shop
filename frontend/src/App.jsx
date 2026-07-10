@@ -10,25 +10,6 @@ import { authApi } from '@/api/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import CustomerLayout from '@/components/layout/CustomerLayout'
 
-// Auth
-import Login from '@/pages/Login'
-
-// Admin Pages
-import Dashboard from '@/pages/admin/Dashboard'
-import NewOrder from '@/pages/admin/orders/NewOrder'
-import OrderList from '@/pages/admin/orders/OrderList'
-import OrderDetail from '@/pages/admin/orders/OrderDetail'
-import Customers from '@/pages/admin/customers/Customers'
-import Products from '@/pages/admin/products/Products'
-import Categories from '@/pages/admin/products/Categories'
-import Brands from '@/pages/admin/products/Brands'
-import ProductSets from '@/pages/admin/products/ProductSets'
-import FlashSales from '@/pages/admin/products/FlashSales'
-import Banners from '@/pages/admin/products/Banners'
-import StockDashboard from '@/pages/admin/inventory/StockDashboard'
-import StockMovements from '@/pages/admin/inventory/StockMovements'
-import StockTransfers from '@/pages/admin/inventory/StockTransfers'
-import PrintCenter, { PrintHistory, PrintPreviewPage } from '@/pages/admin/operations/PrintCenter'
 function lazyWithReload(importer) {
   return lazy(() =>
     importer()
@@ -53,6 +34,10 @@ function lazyWithReload(importer) {
         throw error
       }),
   )
+}
+
+function lazyNamedWithReload(importer, exportName) {
+  return lazyWithReload(() => importer().then((module) => ({ default: module[exportName] })))
 }
 
 function getAppErrorMessage(error) {
@@ -81,56 +66,65 @@ const OutItems = lazyWithReload(() => import('@/pages/admin/operations/OutItems'
 const OutItemsHistory = lazyWithReload(() => import('@/pages/admin/operations/OutItemsHistory'))
 const DeliveryCustomer = lazyWithReload(() => import('@/pages/admin/operations/DeliveryCustomer'))
 const DeliveryByConfig = lazyWithReload(() => import('@/pages/admin/operations/DeliveryByConfig'))
-import Delivery from '@/pages/admin/operations/Delivery'
-import Revenue from '@/pages/admin/finance/Revenue'
-import Expenses from '@/pages/admin/finance/Expenses'
-import ProfitReport from '@/pages/admin/finance/ProfitReport'
-import RewardDashboardAdmin, {
-  RewardAutomationAdmin,
-  RewardCampaignsAdmin,
-  RewardCategoriesAdmin,
-  RewardCouponsAdmin,
-  RewardItemsAdmin,
-  RewardMemberTiersAdmin,
-  RewardNotificationsAdmin,
-  RewardPointsAdmin,
-  RewardRedemptionsAdmin,
-  RewardRulesAdmin,
-  RewardSettingsAdmin,
-  RewardTransactionsAdmin,
-} from '@/pages/admin/rewards/RewardsAdmin'
-import SalesReport from '@/pages/admin/reports/SalesReport'
-import ProductReport from '@/pages/admin/reports/ProductReport'
-import InventoryReport from '@/pages/admin/reports/InventoryReport'
-import Users from '@/pages/admin/users/Users'
-import Roles from '@/pages/admin/users/Roles'
-import ActivityLogs from '@/pages/admin/users/ActivityLogs'
-import AdminProfile from '@/pages/admin/users/AdminProfile'
-import Settings from '@/pages/admin/settings/Settings'
-
-// Customer Pages
-import Home from '@/pages/customer/Home'
-import ProductList from '@/pages/customer/ProductList'
-import ProductDetail from '@/pages/customer/ProductDetail'
-import ProductSetDetail from '@/pages/customer/ProductSetDetail'
-import Cart from '@/pages/customer/Cart'
-import Checkout from '@/pages/customer/Checkout'
-import MyOrders from '@/pages/customer/MyOrders'
-import OrderSuccess from '@/pages/customer/OrderSuccess'
-import Profile, { EditProfilePage } from '@/pages/customer/Profile'
-import Wishlist from '@/pages/customer/Wishlist'
-import OrderTracking from '@/pages/customer/OrderTracking'
-import OrderReceipt from '@/pages/customer/OrderReceipt'
-import AddressBook from '@/pages/customer/AddressBook'
-import ExchangeRewards from '@/pages/customer/ExchangeRewards'
-import EarnPoints from '@/pages/customer/EarnPoints'
-import PointsHistory from '@/pages/customer/PointsHistory'
-import RedeemRewards from '@/pages/customer/RedeemRewards'
-import MyCoupons from '@/pages/customer/MyCoupons'
-import RewardDetail from '@/pages/customer/RewardDetail'
-import LuckyBox from '@/pages/customer/LuckyBox'
-import FlashSale from '@/pages/customer/FlashSale'
-import SearchPage from '@/pages/customer/SearchPage'
+const Login = lazyWithReload(() => import('@/pages/Login'))
+const Dashboard = lazyWithReload(() => import('@/pages/admin/Dashboard'))
+const NewOrder = lazyWithReload(() => import('@/pages/admin/orders/NewOrder'))
+const OrderList = lazyWithReload(() => import('@/pages/admin/orders/OrderList'))
+const OrderDetail = lazyWithReload(() => import('@/pages/admin/orders/OrderDetail'))
+const Customers = lazyWithReload(() => import('@/pages/admin/customers/Customers'))
+const Products = lazyWithReload(() => import('@/pages/admin/products/Products'))
+const Categories = lazyWithReload(() => import('@/pages/admin/products/Categories'))
+const Brands = lazyWithReload(() => import('@/pages/admin/products/Brands'))
+const ProductSets = lazyWithReload(() => import('@/pages/admin/products/ProductSets'))
+const FlashSales = lazyWithReload(() => import('@/pages/admin/products/FlashSales'))
+const Banners = lazyWithReload(() => import('@/pages/admin/products/Banners'))
+const StockDashboard = lazyWithReload(() => import('@/pages/admin/inventory/StockDashboard'))
+const StockMovements = lazyWithReload(() => import('@/pages/admin/inventory/StockMovements'))
+const StockTransfers = lazyWithReload(() => import('@/pages/admin/inventory/StockTransfers'))
+const PrintCenter = lazyWithReload(() => import('@/pages/admin/operations/PrintCenter'))
+const PrintHistory = lazyNamedWithReload(() => import('@/pages/admin/operations/PrintCenter'), 'PrintHistory')
+const PrintPreviewPage = lazyNamedWithReload(() => import('@/pages/admin/operations/PrintCenter'), 'PrintPreviewPage')
+const Delivery = lazyWithReload(() => import('@/pages/admin/operations/Delivery'))
+const Revenue = lazyWithReload(() => import('@/pages/admin/finance/Revenue'))
+const Expenses = lazyWithReload(() => import('@/pages/admin/finance/Expenses'))
+const ProfitReport = lazyWithReload(() => import('@/pages/admin/finance/ProfitReport'))
+const RewardDashboardAdmin = lazyWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'))
+const RewardItemsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardItemsAdmin')
+const RewardPointsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardPointsAdmin')
+const RewardRedemptionsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardRedemptionsAdmin')
+const RewardSettingsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardSettingsAdmin')
+const RewardTransactionsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardTransactionsAdmin')
+const SalesReport = lazyWithReload(() => import('@/pages/admin/reports/SalesReport'))
+const ProductReport = lazyWithReload(() => import('@/pages/admin/reports/ProductReport'))
+const InventoryReport = lazyWithReload(() => import('@/pages/admin/reports/InventoryReport'))
+const Users = lazyWithReload(() => import('@/pages/admin/users/Users'))
+const Roles = lazyWithReload(() => import('@/pages/admin/users/Roles'))
+const ActivityLogs = lazyWithReload(() => import('@/pages/admin/users/ActivityLogs'))
+const AdminProfile = lazyWithReload(() => import('@/pages/admin/users/AdminProfile'))
+const Settings = lazyWithReload(() => import('@/pages/admin/settings/Settings'))
+const Home = lazyWithReload(() => import('@/pages/customer/Home'))
+const ProductList = lazyWithReload(() => import('@/pages/customer/ProductList'))
+const ProductDetail = lazyWithReload(() => import('@/pages/customer/ProductDetail'))
+const ProductSetDetail = lazyWithReload(() => import('@/pages/customer/ProductSetDetail'))
+const Cart = lazyWithReload(() => import('@/pages/customer/Cart'))
+const Checkout = lazyWithReload(() => import('@/pages/customer/Checkout'))
+const MyOrders = lazyWithReload(() => import('@/pages/customer/MyOrders'))
+const OrderSuccess = lazyWithReload(() => import('@/pages/customer/OrderSuccess'))
+const Profile = lazyWithReload(() => import('@/pages/customer/Profile'))
+const EditProfilePage = lazyNamedWithReload(() => import('@/pages/customer/Profile'), 'EditProfilePage')
+const Wishlist = lazyWithReload(() => import('@/pages/customer/Wishlist'))
+const OrderTracking = lazyWithReload(() => import('@/pages/customer/OrderTracking'))
+const OrderReceipt = lazyWithReload(() => import('@/pages/customer/OrderReceipt'))
+const AddressBook = lazyWithReload(() => import('@/pages/customer/AddressBook'))
+const ExchangeRewards = lazyWithReload(() => import('@/pages/customer/ExchangeRewards'))
+const EarnPoints = lazyWithReload(() => import('@/pages/customer/EarnPoints'))
+const PointsHistory = lazyWithReload(() => import('@/pages/customer/PointsHistory'))
+const RedeemRewards = lazyWithReload(() => import('@/pages/customer/RedeemRewards'))
+const MyCoupons = lazyWithReload(() => import('@/pages/customer/MyCoupons'))
+const RewardDetail = lazyWithReload(() => import('@/pages/customer/RewardDetail'))
+const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
+const FlashSale = lazyWithReload(() => import('@/pages/customer/FlashSale'))
+const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -345,6 +339,7 @@ export default function App() {
           <AuthBootstrap />
           <AppIconSync />
           <ScrollToTop />
+          <Suspense fallback={<PageLoader />}>
           <Routes>
           {/* Auth */}
           <Route path="/login" element={<Login />} />
@@ -534,6 +529,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
 
           <Toaster
             position="top-right"
