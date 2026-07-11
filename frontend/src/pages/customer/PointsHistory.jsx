@@ -41,12 +41,12 @@ export default function PointsHistory() {
     queryKey: ['customer-rewards-summary'],
     queryFn: () => ordersApi.rewards.summary().then((response) => response.data),
   })
-  const { data: historyData = [], isLoading: historyLoading, isError: historyError } = useQuery({
+  const { data: historyData, isLoading: historyLoading, isError: historyError } = useQuery({
     queryKey: ['customer-points-history'],
     queryFn: () => ordersApi.rewards.history().then((response) => response.data),
   })
 
-  const transactions = historyData
+  const transactions = historyData || []
   const filteredTransactions = useMemo(() => {
     const now = Date.now()
     return transactions.filter((item) => {
@@ -58,7 +58,7 @@ export default function PointsHistory() {
     })
   }, [activeFilter, transactions])
 
-  if (isLoading || historyLoading) return <div className="flex min-h-[70vh] items-center justify-center"><Loader2 size={26} className="animate-spin text-pink-600" /></div>
+  if ((isLoading && !data) || (historyLoading && !historyData)) return <div className="flex min-h-[70vh] items-center justify-center"><Loader2 size={26} className="animate-spin text-pink-600" /></div>
   if (isError || historyError) return <div className="py-20 text-center text-sm font-bold text-gray-500">{t('rewardsPage.pointsLoadError')}</div>
 
   const points = data?.current_points || 0

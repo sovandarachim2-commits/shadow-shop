@@ -102,7 +102,7 @@ export default function OrderTracking() {
     enabled: !!id,
   })
 
-  if (isLoading) {
+  if (isLoading && !order) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 size={36} className="animate-spin text-pink-400" />

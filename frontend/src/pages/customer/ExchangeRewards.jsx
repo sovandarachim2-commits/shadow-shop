@@ -230,7 +230,7 @@ export default function ExchangeRewards() {
   const redemptions = data?.redemptions || []
   const transactions = data?.transactions || []
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <Loader2 size={28} className="animate-spin text-pink-600" />

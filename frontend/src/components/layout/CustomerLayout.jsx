@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
@@ -456,7 +456,9 @@ export default function CustomerLayout() {
       </header>
 
       <main className={cn('flex-1', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
-        <Outlet />
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <footer className="hidden bg-[#08172f] text-white md:block">

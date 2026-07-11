@@ -1,15 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Component, lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
+import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 
-// Layouts
+// Layouts + critical first-paint pages (eager so refresh does not flash a full-page spinner)
 import AdminLayout from '@/components/layout/AdminLayout'
 import CustomerLayout from '@/components/layout/CustomerLayout'
+import Login from '@/pages/Login'
+import Home from '@/pages/customer/Home'
 
 function lazyWithReload(importer) {
   return lazy(() =>
@@ -67,7 +69,6 @@ const OutItems = lazyWithReload(() => import('@/pages/admin/operations/OutItems'
 const OutItemsHistory = lazyWithReload(() => import('@/pages/admin/operations/OutItemsHistory'))
 const DeliveryCustomer = lazyWithReload(() => import('@/pages/admin/operations/DeliveryCustomer'))
 const DeliveryByConfig = lazyWithReload(() => import('@/pages/admin/operations/DeliveryByConfig'))
-const Login = lazyWithReload(() => import('@/pages/Login'))
 const VerifyEmail = lazyWithReload(() => import('@/pages/VerifyEmail'))
 const Dashboard = lazyWithReload(() => import('@/pages/admin/Dashboard'))
 const NewOrder = lazyWithReload(() => import('@/pages/admin/orders/NewOrder'))
@@ -104,7 +105,6 @@ const Roles = lazyWithReload(() => import('@/pages/admin/users/Roles'))
 const ActivityLogs = lazyWithReload(() => import('@/pages/admin/users/ActivityLogs'))
 const AdminProfile = lazyWithReload(() => import('@/pages/admin/users/AdminProfile'))
 const Settings = lazyWithReload(() => import('@/pages/admin/settings/Settings'))
-const Home = lazyWithReload(() => import('@/pages/customer/Home'))
 const ProductList = lazyWithReload(() => import('@/pages/customer/ProductList'))
 const ProductDetail = lazyWithReload(() => import('@/pages/customer/ProductDetail'))
 const ProductSetDetail = lazyWithReload(() => import('@/pages/customer/ProductSetDetail'))
@@ -129,14 +129,58 @@ const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
 const FlashSale = lazyWithReload(() => import('@/pages/customer/FlashSale'))
 const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
 
+const QUERY_CACHE_KEY = 'shadow-shop-query-cache'
+const QUERY_CACHE_MAX_AGE_MS = 30 * 60 * 1000
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30000,
+      staleTime: 60 * 1000,
+      gcTime: 30 * 60 * 1000,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      // Keep showing last data while a background refetch runs
+      placeholderData: (previousData) => previousData,
     },
   },
+})
+
+function restoreQueryCache() {
+  try {
+    const raw = localStorage.getItem(QUERY_CACHE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!parsed?.timestamp || Date.now() - parsed.timestamp > QUERY_CACHE_MAX_AGE_MS) {
+      localStorage.removeItem(QUERY_CACHE_KEY)
+      return
+    }
+    hydrate(queryClient, parsed.clientState)
+  } catch {
+    localStorage.removeItem(QUERY_CACHE_KEY)
+  }
+}
+
+function persistQueryCache() {
+  try {
+    const clientState = dehydrate(queryClient, {
+      shouldDehydrateQuery: (query) => query.state.status === 'success',
+    })
+    localStorage.setItem(
+      QUERY_CACHE_KEY,
+      JSON.stringify({ timestamp: Date.now(), clientState }),
+    )
+  } catch {
+    // Ignore quota / private-mode failures
+  }
+}
+
+restoreQueryCache()
+
+let persistTimer
+queryClient.getQueryCache().subscribe(() => {
+  clearTimeout(persistTimer)
+  persistTimer = setTimeout(persistQueryCache, 800)
 })
 
 class AppErrorBoundary extends Component {
@@ -240,16 +284,8 @@ function AuthBootstrap() {
   return null
 }
 
-function PageLoader() {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-100 border-t-purple-700" />
-    </div>
-  )
-}
-
 function LazyPage({ children }) {
-  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+  return <Suspense fallback={null}>{children}</Suspense>
 }
 
 function ScrollToTop() {
@@ -324,7 +360,7 @@ function AdminIndexRedirect() {
   })
 
   if (['super_admin', 'admin'].includes(user?.role)) return <Dashboard />
-  if (isLoading) return <PageLoader />
+  if (isLoading) return null
 
   const viewable = new Set(
     myPerms
@@ -345,11 +381,10 @@ export default function App() {
           <AuthBootstrap />
           <AppIconSync />
           <ScrollToTop />
-          <Suspense fallback={<PageLoader />}>
           <Routes>
           {/* Auth */}
           <Route path="/login" element={<Login />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
 
           {/* Customer App */}
           <Route path="/" element={<RequireStorefront><CustomerLayout /></RequireStorefront>}>
@@ -422,7 +457,7 @@ export default function App() {
           {/* Standalone admin pages (no sidebar) */}
           <Route path="/admin/print-preview" element={
             <RequireAuth adminOnly>
-              <PrintPreviewPage />
+              <LazyPage><PrintPreviewPage /></LazyPage>
             </RequireAuth>
           } />
           <Route path="/print/history" element={<Navigate to="/admin/print/history" replace />} />
@@ -541,7 +576,6 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          </Suspense>
 
           <Toaster
             position="top-right"

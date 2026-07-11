@@ -99,7 +99,7 @@ export default function RedeemRewards() {
     ]
   }, [activeFilter, catalog, t])
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return <div className="flex min-h-[70vh] items-center justify-center"><Loader2 size={26} className="animate-spin text-pink-600" /></div>
   }
 

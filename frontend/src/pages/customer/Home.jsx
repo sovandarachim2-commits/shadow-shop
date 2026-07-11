@@ -306,6 +306,9 @@ export default function Home() {
     queryKey: ['new-arrivals'],
     queryFn: () => productsApi.products.list({ is_new_arrival: true, page_size: 12 }).then((r) => r.data.results),
   })
+  const showBestSkeleton = bestLoading && !bestSellerData
+  const showFlashSkeleton = flashLoading && !flashData
+  const showNewSkeleton = newLoading && !newArrivalData
   const banners = useMemo(() => bannersData || [], [bannersData])
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => brandsData || [], [brandsData])
@@ -691,7 +694,7 @@ export default function Home() {
         )}
 
         <div className="h-2 bg-gray-50" />
-        {(flashLoading || flashSale.length > 0) && (
+        {(showFlashSkeleton || flashSale.length > 0) && (
           <div className="bg-white px-4 pb-4 pt-3.5 md:px-6">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -718,7 +721,7 @@ export default function Home() {
             </div>
             {/* Mobile: horizontal scroll; Desktop: grid */}
             <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden">
-              {flashLoading
+              {showFlashSkeleton
                 ? Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="h-56 w-[136px] shrink-0 animate-pulse rounded-2xl bg-gray-100" />
                   ))
@@ -726,7 +729,7 @@ export default function Home() {
               }
             </div>
             <div className="hidden md:grid md:grid-cols-5 md:gap-3 lg:grid-cols-6">
-              {flashLoading
+              {showFlashSkeleton
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="aspect-square animate-pulse rounded-2xl bg-gray-100" />
                   ))
@@ -778,7 +781,7 @@ export default function Home() {
         {/* ════════════════════════════════════════════
             BEST SELLERS
         ════════════════════════════════════════════ */}
-        {(bestLoading || bestSellers.length > 0) && (
+        {(showBestSkeleton || bestSellers.length > 0) && (
           <div className="bg-white px-4 pb-4 pt-3.5 md:px-6">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -792,7 +795,7 @@ export default function Home() {
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
-              {bestLoading
+              {showBestSkeleton
                 ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
                 : bestSellers.slice(0, 12).map((p) => <ProductCard key={p.id} product={p} badge={t('home.bestBadge')} />)
               }
@@ -805,7 +808,7 @@ export default function Home() {
         {/* ════════════════════════════════════════════
             NEW ARRIVALS
         ════════════════════════════════════════════ */}
-        {(newLoading || newArrivals.length > 0) && (
+        {(showNewSkeleton || newArrivals.length > 0) && (
           <div className="bg-white px-4 pb-5 pt-3.5 md:px-6">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -819,7 +822,7 @@ export default function Home() {
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
-              {newLoading
+              {showNewSkeleton
                 ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
                 : newArrivals.slice(0, 12).map((p) => <ProductCard key={p.id} product={p} badge={t('common.new')} />)
               }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { LayoutDashboard, ClipboardList, UserCircle, MoreHorizontal, ScanLine } from 'lucide-react'
@@ -163,7 +163,9 @@ export default function AdminLayout() {
       <main className={`min-h-screen lg:pt-16 transition-all duration-300 ${collapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
         {/* Extra bottom padding on mobile so content isn't hidden behind bottom nav */}
         <div className={`p-4 md:p-6 md:pb-6 ${hideBottomNav ? 'pb-6' : 'pb-24'}`}>
-          <Outlet />
+          <Suspense fallback={null}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 

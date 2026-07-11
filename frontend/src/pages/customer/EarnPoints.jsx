@@ -64,7 +64,7 @@ export default function EarnPoints() {
     }
   }
 
-  if (isLoading) return <div className="flex min-h-[70vh] items-center justify-center"><Loader2 size={26} className="animate-spin text-pink-600" /></div>
+  if (isLoading && !data) return <div className="flex min-h-[70vh] items-center justify-center"><Loader2 size={26} className="animate-spin text-pink-600" /></div>
   if (isError) return <div className="py-20 text-center text-sm font-bold text-gray-500">{t('rewardsPage.earnLoadError')}</div>
 
   const points = data?.current_points || 0

@@ -65,7 +65,7 @@ export default function RewardDetail() {
   const reward = (data?.catalog || []).find((item) => String(item.id) === String(id))
   const currentPoints = data?.current_points || 0
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <div className="flex min-h-[70vh] items-center justify-center bg-white">
         <Loader2 size={28} className="animate-spin text-pink-600" />
