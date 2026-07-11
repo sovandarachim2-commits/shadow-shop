@@ -275,9 +275,12 @@ export default function Checkout() {
     }
 
     let stopped = false
+    let inFlight = false
     let failures = 0
     let notifiedFailure = false
     const checkPayment = async () => {
+      if (inFlight) return
+      inFlight = true
       setCheckingBakong(true)
       try {
         const { data } = await ordersApi.payments.checkBakong(bakongPayment.id)
@@ -302,6 +305,7 @@ export default function Checkout() {
           toast.error(t('checkout.paymentCheckFailed'))
         }
       } finally {
+        inFlight = false
         if (!stopped) setCheckingBakong(false)
       }
     }

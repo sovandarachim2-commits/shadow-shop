@@ -24,17 +24,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
+    has_usable_password = serializers.SerializerMethodField()
     role = serializers.CharField(required=False)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'full_name', 'role', 'phone', 'telegram_id', 'telegram_username',
+            'full_name', 'role', 'phone', 'gender',
+            'telegram_id', 'telegram_username', 'telegram_photo_url',
+            'google_id', 'google_picture_url',
             'avatar', 'avatar_url',
-            'is_active', 'created_at',
+            'has_usable_password', 'is_active', 'created_at',
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'google_id', 'google_picture_url', 'created_at']
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
@@ -45,6 +48,9 @@ class UserSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.avatar.url)
         return None
+
+    def get_has_usable_password(self, obj):
+        return obj.has_usable_password()
 
     def validate_role(self, value):
         if not Role.objects.filter(name=value).exists():
@@ -115,6 +121,16 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError('Old password is incorrect.')
         return value
+
+
+class SetInitialPasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(required=True, min_length=8)
+    confirm_password = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+        return attrs
 
 
 class PermissionSerializer(serializers.ModelSerializer):

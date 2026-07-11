@@ -7,6 +7,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 import hashlib
@@ -19,15 +21,39 @@ import requests
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import HttpResponseRedirect, JsonResponse
-from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, Address, SiteSettings
+from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, EmailVerification, Address, SiteSettings
 from .serializers import (
     CustomTokenObtainPairSerializer, UserSerializer, UserCreateSerializer,
-    ChangePasswordSerializer, CustomerRegisterSerializer, PermissionSerializer, RoleSerializer,
+    ChangePasswordSerializer, SetInitialPasswordSerializer, CustomerRegisterSerializer, PermissionSerializer, RoleSerializer,
     RolePermissionSerializer, ActivityLogSerializer, AddressSerializer, SiteSettingsSerializer,
 )
 from utils.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 
 User = get_user_model()
+
+
+def _create_email_verification(user, request=None):
+    code = ''.join(random.choice(string.digits) for _ in range(4))
+    verification = EmailVerification.objects.create(
+        user=user,
+        email=(user.email or '').strip().lower(),
+        code=code,
+        expires_at=timezone.now() + timedelta(minutes=10),
+    )
+    store_name = SiteSettings.get_solo().store_name
+    subject = f"{store_name} verification code"
+    message = (
+        f"Your {store_name} verification code is {code}.\n\n"
+        "This code expires in 10 minutes. If you did not create an account, you can ignore this email."
+    )
+    send_mail(
+        subject,
+        message,
+        getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@localhost',
+        [verification.email],
+        fail_silently=False,
+    )
+    return verification
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -54,13 +80,87 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        with transaction.atomic():
+            user = serializer.save()
+            user.is_active = False
+            user.save(update_fields=['is_active'])
+            _create_email_verification(user, request)
+        return Response({
+            'detail': 'Verification code sent.',
+            'email': user.email,
+        }, status=status.HTTP_201_CREATED)
+
+
+class EmailVerificationResendView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        if not email:
+            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, role='customer').first()
+        if not user:
+            return Response({'detail': 'No account found for this email.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.is_active:
+            return Response({'detail': 'This email is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        recent = EmailVerification.objects.filter(
+            user=user,
+            created_at__gte=timezone.now() - timedelta(seconds=45),
+        ).first()
+        if recent:
+            return Response({'detail': 'Please wait before requesting another code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        _create_email_verification(user, request)
+        return Response({'detail': 'Verification code sent.', 'email': user.email})
+
+
+class EmailVerificationConfirmView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        code = ''.join(ch for ch in str(request.data.get('code', '')).strip() if ch.isdigit())
+        if not email or len(code) != 4:
+            return Response({'detail': 'Enter the 4 digit verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, role='customer').first()
+        if not user:
+            return Response({'detail': 'No account found for this email.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.is_active:
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': UserSerializer(user, context={'request': request}).data,
+            })
+
+        verification = EmailVerification.objects.filter(user=user, is_verified=False).first()
+        if not verification:
+            return Response({'detail': 'Verification code not found. Please resend a new code.'}, status=status.HTTP_404_NOT_FOUND)
+        if verification.is_expired:
+            return Response({'detail': 'Verification code expired. Please resend a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+        if verification.attempts >= 5:
+            return Response({'detail': 'Too many attempts. Please resend a new code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        if verification.code != code:
+            verification.attempts += 1
+            verification.save(update_fields=['attempts'])
+            return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        verification.is_verified = True
+        verification.verified_at = timezone.now()
+        verification.save(update_fields=['is_verified', 'verified_at'])
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+
         refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
             'user': UserSerializer(user, context={'request': request}).data,
-        }, status=status.HTTP_201_CREATED)
+        })
 
 
 class TelegramLoginView(generics.GenericAPIView):
@@ -388,6 +488,22 @@ class ChangePasswordView(generics.UpdateAPIView):
         user.set_password(serializer.validated_data['new_password'])
         user.save()
         return Response({'detail': 'Password changed successfully.'})
+
+
+class SetInitialPasswordView(generics.GenericAPIView):
+    serializer_class = SetInitialPasswordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.has_usable_password():
+            return Response({'detail': 'Password is already set.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data['password'])
+        user.save(update_fields=['password'])
+        return Response(UserSerializer(user, context={'request': request}).data)
 
 
 class UserViewSet(viewsets.ModelViewSet):

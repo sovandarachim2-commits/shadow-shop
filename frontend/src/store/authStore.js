@@ -25,6 +25,11 @@ const useAuthStore = create(
 
       register: async (payload) => {
         const { data } = await authApi.register(payload)
+        return data
+      },
+
+      verifyEmailCode: async (payload) => {
+        const { data } = await authApi.verifyEmailCode(payload)
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
         set({

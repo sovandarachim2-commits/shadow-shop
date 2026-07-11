@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
+import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 
 // Layouts
 import AdminLayout from '@/components/layout/AdminLayout'
@@ -67,6 +68,7 @@ const OutItemsHistory = lazyWithReload(() => import('@/pages/admin/operations/Ou
 const DeliveryCustomer = lazyWithReload(() => import('@/pages/admin/operations/DeliveryCustomer'))
 const DeliveryByConfig = lazyWithReload(() => import('@/pages/admin/operations/DeliveryByConfig'))
 const Login = lazyWithReload(() => import('@/pages/Login'))
+const VerifyEmail = lazyWithReload(() => import('@/pages/VerifyEmail'))
 const Dashboard = lazyWithReload(() => import('@/pages/admin/Dashboard'))
 const NewOrder = lazyWithReload(() => import('@/pages/admin/orders/NewOrder'))
 const OrderList = lazyWithReload(() => import('@/pages/admin/orders/OrderList'))
@@ -112,6 +114,7 @@ const MyOrders = lazyWithReload(() => import('@/pages/customer/MyOrders'))
 const OrderSuccess = lazyWithReload(() => import('@/pages/customer/OrderSuccess'))
 const Profile = lazyWithReload(() => import('@/pages/customer/Profile'))
 const EditProfilePage = lazyNamedWithReload(() => import('@/pages/customer/Profile'), 'EditProfilePage')
+const CompleteProfile = lazyWithReload(() => import('@/pages/customer/CompleteProfile'))
 const Wishlist = lazyWithReload(() => import('@/pages/customer/Wishlist'))
 const OrderTracking = lazyWithReload(() => import('@/pages/customer/OrderTracking'))
 const OrderReceipt = lazyWithReload(() => import('@/pages/customer/OrderReceipt'))
@@ -188,6 +191,9 @@ function RequireAuth({ children, adminOnly = false }) {
   const location = useLocation()
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (adminOnly && user?.role === 'customer') return <Navigate to="/" replace />
+  if (!adminOnly && isSocialProfileIncomplete(user) && location.pathname !== '/profile/complete') {
+    return <Navigate to="/profile/complete" replace state={{ from: location.pathname }} />
+  }
   return children
 }
 
@@ -343,6 +349,7 @@ export default function App() {
           <Routes>
           {/* Auth */}
           <Route path="/login" element={<Login />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           {/* Customer App */}
           <Route path="/" element={<RequireStorefront><CustomerLayout /></RequireStorefront>}>
@@ -368,6 +375,11 @@ export default function App() {
             <Route path="profile/edit" element={
               <RequireAuth>
                 <EditProfilePage />
+              </RequireAuth>
+            } />
+            <Route path="profile/complete" element={
+              <RequireAuth>
+                <CompleteProfile />
               </RequireAuth>
             } />
             <Route path="profile/rewards" element={

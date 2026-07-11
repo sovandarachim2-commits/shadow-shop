@@ -90,7 +90,10 @@ export default function OrderSuccess() {
     if (!bakongPayment || bakongPayment.status === 'paid') return undefined
 
     let failures = 0
+    let inFlight = false
     const timer = setInterval(async () => {
+      if (inFlight) return
+      inFlight = true
       try {
         const { data } = await ordersApi.payments.checkBakong(bakongPayment.id)
         failures = 0
@@ -103,6 +106,8 @@ export default function OrderSuccess() {
       } catch {
         failures += 1
         if (failures >= 5) clearInterval(timer)
+      } finally {
+        inFlight = false
       }
     }, 3000)
 

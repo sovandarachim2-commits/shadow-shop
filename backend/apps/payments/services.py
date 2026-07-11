@@ -323,6 +323,10 @@ def _request_from_user(user, fallback_user):
     return _Request(user or fallback_user)
 
 
+def _bakong_check_timeout():
+    return max(float(getattr(settings, 'BAKONG_CHECK_TIMEOUT_SECONDS', 5) or 5), 1)
+
+
 def check_bakong_status(payment, user=None, request=None):
     payment = BakongPayment.objects.select_related(
         'order',
@@ -341,9 +345,10 @@ def check_bakong_status(payment, user=None, request=None):
 
     response_data = {}
     paid = False
+    timeout = _bakong_check_timeout()
     try:
         if settings.BAKONG_CHECK_API_URL:
-            response = requests.get(settings.BAKONG_CHECK_API_URL, params={'md5': payment.md5}, timeout=20)
+            response = requests.get(settings.BAKONG_CHECK_API_URL, params={'md5': payment.md5}, timeout=timeout)
             response.raise_for_status()
             response_data = response.json()
         else:
@@ -358,7 +363,7 @@ def check_bakong_status(payment, user=None, request=None):
                     'Authorization': f'Bearer {settings.BAKONG_TOKEN}',
                     'User-Agent': 'ShadowShop/1.0 (+https://shadow-shop.online)',
                 },
-                timeout=20,
+                timeout=timeout,
             )
             response.raise_for_status()
             response_data = response.json()

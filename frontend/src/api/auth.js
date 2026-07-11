@@ -3,6 +3,8 @@ import client from './client'
 export const authApi = {
   login: (credentials) => client.post('/auth/login/', credentials),
   register: (data) => client.post('/auth/register/', data),
+  resendEmailCode: (data) => client.post('/auth/email/resend-code/', data),
+  verifyEmailCode: (data) => client.post('/auth/email/verify-code/', data),
   googleConfig: () => client.get('/auth/google/config/'),
   googleLogin: (data) => client.post('/auth/google/login/', data),
   telegramConfig: () => client.get('/auth/telegram/config/'),
@@ -17,6 +19,7 @@ export const authApi = {
     headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
   }),
   changePassword: (data) => client.put('/auth/change-password/', data),
+  setInitialPassword: (data) => client.post('/auth/set-initial-password/', data),
   dashboardStats: () => client.get('/auth/dashboard/stats/'),
   users: {
     list: (params) => client.get('/auth/users/', { params }),

@@ -14,9 +14,16 @@ class User(AbstractUser):
         ('delivery', 'Delivery Staff'),
         ('customer', 'Customer'),
     ]
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+        ('prefer_not_to_say', 'Prefer not to say'),
+    ]
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
     phone = models.CharField(max_length=20, blank=True)
+    gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True)
     telegram_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     telegram_username = models.CharField(max_length=150, blank=True)
     telegram_photo_url = models.URLField(blank=True)
@@ -195,6 +202,29 @@ class TelegramVerification(models.Model):
     class Meta:
         db_table = 'telegram_verifications'
         ordering = ['-created_at']
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+
+class EmailVerification(models.Model):
+    email = models.EmailField()
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_verifications')
+    code = models.CharField(max_length=6)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'email_verifications'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', 'code']),
+            models.Index(fields=['user', 'is_verified']),
+        ]
 
     @property
     def is_expired(self):

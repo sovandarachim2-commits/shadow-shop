@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
+import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 
 /* ──────────────────────────────────────────────────
    CROWN SVG
@@ -440,7 +441,7 @@ export default function Login() {
   const location = useLocation()
   const { login, register, googleLogin, telegramLogin, isAuthenticated, user } = useAuthStore()
   const { t } = useTranslation()
-  const [mode, setMode] = useState('login')
+  const [mode, setMode] = useState(location.state?.mode === 'register' ? 'register' : 'login')
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -449,7 +450,7 @@ export default function Login() {
   const [googleOpen, setGoogleOpen] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
-  const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '' })
+  const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '', terms: true })
   const telegramWidgetRef = useRef(null)
   const googleButtonRef = useRef(null)
   const sl = (k, v) => setLf((f) => ({ ...f, [k]: v }))
@@ -493,7 +494,9 @@ export default function Login() {
   useEffect(() => {
     if (!isAuthenticated) return
     const from = location.state?.from
-    if (user?.role === 'customer') navigate(from || '/', { replace: true })
+    if (user?.role === 'customer') {
+      navigate(isSocialProfileIncomplete(user) ? '/profile/complete' : (from || '/'), { replace: true })
+    }
     else navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
   }, [isAuthenticated, user, navigate, location.state?.from])
 
@@ -612,15 +615,18 @@ export default function Login() {
 
   const handleRegister = async (e) => {
     e.preventDefault()
-    const { full_name, phone, email, password, confirm_password } = rf
-    if (!full_name || !phone || !password || !confirm_password) return toast.error('Please fill in all required fields')
+    const { full_name, email, password, confirm_password, terms } = rf
+    const cleanEmail = email.trim().toLowerCase()
+    if (!full_name || !cleanEmail || !password || !confirm_password) return toast.error('Please fill in all required fields')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return toast.error('Please enter a valid email')
     if (password !== confirm_password) return toast.error('Passwords do not match')
+    if (!terms) return toast.error('Please agree with Terms & Condition')
     const [firstName, ...rest] = full_name.trim().split(/\s+/)
     setLoading(true)
     try {
-      const u = await register({ username: phone, email: email || undefined, phone, first_name: firstName || '', last_name: rest.join(' '), password, confirm_password })
-      toast.success(`Welcome, ${u.first_name || u.username}!`)
-      navigate(location.state?.from || '/')
+      await register({ username: cleanEmail, email: cleanEmail, phone: '', first_name: firstName || '', last_name: rest.join(' '), password, confirm_password })
+      toast.success('Verification code sent to your email')
+      navigate('/verify-email', { state: { email: cleanEmail, from: location.state?.from || '/' } })
     } catch (err) {
       const d = err.response?.data
       const firstError = d && typeof d === 'object'
@@ -705,7 +711,6 @@ export default function Login() {
                   </div>
 
                   <div className="space-y-4">
-                    {/* Email */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.email')}</label>
                       <div className="flex items-center h-12 rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/40 focus-within:ring-2 focus-within:ring-[#E91E63]/10">
@@ -716,7 +721,6 @@ export default function Login() {
                       </div>
                     </div>
 
-                    {/* Password */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.password')}</label>
                       <div className="flex items-center h-12 rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/40 focus-within:ring-2 focus-within:ring-[#E91E63]/10">
@@ -734,14 +738,12 @@ export default function Login() {
                       </div>
                     </div>
 
-                    {/* Login button */}
                     <button type="submit" disabled={loading}
                       className="w-full h-12 rounded-xl text-white font-bold text-[15px] flex items-center justify-center gap-2 transition hover:opacity-90 disabled:opacity-60 mt-2"
                       style={{ background: '#E91E63', boxShadow: '0 4px 18px rgba(233,30,99,0.3)' }}>
                       {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.login')} <ChevronRight size={17} strokeWidth={2.5} /></>}
                     </button>
 
-                    {/* OR divider */}
                     <div className="flex items-center gap-3 py-0.5">
                       <div className="flex-1 h-px bg-gray-200" />
                       <span className="text-sm lg:text-xs font-bold text-gray-300 tracking-widest">{t('common.or')}</span>
@@ -785,18 +787,18 @@ export default function Login() {
                   <div className="space-y-4">
                     {/* Full Name */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.fullName')} *</label>
+                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">Name</label>
                       <div className="flex items-center h-13 rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10" style={{ height: 52 }}>
                         <User size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type="text" value={rf.full_name} onChange={(e) => sr('full_name', e.target.value)}
-                          placeholder={t('auth.fullName')}
+                          placeholder="Ex. Jonh den"
                           className="flex-1 bg-transparent text-[15px] text-gray-800 outline-none placeholder:text-gray-300" />
                       </div>
                     </div>
 
                     {/* Phone */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.phoneNumber')} *</label>
+                    <div className="hidden">
+                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.phoneNumber')}</label>
                       <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10"
                         style={{ height: 52 }}>
                         <div className="flex items-center gap-1.5 px-3 bg-gray-50 border-r border-gray-200 text-sm font-semibold text-gray-600 shrink-0">
@@ -812,20 +814,20 @@ export default function Login() {
                     </div>
 
                     {/* Email */}
-                    <div className="hidden">
-                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.emailOptional')}</label>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">Email</label>
                       <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10"
                         style={{ height: 52 }}>
                         <Mail size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type="email" value={rf.email} onChange={(e) => sr('email', e.target.value)}
-                          placeholder={t('auth.emailPlaceholder')}
+                          placeholder="example@gmail.com"
                           className="flex-1 bg-transparent text-[15px] text-gray-800 outline-none placeholder:text-gray-300" />
                       </div>
                     </div>
 
                     {/* Password */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.password')} *</label>
+                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.password')}</label>
                       <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10 transition" style={{ height: 52 }}>
                         <Lock size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type={showPass ? 'text' : 'password'} value={rf.password}
@@ -837,7 +839,7 @@ export default function Login() {
 
                     {/* Confirm Password */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.confirmPassword')} *</label>
+                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.confirmPassword')}</label>
                       <div className="flex items-center rounded-xl border border-gray-200 bg-white px-4 gap-3 focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10 transition" style={{ height: 52 }}>
                         <Lock size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
                         <input type={showConfirm ? 'text' : 'password'} value={rf.confirm_password}
@@ -847,10 +849,15 @@ export default function Login() {
                       </div>
                     </div>
 
-                    <label className="hidden items-center gap-3 cursor-pointer pt-1">
-                      <input type="checkbox" defaultChecked className="h-4 w-4 rounded accent-[#E91E63] shrink-0 cursor-pointer" />
-                      <span className="text-xs text-gray-400 leading-relaxed">
-                        {t('auth.termsAgreement', { terms: t('auth.termsConditions'), privacy: t('auth.privacyPolicy') })}
+                    <label className="flex items-center gap-3 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={rf.terms}
+                        onChange={(e) => sr('terms', e.target.checked)}
+                        className="h-5 w-5 rounded accent-[#E91E63] shrink-0 cursor-pointer"
+                      />
+                      <span className="text-sm font-semibold text-gray-500 leading-relaxed">
+                        Agree with <span className="font-bold underline">Terms & Condition</span>
                       </span>
                     </label>
 

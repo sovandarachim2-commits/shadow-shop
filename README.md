@@ -212,6 +212,10 @@ FRONTEND_URL=https://your-domain.com
 BACKEND_URL=https://your-domain.com
 ```
 
+Use the non-`www` domain as the canonical domain when configuring Telegram Login.
+The Nginx config redirects `www.your-domain.com` to `your-domain.com` so Telegram,
+payments, shared links, and app metadata all use the same origin.
+
 4. Install the SSL certificate:
 
 ```bash
@@ -222,4 +226,3 @@ sudo systemctl restart shadow_shop
 ```
 
 After this, `http://your-domain.com` redirects to `https://your-domain.com`.
-

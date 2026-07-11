@@ -199,6 +199,20 @@ CELERY_RESULT_BACKEND = REDIS_URL
 # Frontend
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
+# Email
+_EMAIL_BACKEND_DEFAULT = (
+    'django.core.mail.backends.console.EmailBackend'
+    if DEBUG else
+    'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_BACKEND = config('EMAIL_BACKEND', default=_EMAIL_BACKEND_DEFAULT)
+EMAIL_HOST = config('EMAIL_HOST', default='localhost')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Shadow Shop <no-reply@shadowshop.local>')
+
 # ABA PayWay
 ABA_PAYWAY_MERCHANT_ID = config('ABA_PAYWAY_MERCHANT_ID', default='')
 ABA_PAYWAY_API_KEY = config('ABA_PAYWAY_API_KEY', default='')
@@ -214,6 +228,7 @@ BAKONG_CURRENCY = config('BAKONG_CURRENCY', default='USD').upper()
 BAKONG_EXPIRATION_MINUTES = config('BAKONG_EXPIRATION_MINUTES', default=5, cast=int)
 BAKONG_IS_TEST = config('BAKONG_IS_TEST', default=False, cast=bool)
 BAKONG_CHECK_API_URL = config('BAKONG_CHECK_API_URL', default='')
+BAKONG_CHECK_TIMEOUT_SECONDS = config('BAKONG_CHECK_TIMEOUT_SECONDS', default=5, cast=float)
 
 # Activity Stream
 ACTSTREAM_SETTINGS = {
