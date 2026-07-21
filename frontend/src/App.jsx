@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
@@ -13,6 +13,12 @@ import CustomerLayout from '@/components/layout/CustomerLayout'
 import Login from '@/pages/Login'
 import Home from '@/pages/customer/Home'
 
+async function clearFrontendCaches() {
+  if (!('caches' in window)) return
+  const keys = await window.caches.keys()
+  await Promise.all(keys.filter((key) => key.startsWith('shadow-shop-')).map((key) => window.caches.delete(key)))
+}
+
 function lazyWithReload(importer) {
   return lazy(() =>
     importer()
@@ -20,7 +26,7 @@ function lazyWithReload(importer) {
         sessionStorage.removeItem('shadow-shop-chunk-reload')
         return module
       })
-      .catch((error) => {
+      .catch(async (error) => {
         const message = String(error?.message || error || '')
         const isChunkLoadError =
           message.includes('Failed to fetch dynamically imported module') ||
@@ -31,7 +37,9 @@ function lazyWithReload(importer) {
 
         if (isChunkLoadError && sessionStorage.getItem('shadow-shop-chunk-reload') !== '1') {
           sessionStorage.setItem('shadow-shop-chunk-reload', '1')
+          await clearFrontendCaches().catch(() => {})
           window.location.reload()
+          return new Promise(() => {})
         }
 
         throw error
@@ -241,6 +249,49 @@ function RequireAuth({ children, adminOnly = false }) {
   return children
 }
 
+function RequireRewardsAuth({ children }) {
+  const { isAuthenticated, user } = useAuthStore()
+  const navigate = useNavigate()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center bg-white px-4 py-10">
+        <div className="w-full max-w-md rounded-2xl border border-pink-100 bg-white p-6 text-center shadow-card">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-50 text-3xl">
+            <span aria-hidden="true">★</span>
+          </div>
+          <h1 className="mt-5 text-2xl font-black text-gray-950">Login to Use Rewards</h1>
+          <p className="mt-2 text-sm font-semibold leading-6 text-gray-500">
+            Please login or register first to earn points, redeem rewards, and view your coupons.
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { from: '/profile/rewards' } })}
+              className="shop-btn-primary h-11 px-4 py-0"
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { mode: 'register', from: '/profile/rewards' } })}
+              className="shop-btn-outline h-11 px-4 py-0"
+            >
+              Register
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isSocialProfileIncomplete(user)) {
+    return <Navigate to="/profile/complete" replace state={{ from: '/profile/rewards' }} />
+  }
+
+  return children
+}
+
 // Guards customer routes: staff users must have storefront.view permission
 function RequireStorefront({ children }) {
   const { isAuthenticated, user } = useAuthStore()
@@ -418,34 +469,34 @@ export default function App() {
               </RequireAuth>
             } />
             <Route path="profile/rewards" element={
-              <RequireAuth>
+              <RequireRewardsAuth>
                 <ExchangeRewards />
-              </RequireAuth>
+              </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/redeem" element={
-              <RequireAuth>
+              <RequireRewardsAuth>
                 <RedeemRewards />
-              </RequireAuth>
+              </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/earn" element={
-              <RequireAuth>
+              <RequireRewardsAuth>
                 <EarnPoints />
-              </RequireAuth>
+              </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/history" element={
-              <RequireAuth>
+              <RequireRewardsAuth>
                 <PointsHistory />
-              </RequireAuth>
+              </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/coupons" element={
-              <RequireAuth>
+              <RequireRewardsAuth>
                 <MyCoupons />
-              </RequireAuth>
+              </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/:id" element={
-              <RequireAuth>
+              <RequireRewardsAuth>
                 <RewardDetail />
-              </RequireAuth>
+              </RequireRewardsAuth>
             } />
             <Route path="address-book" element={
               <RequireAuth>

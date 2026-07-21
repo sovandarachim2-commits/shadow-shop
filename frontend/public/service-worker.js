@@ -1,6 +1,5 @@
-const CACHE_VERSION = 'shadow-shop-v4'
+const CACHE_VERSION = 'shadow-shop-v5'
 const APP_SHELL = [
-  '/',
   '/manifest.webmanifest',
   '/app-icon.svg',
   '/app-icon-180.png',
@@ -36,18 +35,16 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/').then((cached) => {
-        const request = fetch(event.request, { cache: 'no-store' })
+      caches.match('/index.html').then((cached) => {
+        return fetch(event.request, { cache: 'no-store' })
           .then((response) => {
             if (response.ok) {
               const copy = response.clone()
-              caches.open(CACHE_VERSION).then((cache) => cache.put('/', copy))
+              caches.open(CACHE_VERSION).then((cache) => cache.put('/index.html', copy))
             }
             return response
           })
           .catch(() => cached)
-
-        return request
       }),
     )
     return

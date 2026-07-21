@@ -231,6 +231,34 @@ class EmailVerification(models.Model):
         return timezone.now() > self.expires_at
 
 
+class PendingRegistration(models.Model):
+    email = models.EmailField(unique=True)
+    data = models.JSONField(default=dict)
+    password_hash = models.CharField(max_length=128)
+    code = models.CharField(max_length=6)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'pending_registrations'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', 'code']),
+            models.Index(fields=['email', 'is_verified']),
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return self.email
+
+
 class SiteSettings(models.Model):
     store_name = models.CharField(max_length=200, default='Shadow Shop')
     store_phone = models.CharField(max_length=50, blank=True)

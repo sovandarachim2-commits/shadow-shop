@@ -81,14 +81,16 @@ const useAuthStore = create(
       },
 
       logout: async () => {
-        const refresh = get().refreshToken
+        const refresh = get().refreshToken || localStorage.getItem('refresh_token')
         try {
           if (refresh) await authApi.logout(refresh)
         } catch {}
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
-        window.location.replace('/login?signout=1')
+        if (window.location.pathname !== '/login') {
+          window.location.replace('/login?signout=1')
+        }
       },
 
       clearSession: () => {

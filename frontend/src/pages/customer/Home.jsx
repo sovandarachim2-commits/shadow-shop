@@ -27,6 +27,11 @@ const CATEGORY_SHORTCUTS = [
   { id: 'new-arrival',  name: 'New',          keywords: [],                                 icon: Gift,      bg: '#EC4899', color: '#FFFFFF', path: '/shop?filter=new_arrival', isNew: true },
 ]
 
+const HOME_QUERY_OPTIONS = {
+  staleTime: 5 * 60 * 1000,
+  gcTime: 30 * 60 * 1000,
+}
+
 function iconForCategory(name) {
   const v = (name || '').toLowerCase()
   if (v.includes('makeup') || v.includes('make up')) return Brush
@@ -285,26 +290,32 @@ export default function Home() {
   const { data: bannersData, refetch: refetchBanners } = useQuery({
     queryKey: ['home-banners'],
     queryFn: () => productsApi.banners.list({ is_active: true }).then((r) => r.data.results ?? r.data),
+    ...HOME_QUERY_OPTIONS,
   })
   const { data: categoriesData, refetch: refetchCategories } = useQuery({
     queryKey: ['categories-home'],
     queryFn: () => productsApi.categories.list({ is_active: true }).then((r) => r.data.results || r.data),
+    ...HOME_QUERY_OPTIONS,
   })
   const { data: brandsData, refetch: refetchBrands } = useQuery({
     queryKey: ['brands-home'],
     queryFn: () => productsApi.brands.list({ is_active: true }).then((r) => r.data.results || r.data),
+    ...HOME_QUERY_OPTIONS,
   })
   const { data: bestSellerData, isLoading: bestLoading, refetch: refetchBestSellers } = useQuery({
     queryKey: ['best-sellers'],
     queryFn: () => productsApi.products.list({ is_best_seller: true, page_size: 12 }).then((r) => r.data.results),
+    ...HOME_QUERY_OPTIONS,
   })
   const { data: flashData, isLoading: flashLoading, refetch: refetchFlash } = useQuery({
     queryKey: ['flash-sale'],
     queryFn: () => productsApi.products.list({ active_flash_sale: true, page_size: 10 }).then((r) => r.data.results),
+    ...HOME_QUERY_OPTIONS,
   })
   const { data: newArrivalData, isLoading: newLoading, refetch: refetchNewArrivals } = useQuery({
     queryKey: ['new-arrivals'],
     queryFn: () => productsApi.products.list({ is_new_arrival: true, page_size: 12 }).then((r) => r.data.results),
+    ...HOME_QUERY_OPTIONS,
   })
   const showBestSkeleton = bestLoading && !bestSellerData
   const showFlashSkeleton = flashLoading && !flashData

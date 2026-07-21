@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Shield, Eye } from 'lucide-react'
+import { Plus, Edit, Shield, Eye, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { authApi } from '@/api/auth'
 import { formatDateTime } from '@/utils/helpers'
 
@@ -26,6 +27,15 @@ const getApiError = (error, fallback) => {
   if (Array.isArray(firstValue)) return `${firstKey}: ${firstValue[0]}`
   if (typeof firstValue === 'string') return `${firstKey}: ${firstValue}`
   return fallback
+}
+
+const cleanUsernamePart = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+const generatedUsernamePreview = (firstName, lastName) => {
+  const first = cleanUsernamePart(firstName)
+  const last = cleanUsernamePart(lastName)
+  const base = first && last ? `${first[0]}${last}` : first || last || 'user'
+  return `${base}1048`
 }
 
 function StatusSwitch({ active, disabled, onToggle }) {
@@ -114,6 +124,9 @@ function UserForm({ user, roles, onSave, onClose }) {
   })
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const isEdit = !!user
+  const usernamePreview = isEdit
+    ? form.username
+    : generatedUsernamePreview(form.first_name, form.last_name)
   const hasCurrentRole = roles.some((r) => r.name === form.role)
   const roleOptions = hasCurrentRole
     ? roles
@@ -131,8 +144,9 @@ function UserForm({ user, roles, onSave, onClose }) {
           <input className="input-field" value={form.last_name} onChange={(e) => set('last_name', e.target.value)} />
         </div>
         <div>
-          <label className="label">Username *</label>
-          <input className="input-field" value={form.username} onChange={(e) => set('username', e.target.value)} disabled={isEdit} />
+          <label className="label">Username</label>
+          <input className="input-field font-mono" value={usernamePreview} disabled />
+          {!isEdit && <p className="mt-1 text-xs font-semibold text-gray-400">Auto-generated like dsok1048</p>}
         </div>
         <div>
           <label className="label">Phone</label>
@@ -173,6 +187,7 @@ function UserForm({ user, roles, onSave, onClose }) {
 
 export default function Users() {
   const queryClient = useQueryClient()
+  const [confirm, ConfirmDialog] = useConfirm()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -208,6 +223,12 @@ export default function Users() {
     onError: (e) => toast.error(getApiError(e, 'Failed to update status')),
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: authApi.users.delete,
+    onSuccess: () => { queryClient.invalidateQueries(['users']); toast.success('User deleted!') },
+    onError: (e) => toast.error(getApiError(e, 'Failed to delete user')),
+  })
+
   const closeUserModal = () => {
     setShowModal(false)
     setEditUser(null)
@@ -218,8 +239,18 @@ export default function Users() {
       const { password, confirm_password, username, ...updateData } = form
       updateMutation.mutate({ id: editUser.id, data: updateData })
     } else {
-      createMutation.mutate(form)
+      const { username, ...createData } = form
+      createMutation.mutate(createData)
     }
+  }
+
+  const handleDelete = async (userToDelete) => {
+    const ok = await confirm('Delete user?', `Delete ${userToDelete.full_name || userToDelete.username}? This action cannot be undone.`, {
+      confirmText: 'Delete',
+      icon: 'delete',
+      danger: true,
+    })
+    if (ok) deleteMutation.mutate(userToDelete.id)
   }
 
   const users = data?.results || []
@@ -303,6 +334,11 @@ export default function Users() {
                         className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500 transition-colors" title="Edit">
                         <Edit size={14} />
                       </button>
+                      <button onClick={() => handleDelete(u)}
+                        disabled={deleteMutation.isPending}
+                        className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors disabled:opacity-50" title="Delete">
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </Td>
                 </Tr>
@@ -324,6 +360,7 @@ export default function Users() {
       <Modal isOpen={showModal} onClose={closeUserModal} title={editUser ? 'Edit User' : 'Add User'} size="md">
         <UserForm user={editUser} roles={rolesData} onSave={handleSave} onClose={closeUserModal} />
       </Modal>
+      {ConfirmDialog}
     </div>
   )
 }

@@ -2,8 +2,32 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from .models import Permission, Role, RolePermission, ActivityLog, Address, SiteSettings
+import random
+import re
 
 User = get_user_model()
+
+
+def _clean_username_part(value):
+    return re.sub(r'[^a-z0-9]', '', str(value or '').lower())
+
+
+def generate_staff_username(first_name='', last_name=''):
+    first = _clean_username_part(first_name)
+    last = _clean_username_part(last_name)
+    if first and last:
+        base = f'{first[0]}{last}'
+    else:
+        base = first or last or 'user'
+
+    base = base[:24]
+    for _ in range(20):
+        username = f'{base}{random.randint(1000, 9999)}'
+        if not User.objects.filter(username=username).exists():
+            return username
+
+    suffix = User.objects.count() + random.randint(1000, 9999)
+    return f'{base}{suffix}'[:150]
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -59,6 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
     role = serializers.CharField(required=False)
@@ -82,6 +107,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        username = str(validated_data.get('username', '')).strip()
+        if not username:
+            validated_data['username'] = generate_staff_username(
+                validated_data.get('first_name', ''),
+                validated_data.get('last_name', ''),
+            )
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -89,6 +120,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 
 class CustomerRegisterSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
 
@@ -102,6 +134,16 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs.pop('confirm_password'):
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
+        email = str(attrs.get('email', '')).strip().lower()
+        if not email:
+            raise serializers.ValidationError({'email': 'Email is required.'})
+        username = str(attrs.get('username') or email).strip()
+        attrs['email'] = email
+        attrs['username'] = username
+        if email and User.objects.filter(email__iexact=email, is_active=True).exists():
+            raise serializers.ValidationError({'email': 'An account with this email already exists.'})
+        if username and User.objects.filter(username__iexact=username, is_active=True).exists():
+            raise serializers.ValidationError({'username': 'An account with this username already exists.'})
         return attrs
 
     def create(self, validated_data):

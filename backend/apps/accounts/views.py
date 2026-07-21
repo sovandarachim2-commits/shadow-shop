@@ -9,6 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.db import transaction
+from django.contrib.auth.hashers import make_password
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 import hashlib
@@ -21,7 +22,7 @@ import requests
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import HttpResponseRedirect, JsonResponse
-from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, EmailVerification, Address, SiteSettings
+from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, EmailVerification, PendingRegistration, Address, SiteSettings
 from .serializers import (
     CustomTokenObtainPairSerializer, UserSerializer, UserCreateSerializer,
     ChangePasswordSerializer, SetInitialPasswordSerializer, CustomerRegisterSerializer, PermissionSerializer, RoleSerializer,
@@ -32,14 +33,11 @@ from utils.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 User = get_user_model()
 
 
-def _create_email_verification(user, request=None):
-    code = ''.join(random.choice(string.digits) for _ in range(4))
-    verification = EmailVerification.objects.create(
-        user=user,
-        email=(user.email or '').strip().lower(),
-        code=code,
-        expires_at=timezone.now() + timedelta(minutes=10),
-    )
+def _verification_code():
+    return ''.join(random.choice(string.digits) for _ in range(4))
+
+
+def _send_email_verification(email, code):
     store_name = SiteSettings.get_solo().store_name
     subject = f"{store_name} verification code"
     message = (
@@ -50,9 +48,20 @@ def _create_email_verification(user, request=None):
         subject,
         message,
         getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@localhost',
-        [verification.email],
+        [email],
         fail_silently=False,
     )
+
+
+def _create_email_verification(user, request=None):
+    code = ''.join(random.choice(string.digits) for _ in range(4))
+    verification = EmailVerification.objects.create(
+        user=user,
+        email=(user.email or '').strip().lower(),
+        code=code,
+        expires_at=timezone.now() + timedelta(minutes=10),
+    )
+    _send_email_verification(verification.email, code)
     return verification
 
 
@@ -80,14 +89,34 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data.copy()
+        email = str(validated.get('email', '')).strip().lower()
+        username = str(validated.get('username') or email).strip()
+        password = validated.pop('password')
+        validated.update({
+            'email': email,
+            'username': username,
+            'role': 'customer',
+            'phone': validated.get('phone', ''),
+        })
+        code = _verification_code()
         with transaction.atomic():
-            user = serializer.save()
-            user.is_active = False
-            user.save(update_fields=['is_active'])
-            _create_email_verification(user, request)
+            PendingRegistration.objects.update_or_create(
+                email=email,
+                defaults={
+                    'data': validated,
+                    'password_hash': make_password(password),
+                    'code': code,
+                    'attempts': 0,
+                    'is_verified': False,
+                    'expires_at': timezone.now() + timedelta(minutes=10),
+                    'verified_at': None,
+                },
+            )
+            _send_email_verification(email, code)
         return Response({
             'detail': 'Verification code sent.',
-            'email': user.email,
+            'email': email,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -99,21 +128,22 @@ class EmailVerificationResendView(generics.GenericAPIView):
         if not email:
             return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.filter(email__iexact=email, role='customer').first()
-        if not user:
-            return Response({'detail': 'No account found for this email.'}, status=status.HTTP_404_NOT_FOUND)
-        if user.is_active:
+        if User.objects.filter(email__iexact=email, role='customer').exists():
             return Response({'detail': 'This email is already verified.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        recent = EmailVerification.objects.filter(
-            user=user,
-            created_at__gte=timezone.now() - timedelta(seconds=45),
-        ).first()
-        if recent:
+        pending = PendingRegistration.objects.filter(email__iexact=email, is_verified=False).first()
+        if not pending:
+            return Response({'detail': 'No pending verification found for this email. Please register again.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if pending.updated_at >= timezone.now() - timedelta(seconds=45):
             return Response({'detail': 'Please wait before requesting another code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-        _create_email_verification(user, request)
-        return Response({'detail': 'Verification code sent.', 'email': user.email})
+        pending.code = _verification_code()
+        pending.attempts = 0
+        pending.expires_at = timezone.now() + timedelta(minutes=10)
+        pending.save(update_fields=['code', 'attempts', 'expires_at', 'updated_at'])
+        _send_email_verification(email, pending.code)
+        return Response({'detail': 'Verification code sent.', 'email': email})
 
 
 class EmailVerificationConfirmView(generics.GenericAPIView):
@@ -125,35 +155,53 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
         if not email or len(code) != 4:
             return Response({'detail': 'Enter the 4 digit verification code.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.filter(email__iexact=email, role='customer').first()
-        if not user:
-            return Response({'detail': 'No account found for this email.'}, status=status.HTTP_404_NOT_FOUND)
-        if user.is_active:
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'user': UserSerializer(user, context={'request': request}).data,
-            })
+        if User.objects.filter(email__iexact=email, role='customer').exists():
+            return Response({'detail': 'This email is already verified. Please login.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        verification = EmailVerification.objects.filter(user=user, is_verified=False).first()
-        if not verification:
+        pending = PendingRegistration.objects.filter(email__iexact=email, is_verified=False).first()
+        if not pending:
             return Response({'detail': 'Verification code not found. Please resend a new code.'}, status=status.HTTP_404_NOT_FOUND)
-        if verification.is_expired:
+        if pending.is_expired:
             return Response({'detail': 'Verification code expired. Please resend a new code.'}, status=status.HTTP_400_BAD_REQUEST)
-        if verification.attempts >= 5:
+        if pending.attempts >= 5:
             return Response({'detail': 'Too many attempts. Please resend a new code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-        if verification.code != code:
-            verification.attempts += 1
-            verification.save(update_fields=['attempts'])
+        if pending.code != code:
+            pending.attempts += 1
+            pending.save(update_fields=['attempts', 'updated_at'])
             return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        verification.is_verified = True
-        verification.verified_at = timezone.now()
-        verification.save(update_fields=['is_verified', 'verified_at'])
-        user.is_active = True
-        user.save(update_fields=['is_active'])
+        data = pending.data or {}
+        username = data.get('username') or email
+        with transaction.atomic():
+            if User.objects.filter(email__iexact=email, is_active=True).exists():
+                return Response({'detail': 'This email is already verified. Please login.'}, status=status.HTTP_400_BAD_REQUEST)
+            if User.objects.filter(username__iexact=username, is_active=True).exists():
+                return Response({'detail': 'An account with this username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+            User.objects.filter(
+                email__iexact=email,
+                role='customer',
+                is_active=False,
+            ).delete()
+            User.objects.filter(
+                username__iexact=username,
+                role='customer',
+                is_active=False,
+            ).delete()
+            user = User(
+                username=username,
+                email=email,
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+                phone=data.get('phone', ''),
+                role='customer',
+                is_active=True,
+                password=pending.password_hash,
+            )
+            user.save()
+            pending.is_verified = True
+            pending.verified_at = timezone.now()
+            pending.save(update_fields=['is_verified', 'verified_at', 'updated_at'])
 
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -538,6 +586,14 @@ class UserViewSet(viewsets.ModelViewSet):
         user.set_password(new_password)
         user.save()
         return Response({'detail': 'Password reset successfully.'})
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        email = str(user.email or '').strip().lower()
+        response = super().destroy(request, *args, **kwargs)
+        if email:
+            PendingRegistration.objects.filter(email__iexact=email).delete()
+        return response
 
 
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
