@@ -145,3 +145,56 @@ class CustomerOrderFlowTests(TestCase):
         self.assertEqual(customer.total_spent, order.grand_total)
         self.assertEqual(OrderItem.objects.filter(order=order).count(), 1)
         self.assertTrue(OrderStatusHistory.objects.filter(order=order, note='Order placed online').exists())
+
+
+class StaffStorefrontCheckoutTests(TestCase):
+    """Staff accounts must be able to place test orders from the storefront."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username='checkout-admin',
+            password='pass12345',
+            role='admin',
+            phone='010000001',
+        )
+        self.category = Category.objects.create(name='Staff Checkout Category')
+        self.product = Product.objects.create(
+            code='STAFF-CHECKOUT-1',
+            name='Staff Checkout Product',
+            category=self.category,
+            cost_price='4.00',
+            retail_price='10.00',
+        )
+        Stock.objects.create(product=self.product, quantity=20)
+        self.client.force_authenticate(user=self.admin)
+
+    def test_admin_can_post_storefront_checkout(self):
+        response = self.client.post(
+            '/api/orders/list/checkout/',
+            {
+                'name': 'Admin Shopper',
+                'phone': '010000001',
+                'email': 'admin@example.com',
+                'address': 'Phnom Penh',
+                'province': 'phnom_penh',
+                'payment_method': 'cod',
+                'payment_status': 'unpaid',
+                'delivery_fee': '2.00',
+                'items': [
+                    {
+                        'product': self.product.id,
+                        'quantity': 1,
+                        'unit_price': '10.00',
+                        'cost_price': '4.00',
+                    },
+                ],
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(Customer.objects.filter(user=self.admin).exists())
+        self.assertEqual(Order.objects.filter(customer__user=self.admin).count(), 1)

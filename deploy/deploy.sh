@@ -28,6 +28,19 @@ npm run build
 
 echo "6. Restarting services..."
 sudo systemctl restart shadow_shop
+
+# Keep live nginx in sync with repo (fixes /admin refresh → SPA, not Django 404).
+if [ -f "$APP_DIR/deploy/nginx.conf" ]; then
+    echo "7. Updating nginx site config..."
+    if [ -f /etc/nginx/sites-available/shadow_shop ]; then
+        sudo cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/shadow_shop
+    elif [ -f /etc/nginx/sites-available/shadow-shop.online ]; then
+        sudo cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/shadow-shop.online
+    else
+        echo "WARNING: no known nginx site file found; copy deploy/nginx.conf manually"
+    fi
+fi
+
 sudo nginx -t
 if sudo systemctl is-active --quiet nginx; then
     sudo systemctl reload nginx

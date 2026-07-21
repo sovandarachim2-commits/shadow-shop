@@ -171,7 +171,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'grand_total']
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve', 'checkout'):
+        if self.action in ('list', 'retrieve', 'checkout', 'checkout_status'):
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaff()]
 
@@ -494,9 +494,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def checkout(self, request):
-        if request.user.role != 'customer':
-            return Response({'detail': 'Only customers can use this checkout endpoint.'}, status=status.HTTP_403_FORBIDDEN)
-
+        # Any authenticated shopper can checkout; Customer row is get_or_create'd
+        # against request.user (staff testing the storefront included).
         from apps.notifications.services import ONLINE_PAY_NOW_METHODS
         payment_method = request.data.get('payment_method')
         if payment_method in ONLINE_PAY_NOW_METHODS:
@@ -515,8 +514,6 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def checkout_status(self, request):
-        if request.user.role != 'customer':
-            return Response({'detail': 'Only customers can use this endpoint.'}, status=status.HTTP_403_FORBIDDEN)
         reference = request.query_params.get('reference')
         if not reference:
             return Response({'detail': 'reference is required.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -454,25 +454,25 @@ export default function App() {
               <LazyPage><CustomerLayout /></LazyPage>
             </RequireStorefront>
           }>
-            <Route index element={<Home />} />
-            <Route path="search" element={<SearchPage />} />
-            <Route path="shop" element={<ProductList />} />
-            <Route path="lucky-box" element={<LuckyBox />} />
-            <Route path="flash-sale" element={<FlashSale />} />
-            <Route path="product/:id" element={<ProductDetail />} />
-            <Route path="product-set/:id" element={<ProductSetDetail />} />
-            <Route path="cart" element={<Cart />} />
+            <Route index element={<LazyPage><Home /></LazyPage>} />
+            <Route path="search" element={<LazyPage><SearchPage /></LazyPage>} />
+            <Route path="shop" element={<LazyPage><ProductList /></LazyPage>} />
+            <Route path="lucky-box" element={<LazyPage><LuckyBox /></LazyPage>} />
+            <Route path="flash-sale" element={<LazyPage><FlashSale /></LazyPage>} />
+            <Route path="product/:id" element={<LazyPage><ProductDetail /></LazyPage>} />
+            <Route path="product-set/:id" element={<LazyPage><ProductSetDetail /></LazyPage>} />
+            <Route path="cart" element={<LazyPage><Cart /></LazyPage>} />
             <Route path="checkout" element={
               <RequireAuth>
-                <Checkout />
+                <LazyPage><Checkout /></LazyPage>
               </RequireAuth>
             } />
-            <Route path="order-success" element={<OrderSuccess />} />
-            <Route path="my-orders" element={<MyOrders />} />
-            <Route path="my-orders/:id/receipt" element={<OrderReceipt />} />
-            <Route path="my-orders/:id" element={<OrderTracking />} />
-            <Route path="wishlist" element={<Wishlist />} />
-            <Route path="profile" element={<Profile />} />
+            <Route path="order-success" element={<LazyPage><OrderSuccess /></LazyPage>} />
+            <Route path="my-orders" element={<LazyPage><MyOrders /></LazyPage>} />
+            <Route path="my-orders/:id/receipt" element={<LazyPage><OrderReceipt /></LazyPage>} />
+            <Route path="my-orders/:id" element={<LazyPage><OrderTracking /></LazyPage>} />
+            <Route path="wishlist" element={<LazyPage><Wishlist /></LazyPage>} />
+            <Route path="profile" element={<LazyPage><Profile /></LazyPage>} />
             <Route path="profile/edit" element={
               <RequireAuth>
                 <EditProfilePage />
@@ -565,77 +565,77 @@ export default function App() {
               <LazyPage><AdminLayout /></LazyPage>
             </RequireAuth>
           }>
-            <Route index element={<AdminIndexRedirect />} />
+            <Route index element={<LazyPage><AdminIndexRedirect /></LazyPage>} />
 
             {/* Sales */}
-            <Route path="orders/new" element={<NewOrder />} />
-            <Route path="orders" element={<OrderList />} />
-            <Route path="orders/:id" element={<OrderDetail />} />
-            <Route path="customers" element={<Customers />} />
+            <Route path="orders/new" element={<LazyPage><NewOrder /></LazyPage>} />
+            <Route path="orders" element={<LazyPage><OrderList /></LazyPage>} />
+            <Route path="orders/:id" element={<LazyPage><OrderDetail /></LazyPage>} />
+            <Route path="customers" element={<LazyPage><Customers /></LazyPage>} />
 
             {/* Products */}
-            <Route path="products" element={<Products />} />
-            <Route path="products/brands" element={<Brands />} />
-            <Route path="products/categories" element={<Categories />} />
-            <Route path="products/sets" element={<ProductSets />} />
-            <Route path="products/flash-sale" element={<FlashSales />} />
-            <Route path="products/banners" element={<Banners />} />
+            <Route path="products" element={<LazyPage><Products /></LazyPage>} />
+            <Route path="products/brands" element={<LazyPage><Brands /></LazyPage>} />
+            <Route path="products/categories" element={<LazyPage><Categories /></LazyPage>} />
+            <Route path="products/sets" element={<LazyPage><ProductSets /></LazyPage>} />
+            <Route path="products/flash-sale" element={<LazyPage><FlashSales /></LazyPage>} />
+            <Route path="products/banners" element={<LazyPage><Banners /></LazyPage>} />
 
             {/* Inventory */}
-            <Route path="inventory" element={<StockDashboard />} />
-            <Route path="inventory/movements" element={<StockMovements />} />
-            <Route path="inventory/transfers" element={<StockTransfers />} />
+            <Route path="inventory" element={<LazyPage><StockDashboard /></LazyPage>} />
+            <Route path="inventory/movements" element={<LazyPage><StockMovements /></LazyPage>} />
+            <Route path="inventory/transfers" element={<LazyPage><StockTransfers /></LazyPage>} />
 
             {/* Customer Scanner */}
             <Route path="customer-scanner/delivery" element={<LazyPage><DeliveryCustomer /></LazyPage>} />
             <Route path="customer-scanner/delivery-config" element={<LazyPage><DeliveryByConfig /></LazyPage>} />
 
             {/* Operations */}
-            <Route path="print" element={<PrintCenter />} />
-            <Route path="print/history" element={<PrintHistory />} />
+            <Route path="print" element={<LazyPage><PrintCenter /></LazyPage>} />
+            <Route path="print/history" element={<LazyPage><PrintHistory /></LazyPage>} />
             <Route path="scanner" element={<LazyPage><Scanner /></LazyPage>} />
             <Route path="scanner/orders" element={<LazyPage><ScannerOrders /></LazyPage>} />
-            <Route path="delivery" element={<Delivery />} />
+            <Route path="delivery" element={<LazyPage><Delivery /></LazyPage>} />
 
             {/* Finance */}
-            <Route path="finance/revenue" element={<Revenue />} />
-            <Route path="finance/expenses" element={<Expenses />} />
-            <Route path="finance/profit" element={<ProfitReport />} />
+            <Route path="finance/revenue" element={<LazyPage><Revenue /></LazyPage>} />
+            <Route path="finance/expenses" element={<LazyPage><Expenses /></LazyPage>} />
+            <Route path="finance/profit" element={<LazyPage><ProfitReport /></LazyPage>} />
 
             {/* Rewards */}
-            <Route path="rewards" element={<RewardDashboardAdmin />} />
+            <Route path="rewards" element={<LazyPage><RewardDashboardAdmin /></LazyPage>} />
             <Route path="rewards/rules" element={<Navigate to="/admin/rewards/settings" replace />} />
-            <Route path="rewards/points" element={<RewardPointsAdmin />} />
-            <Route path="rewards/transactions" element={<RewardTransactionsAdmin />} />
-            <Route path="rewards/products" element={<RewardItemsAdmin />} />
-            <Route path="rewards/exchanges" element={<RewardRedemptionsAdmin />} />
+            <Route path="rewards/points" element={<LazyPage><RewardPointsAdmin /></LazyPage>} />
+            <Route path="rewards/transactions" element={<LazyPage><RewardTransactionsAdmin /></LazyPage>} />
+            <Route path="rewards/products" element={<LazyPage><RewardItemsAdmin /></LazyPage>} />
+            <Route path="rewards/exchanges" element={<LazyPage><RewardRedemptionsAdmin /></LazyPage>} />
             <Route path="rewards/tiers" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/coupons" element={<Navigate to="/admin/rewards/products" replace />} />
             <Route path="rewards/campaigns" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/categories" element={<Navigate to="/admin/rewards/products" replace />} />
-            <Route path="rewards/settings" element={<RewardSettingsAdmin />} />
+            <Route path="rewards/settings" element={<LazyPage><RewardSettingsAdmin /></LazyPage>} />
             <Route path="rewards/notifications" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/automation" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/redemptions" element={<Navigate to="/admin/rewards/exchanges" replace />} />
 
             {/* Reports */}
-            <Route path="reports/sales" element={<SalesReport />} />
-            <Route path="reports/products" element={<ProductReport />} />
-            <Route path="reports/inventory" element={<InventoryReport />} />
+            <Route path="reports/sales" element={<LazyPage><SalesReport /></LazyPage>} />
+            <Route path="reports/products" element={<LazyPage><ProductReport /></LazyPage>} />
+            <Route path="reports/inventory" element={<LazyPage><InventoryReport /></LazyPage>} />
 
             {/* Administration */}
-            <Route path="profile" element={<AdminProfile />} />
-            <Route path="users" element={<Users />} />
-            <Route path="roles" element={<Roles />} />
-            <Route path="activity" element={<ActivityLogs />} />
+            <Route path="profile" element={<LazyPage><AdminProfile /></LazyPage>} />
+            <Route path="users" element={<LazyPage><Users /></LazyPage>} />
+            <Route path="roles" element={<LazyPage><Roles /></LazyPage>} />
+            <Route path="activity" element={<LazyPage><ActivityLogs /></LazyPage>} />
 
             {/* Settings */}
-            <Route path="settings" element={<Settings />} />
-            <Route path="settings/telegram" element={<Settings tab="telegram" />} />
-            <Route path="settings/delivery" element={<Settings tab="delivery" />} />
-            <Route path="settings/payment" element={<Settings tab="payment" />} />
-            <Route path="settings/print-logo" element={<Settings tab="printLogo" />} />
-            <Route path="settings/login-logo" element={<Settings tab="loginSplash" />} />
+            <Route path="settings" element={<LazyPage><Settings /></LazyPage>} />
+            <Route path="settings/telegram" element={<LazyPage><Settings tab="telegram" /></LazyPage>} />
+            <Route path="settings/delivery" element={<LazyPage><Settings tab="delivery" /></LazyPage>} />
+            <Route path="settings/payment" element={<LazyPage><Settings tab="payment" /></LazyPage>} />
+            <Route path="settings/print-logo" element={<LazyPage><Settings tab="printLogo" /></LazyPage>} />
+            <Route path="settings/login-logo" element={<LazyPage><Settings tab="loginSplash" /></LazyPage>} />
             <Route path="settings/login-splash" element={<Navigate to="/admin/settings/login-logo" replace />} />
           </Route>
 

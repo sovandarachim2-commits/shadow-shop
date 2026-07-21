@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, startTransition } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Minus, Plus, ShoppingCart, ArrowRight, ChevronLeft, TicketPercent, X } from 'lucide-react'
 import useCartStore from '@/store/cartStore'
@@ -77,7 +77,7 @@ export default function Cart() {
       navigate('/login', { state: { from: '/checkout' } })
       return
     }
-    navigate('/checkout')
+    startTransition(() => navigate('/checkout'))
   }
 
   const handleApplyPromo = async (event) => {
