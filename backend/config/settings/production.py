@@ -19,6 +19,27 @@ CSRF_TRUSTED_ORIGINS = [origin for origin in CSRF_TRUSTED_ORIGINS if origin]
 # Reuse DB connections between requests (big win on MySQL + gunicorn)
 DATABASES['default']['CONN_MAX_AGE'] = 60
 
+# Redis shared cache across gunicorn workers (install/start redis-server on OVH).
+# Falls back to local memory if Redis URL is empty.
+_redis_url = (REDIS_URL or '').strip()
+if _redis_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_url,
+            'KEY_PREFIX': 'shadow_shop',
+            'TIMEOUT': 60,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'shadow-shop',
+            'TIMEOUT': 60,
+        }
+    }
+
 DJANGO_LOG_FILE = config('DJANGO_LOG_FILE', default='')
 
 LOGGING = {

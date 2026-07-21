@@ -128,6 +128,11 @@ class Product(models.Model):
     class Meta:
         db_table = 'products'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['is_active', 'is_best_seller']),
+            models.Index(fields=['is_active', 'is_new_arrival']),
+            models.Index(fields=['is_active', 'is_featured']),
+        ]
 
     def __str__(self):
         return f"[{self.code}] {self.name}"

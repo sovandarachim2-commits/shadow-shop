@@ -28,8 +28,9 @@ const CATEGORY_SHORTCUTS = [
 ]
 
 const HOME_QUERY_OPTIONS = {
-  staleTime: 5 * 60 * 1000,
-  gcTime: 30 * 60 * 1000,
+  staleTime: 10 * 60 * 1000,
+  gcTime: 45 * 60 * 1000,
+  refetchOnMount: false,
 }
 
 function iconForCategory(name) {

@@ -27,6 +27,7 @@ const AUTH_FREE_PATHS = [
 const PUBLIC_GET_PREFIXES = [
   '/products/brands/',
   '/products/categories/',
+  '/products/home/',
   '/products/home-sections/',
   '/products/items/',
   '/products/reviews/',

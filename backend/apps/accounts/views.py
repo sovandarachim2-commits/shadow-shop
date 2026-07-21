@@ -845,6 +845,24 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return SiteSettings.get_solo()
 
+    def retrieve(self, request, *args, **kwargs):
+        from django.core.cache import cache
+        from utils.storefront_cache import SITE_SETTINGS_CACHE_KEY, SITE_SETTINGS_TTL
+
+        cached = cache.get(SITE_SETTINGS_CACHE_KEY)
+        if cached is not None:
+            return Response(cached)
+
+        instance = self.get_object()
+        data = self.get_serializer(instance).data
+        cache.set(SITE_SETTINGS_CACHE_KEY, data, SITE_SETTINGS_TTL)
+        return Response(data)
+
+    def perform_update(self, serializer):
+        from utils.storefront_cache import bump_storefront_cache
+        serializer.save()
+        bump_storefront_cache()
+
 
 class SiteSettingsManifestView(generics.GenericAPIView):
     permission_classes = [AllowAny]

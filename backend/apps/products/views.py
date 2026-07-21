@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
+from django.core.cache import cache
 from django.db.models import F, Q
 from django.utils import timezone
 from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
@@ -333,6 +334,12 @@ class HomeFeedView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from utils.storefront_cache import HOME_FEED_CACHE_KEY, HOME_FEED_TTL
+
+        cached = cache.get(HOME_FEED_CACHE_KEY)
+        if cached is not None:
+            return Response(cached)
+
         now = timezone.now()
         ctx = {'request': request}
         product_qs = Product.objects.filter(is_active=True).select_related(
@@ -348,7 +355,7 @@ class HomeFeedView(generics.GenericAPIView):
             Q(flash_sale_ends_at__isnull=True) | Q(flash_sale_ends_at__gte=now),
         )[:10]
 
-        return Response({
+        payload = {
             'banners': BannerSerializer(
                 Banner.objects.filter(is_active=True),
                 many=True,
@@ -375,4 +382,6 @@ class HomeFeedView(generics.GenericAPIView):
                 many=True,
                 context=ctx,
             ).data,
-        })
+        }
+        cache.set(HOME_FEED_CACHE_KEY, payload, HOME_FEED_TTL)
+        return Response(payload)
