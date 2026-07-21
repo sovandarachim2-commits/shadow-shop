@@ -206,11 +206,14 @@ bash deploy/deploy.sh
 ```env
 DEBUG=False
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+DJANGO_LOG_FILE=/var/log/shadow_shop/app.log
 CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://www.your-domain.com
 CORS_ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com
 FRONTEND_URL=https://your-domain.com
 BACKEND_URL=https://your-domain.com
 ```
+
+For Render/Railway/container deploys, leave `DJANGO_LOG_FILE` empty and read backend errors from the platform logs.
 
 Use the non-`www` domain as the canonical domain when configuring Telegram Login.
 The Nginx config redirects `www.your-domain.com` to `your-domain.com` so Telegram,

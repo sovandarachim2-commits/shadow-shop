@@ -16,6 +16,8 @@ CSRF_TRUSTED_ORIGINS = config(
 ).split(',')
 CSRF_TRUSTED_ORIGINS = [origin for origin in CSRF_TRUSTED_ORIGINS if origin]
 
+DJANGO_LOG_FILE = config('DJANGO_LOG_FILE', default='')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -26,16 +28,23 @@ LOGGING = {
         },
     },
     'handlers': {
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/var/log/shadow_shop/app.log',
-            'maxBytes': 1024 * 1024 * 10,
-            'backupCount': 5,
+        'console': {
+            'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
     },
     'root': {
-        'handlers': ['file'],
+        'handlers': ['console'],
         'level': 'WARNING',
     },
 }
+
+if DJANGO_LOG_FILE:
+    LOGGING['handlers']['file'] = {
+        'class': 'logging.handlers.RotatingFileHandler',
+        'filename': DJANGO_LOG_FILE,
+        'maxBytes': 1024 * 1024 * 10,
+        'backupCount': 5,
+        'formatter': 'verbose',
+    }
+    LOGGING['root']['handlers'].append('file')

@@ -6,8 +6,23 @@ pymysql.install_as_MySQLdb()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+
+def env_bool(name, default=False):
+    value = config(name, default=None)
+    if value is None or value == '':
+        return default
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {'1', 'true', 'yes', 'y', 'on'}:
+        return True
+    if normalized in {'0', 'false', 'no', 'n', 'off'}:
+        return False
+    return default
+
+
 SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-change-in-prod')
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = env_bool('DEBUG', default=True)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 DJANGO_APPS = [
@@ -119,7 +134,7 @@ R2_SECRET_ACCESS_KEY = config('R2_SECRET_ACCESS_KEY', default='')
 R2_BUCKET_NAME = config('R2_BUCKET_NAME', default='shadow-shop')
 R2_ENDPOINT_URL = config('R2_ENDPOINT_URL', default='')
 R2_PUBLIC_URL = config('R2_PUBLIC_URL', default='')
-USE_R2_STORAGE = config('USE_R2_STORAGE', default=False, cast=bool)
+USE_R2_STORAGE = env_bool('USE_R2_STORAGE', default=False)
 R2_PUBLIC_DOMAIN = urlparse(R2_PUBLIC_URL).netloc or urlparse(R2_PUBLIC_URL).path
 
 R2_CONFIGURED = all([
@@ -208,7 +223,7 @@ _EMAIL_BACKEND_DEFAULT = (
 EMAIL_BACKEND = config('EMAIL_BACKEND', default=_EMAIL_BACKEND_DEFAULT)
 EMAIL_HOST = config('EMAIL_HOST', default='localhost')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=True)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Shadow Shop <no-reply@shadowshop.local>')
@@ -216,7 +231,7 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Shadow Shop <no-reply
 # ABA PayWay
 ABA_PAYWAY_MERCHANT_ID = config('ABA_PAYWAY_MERCHANT_ID', default='')
 ABA_PAYWAY_API_KEY = config('ABA_PAYWAY_API_KEY', default='')
-ABA_PAYWAY_IS_SANDBOX = config('ABA_PAYWAY_IS_SANDBOX', default=True, cast=bool)
+ABA_PAYWAY_IS_SANDBOX = env_bool('ABA_PAYWAY_IS_SANDBOX', default=True)
 BACKEND_URL = config('BACKEND_URL', default='http://localhost:8000')
 
 # Bakong KHQR
@@ -226,7 +241,7 @@ BAKONG_MERCHANT_NAME = config('BAKONG_MERCHANT_NAME', default='Shadow Shop')
 BAKONG_MERCHANT_CITY = config('BAKONG_MERCHANT_CITY', default='Phnom Penh')
 BAKONG_CURRENCY = config('BAKONG_CURRENCY', default='USD').upper()
 BAKONG_EXPIRATION_MINUTES = config('BAKONG_EXPIRATION_MINUTES', default=5, cast=int)
-BAKONG_IS_TEST = config('BAKONG_IS_TEST', default=False, cast=bool)
+BAKONG_IS_TEST = env_bool('BAKONG_IS_TEST', default=False)
 BAKONG_CHECK_API_URL = config('BAKONG_CHECK_API_URL', default='')
 BAKONG_CHECK_TIMEOUT_SECONDS = config('BAKONG_CHECK_TIMEOUT_SECONDS', default=5, cast=float)
 
