@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, startTransition } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
@@ -524,14 +524,15 @@ export default function CustomerLayout() {
 
       {/* Back to Admin button — visible only to staff browsing the storefront */}
       {isStaff && (
-        <Link
-          to="/admin"
+        <button
+          type="button"
+          onClick={() => startTransition(() => navigate('/admin'))}
           className="fixed bottom-24 right-4 z-50 flex items-center gap-2 rounded-2xl bg-navy-800 px-4 py-2.5 text-xs font-bold text-white shadow-xl shadow-black/20 transition hover:bg-navy-700 active:scale-95 md:bottom-6"
           style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom))' }}
         >
           <LayoutDashboard size={15} />
           Back to Admin
-        </Link>
+        </button>
       )}
 
       {!hideMobileBottomNav && (

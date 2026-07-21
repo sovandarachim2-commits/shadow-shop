@@ -337,7 +337,17 @@ function AuthBootstrap() {
 }
 
 function LazyPage({ children }) {
-  return <Suspense fallback={null}>{children}</Suspense>
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center bg-white text-sm font-semibold text-gray-500">
+          Loading…
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  )
 }
 
 function ScrollToTop() {
@@ -439,7 +449,11 @@ export default function App() {
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
 
           {/* Customer App */}
-          <Route path="/" element={<RequireStorefront><CustomerLayout /></RequireStorefront>}>
+          <Route path="/" element={
+            <RequireStorefront>
+              <LazyPage><CustomerLayout /></LazyPage>
+            </RequireStorefront>
+          }>
             <Route index element={<Home />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="shop" element={<ProductList />} />
@@ -548,7 +562,7 @@ export default function App() {
           {/* Admin App */}
           <Route path="/admin" element={
             <RequireAuth adminOnly>
-              <AdminLayout />
+              <LazyPage><AdminLayout /></LazyPage>
             </RequireAuth>
           }>
             <Route index element={<AdminIndexRedirect />} />
