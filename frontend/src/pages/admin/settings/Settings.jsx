@@ -19,7 +19,7 @@ export default function Settings({ tab = 'general' }) {
 
   // ── General Settings ──────────────────────────────────────────────
   const [generalForm, setGeneralForm] = useState({
-    store_name: '', store_phone: '', store_address: '', currency: 'USD', timezone: 'Asia/Phnom_Penh',
+    store_name: '', store_phone: '', store_email: '', store_address: '', currency: 'USD', timezone: 'Asia/Phnom_Penh',
   })
   const [logoFile, setLogoFile] = useState(null)
   const [faviconFile, setFaviconFile] = useState(null)
@@ -46,6 +46,7 @@ export default function Settings({ tab = 'general' }) {
     setGeneralForm({
       store_name: siteSettings.store_name || '',
       store_phone: siteSettings.store_phone || '',
+      store_email: siteSettings.store_email || '',
       store_address: siteSettings.store_address || '',
       currency: siteSettings.currency || 'USD',
       timezone: siteSettings.timezone || 'Asia/Phnom_Penh',
@@ -67,6 +68,7 @@ export default function Settings({ tab = 'general' }) {
       const fd = new FormData()
       fd.append('store_name', generalForm.store_name)
       fd.append('store_phone', generalForm.store_phone)
+      fd.append('store_email', generalForm.store_email)
       fd.append('store_address', generalForm.store_address)
       fd.append('currency', generalForm.currency)
       fd.append('timezone', generalForm.timezone)
@@ -415,6 +417,19 @@ export default function Settings({ tab = 'general' }) {
                 <label className="label">Store Phone</label>
                 <input className="input-field" placeholder="+855 xx xxx xxxx" value={generalForm.store_phone}
                   onChange={(e) => setGeneralForm((f) => ({ ...f, store_phone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Store Email</label>
+                <input
+                  className="input-field"
+                  type="email"
+                  placeholder="no-reply-shadow-shop@dertinh.com"
+                  value={generalForm.store_email}
+                  onChange={(e) => setGeneralForm((f) => ({ ...f, store_email: e.target.value }))}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Webmail for the store profile. OTP emails use Store Name + this address, and show the Login Logo in the message.
+                </p>
               </div>
               <div>
                 <label className="label">Store Address</label>

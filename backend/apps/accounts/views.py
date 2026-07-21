@@ -37,19 +37,71 @@ def _verification_code():
     return ''.join(random.choice(string.digits) for _ in range(4))
 
 
+def _absolute_media_url(file_field):
+    if not file_field:
+        return None
+    url = file_field.url
+    if url.startswith(('http://', 'https://')):
+        return url
+    base = (getattr(settings, 'BACKEND_URL', None) or getattr(settings, 'FRONTEND_URL', None) or '').rstrip('/')
+    if not base:
+        return url
+    return f"{base}{url if url.startswith('/') else f'/{url}'}"
+
+
 def _send_email_verification(email, code):
-    store_name = SiteSettings.get_solo().store_name
+    from email.utils import formataddr
+    from django.utils.html import escape
+
+    site = SiteSettings.get_solo()
+    store_name = site.store_name or 'Shadow Shop'
     subject = f"{store_name} verification code"
     message = (
         f"Your {store_name} verification code is {code}.\n\n"
         "This code expires in 10 minutes. If you did not create an account, you can ignore this email."
     )
+    store_email = (site.store_email or '').strip()
+    if store_email:
+        from_email = formataddr((store_name, store_email))
+    else:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@localhost'
+
+    logo_url = _absolute_media_url(site.login_logo) or _absolute_media_url(site.logo)
+    safe_name = escape(store_name)
+    safe_code = escape(str(code))
+    logo_block = ''
+    if logo_url:
+        safe_logo = escape(logo_url)
+        logo_block = (
+            f'<div style="margin:0 0 20px;text-align:center">'
+            f'<img src="{safe_logo}" alt="{safe_name}" width="72" height="72" '
+            f'style="width:72px;height:72px;border-radius:50%;object-fit:cover;display:inline-block;border:2px solid #f3f4f6" />'
+            f'</div>'
+        )
+
+    html_message = f'''
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:440px;margin:0 auto;padding:28px 20px;color:#111827">
+      {logo_block}
+      <p style="margin:0 0 8px;font-size:18px;font-weight:700;text-align:center">{safe_name}</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#4b5563;text-align:center">
+        Your verification code is
+      </p>
+      <p style="margin:0 0 20px;font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;color:#db2777">
+        {safe_code}
+      </p>
+      <p style="margin:0;font-size:13px;line-height:1.5;color:#6b7280;text-align:center">
+        This code expires in 10 minutes. If you did not create an account, you can ignore this email.
+      </p>
+    </div>
+    '''
+
     send_mail(
         subject,
         message,
-        getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@localhost',
+        from_email,
         [email],
         fail_silently=False,
+        html_message=html_message,
     )
 
 

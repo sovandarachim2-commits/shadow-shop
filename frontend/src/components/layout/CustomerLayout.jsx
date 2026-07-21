@@ -142,6 +142,8 @@ export default function CustomerLayout() {
   })
   const logoUrl = siteSettings?.logo_url || null
   const storeName = siteSettings?.store_name || 'Shadow Shop'
+  const storePhone = siteSettings?.store_phone || ''
+  const storeEmail = siteSettings?.store_email || ''
 
   useEffect(() => {
     if (siteSettings?.favicon_url) {
@@ -468,6 +470,16 @@ export default function CustomerLayout() {
             <p className="mt-4 max-w-xs text-sm leading-6 text-slate-300">
               {t('footer.tagline')}
             </p>
+            {(storePhone || storeEmail) && (
+              <div className="mt-4 space-y-1.5 text-sm text-slate-300">
+                {storePhone ? <p>{storePhone}</p> : null}
+                {storeEmail ? (
+                  <a href={`mailto:${storeEmail}`} className="block transition hover:text-white">
+                    {storeEmail}
+                  </a>
+                ) : null}
+              </div>
+            )}
             <div className="mt-5 flex gap-3">
               {[Facebook, Instagram, Youtube].map((Icon, index) => (
                 <a key={index} href="#" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 transition hover:bg-white/10">

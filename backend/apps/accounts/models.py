@@ -262,6 +262,7 @@ class PendingRegistration(models.Model):
 class SiteSettings(models.Model):
     store_name = models.CharField(max_length=200, default='Shadow Shop')
     store_phone = models.CharField(max_length=50, blank=True)
+    store_email = models.EmailField(blank=True)
     store_address = models.TextField(blank=True)
     logo = models.ImageField(upload_to='site/', null=True, blank=True)
     favicon = models.ImageField(upload_to='site/', null=True, blank=True)
