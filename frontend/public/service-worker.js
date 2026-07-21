@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'shadow-shop-v5'
+const CACHE_VERSION = 'shadow-shop-v6'
 const APP_SHELL = [
   '/manifest.webmanifest',
   '/app-icon.svg',
@@ -26,6 +26,31 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+function cacheFirst(request) {
+  return caches.match(request).then((cached) => {
+    if (cached) return cached
+    return fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone()
+        caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy))
+      }
+      return response
+    })
+  })
+}
+
+function networkFirst(request, fallbackUrl) {
+  return fetch(request, { cache: 'no-store' })
+    .then((response) => {
+      if (response.ok) {
+        const copy = response.clone()
+        caches.open(CACHE_VERSION).then((cache) => cache.put(fallbackUrl || request, copy))
+      }
+      return response
+    })
+    .catch(() => caches.match(fallbackUrl || request))
+}
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
@@ -33,51 +58,23 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Hashed Vite assets: serve from cache immediately after first download
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(cacheFirst(event.request))
+    return
+  }
+
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      caches.match('/index.html').then((cached) => {
-        return fetch(event.request, { cache: 'no-store' })
-          .then((response) => {
-            if (response.ok) {
-              const copy = response.clone()
-              caches.open(CACHE_VERSION).then((cache) => cache.put('/index.html', copy))
-            }
-            return response
-          })
-          .catch(() => cached)
-      }),
-    )
+    event.respondWith(networkFirst(event.request, '/index.html'))
     return
   }
 
   if (['script', 'style'].includes(event.request.destination)) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        return fetch(event.request, { cache: 'no-store' }).then((response) => {
-          if (response.ok) {
-            const copy = response.clone()
-            caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy))
-          }
-          return response
-        }).catch(() => cached)
-      }),
-    )
+    event.respondWith(cacheFirst(event.request))
     return
   }
 
   if (['image', 'font'].includes(event.request.destination)) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached
-
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone()
-            caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy))
-          }
-          return response
-        })
-      }),
-    )
+    event.respondWith(cacheFirst(event.request))
   }
 })
