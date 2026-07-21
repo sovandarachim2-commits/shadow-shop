@@ -16,6 +16,9 @@ CSRF_TRUSTED_ORIGINS = config(
 ).split(',')
 CSRF_TRUSTED_ORIGINS = [origin for origin in CSRF_TRUSTED_ORIGINS if origin]
 
+# Reuse DB connections between requests (big win on MySQL + gunicorn)
+DATABASES['default']['CONN_MAX_AGE'] = 60
+
 DJANGO_LOG_FILE = config('DJANGO_LOG_FILE', default='')
 
 LOGGING = {

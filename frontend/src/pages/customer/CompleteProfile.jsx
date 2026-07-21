@@ -184,7 +184,7 @@ export default function CompleteProfile() {
 
         <form
           onSubmit={isPasswordStep ? handlePasswordSubmit : handleSubmit}
-          className="relative mx-auto flex w-full max-w-[620px] flex-1 flex-col bg-white px-5 py-6 sm:px-8 lg:max-w-none lg:px-16 lg:py-10 xl:px-20"
+          className="relative mx-auto flex w-full max-w-[620px] flex-1 flex-col bg-white px-5 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+0.75rem))] sm:px-8 lg:max-w-none lg:px-16 lg:py-10 xl:px-20"
         >
           <div className="flex items-center justify-between gap-3">
             <button
@@ -353,7 +353,6 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
         />
         <div className="text-center sm:text-left">
           <p className="text-base font-black text-[#1A1A1A]">Profile Photo</p>
-          <p className="mt-1 text-xs font-semibold text-[#6B7280]">JPG, PNG or WEBP. Max size 6MB.</p>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
