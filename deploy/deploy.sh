@@ -28,7 +28,12 @@ npm run build
 
 echo "6. Restarting services..."
 sudo systemctl restart shadow_shop
-sudo systemctl reload nginx
+sudo nginx -t
+if sudo systemctl is-active --quiet nginx; then
+    sudo systemctl reload nginx
+else
+    sudo systemctl start nginx
+fi
 
 echo "=== Deployment Complete ==="
 sudo systemctl status shadow_shop --no-pager
