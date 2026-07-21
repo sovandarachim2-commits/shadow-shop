@@ -620,7 +620,6 @@ export default function Profile() {
     })
     if (!ok) return
     await logout()
-    navigate('/login')
   }
 
   const handleMenuSelect = (item, fromMobile = false) => {
@@ -640,6 +639,18 @@ export default function Profile() {
     }
     setActiveView(item.view)
   }
+
+  const orderCounts = useMemo(() => {
+    const c = { pending: 0, preparing: 0, packed: 0, shipped: 0, completed: 0 }
+    accountOrders.forEach((o) => {
+      if (o.status === 'new' || o.status === 'pending') c.pending++
+      else if (o.status === 'printed' || o.status === 'preparing') c.preparing++
+      else if (o.status === 'packed') c.packed++
+      else if (o.status === 'shipped') c.shipped++
+      else if (o.status === 'completed') c.completed++
+    })
+    return c
+  }, [accountOrders])
 
   if (!user) {
     return (
@@ -667,18 +678,6 @@ export default function Profile() {
   const ptsToNext = rewardsSummary?.points_to_next_level ?? Math.max(0, nextTierPoints - rewardPoints)
   const progressPct = rewardsSummary?.progress_pct ?? Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
   const rewardRedemptions = rewardsSummary?.redemptions ?? []
-
-  const orderCounts = useMemo(() => {
-    const c = { pending: 0, preparing: 0, packed: 0, shipped: 0, completed: 0 }
-    accountOrders.forEach((o) => {
-      if (o.status === 'new' || o.status === 'pending') c.pending++
-      else if (o.status === 'printed' || o.status === 'preparing') c.preparing++
-      else if (o.status === 'packed') c.packed++
-      else if (o.status === 'shipped') c.shipped++
-      else if (o.status === 'completed') c.completed++
-    })
-    return c
-  }, [accountOrders])
 
   const mobileQuickActions = [
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },

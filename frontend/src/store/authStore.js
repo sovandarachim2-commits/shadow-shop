@@ -87,10 +87,12 @@ const useAuthStore = create(
         } catch {}
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
+        // Navigate first so Profile unmounts before auth state clears (avoids hook-order crash).
         if (window.location.pathname !== '/login') {
           window.location.replace('/login?signout=1')
+          return
         }
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
       },
 
       clearSession: () => {
