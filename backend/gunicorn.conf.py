@@ -2,9 +2,9 @@ import multiprocessing
 import os
 
 bind = "127.0.0.1:8000"
-# Cap workers on small VPS RAM; override with GUNICORN_WORKERS=N if needed
+# 2 vCPU / 4GB VPS: default to cpu*2+1 (5). Override with GUNICORN_WORKERS=N.
 _cpu_workers = multiprocessing.cpu_count() * 2 + 1
-workers = int(os.environ.get('GUNICORN_WORKERS', min(_cpu_workers, 3)))
+workers = int(os.environ.get('GUNICORN_WORKERS', _cpu_workers))
 worker_class = "sync"
 worker_connections = 1000
 timeout = 120
