@@ -286,40 +286,25 @@ export default function Home() {
   const desktopBannerDragRef = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false, blockClick: false })
   const refreshStart = useRef({ x: 0, y: 0 })
 
-  // ── Queries ────────────────────────────────────────────────────────────────
-  const { data: bannersData, refetch: refetchBanners } = useQuery({
-    queryKey: ['home-banners'],
-    queryFn: () => productsApi.banners.list({ is_active: true }).then((r) => r.data.results ?? r.data),
+  // ── Queries (one round-trip for OVH VPS home) ───────────────────────────────
+  const {
+    data: homeData,
+    isLoading: homeLoading,
+    refetch: refetchHome,
+  } = useQuery({
+    queryKey: ['home-feed'],
+    queryFn: () => productsApi.home.feed().then((r) => r.data),
     ...HOME_QUERY_OPTIONS,
   })
-  const { data: categoriesData, refetch: refetchCategories } = useQuery({
-    queryKey: ['categories-home'],
-    queryFn: () => productsApi.categories.list({ is_active: true }).then((r) => r.data.results || r.data),
-    ...HOME_QUERY_OPTIONS,
-  })
-  const { data: brandsData, refetch: refetchBrands } = useQuery({
-    queryKey: ['brands-home'],
-    queryFn: () => productsApi.brands.list({ is_active: true }).then((r) => r.data.results || r.data),
-    ...HOME_QUERY_OPTIONS,
-  })
-  const { data: bestSellerData, isLoading: bestLoading, refetch: refetchBestSellers } = useQuery({
-    queryKey: ['best-sellers'],
-    queryFn: () => productsApi.products.list({ is_best_seller: true, page_size: 12 }).then((r) => r.data.results),
-    ...HOME_QUERY_OPTIONS,
-  })
-  const { data: flashData, isLoading: flashLoading, refetch: refetchFlash } = useQuery({
-    queryKey: ['flash-sale'],
-    queryFn: () => productsApi.products.list({ active_flash_sale: true, page_size: 10 }).then((r) => r.data.results),
-    ...HOME_QUERY_OPTIONS,
-  })
-  const { data: newArrivalData, isLoading: newLoading, refetch: refetchNewArrivals } = useQuery({
-    queryKey: ['new-arrivals'],
-    queryFn: () => productsApi.products.list({ is_new_arrival: true, page_size: 12 }).then((r) => r.data.results),
-    ...HOME_QUERY_OPTIONS,
-  })
-  const showBestSkeleton = bestLoading && !bestSellerData
-  const showFlashSkeleton = flashLoading && !flashData
-  const showNewSkeleton = newLoading && !newArrivalData
+  const bannersData = homeData?.banners
+  const categoriesData = homeData?.categories
+  const brandsData = homeData?.brands
+  const bestSellerData = homeData?.best_sellers
+  const flashData = homeData?.flash_sale
+  const newArrivalData = homeData?.new_arrivals
+  const showBestSkeleton = homeLoading && !bestSellerData
+  const showFlashSkeleton = homeLoading && !flashData
+  const showNewSkeleton = homeLoading && !newArrivalData
   const banners = useMemo(() => bannersData || [], [bannersData])
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => brandsData || [], [brandsData])
@@ -476,10 +461,7 @@ export default function Home() {
     setIsRefreshing(true)
     setPullDistance(78)
     try {
-      await Promise.all([
-        refetchBanners(), refetchCategories(), refetchBrands(),
-        refetchBestSellers(), refetchNewArrivals(), refetchFlash(),
-      ])
+      await refetchHome()
     } finally {
       setTimeout(() => { setIsRefreshing(false); setIsPulling(false); setPullDistance(0) }, 350)
     }

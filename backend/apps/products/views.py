@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
@@ -15,7 +15,6 @@ from .serializers import (
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
 )
 from utils.permissions import IsAdminOrSuperAdmin, IsStaff
-
 
 class ProductFilter(filters.FilterSet):
     min_price = filters.NumberFilter(field_name='wholesale_price', lookup_expr='gte')
@@ -327,3 +326,53 @@ class BannerViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('is_active'):
             qs = qs.filter(is_active=True)
         return qs
+
+
+class HomeFeedView(generics.GenericAPIView):
+    """Single payload for the storefront home page (fewer round-trips on VPS)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        now = timezone.now()
+        ctx = {'request': request}
+        product_qs = Product.objects.filter(is_active=True).select_related(
+            'category', 'brand'
+        ).prefetch_related('images', 'stock')
+
+        flash_qs = product_qs.filter(
+            is_featured=True,
+            flash_sale_price__isnull=False,
+            flash_sale_price__lt=F('retail_price'),
+        ).filter(
+            Q(flash_sale_starts_at__isnull=True) | Q(flash_sale_starts_at__lte=now),
+            Q(flash_sale_ends_at__isnull=True) | Q(flash_sale_ends_at__gte=now),
+        )[:10]
+
+        return Response({
+            'banners': BannerSerializer(
+                Banner.objects.filter(is_active=True),
+                many=True,
+                context=ctx,
+            ).data,
+            'categories': CategorySerializer(
+                Category.objects.filter(is_active=True).prefetch_related('children'),
+                many=True,
+                context=ctx,
+            ).data,
+            'brands': BrandSerializer(
+                Brand.objects.filter(is_active=True),
+                many=True,
+                context=ctx,
+            ).data,
+            'best_sellers': ProductListSerializer(
+                product_qs.filter(is_best_seller=True)[:12],
+                many=True,
+                context=ctx,
+            ).data,
+            'flash_sale': ProductListSerializer(flash_qs, many=True, context=ctx).data,
+            'new_arrivals': ProductListSerializer(
+                product_qs.filter(is_new_arrival=True)[:12],
+                many=True,
+                context=ctx,
+            ).data,
+        })

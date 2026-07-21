@@ -73,4 +73,7 @@ export const productsApi = {
     update: (id, data) => client.patch(`/products/banners/${id}/`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
     delete: (id) => client.delete(`/products/banners/${id}/`),
   },
+  home: {
+    feed: () => client.get('/products/home/'),
+  },
 }
