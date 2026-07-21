@@ -1,10 +1,7 @@
-import { clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
 import { format, parseISO } from 'date-fns'
+import { cn } from './cn'
 
-export function cn(...inputs) {
-  return twMerge(clsx(inputs))
-}
+export { cn }
 
 export function formatCurrency(amount, currency = '$') {
   if (amount === null || amount === undefined) return `${currency}0.00`

@@ -68,7 +68,13 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'utils.performance.SlowRequestLoggingMiddleware',
 ]
+
+SLOW_REQUEST_THRESHOLD_SECONDS = float(config('SLOW_REQUEST_THRESHOLD_SECONDS', default='0.75'))
+SLOW_DB_THRESHOLD_SECONDS = float(config('SLOW_DB_THRESHOLD_SECONDS', default='0.4'))
+# DB execute wrapping adds overhead; enable only when diagnosing (or DEBUG).
+PERF_INSTRUMENT_DB = env_bool('PERF_INSTRUMENT_DB', default=DEBUG)
 
 ROOT_URLCONF = 'config.urls'
 

@@ -28,13 +28,16 @@ class TelegramService:
             'your-chat-id',
         }
 
-    def get_bot_username(self) -> str:
+    def get_bot_username(self, allow_remote: bool = True) -> str:
         if self.config and not self.is_placeholder(self.config.bot_username):
             return self.config.bot_username.strip().lstrip('@')
 
         env_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', '')
         if not self.is_placeholder(env_username):
             return env_username.strip().lstrip('@')
+
+        if not allow_remote:
+            return ''
 
         token = self.config.bot_token if self.config else getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
         if self.is_placeholder(token):

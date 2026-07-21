@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
-import { cn } from '@/utils/helpers'
+import { cn } from '@/utils/cn'
 
 function GoogleMark({ size = 18 }) {
   return (
@@ -346,6 +346,15 @@ export default function Login() {
     setNotice(null)
   }
 
+  const [socialConfigReady, setSocialConfigReady] = useState(false)
+
+  useEffect(() => {
+    const start = window.requestIdleCallback || ((cb) => window.setTimeout(cb, 180))
+    const cancel = window.cancelIdleCallback || window.clearTimeout
+    const id = start(() => setSocialConfigReady(true))
+    return () => cancel(id)
+  }, [])
+
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
@@ -355,13 +364,15 @@ export default function Login() {
   const { data: telegramConfig } = useQuery({
     queryKey: ['telegram-login-config'],
     queryFn: () => authApi.telegramConfig().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    enabled: socialConfigReady,
   })
 
   const { data: googleConfig } = useQuery({
     queryKey: ['google-login-config'],
     queryFn: () => authApi.googleConfig().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    enabled: socialConfigReady,
   })
 
   const storeName = siteSettings?.store_name || 'Shadow Shop'

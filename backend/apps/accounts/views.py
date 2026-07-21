@@ -351,13 +351,23 @@ class TelegramLoginConfigView(generics.GenericAPIView):
 
     def get(self, request):
         from apps.notifications.services import TelegramService
+        from utils.storefront_cache import safe_cache_get, safe_cache_set
+
+        cache_key = 'auth:telegram_login_config:v1'
+        cached = safe_cache_get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         telegram_service = TelegramService()
-        bot_username = telegram_service.get_bot_username()
+        # Never block login on live Telegram getMe (up to 8s).
+        bot_username = telegram_service.get_bot_username(allow_remote=False)
         bot_token = telegram_service.get_bot_token()
-        return Response({
+        payload = {
             'bot_username': bot_username,
             'configured': bool(bot_username and bot_token),
-        })
+        }
+        safe_cache_set(cache_key, payload, 120)
+        return Response(payload)
 
 
 class GoogleLoginConfigView(generics.GenericAPIView):
@@ -846,16 +856,15 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
         return SiteSettings.get_solo()
 
     def retrieve(self, request, *args, **kwargs):
-        from django.core.cache import cache
-        from utils.storefront_cache import SITE_SETTINGS_CACHE_KEY, SITE_SETTINGS_TTL
+        from utils.storefront_cache import SITE_SETTINGS_CACHE_KEY, SITE_SETTINGS_TTL, safe_cache_get, safe_cache_set
 
-        cached = cache.get(SITE_SETTINGS_CACHE_KEY)
+        cached = safe_cache_get(SITE_SETTINGS_CACHE_KEY)
         if cached is not None:
             return Response(cached)
 
         instance = self.get_object()
         data = self.get_serializer(instance).data
-        cache.set(SITE_SETTINGS_CACHE_KEY, data, SITE_SETTINGS_TTL)
+        safe_cache_set(SITE_SETTINGS_CACHE_KEY, data, SITE_SETTINGS_TTL)
         return Response(data)
 
     def perform_update(self, serializer):
@@ -868,10 +877,26 @@ class SiteSettingsManifestView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from utils.storefront_cache import safe_cache_get, safe_cache_set
+
+        cache_key = 'auth:site_manifest:v1'
+        cached = safe_cache_get(cache_key)
+        if cached is not None:
+            return JsonResponse(cached, content_type='application/manifest+json')
+
         site_settings = SiteSettings.get_solo()
         store_name = site_settings.store_name or 'Shadow Shop'
 
-        icon_src = request.build_absolute_uri('/api/auth/site-settings/favicon/')
+        icon_src = request.build_absolute_uri('/app-icon-512.png')
+        if site_settings.favicon:
+            icon_src = site_settings.favicon.url
+            if icon_src.startswith('/'):
+                icon_src = request.build_absolute_uri(icon_src)
+        elif site_settings.logo:
+            icon_src = site_settings.logo.url
+            if icon_src.startswith('/'):
+                icon_src = request.build_absolute_uri(icon_src)
+
         source_name = ''
         if site_settings.favicon:
             source_name = site_settings.favicon.name
@@ -881,7 +906,7 @@ class SiteSettingsManifestView(generics.GenericAPIView):
         icon_type = mimetypes.guess_type(source_name)[0] or 'image/png'
         icon_sizes = 'any' if icon_type == 'image/svg+xml' else '512x512'
 
-        return JsonResponse({
+        payload = {
             'name': store_name,
             'short_name': store_name[:12] or 'Shadow',
             'description': 'Beauty and lifestyle shopping app.',
@@ -907,16 +932,27 @@ class SiteSettingsManifestView(generics.GenericAPIView):
                     'purpose': 'any maskable',
                 },
             ],
-        }, content_type='application/manifest+json')
+        }
+        safe_cache_set(cache_key, payload, 300)
+        return JsonResponse(payload, content_type='application/manifest+json')
 
 
 class SiteSettingsFaviconView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from utils.storefront_cache import safe_cache_get, safe_cache_set
+
+        cache_key = 'auth:site_favicon_url:v1'
+        cached = safe_cache_get(cache_key)
+        if cached:
+            return HttpResponseRedirect(cached)
+
         site_settings = SiteSettings.get_solo()
+        target = '/app-icon-512.png'
         if site_settings.favicon:
-            return HttpResponseRedirect(site_settings.favicon.url)
-        if site_settings.logo:
-            return HttpResponseRedirect(site_settings.logo.url)
-        return HttpResponseRedirect('/app-icon-512.png')
+            target = site_settings.favicon.url
+        elif site_settings.logo:
+            target = site_settings.logo.url
+        safe_cache_set(cache_key, target, 300)
+        return HttpResponseRedirect(target)

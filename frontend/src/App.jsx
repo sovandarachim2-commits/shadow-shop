@@ -7,11 +7,8 @@ import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 
-// Layouts + critical first-paint pages (eager so refresh does not flash a full-page spinner)
-import AdminLayout from '@/components/layout/AdminLayout'
-import CustomerLayout from '@/components/layout/CustomerLayout'
+// Auth-critical first paint only. Layouts/home are lazy so /login stays light.
 import Login from '@/pages/Login'
-import Home from '@/pages/customer/Home'
 
 async function clearFrontendCaches() {
   if (!('caches' in window)) return
@@ -50,6 +47,10 @@ function lazyWithReload(importer) {
 function lazyNamedWithReload(importer, exportName) {
   return lazyWithReload(() => importer().then((module) => ({ default: module[exportName] })))
 }
+
+const AdminLayout = lazyWithReload(() => import('@/components/layout/AdminLayout'))
+const CustomerLayout = lazyWithReload(() => import('@/components/layout/CustomerLayout'))
+const Home = lazyWithReload(() => import('@/pages/customer/Home'))
 
 function getAppErrorMessage(error) {
   if (typeof error === 'string' && error.trim()) return error

@@ -6,8 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
-from django.core.cache import cache
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
 from .serializers import (
@@ -15,7 +14,16 @@ from .serializers import (
     ProductWriteSerializer, ProductImageSerializer, ProductSetImageSerializer, ProductSetSerializer,
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
 )
+from .flash_sale_stats import attach_flash_sale_stats
 from utils.permissions import IsAdminOrSuperAdmin, IsStaff
+from utils.storefront_cache import (
+    HOME_FEED_CACHE_KEY,
+    HOME_FEED_TTL,
+    product_list_cache_key,
+    safe_cache_get,
+    safe_cache_set,
+    PRODUCT_LIST_TTL,
+)
 
 class ProductFilter(filters.FilterSet):
     min_price = filters.NumberFilter(field_name='wholesale_price', lookup_expr='gte')
@@ -74,7 +82,14 @@ class ProductSetFilter(filters.FilterSet):
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all().prefetch_related('children')
+    queryset = Category.objects.all().prefetch_related('children').annotate(
+        annotated_children_count=Count('children', distinct=True),
+        annotated_products_count=Count(
+            'products',
+            filter=Q(products__is_active=True),
+            distinct=True,
+        ),
+    ).order_by('order', 'name')
     serializer_class = CategorySerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -89,13 +104,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def tree(self, request):
-        root_cats = Category.objects.filter(parent=None, is_active=True)
+        root_cats = self.get_queryset().filter(parent=None, is_active=True)
         serializer = self.get_serializer(root_cats, many=True)
         return Response(serializer.data)
 
 
 class BrandViewSet(viewsets.ModelViewSet):
-    queryset = Brand.objects.all()
+    queryset = Brand.objects.all().annotate(
+        annotated_products_count=Count(
+            'products',
+            filter=Q(products__is_active=True),
+            distinct=True,
+        ),
+    )
     serializer_class = BrandSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [SearchFilter, OrderingFilter]
@@ -138,6 +159,35 @@ class ProductViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
         return [IsAuthenticated(), IsAdminOrSuperAdmin()]
+
+    def list(self, request, *args, **kwargs):
+        cacheable = request.method == 'GET' and not request.user.is_authenticated
+        cache_key = None
+        if cacheable:
+            cache_key = product_list_cache_key(request.META.get('QUERY_STRING', ''))
+            cached = safe_cache_get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        products = list(page if page is not None else queryset)
+        attach_flash_sale_stats(products)
+        serializer = self.get_serializer(products, many=True)
+        if page is not None:
+            response = self.get_paginated_response(serializer.data)
+        else:
+            response = Response(serializer.data)
+
+        if cacheable and cache_key:
+            safe_cache_set(cache_key, response.data, PRODUCT_LIST_TTL)
+        return response
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        attach_flash_sale_stats([instance])
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upload_images(self, request, pk=None):
@@ -334,9 +384,7 @@ class HomeFeedView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        from utils.storefront_cache import HOME_FEED_CACHE_KEY, HOME_FEED_TTL
-
-        cached = cache.get(HOME_FEED_CACHE_KEY)
+        cached = safe_cache_get(HOME_FEED_CACHE_KEY)
         if cached is not None:
             return Response(cached)
 
@@ -346,14 +394,33 @@ class HomeFeedView(generics.GenericAPIView):
             'category', 'brand'
         ).prefetch_related('images', 'stock')
 
-        flash_qs = product_qs.filter(
+        flash_qs = list(product_qs.filter(
             is_featured=True,
             flash_sale_price__isnull=False,
             flash_sale_price__lt=F('retail_price'),
         ).filter(
             Q(flash_sale_starts_at__isnull=True) | Q(flash_sale_starts_at__lte=now),
             Q(flash_sale_ends_at__isnull=True) | Q(flash_sale_ends_at__gte=now),
-        )[:10]
+        )[:10])
+        best_sellers = list(product_qs.filter(is_best_seller=True)[:12])
+        new_arrivals = list(product_qs.filter(is_new_arrival=True)[:12])
+        attach_flash_sale_stats(flash_qs + best_sellers + new_arrivals)
+
+        categories = Category.objects.filter(is_active=True).prefetch_related('children').annotate(
+            annotated_children_count=Count('children', distinct=True),
+            annotated_products_count=Count(
+                'products',
+                filter=Q(products__is_active=True),
+                distinct=True,
+            ),
+        )
+        brands = Brand.objects.filter(is_active=True).annotate(
+            annotated_products_count=Count(
+                'products',
+                filter=Q(products__is_active=True),
+                distinct=True,
+            ),
+        )
 
         payload = {
             'banners': BannerSerializer(
@@ -361,27 +428,11 @@ class HomeFeedView(generics.GenericAPIView):
                 many=True,
                 context=ctx,
             ).data,
-            'categories': CategorySerializer(
-                Category.objects.filter(is_active=True).prefetch_related('children'),
-                many=True,
-                context=ctx,
-            ).data,
-            'brands': BrandSerializer(
-                Brand.objects.filter(is_active=True),
-                many=True,
-                context=ctx,
-            ).data,
-            'best_sellers': ProductListSerializer(
-                product_qs.filter(is_best_seller=True)[:12],
-                many=True,
-                context=ctx,
-            ).data,
+            'categories': CategorySerializer(categories, many=True, context=ctx).data,
+            'brands': BrandSerializer(brands, many=True, context=ctx).data,
+            'best_sellers': ProductListSerializer(best_sellers, many=True, context=ctx).data,
             'flash_sale': ProductListSerializer(flash_qs, many=True, context=ctx).data,
-            'new_arrivals': ProductListSerializer(
-                product_qs.filter(is_new_arrival=True)[:12],
-                many=True,
-                context=ctx,
-            ).data,
+            'new_arrivals': ProductListSerializer(new_arrivals, many=True, context=ctx).data,
         }
-        cache.set(HOME_FEED_CACHE_KEY, payload, HOME_FEED_TTL)
+        safe_cache_set(HOME_FEED_CACHE_KEY, payload, HOME_FEED_TTL)
         return Response(payload)

@@ -132,6 +132,8 @@ class Product(models.Model):
             models.Index(fields=['is_active', 'is_best_seller']),
             models.Index(fields=['is_active', 'is_new_arrival']),
             models.Index(fields=['is_active', 'is_featured']),
+            models.Index(fields=['is_active', 'category']),
+            models.Index(fields=['is_active', 'brand']),
         ]
 
     def __str__(self):

@@ -9,7 +9,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, OuterRef, Subquery, Sum, Q
 from django.contrib.auth import get_user_model
 from datetime import timedelta
 from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord, RewardItem, RewardRedemption, RewardSettings, PointTransaction
@@ -152,12 +152,16 @@ class OrderFilter(filters.FilterSet):
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().select_related(
-        'customer', 'seller', 'bakong_payment', 'aba_payment'
+        'customer', 'seller', 'bakong_payment', 'aba_payment', 'printed_by'
     ).prefetch_related(
         'items__product__images',
         'items__product_set',
         'items',
-        'status_history',
+        'status_history__changed_by',
+    ).annotate(
+        out_record_delivery_by=Subquery(
+            OutRecord.objects.filter(code=OuterRef('order_number')).values('delivery_by')[:1]
+        )
     ).order_by('-created_at')
     permission_classes = [IsAuthenticated, IsStaff]
     pagination_class = OrderPagination

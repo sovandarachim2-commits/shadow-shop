@@ -10,7 +10,8 @@ from apps.products.models import Product, ProductSet
 def resolve_product_image_url(product, request=None):
     if not product:
         return ''
-    img = product.images.filter(is_primary=True).first() or product.images.first()
+    images = list(product.images.all())
+    img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
     if img and img.image:
         if request and hasattr(request, 'build_absolute_uri'):
             return request.build_absolute_uri(img.image.url)
@@ -27,7 +28,8 @@ def resolve_product_set_image_url(product_set, request=None):
 
 
 def first_order_item_image(order, request=None):
-    first = order.items.first()
+    items = list(order.items.all())
+    first = items[0] if items else None
     if not first:
         return None
     if first.product_image:
@@ -41,7 +43,14 @@ def display_seller_name(order):
         return 'N/A'
     if seller.role == 'customer':
         from apps.accounts.models import SiteSettings
-        return SiteSettings.get_solo().store_name or 'Shadow Shop'
+        from utils.storefront_cache import STORE_NAME_CACHE_KEY, STORE_NAME_TTL, safe_cache_get, safe_cache_set
+
+        cached = safe_cache_get(STORE_NAME_CACHE_KEY)
+        if cached is not None:
+            return cached
+        name = SiteSettings.get_solo().store_name or 'Shadow Shop'
+        safe_cache_set(STORE_NAME_CACHE_KEY, name, STORE_NAME_TTL)
+        return name
     return seller.get_full_name() or seller.username
 
 
@@ -234,13 +243,20 @@ class OrderListSerializer(serializers.ModelSerializer):
         return display_seller_name(obj)
 
     def get_items_count(self, obj):
+        items = obj.items.all()
+        if hasattr(items, '_result_cache') and items._result_cache is not None:
+            return len(items._result_cache)
+        prefetched = getattr(obj, '_prefetched_objects_cache', {})
+        if 'items' in prefetched:
+            return len(prefetched['items'])
         return obj.items.count()
 
     def get_preview_image(self, obj):
         return first_order_item_image(obj, self.context.get('request'))
 
     def get_preview_name(self, obj):
-        first = obj.items.first()
+        items = list(obj.items.all())
+        first = items[0] if items else None
         return first.product_name if first else None
 
     def get_items_preview(self, obj):
@@ -309,6 +325,9 @@ class OrderListSerializer(serializers.ModelSerializer):
     def get_delivery_by(self, obj):
         if obj.out_delivery_by:
             return obj.out_delivery_by
+        annotated = getattr(obj, 'out_record_delivery_by', None)
+        if annotated is not None:
+            return annotated or ''
         out_record = OutRecord.objects.filter(code=obj.order_number).only('delivery_by').first()
         return out_record.delivery_by if out_record else ''
 

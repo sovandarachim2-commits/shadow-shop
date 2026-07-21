@@ -1,6 +1,7 @@
 from .base import *
 
 DEBUG = False
+PERF_INSTRUMENT_DB = env_bool('PERF_INSTRUMENT_DB', default=False)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -31,6 +32,8 @@ if _redis_url:
             'TIMEOUT': 60,
         }
     }
+    # Prefer cached DB sessions when Redis is available (less MySQL on every request).
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 else:
     CACHES = {
         'default': {
@@ -61,6 +64,13 @@ LOGGING = {
         'handlers': ['console'],
         'level': 'WARNING',
     },
+    'loggers': {
+        'shadow_shop.performance': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
 }
 
 if DJANGO_LOG_FILE:
@@ -72,3 +82,4 @@ if DJANGO_LOG_FILE:
         'formatter': 'verbose',
     }
     LOGGING['root']['handlers'].append('file')
+    LOGGING['loggers']['shadow_shop.performance']['handlers'].append('file')

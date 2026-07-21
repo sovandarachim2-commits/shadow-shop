@@ -14,9 +14,15 @@ class CategorySerializer(serializers.ModelSerializer):
         extra_kwargs = {'image': {'write_only': True, 'required': False}}
 
     def get_children_count(self, obj):
+        annotated = getattr(obj, 'annotated_children_count', None)
+        if annotated is not None:
+            return annotated
         return obj.children.count()
 
     def get_products_count(self, obj):
+        annotated = getattr(obj, 'annotated_products_count', None)
+        if annotated is not None:
+            return annotated
         return obj.products.filter(is_active=True).count()
 
     def get_image_url(self, obj):
@@ -44,6 +50,9 @@ class BrandSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_products_count(self, obj):
+        annotated = getattr(obj, 'annotated_products_count', None)
+        if annotated is not None:
+            return annotated
         return obj.products.filter(is_active=True).count()
 
     def get_logo_url(self, obj):
@@ -134,7 +143,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         return obj.retail_price if obj.is_flash_sale_active else None
 
     def _flash_sale_items(self, obj):
-        if not obj.flash_sale_price:
+        if not obj.flash_sale_price or not obj.is_flash_sale_active:
             return obj.order_items.none()
         qs = obj.order_items.filter(
             unit_price=obj.flash_sale_price,
@@ -147,9 +156,17 @@ class ProductListSerializer(serializers.ModelSerializer):
         return qs
 
     def get_flash_sale_order_count(self, obj):
+        if hasattr(obj, '_flash_sale_order_count'):
+            return obj._flash_sale_order_count
+        if not obj.is_flash_sale_active:
+            return 0
         return self._flash_sale_items(obj).values('order_id').distinct().count()
 
     def get_flash_sale_quantity_sold(self, obj):
+        if hasattr(obj, '_flash_sale_quantity_sold'):
+            return obj._flash_sale_quantity_sold
+        if not obj.is_flash_sale_active:
+            return 0
         return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
 
 
@@ -182,7 +199,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         return obj.retail_price if obj.is_flash_sale_active else None
 
     def _flash_sale_items(self, obj):
-        if not obj.flash_sale_price:
+        if not obj.flash_sale_price or not obj.is_flash_sale_active:
             return obj.order_items.none()
         qs = obj.order_items.filter(
             unit_price=obj.flash_sale_price,
@@ -195,9 +212,17 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         return qs
 
     def get_flash_sale_order_count(self, obj):
+        if hasattr(obj, '_flash_sale_order_count'):
+            return obj._flash_sale_order_count
+        if not obj.is_flash_sale_active:
+            return 0
         return self._flash_sale_items(obj).values('order_id').distinct().count()
 
     def get_flash_sale_quantity_sold(self, obj):
+        if hasattr(obj, '_flash_sale_quantity_sold'):
+            return obj._flash_sale_quantity_sold
+        if not obj.is_flash_sale_active:
+            return 0
         return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
 
 
