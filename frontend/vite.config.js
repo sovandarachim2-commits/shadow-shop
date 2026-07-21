@@ -13,7 +13,7 @@ export default defineConfig({
     target: 'es2018',
     cssCodeSplit: true,
     sourcemap: false,
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
         manualChunks: {
