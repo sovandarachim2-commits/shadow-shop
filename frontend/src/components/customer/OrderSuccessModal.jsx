@@ -9,6 +9,8 @@ export default function OrderSuccessModal({
   description,
   trackLabel,
   variant = 'success',
+  secondaryLabel,
+  onSecondary,
 }) {
   const { t } = useTranslation()
 
@@ -33,10 +35,20 @@ export default function OrderSuccessModal({
           {description || t('orders.orderPlaced')}
         </p>
 
+        {secondaryLabel && onSecondary && (
+          <button
+            type="button"
+            onClick={onSecondary}
+            className="mt-8 w-full rounded-full bg-[#229ED9] py-4 text-sm font-bold text-white transition active:scale-[0.98]"
+          >
+            {secondaryLabel}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onTrack}
-          className="mt-8 w-full rounded-full bg-gray-950 py-4 text-sm font-bold text-white transition active:scale-[0.98]"
+          className={`${secondaryLabel && onSecondary ? 'mt-3' : 'mt-8'} w-full rounded-full bg-gray-950 py-4 text-sm font-bold text-white transition active:scale-[0.98]`}
         >
           {trackLabel || t('orders.trackYourOrder')}
         </button>

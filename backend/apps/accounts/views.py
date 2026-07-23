@@ -664,38 +664,86 @@ class TelegramWebhookView(generics.GenericAPIView):
             return Response({'ok': True})
 
         message = request.data.get('message') or {}
-        text = message.get('text', '')
+        text = str(message.get('text') or '').strip()
         chat = message.get('chat') or {}
         user = message.get('from') or {}
 
-        if not text.startswith('/start verify_'):
+        if not text.startswith('/start'):
             return Response({'ok': True})
-
-        token = text.replace('/start verify_', '', 1).strip()
-        verification = TelegramVerification.objects.filter(token=token).first()
-        if not verification or verification.is_expired:
-            return Response({'ok': True})
-
-        otp = ''.join(random.choice(string.digits) for _ in range(6))
-        verification.telegram_chat_id = str(chat.get('id', ''))
-        verification.telegram_user_id = str(user.get('id', ''))
-        verification.telegram_username = user.get('username', '') or ''
-        verification.otp_code = otp
-        verification.save(update_fields=[
-            'telegram_chat_id', 'telegram_user_id', 'telegram_username', 'otp_code'
-        ])
 
         from apps.notifications.services import TelegramService
-        TelegramService().send_message(
-            (
-                f"<b>Shadow Shop verification</b>\n"
-                f"Phone: <code>{verification.phone}</code>\n"
-                f"Your OTP code is: <b>{otp}</b>\n\n"
-                f"If you did not request this, ignore this message."
-            ),
-            event_type='telegram_otp',
-            chat_id=verification.telegram_chat_id,
-        )
+        service = TelegramService()
+
+        # Phone OTP verification deep link: /start verify_<token>
+        if text.startswith('/start verify_'):
+            token = text.replace('/start verify_', '', 1).strip()
+            verification = TelegramVerification.objects.filter(token=token).first()
+            if not verification or verification.is_expired:
+                return Response({'ok': True})
+
+            otp = ''.join(random.choice(string.digits) for _ in range(6))
+            verification.telegram_chat_id = str(chat.get('id', ''))
+            verification.telegram_user_id = str(user.get('id', ''))
+            verification.telegram_username = user.get('username', '') or ''
+            verification.otp_code = otp
+            verification.save(update_fields=[
+                'telegram_chat_id', 'telegram_user_id', 'telegram_username', 'otp_code'
+            ])
+
+            # Also link this Telegram user to a shop account when possible.
+            tg_id = str(user.get('id') or '').strip()
+            if tg_id:
+                shop_user = User.objects.filter(telegram_id=tg_id).first()
+                if shop_user and user.get('username'):
+                    shop_user.telegram_username = user.get('username') or shop_user.telegram_username
+                    shop_user.save(update_fields=['telegram_username'])
+
+            service.send_message(
+                (
+                    f"<b>Shadow Shop verification</b>\n"
+                    f"Phone: <code>{verification.phone}</code>\n"
+                    f"Your OTP code is: <b>{otp}</b>\n\n"
+                    f"If you did not request this, ignore this message."
+                ),
+                event_type='telegram_otp',
+                chat_id=verification.telegram_chat_id,
+                disable_web_page_preview=True,
+            )
+            return Response({'ok': True})
+
+        # Plain /start — required so the bot can later DM order confirmations privately.
+        tg_id = str(user.get('id') or '').strip()
+        chat_id = str(chat.get('id') or '').strip()
+        if not tg_id or not chat_id or str(chat_id).startswith('-'):
+            return Response({'ok': True})
+
+        shop_user = User.objects.filter(telegram_id=tg_id).first()
+        if shop_user:
+            if user.get('username') and shop_user.telegram_username != user.get('username'):
+                shop_user.telegram_username = user.get('username') or ''
+                shop_user.save(update_fields=['telegram_username'])
+            service.send_message(
+                (
+                    "✅ <b>Shadow Shop bot is ready</b>\n\n"
+                    "You will receive private messages here when sales confirms your Contact Sales order.\n\n"
+                    "សូមរង់ចាំ — នៅពេលផ្នែកលក់បញ្ជាក់ការបញ្ជាទិញ "
+                    "អ្នកនឹងទទួលសារឯកជននៅក្នុងជជែកនេះ។"
+                ),
+                event_type='telegram_start_linked',
+                chat_id=chat_id,
+                disable_web_page_preview=True,
+            )
+        else:
+            service.send_message(
+                (
+                    "👋 <b>Welcome to Shadow Shop</b>\n\n"
+                    "Please log in with Telegram on the Shadow Shop website first, "
+                    "then press /start again to receive private order updates."
+                ),
+                event_type='telegram_start_unlinked',
+                chat_id=chat_id,
+                disable_web_page_preview=True,
+            )
         return Response({'ok': True})
 
 

@@ -476,14 +476,20 @@ class TelegramService:
         )
 
     def _get_customer_telegram_id(self, order) -> str:
+        """Return private Telegram chat id for the customer (never a group id)."""
         customer = order.customer
         user = getattr(customer, 'user', None)
+        telegram_id = ''
         if user and getattr(user, 'telegram_id', None):
-            return str(user.telegram_id).strip()
-        seller = getattr(order, 'seller', None)
-        if seller and getattr(seller, 'role', '') == 'customer' and getattr(seller, 'telegram_id', None):
-            return str(seller.telegram_id).strip()
-        return ''
+            telegram_id = str(user.telegram_id).strip()
+        else:
+            seller = getattr(order, 'seller', None)
+            if seller and getattr(seller, 'role', '') == 'customer' and getattr(seller, 'telegram_id', None):
+                telegram_id = str(seller.telegram_id).strip()
+        # Group/supergroup chat ids are negative — never use those for customer DMs.
+        if not telegram_id or telegram_id.startswith('-'):
+            return ''
+        return telegram_id
 
     def _contact_sales_customer_message(self, order, action: str) -> str:
         customer_name = escape(order.customer.name or 'អតិថិជន')
@@ -534,7 +540,7 @@ class TelegramService:
         return '\n'.join(lines)
 
     def notify_contact_sales_customer(self, order, action: str, group_chat_id=None) -> bool:
-        """Send confirm/cancel notice as a private bot DM to the customer only."""
+        """Private bot DM only after sales confirm/cancel. Never posts this text to a group."""
         if action not in {'confirm', 'cancel'}:
             return False
         if not self.config:
@@ -544,6 +550,11 @@ class TelegramService:
 
         telegram_id = self._get_customer_telegram_id(order)
         if not telegram_id:
+            logger.info(
+                'Contact sales %s: skip private DM for order %s (customer has no linked Telegram)',
+                action,
+                getattr(order, 'order_number', order.pk),
+            )
             return False
 
         return self.send_message(

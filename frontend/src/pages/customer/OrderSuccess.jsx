@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, QrCode } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
+import { authApi } from '@/api/auth'
 import { formatCurrency } from '@/utils/helpers'
 import { useTranslation } from 'react-i18next'
 import useCartStore from '@/store/cartStore'
@@ -73,6 +74,14 @@ export default function OrderSuccess() {
   const isBakongExpired = bakongPayment?.status === 'expired'
   const trackPath = (order?.id || resolvedOrderId) ? `/my-orders/${order?.id || resolvedOrderId}` : '/my-orders'
 
+  const { data: telegramConfig } = useQuery({
+    queryKey: ['telegram-public-config'],
+    queryFn: () => authApi.telegramConfig().then((r) => r.data),
+    enabled: isContactSales,
+  })
+  const botUsername = String(telegramConfig?.bot_username || '').replace('@', '').trim()
+  const botStartUrl = botUsername ? `https://t.me/${botUsername}?start=notify` : ''
+
   useEffect(() => {
     if (!paid) return
     localStorage.removeItem(PENDING_PAYMENT_KEY)
@@ -125,6 +134,8 @@ export default function OrderSuccess() {
           trackLabel={t('orders.viewOrderStatus')}
           onTrack={() => navigate(trackPath)}
           onBack={() => navigate('/shop')}
+          secondaryLabel={botStartUrl ? t('orders.startBotForUpdates') : undefined}
+          onSecondary={botStartUrl ? () => window.open(botStartUrl, '_blank', 'noopener,noreferrer') : undefined}
         />
       </div>
     )
