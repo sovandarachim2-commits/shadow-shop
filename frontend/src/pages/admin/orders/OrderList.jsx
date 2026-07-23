@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, Filter, RefreshCw, Pencil, Package, X, Printer, Clock, Check, Truck } from 'lucide-react'
+import { Plus, Eye, Filter, RefreshCw, Pencil, Package, X, Printer, Clock, Check, Truck, DollarSign, CreditCard } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Badge, OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { ordersApi } from '@/api/orders'
+import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import NewOrder from './NewOrder'
 import { EditOrderModal } from './OrderDetail'
@@ -35,6 +36,32 @@ const STATUS_FLOW = [
   { key: 'completed', label: 'Completed', icon: Check },
 ]
 
+const PAYMENT_METHOD_LABELS = {
+  bakong: 'Bakong KHQR',
+  aba: 'ABA Bank',
+  acleda: 'ACLEDA Bank',
+  wing: 'Wing',
+  cod: 'Cash on Delivery',
+  cash: 'Cash',
+  contact_sales: 'Contact Sales',
+  other: 'Other',
+}
+
+const PAYMENT_METHOD_OPTIONS = [
+  'cash',
+  'aba',
+  'bakong',
+  'acleda',
+  'wing',
+  'cod',
+  'contact_sales',
+  'other',
+]
+
+function paymentMethodLabel(method) {
+  return PAYMENT_METHOD_LABELS[method] || method || '-'
+}
+
 export default function OrderList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -46,6 +73,8 @@ export default function OrderList() {
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
+  const [payOrder, setPayOrder] = useState(null)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash')
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['orders', search, status, paymentStatus, page, pageSize],
@@ -64,10 +93,16 @@ export default function OrderList() {
     enabled: !!(viewOrder?.id || editOrder?.id),
   })
 
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+  })
+
   const orders = data?.results || []
   const total = data?.count || 0
   const popupOrder = detailOrder || viewOrder
   const popupStatusIndex = popupOrder ? STATUS_FLOW.findIndex((s) => s.key === popupOrder.status) : -1
+  const paymentLogoUrls = siteSettings?.payment_methods?.logo_urls || {}
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }) => ordersApi.orders.updateStatus(id, { status }),
@@ -77,6 +112,19 @@ export default function OrderList() {
       toast.success('Status updated')
     },
     onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to update status'),
+  })
+
+  const markPaidMutation = useMutation({
+    mutationFn: ({ order, paymentMethod }) => ordersApi.orders.markPaid(order.id, {
+      payment_method: paymentMethod,
+    }),
+    onSuccess: (_, { order }) => {
+      queryClient.invalidateQueries({ queryKey: ['order', order.id] })
+      setPayOrder(null)
+      refetch()
+      toast.success('Payment recorded')
+    },
+    onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to mark order as paid'),
   })
 
   return (
@@ -127,7 +175,8 @@ export default function OrderList() {
               <Th>Seller</Th>
               <Th>Print Status</Th>
               <Th>Amount</Th>
-              <Th>Payment</Th>
+              <Th>Payment Method</Th>
+              <Th>Payment Status</Th>
               <Th>Status</Th>
               <Th>Delivery By</Th>
               <Th>Date</Th>
@@ -135,7 +184,7 @@ export default function OrderList() {
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={12} />}
+            {isLoading && <LoadingRows cols={13} />}
             {!isLoading && orders.map((order, index) => (
               <Tr key={order.id} onClick={() => navigate(`/admin/orders/${order.id}`)}>
                 <Td><span className="text-sm font-semibold text-gray-500">{(page - 1) * pageSize + index + 1}</span></Td>
@@ -156,12 +205,39 @@ export default function OrderList() {
                   )}
                 </Td>
                 <Td><span className="font-semibold">{formatCurrency(order.grand_total)}</span></Td>
+                <Td>
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                    {paymentLogoUrls[order.payment_method] && (
+                      <img
+                        src={paymentLogoUrls[order.payment_method]}
+                        alt=""
+                        className="h-4 w-4 rounded-full object-contain"
+                      />
+                    )}
+                    {paymentMethodLabel(order.payment_method)}
+                  </span>
+                </Td>
                 <Td><PaymentStatusBadge status={order.payment_status} /></Td>
                 <Td><OrderStatusBadge status={order.status} /></Td>
                 <Td><span className="text-sm text-gray-600">{order.delivery_by || order.out_delivery_by || '-'}</span></Td>
                 <Td><span className="text-xs text-gray-500">{formatDateTime(order.created_at)}</span></Td>
                 <Td>
                   <div className="flex items-center gap-1.5">
+                    {order.payment_status !== 'paid' && (
+                      <button
+                        type="button"
+                        disabled={markPaidMutation.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedPaymentMethod(order.payment_method || 'cash')
+                          setPayOrder(order)
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 transition-colors hover:border-green-300 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <DollarSign size={14} />
+                        Mark Paid
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -189,7 +265,7 @@ export default function OrderList() {
               </Tr>
             ))}
             {!isLoading && orders.length === 0 && (
-              <tr><td colSpan={12}><EmptyState message="No orders found" icon={Filter} /></td></tr>
+              <tr><td colSpan={13}><EmptyState message="No orders found" icon={Filter} /></td></tr>
             )}
           </Tbody>
         </Table>
@@ -439,6 +515,73 @@ export default function OrderList() {
             navigate(`/admin/orders/${order.id}`)
           }}
         />
+      </Modal>
+
+      <Modal
+        isOpen={!!payOrder}
+        onClose={() => {
+          if (!markPaidMutation.isPending) setPayOrder(null)
+        }}
+        title="Mark Order As Paid"
+        size="sm"
+      >
+        {payOrder && (
+          <div className="space-y-5 p-6">
+            <div className="rounded-xl bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Order</p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span className="font-mono text-sm font-bold text-purple-700">#{payOrder.order_number}</span>
+                <span className="text-sm font-black text-gray-950">{formatCurrency(payOrder.grand_total)}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Payment Method</label>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                  {paymentLogoUrls[selectedPaymentMethod] ? (
+                    <img
+                      src={paymentLogoUrls[selectedPaymentMethod]}
+                      alt={`${paymentMethodLabel(selectedPaymentMethod)} logo`}
+                      className="h-full w-full object-contain p-1.5"
+                    />
+                  ) : (
+                    <CreditCard size={18} className="text-gray-400" />
+                  )}
+                </div>
+                <select
+                  className="select-field"
+                  value={selectedPaymentMethod}
+                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                >
+                  {PAYMENT_METHOD_OPTIONS.map((method) => (
+                    <option key={method} value={method}>{paymentMethodLabel(method)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setPayOrder(null)}
+                disabled={markPaidMutation.isPending}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => markPaidMutation.mutate({ order: payOrder, paymentMethod: selectedPaymentMethod })}
+                disabled={markPaidMutation.isPending || !selectedPaymentMethod}
+                className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-60"
+              >
+                <DollarSign size={16} />
+                {markPaidMutation.isPending ? 'Saving...' : 'Mark Paid'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

@@ -19,6 +19,35 @@ const PRINT_TYPES = [
 ]
 
 const USD_TO_KHR_RATE = 4100
+const PAYMENT_METHOD_LABELS = {
+  bakong: 'Bakong KHQR',
+  aba: 'ABA Bank',
+  acleda: 'ACLEDA Bank',
+  wing: 'Wing',
+  cod: 'Cash on Delivery',
+  cash: 'Cash',
+  contact_sales: 'Contact Sales',
+  other: 'Other',
+}
+
+function paymentMethodLabel(method) {
+  return PAYMENT_METHOD_LABELS[method] || method || '-'
+}
+
+function PaymentMethodCell({ method, logoUrls = {} }) {
+  const logoUrl = logoUrls[method]
+
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+      {logoUrl && <img src={logoUrl} alt="" className="h-4 w-4 rounded-full object-contain" />}
+      {paymentMethodLabel(method)}
+    </span>
+  )
+}
+
+function isUnpaidContactSalesOrder(order) {
+  return order?.payment_method === 'contact_sales' && order?.payment_status !== 'paid'
+}
 
 function StockAlertCard({ alert, onClose }) {
   if (!alert?.issues?.length) return null
@@ -435,6 +464,7 @@ export default function PrintCenter() {
   const printLogoUrl = siteSettings?.print_logo_url || null
   const printLogoSize = siteSettings?.print_logo_size || 64
   const printQrSize = siteSettings?.print_qr_size || 68
+  const paymentLogoUrls = siteSettings?.payment_methods?.logo_urls || {}
 
   const { data: orderDetail, isLoading: isPreviewLoading, isFetching: isPreviewFetching } = useQuery({
     queryKey: ['order-detail', previewOrder?.id],
@@ -454,9 +484,15 @@ export default function PrintCenter() {
   ))
   const isLoadingPrintDetails = selectedOrderDetails.some((query) => query.isLoading || query.isFetching)
 
-  const toggleOrder = (id) => {
+  const printableOrders = (data || []).filter((order) => !isUnpaidContactSalesOrder(order))
+
+  const toggleOrder = (order) => {
+    if (isUnpaidContactSalesOrder(order)) {
+      toast.error('Contact Sales order must be paid before printing')
+      return
+    }
     setSelectedOrders((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+      prev.includes(order.id) ? prev.filter((i) => i !== order.id) : [...prev, order.id]
     )
   }
 
@@ -479,6 +515,12 @@ export default function PrintCenter() {
     }
     if (isLoadingPrintDetails) {
       toast.error('Preparing order details, please try again in a moment')
+      return
+    }
+    const blockedOrder = selectedOrderRows.find(isUnpaidContactSalesOrder)
+    if (blockedOrder) {
+      setSelectedOrders((prev) => prev.filter((id) => id !== blockedOrder.id))
+      toast.error(`Order #${blockedOrder.order_number} must be paid before printing`)
       return
     }
     setCheckingStock(true)
@@ -543,7 +585,7 @@ export default function PrintCenter() {
                 <p className="mt-1 text-xs text-gray-400">Select orders from this list, then print the chosen document type.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => setSelectedOrders((data || []).map((o) => o.id))} className="rounded-lg px-2 py-1 text-xs font-semibold text-purple-600 hover:bg-purple-50">Select All</button>
+                <button onClick={() => setSelectedOrders(printableOrders.map((o) => o.id))} className="rounded-lg px-2 py-1 text-xs font-semibold text-purple-600 hover:bg-purple-50">Select All</button>
                 <button onClick={() => setSelectedOrders([])} className="rounded-lg px-2 py-1 text-xs font-semibold text-gray-400 hover:bg-gray-50">Clear</button>
                 <button
                   onClick={handlePrint}
@@ -573,30 +615,33 @@ export default function PrintCenter() {
                       <Th>Customer</Th>
                       <Th>Phone</Th>
                       <Th>Seller</Th>
+                      <Th>Payment Method</Th>
                       <Th>Status Payment</Th>
                       <Th>Total</Th>
                       <Th>View</Th>
                     </tr>
                   </Thead>
                   <Tbody>
-                    {isLoading && <LoadingRows cols={10} rows={5} />}
+                    {isLoading && <LoadingRows cols={11} rows={5} />}
                     {!isLoading && (data || []).map((order, index) => {
                       const selected = selectedOrders.includes(order.id)
+                      const blockedContactSales = isUnpaidContactSalesOrder(order)
 
                       return (
                         <Tr
                           key={order.id}
-                          onClick={() => toggleOrder(order.id)}
-                          className={selected ? 'bg-purple-50' : ''}
+                          onClick={() => toggleOrder(order)}
+                          className={blockedContactSales ? 'bg-red-50 hover:bg-red-50' : selected ? 'bg-purple-50' : ''}
                         >
                           <Td>
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
                                 checked={selected}
-                                onChange={() => toggleOrder(order.id)}
+                                disabled={blockedContactSales}
+                                onChange={() => toggleOrder(order)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="h-4 w-4 accent-purple-600"
+                                className="h-4 w-4 accent-purple-600 disabled:cursor-not-allowed disabled:opacity-40"
                               />
                               <span className="text-sm font-semibold text-gray-500">{index + 1}</span>
                             </div>
@@ -613,7 +658,17 @@ export default function PrintCenter() {
                           </Td>
                           <Td><span className="text-sm text-gray-500">{order.customer_phone || '-'}</span></Td>
                           <Td><span className="text-sm text-gray-700">{order.seller_name}</span></Td>
-                          <Td><PaymentStatusBadge status={order.payment_status} /></Td>
+                          <Td><PaymentMethodCell method={order.payment_method} logoUrls={paymentLogoUrls} /></Td>
+                          <Td>
+                            <div className="flex flex-col items-start gap-1">
+                              <PaymentStatusBadge status={order.payment_status} />
+                              {blockedContactSales && (
+                                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-700">
+                                  Cannot print
+                                </span>
+                              )}
+                            </div>
+                          </Td>
                           <Td><span className="text-sm font-semibold text-gray-900">{formatCurrency(order.grand_total)}</span></Td>
                           <Td>
                             <button
@@ -628,7 +683,7 @@ export default function PrintCenter() {
                       )
                     })}
                     {!isLoading && (!data || data.length === 0) && (
-                      <tr><td colSpan={10}><EmptyState message="No unprinted orders found" /></td></tr>
+                      <tr><td colSpan={11}><EmptyState message="No unprinted orders found" /></td></tr>
                     )}
                   </Tbody>
                 </Table>
@@ -713,6 +768,7 @@ export function PrintHistory() {
   const printLogoUrl = siteSettings?.print_logo_url || null
   const printLogoSize = siteSettings?.print_logo_size || 64
   const printQrSize = siteSettings?.print_qr_size || 68
+  const paymentLogoUrls = siteSettings?.payment_methods?.logo_urls || {}
 
   const openReprint = (orderId) => {
     window.open(`/admin/print-preview?type=${printType}&ids=${orderId}`, '_blank', 'noopener,noreferrer')
@@ -765,11 +821,12 @@ export function PrintHistory() {
                   <Th>Customer</Th>
                   <Th>Seller</Th>
                   <Th>Cashier</Th>
+                  <Th>Payment Method</Th>
                   <Th>Actions</Th>
                 </tr>
               </Thead>
               <Tbody>
-                {isLoading && <LoadingRows cols={7} rows={6} />}
+                {isLoading && <LoadingRows cols={8} rows={6} />}
                 {!isLoading && (data || []).map((order, index) => (
                   <Tr key={order.id}>
                     <Td>
@@ -780,6 +837,7 @@ export function PrintHistory() {
                     <Td><span className="text-sm font-medium text-gray-900">{order.customer_name}</span></Td>
                     <Td><span className="text-sm text-gray-700">{order.seller_name}</span></Td>
                     <Td><span className="text-sm text-gray-700">{order.printed_by_name || '-'}</span></Td>
+                    <Td><PaymentMethodCell method={order.payment_method} logoUrls={paymentLogoUrls} /></Td>
                     <Td>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -802,7 +860,7 @@ export function PrintHistory() {
                   </Tr>
                 ))}
                 {!isLoading && (!data || data.length === 0) && (
-                  <tr><td colSpan={7}><EmptyState message="No print history found" /></td></tr>
+                  <tr><td colSpan={8}><EmptyState message="No print history found" /></td></tr>
                 )}
               </Tbody>
             </Table>

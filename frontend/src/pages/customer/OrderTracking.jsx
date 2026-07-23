@@ -18,6 +18,7 @@ import {
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 import { ordersApi } from '@/api/orders'
+import { authApi } from '@/api/auth'
 import { useTranslation } from 'react-i18next'
 
 const STATUS_STYLES = {
@@ -91,6 +92,22 @@ function SummaryLine({ label, value, success = false }) {
   )
 }
 
+function paymentMethodBadge(method, label) {
+  if (method === 'contact_sales') return 'Sale'
+  if (method === 'aba') return 'ABA'
+  if (method === 'bakong') return 'KHQR'
+  return label.slice(0, 4)
+}
+
+function normalizeTelegramUrl(value = '') {
+  const clean = String(value || '').trim()
+  if (!clean) return ''
+  if (clean.startsWith('@')) return `https://t.me/${clean.slice(1)}`
+  if (/^t\.me\//i.test(clean)) return `https://${clean}`
+  if (/^telegram\.me\//i.test(clean)) return `https://${clean}`
+  return clean
+}
+
 export default function OrderTracking() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -100,6 +117,11 @@ export default function OrderTracking() {
     queryKey: ['order-detail', id],
     queryFn: () => ordersApi.orders.get(id).then((r) => r.data),
     enabled: !!id,
+  })
+
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
   })
 
   if (isLoading && !order) {
@@ -137,7 +159,13 @@ export default function OrderTracking() {
     cash: t('orders.payment.cash'),
     acleda: 'ACLEDA Bank',
     wing: 'Wing',
+    contact_sales: t('orders.payment.contact_sales'),
   }[order.payment_method] || order.payment_method || t('orders.payment.title')
+  const contactSalesUrl = normalizeTelegramUrl(siteSettings?.payment_methods?.contact_sales_url)
+  const supportUrl = contactSalesUrl || (siteSettings?.store_phone ? `tel:${siteSettings.store_phone}` : '')
+  const openSupport = () => {
+    if (supportUrl) window.location.href = supportUrl
+  }
 
   return (
     <div className="mx-auto max-w-3xl pb-24 md:pb-0">
@@ -239,7 +267,7 @@ export default function OrderTracking() {
         <Card title={t('orders.paymentMethod')}>
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-center text-[11px] font-black leading-tight text-white">
-              {order.payment_method === 'aba' ? 'ABA Pay' : paymentLabel.slice(0, 4)}
+              {paymentMethodBadge(order.payment_method, paymentLabel)}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-gray-950">{paymentLabel}</p>
@@ -252,7 +280,12 @@ export default function OrderTracking() {
         </Card>
 
         <Card title={t('orders.needHelp')}>
-          <button className="flex w-full items-center gap-3 text-left">
+          <button
+            type="button"
+            onClick={openSupport}
+            disabled={!supportUrl}
+            className="flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
+          >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500"><Phone size={18} /></div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-gray-950">{t('orders.contactSupport')}</p>

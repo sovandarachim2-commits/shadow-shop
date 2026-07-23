@@ -9,6 +9,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.core.mail import BadHeaderError
+from django.core.files.storage import default_storage
+from django.utils.text import get_valid_filename
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from django_filters.rest_framework import DjangoFilterBackend
@@ -33,6 +35,8 @@ from .serializers import (
 from utils.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 
 User = get_user_model()
+
+PAYMENT_METHOD_KEYS = {'bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales', 'other'}
 
 
 def _verification_code():
@@ -653,6 +657,12 @@ class TelegramWebhookView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        callback_query = request.data.get('callback_query') or {}
+        if callback_query:
+            from apps.notifications.services import TelegramService
+            TelegramService().handle_contact_sales_callback(callback_query)
+            return Response({'ok': True})
+
         message = request.data.get('message') or {}
         text = message.get('text', '')
         chat = message.get('chat') or {}
@@ -983,7 +993,24 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
 
     def perform_update(self, serializer):
         from utils.storefront_cache import bump_storefront_cache
-        serializer.save()
+        instance = serializer.save()
+
+        logo_urls = dict(instance.payment_methods.get('logo_urls') or {})
+        for method in PAYMENT_METHOD_KEYS:
+            upload = self.request.FILES.get(f'payment_logo_{method}')
+            if not upload:
+                continue
+            filename = get_valid_filename(upload.name or f'{method}.png')
+            path = default_storage.save(f'site/payment_methods/{method}/{filename}', upload)
+            url = default_storage.url(path)
+            logo_urls[method] = self.request.build_absolute_uri(url) if url.startswith('/') else url
+
+        if logo_urls:
+            payment_methods = dict(instance.payment_methods or {})
+            payment_methods['logo_urls'] = logo_urls
+            instance.payment_methods = payment_methods
+            instance.save(update_fields=['payment_methods'])
+
         bump_storefront_cache()
 
 

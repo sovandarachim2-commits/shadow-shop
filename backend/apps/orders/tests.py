@@ -12,6 +12,7 @@ from apps.orders.serializers import CustomerCheckoutSerializer
 from apps.payments.checkout_flow import fulfill_pending_checkout, prepare_online_checkout
 from apps.payments.models import PendingCheckout
 from apps.products.models import Category, Product
+from apps.finance.models import Revenue
 
 
 class CustomerOrderFlowTests(TestCase):
@@ -124,8 +125,79 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn('<b>សំណើទាក់ទងផ្នែកលក់</b>', payload['text'])
         self.assertIn('ស្ថានភាព: កំពុងរង់ចាំផ្នែកលក់បញ្ជាក់', payload['text'])
         self.assertIn('Order Test Product x2 @ $10.00', payload['text'])
+        self.assertEqual(
+            payload['reply_markup']['inline_keyboard'][0][0]['callback_data'],
+            f'contact_sales:confirm:{order.id}',
+        )
+        self.assertEqual(
+            payload['reply_markup']['inline_keyboard'][0][1]['callback_data'],
+            f'contact_sales:cancel:{order.id}',
+        )
         self.assertIn('អាសយដ្ឋាន: Phnom Penh, Street 1', payload['text'])
         self.assertIn('វិធីបង់ប្រាក់: ទាក់ទងផ្នែកលក់', payload['text'])
+
+    @patch('apps.notifications.services.requests.post')
+    def test_contact_sales_confirm_button_records_confirmation(self, requests_post):
+        response = Mock(status_code=200, content=b'{}')
+        response.json.return_value = {'ok': True}
+        requests_post.return_value = response
+        TelegramConfig.objects.create(
+            name='Sales',
+            bot_token='test-token',
+            chat_id='test-chat',
+            notify_new_order=True,
+        )
+        order = self.create_customer_order('contact_sales')
+
+        handled = TelegramService().handle_contact_sales_callback({
+            'id': 'callback-1',
+            'data': f'contact_sales:confirm:{order.id}',
+            'from': {'username': 'seller_one'},
+            'message': {'message_id': 321, 'chat': {'id': 'test-chat'}},
+        })
+
+        order.refresh_from_db()
+        self.assertTrue(handled)
+        self.assertEqual(order.status, Order.STATUS_PRINTED)
+        self.assertEqual(order.payment_status, 'paid')
+        self.assertTrue(OrderStatusHistory.objects.filter(
+            order=order,
+            status=Order.STATUS_PRINTED,
+            note='Contact sales order confirmed and marked paid by @seller_one',
+        ).exists())
+        self.assertTrue(Revenue.objects.filter(order=order, payment_method='contact_sales').exists())
+        methods = [call.args[0].rsplit('/', 1)[-1] for call in requests_post.call_args_list]
+        self.assertIn('answerCallbackQuery', methods)
+        self.assertIn('editMessageReplyMarkup', methods)
+
+    @patch('apps.notifications.services.requests.post')
+    def test_contact_sales_cancel_button_cancels_order(self, requests_post):
+        response = Mock(status_code=200, content=b'{}')
+        response.json.return_value = {'ok': True}
+        requests_post.return_value = response
+        TelegramConfig.objects.create(
+            name='Sales',
+            bot_token='test-token',
+            chat_id='test-chat',
+            notify_new_order=True,
+        )
+        order = self.create_customer_order('contact_sales')
+
+        handled = TelegramService().handle_contact_sales_callback({
+            'id': 'callback-2',
+            'data': f'contact_sales:cancel:{order.id}',
+            'from': {'first_name': 'Sales', 'last_name': 'Team'},
+            'message': {'message_id': 322, 'chat': {'id': 'test-chat'}},
+        })
+
+        order.refresh_from_db()
+        self.assertTrue(handled)
+        self.assertEqual(order.status, Order.STATUS_CANCELLED)
+        self.assertTrue(OrderStatusHistory.objects.filter(
+            order=order,
+            status=Order.STATUS_CANCELLED,
+            note='Contact sales order cancelled by Sales Team',
+        ).exists())
 
     @patch('apps.payments.checkout_flow.TelegramService')
     def test_pay_now_checkout_prepares_pending_checkout_without_creating_order(self, telegram_service):
@@ -136,6 +208,17 @@ class CustomerOrderFlowTests(TestCase):
         self.assertEqual(PendingCheckout.objects.count(), 1)
         self.assertEqual(Order.objects.count(), 0)
         telegram_service.notify_new_order_async.assert_not_called()
+
+    @patch('django.db.transaction.on_commit')
+    @patch('apps.notifications.services.TelegramService.notify_new_order_async')
+    def test_acleda_checkout_creates_unpaid_order_without_pending_checkout(self, notify_new_order_async, on_commit):
+        order = self.create_customer_order('acleda')
+
+        self.assertEqual(order.payment_method, 'acleda')
+        self.assertEqual(order.payment_status, 'unpaid')
+        self.assertEqual(PendingCheckout.objects.count(), 0)
+        on_commit.call_args.args[0]()
+        notify_new_order_async.assert_called_once_with(order.id)
 
     @patch('django.db.transaction.on_commit')
     @patch('apps.notifications.services.TelegramService.notify_new_order_async')

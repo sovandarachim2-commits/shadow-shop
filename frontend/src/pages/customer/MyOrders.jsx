@@ -45,6 +45,10 @@ const PAYMENT_METHOD_LABELS = {
   bakong: 'Bakong KHQR',
   acleda: 'ACLEDA',
   wing: 'Wing',
+  cod: 'Cash on Delivery',
+  cash: 'Cash',
+  contact_sales: 'Contact Sales',
+  other: 'Other',
 }
 
 function formatRiel(amount) {
@@ -259,6 +263,127 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
   )
 }
 
+function CleanReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
+  const customer = order.customer_detail || {}
+  const customerAddress = formatFullAddressKhmer(customer)
+  const items = order.items?.length ? order.items : [{
+    id: 'preview',
+    product_name: order.preview_name || 'Product',
+    quantity: order.items_count || 1,
+    unit_price: order.grand_total || 0,
+    total_price: order.grand_total || 0,
+  }]
+  const subtotal = Number(order.subtotal ?? items.reduce((sum, item) => sum + Number(item.total_price || 0), 0))
+  const deliveryFee = Number(order.delivery_fee || 0)
+  const discount = Number(order.discount || 0)
+  const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
+  const isPaid = order.payment_status === 'paid'
+
+  return (
+    <div className="receipt-paper mx-auto w-full max-w-[420px] bg-white p-5 text-gray-950 shadow-sm sm:p-6">
+      <header className="text-center">
+        <PrintLogo printLogoUrl={printLogoUrl} size={printLogoSize} />
+        <p className="mt-3 text-[11px] font-black uppercase tracking-[0.28em] text-gray-400">Customer Receipt</p>
+        <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950">#{order.order_number}</h2>
+        <p className="mt-1 text-xs font-semibold text-gray-500">{formatDateTime(order.created_at)}</p>
+      </header>
+
+      <div className="my-5 border-t border-dashed border-gray-300" />
+
+      <section className="grid grid-cols-[1fr_88px] items-start gap-4">
+        <div className="min-w-0 space-y-3 text-sm">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Seller</p>
+            <p className="mt-1 font-black text-gray-950">{order.seller_name || 'Shadow Shop'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Customer</p>
+            <p className="mt-1 font-black text-gray-950">{customer.name || order.customer_name || '-'}</p>
+            <p className="mt-0.5 font-semibold text-gray-600">{customer.phone || order.customer_phone || '-'}</p>
+          </div>
+        </div>
+        <ReceiptQr orderNumber={order.order_number} />
+      </section>
+
+      {customerAddress && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Delivery Address</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-gray-700" style={{ fontFamily: KHMER_FONT_FAMILY }}>
+            {customerAddress}
+          </p>
+        </section>
+      )}
+
+      <section className="mt-4 rounded-xl border border-gray-200 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Payment</p>
+            <p className="mt-1 text-sm font-black text-gray-950">{paymentMethodLabel(order.payment_method)}</p>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs font-black ${isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+            {isPaid ? 'PAID' : 'UNPAID'}
+          </span>
+        </div>
+        <div className="mt-3 flex justify-between gap-3 border-t border-gray-100 pt-3 text-sm">
+          <span className="font-semibold text-gray-500">{isPaid ? 'Paid Date' : 'Created Date'}</span>
+          <span className="text-right font-bold text-gray-800">{formatDateTime(isPaid ? order.updated_at : order.created_at)}</span>
+        </div>
+      </section>
+
+      <section className="mt-5">
+        <p className="mb-2 text-[11px] font-black uppercase tracking-widest text-gray-400">Items</p>
+        <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+          {items.map((item, index) => (
+            <div key={item.id || index} className="grid grid-cols-[24px_1fr_auto] gap-2 px-3 py-3 text-sm">
+              <span className="font-black text-gray-400">{index + 1}</span>
+              <div className="min-w-0">
+                <p className="break-words font-black text-gray-950">{item.product_name || 'Product'}</p>
+                <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                  {item.quantity || 1} x {formatCurrency(item.unit_price || 0)}
+                </p>
+              </div>
+              <span className="text-right font-black text-gray-950">{formatCurrency(item.total_price || item.subtotal || 0)}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-5 rounded-xl bg-gray-50 p-4">
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between gap-3">
+            <span className="font-semibold text-gray-500">Subtotal</span>
+            <span className="font-black">{formatCurrency(subtotal)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="font-semibold text-gray-500">Delivery Fee</span>
+            <span className="font-black">{formatCurrency(deliveryFee)}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span className="font-semibold text-gray-500">Discount</span>
+            <span className="font-black">-{formatCurrency(discount)}</span>
+          </div>
+        </div>
+        <div className="mt-3 border-t border-dashed border-gray-300 pt-3">
+          <div className="flex items-end justify-between gap-3">
+            <span className="text-base font-black text-gray-950">Grand Total</span>
+            <span className="text-2xl font-black text-gray-950">{formatCurrency(grandTotal)}</span>
+          </div>
+          <div className="mt-1 flex justify-between gap-3 text-xs font-bold text-gray-500">
+            <span>KHR Total</span>
+            <span>{formatRiel(grandTotal * USD_TO_KHR_RATE)}</span>
+          </div>
+        </div>
+      </section>
+
+      <footer className="mt-5 border-t border-dashed border-gray-300 pt-4 text-center text-xs font-semibold leading-5 text-gray-500">
+        <p>Exchange rate: 1 USD = {formatRiel(USD_TO_KHR_RATE)}</p>
+        <p>Thank you for shopping with Shadow Shop.</p>
+        <p className="mt-2 text-[11px] uppercase tracking-widest text-gray-400">Powered by One Night Solution</p>
+      </footer>
+    </div>
+  )
+}
+
 export default function MyOrders() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -363,15 +488,14 @@ export default function MyOrders() {
                 {orderItems.map((item, index) => (
                   <article key={item.id || `${order.id}-${index}`} className="flex min-h-[94px] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
                     <button onClick={() => navigate(`/my-orders/${order.id}`)} className="h-[70px] w-[70px] shrink-0 overflow-hidden rounded-md bg-gray-100 text-left">
-                      {item.product_image || (index === 0 && order.preview_image) ? (
-                        <img
-                          src={item.product_image || order.preview_image}
-                          alt={item.product_name || order.preview_name || order.order_number}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <ProductThumb product={{ name: item.product_name || order.preview_name || t('common.product') }} size="lg" className="h-[70px] w-[70px] rounded-md" />
-                      )}
+                      <ProductThumb
+                        product={{
+                          name: item.product_name || order.preview_name || order.order_number || t('common.product'),
+                          primary_image: item.product_image || (index === 0 ? order.preview_image : ''),
+                        }}
+                        size="lg"
+                        className="h-[70px] w-[70px] rounded-md"
+                      />
                     </button>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
@@ -441,7 +565,7 @@ export default function MyOrders() {
                   <Loader2 size={34} className="animate-spin text-pink-500" />
                 </div>
               ) : (
-                <ReceiptPreview
+                <CleanReceiptPreview
                   order={receiptOrder}
                   printLogoUrl={siteSettings?.print_logo_url}
                   printLogoSize={siteSettings?.print_logo_size || 78}

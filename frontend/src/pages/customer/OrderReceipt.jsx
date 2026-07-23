@@ -19,6 +19,7 @@ const PAYMENT_METHOD_LABELS = {
   bakong: 'Bakong KHQR',
   cod: 'Cash on Delivery',
   cash: 'Cash',
+  contact_sales: 'Contact Sales',
   acleda: 'ACLEDA Bank',
   wing: 'Wing',
 }

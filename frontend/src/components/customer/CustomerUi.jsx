@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ShoppingBag, Star } from 'lucide-react'
 import { cn } from '@/utils/helpers'
 
@@ -62,19 +63,45 @@ export function BrandLogo({ brand, size = 'md', className = '' }) {
 }
 
 export function ProductThumb({ product, size = 'md', className = '' }) {
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageFailed, setImageFailed] = useState(false)
+  const [showImageLoader, setShowImageLoader] = useState(false)
   const sizes = {
     sm: 'h-14 w-14',
     md: 'h-20 w-20',
     lg: 'h-28 w-28',
     full: 'h-full w-full',
   }
+  const imageUrl = product?.primary_image || product?.image_url || product?.image
+
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageFailed(false)
+    setShowImageLoader(false)
+    if (!imageUrl) return undefined
+    const timer = setTimeout(() => setShowImageLoader(true), 350)
+    return () => clearTimeout(timer)
+  }, [imageUrl])
 
   return (
-    <div className={cn('overflow-hidden rounded-2xl bg-white', sizes[size], className)}>
-      {product?.primary_image || product?.image_url ? (
-        <img src={product.primary_image || product.image_url} alt={product.name || 'Product'} loading="lazy" decoding="async" className="h-full w-full object-contain p-1" />
+    <div className={cn('relative overflow-hidden rounded-2xl bg-gray-100', sizes[size], className)}>
+      {imageUrl && !imageFailed ? (
+        <>
+          {!imageLoaded && showImageLoader && <div className="absolute inset-0 animate-pulse bg-gray-100" />}
+          <img
+            src={imageUrl}
+            alt={product?.name || 'Product'}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageFailed(true)}
+            className={cn('absolute inset-0 h-full w-full object-contain p-1 transition duration-300', imageLoaded ? 'opacity-100' : 'opacity-0')}
+          />
+        </>
       ) : (
-        <CosmeticArt tone={product?.tone} className="min-h-full rounded-none" />
+        <div className="flex h-full w-full items-center justify-center text-gray-300">
+          <ShoppingBag size={24} />
+        </div>
       )}
     </div>
   )

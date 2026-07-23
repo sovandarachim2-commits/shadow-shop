@@ -3,13 +3,14 @@ import logging
 from threading import Thread
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.utils.html import escape
 from django.utils import timezone
 from .models import TelegramConfig, NotificationLog
 
 logger = logging.getLogger(__name__)
 
-ONLINE_PAY_NOW_METHODS = frozenset({'bakong', 'aba', 'acleda', 'wing'})
+ONLINE_PAY_NOW_METHODS = frozenset({'bakong', 'aba'})
 
 
 class TelegramService:
@@ -68,6 +69,7 @@ class TelegramService:
         message_thread_id: int = None,
         reply_to_message_id: int = None,
         reference: str = '',
+        reply_markup: dict = None,
     ) -> bool:
         if not self.config:
             self.last_error_message = 'Telegram config is not set.'
@@ -103,6 +105,8 @@ class TelegramService:
                 payload['message_thread_id'] = thread_id
             if reply_to_message_id:
                 payload['reply_to_message_id'] = reply_to_message_id
+            if reply_markup:
+                payload['reply_markup'] = reply_markup
 
             response = requests.post(url, json=payload, timeout=10)
             response_data = response.json() if response.content else {}
@@ -136,6 +140,7 @@ class TelegramService:
         event_type: str,
         reference: str = '',
         reply_to_message_id: int = None,
+        reply_markup: dict = None,
     ) -> bool:
         sent = False
         current_config = self.config
@@ -146,6 +151,7 @@ class TelegramService:
                 event_type,
                 reference=reference,
                 reply_to_message_id=reply_to_message_id,
+                reply_markup=reply_markup,
             ) or sent
         self.config = current_config
         return sent
@@ -190,6 +196,18 @@ class TelegramService:
         customer_phone = escape(order.customer.phone or 'N/A')
 
         if order.payment_method == 'contact_sales':
+            reply_markup = {
+                'inline_keyboard': [[
+                    {
+                        'text': 'Confirm Order',
+                        'callback_data': f'contact_sales:confirm:{order.id}',
+                    },
+                    {
+                        'text': 'Cancel Order',
+                        'callback_data': f'contact_sales:cancel:{order.id}',
+                    },
+                ]]
+            }
             message = (
                 f"<b>សំណើទាក់ទងផ្នែកលក់</b>\n"
                 f"ការបញ្ជាទិញ: <code>#{order.order_number}</code>\n"
@@ -207,7 +225,13 @@ class TelegramService:
                 f"ប្រភព: {'អតិថិជនបញ្ជាទិញ' if source == 'Customer Checkout' else 'បុគ្គលិកបញ្ជាទិញ'}\n"
                 f"អ្នកលក់: {seller_name}"
             )
-            return self.send_to_configs(configs, message, 'contact_sales_order', reference=order.order_number)
+            return self.send_to_configs(
+                configs,
+                message,
+                'contact_sales_order',
+                reference=order.order_number,
+                reply_markup=reply_markup,
+            )
         message = (
             f"<b>New Order!</b>\n"
             f"Order: <code>#{order.order_number}</code>\n"
@@ -396,6 +420,149 @@ class TelegramService:
             transaction_id = order.order_number
 
         return transaction_id, paid_at or order.updated_at
+
+    def _telegram_api_post(self, method: str, payload: dict):
+        token = self.get_bot_token()
+        if self.is_placeholder(token):
+            self.last_error_message = 'Telegram bot token is not configured.'
+            return None
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{token}/{method}",
+                json=payload,
+                timeout=10,
+            )
+            if response.status_code != 200:
+                self.last_error_message = response.text
+            return response
+        except Exception as e:
+            self.last_error_message = str(e)
+            logger.error(f"Telegram API call failed: {e}")
+            return None
+
+    def _answer_callback_query(self, callback_query_id: str, text: str, alert: bool = False):
+        if not callback_query_id:
+            return None
+        return self._telegram_api_post(
+            'answerCallbackQuery',
+            {
+                'callback_query_id': callback_query_id,
+                'text': text,
+                'show_alert': alert,
+            },
+        )
+
+    def _clear_callback_buttons(self, callback_query: dict):
+        message = callback_query.get('message') or {}
+        chat = message.get('chat') or {}
+        chat_id = chat.get('id')
+        message_id = message.get('message_id')
+        if not chat_id or not message_id:
+            return None
+        return self._telegram_api_post(
+            'editMessageReplyMarkup',
+            {
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'reply_markup': {'inline_keyboard': []},
+            },
+        )
+
+    @staticmethod
+    def _callback_actor(callback_query: dict) -> str:
+        user = callback_query.get('from') or {}
+        username = user.get('username')
+        if username:
+            return f"@{username}"
+        full_name = " ".join(
+            str(user.get(key) or '').strip()
+            for key in ('first_name', 'last_name')
+            if str(user.get(key) or '').strip()
+        )
+        return full_name or str(user.get('id') or 'Telegram user')
+
+    def handle_contact_sales_callback(self, callback_query: dict) -> bool:
+        data = callback_query.get('data') or ''
+        parts = data.split(':')
+        callback_query_id = callback_query.get('id') or ''
+        if len(parts) != 3 or parts[0] != 'contact_sales' or parts[1] not in {'confirm', 'cancel'}:
+            return False
+
+        action = parts[1]
+        try:
+            order_id = int(parts[2])
+        except (TypeError, ValueError):
+            self._answer_callback_query(callback_query_id, 'Invalid order action.', alert=True)
+            return True
+
+        from apps.orders.models import Order, OrderStatusHistory
+
+        try:
+            order = Order.objects.select_related('customer').get(pk=order_id, payment_method='contact_sales')
+        except Order.DoesNotExist:
+            self._answer_callback_query(callback_query_id, 'Order not found.', alert=True)
+            return True
+
+        actor = self._callback_actor(callback_query)
+        if action == 'cancel':
+            if order.status == Order.STATUS_CANCELLED:
+                self._answer_callback_query(callback_query_id, 'Order is already cancelled.')
+                self._clear_callback_buttons(callback_query)
+                return True
+            order.status = Order.STATUS_CANCELLED
+            order.save(update_fields=['status', 'updated_at'])
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=Order.STATUS_CANCELLED,
+                note=f'Contact sales order cancelled by {actor}',
+            )
+            self._answer_callback_query(callback_query_id, f'Order #{order.order_number} cancelled.')
+            self._clear_callback_buttons(callback_query)
+            return True
+
+        if order.status == Order.STATUS_CANCELLED:
+            self._answer_callback_query(callback_query_id, 'Cannot confirm a cancelled order.', alert=True)
+            self._clear_callback_buttons(callback_query)
+            return True
+
+        from apps.finance.models import Revenue
+        from apps.orders.rewards import award_points_for_paid_order
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().select_related('customer').get(pk=order.pk)
+            if order.status == Order.STATUS_NEW:
+                order.status = Order.STATUS_PRINTED
+            order.payment_status = 'paid'
+            order.save(update_fields=['status', 'payment_status', 'updated_at'])
+
+            Revenue.objects.get_or_create(
+                order=order,
+                defaults={
+                    'amount': order.grand_total,
+                    'payment_method': 'contact_sales',
+                    'reference': f'CONTACT-SALES-{order.order_number}',
+                    'received_at': timezone.now(),
+                    'received_by': None,
+                    'notes': f'Confirmed by {actor} from Telegram sales button.',
+                },
+            )
+            award_points_for_paid_order(order)
+
+            already_confirmed = OrderStatusHistory.objects.filter(
+                order=order,
+                note__startswith='Contact sales order confirmed',
+            ).exists()
+            if not already_confirmed:
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    status=order.status,
+                    note=f'Contact sales order confirmed and marked paid by {actor}',
+                )
+
+        transaction.on_commit(lambda: TelegramService().notify_payment_received(order))
+        self._answer_callback_query(callback_query_id, f'Order #{order.order_number} confirmed.')
+        self._clear_callback_buttons(callback_query)
+        return True
 
     def notify_delivery_update(self, delivery) -> bool:
         configs = self.get_configs_for('notify_delivery')

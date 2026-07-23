@@ -71,6 +71,7 @@ function paymentSettingsPayload(paymentMethods) {
   for (const method of ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales']) {
     payload[method] = paymentMethods[method] !== false
   }
+  payload.logo_urls = paymentMethods.logo_urls || {}
   payload.contact_sales_url = normalizeTelegramUrl(paymentMethods.contact_sales_url)
   return payload
 }
@@ -212,18 +213,44 @@ export default function Settings({ tab = 'general' }) {
     {
       ...Object.fromEntries(ALL_PAYMENT_METHODS.map((m) => [m.key, true])),
       contact_sales_url: '',
+      logo_urls: {},
     }
   )
+  const [paymentLogoFiles, setPaymentLogoFiles] = useState({})
+  const [paymentLogoPreviews, setPaymentLogoPreviews] = useState({})
   const [footerMenus, setFooterMenus] = useState(normalizeFooterMenus())
 
   const savePaymentMutation = useMutation({
-    mutationFn: () => authApi.siteSettings.update({ payment_methods: paymentSettingsPayload(paymentMethods) }),
+    mutationFn: () => {
+      const payload = paymentSettingsPayload(paymentMethods)
+      if (Object.keys(paymentLogoFiles).length === 0) {
+        return authApi.siteSettings.update({ payment_methods: payload })
+      }
+
+      const fd = new FormData()
+      fd.append('payment_methods', JSON.stringify(payload))
+      Object.entries(paymentLogoFiles).forEach(([method, file]) => {
+        if (file) fd.append(`payment_logo_${method}`, file)
+      })
+      return authApi.siteSettings.update(fd)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      setPaymentLogoFiles({})
+      setPaymentLogoPreviews({})
       toast.success('Payment methods saved!')
     },
     onError: (error) => toast.error(apiErrorMessage(error, 'Failed to save payment methods')),
   })
+
+  const pickPaymentLogo = (method) => (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPaymentLogoFiles((prev) => ({ ...prev, [method]: file }))
+    const reader = new FileReader()
+    reader.onload = (ev) => setPaymentLogoPreviews((prev) => ({ ...prev, [method]: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
 
   const updateFooterSection = (sectionKey, field, value) => {
     setFooterMenus((current) => ({
@@ -1186,23 +1213,43 @@ export default function Settings({ tab = 'general' }) {
               <div key={p.key} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100">
-                      <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
+                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center overflow-hidden shadow-sm border border-gray-100">
+                      {paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key] ? (
+                        <img
+                          src={paymentLogoPreviews[p.key] || paymentMethods.logo_urls[p.key]}
+                          alt={`${p.label} logo`}
+                          className="h-full w-full object-contain p-1"
+                        />
+                      ) : (
+                        <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
+                      )}
                     </div>
                     <div>
                       <p className={`font-medium text-sm ${paymentMethods[p.key] ? 'text-gray-900' : 'text-gray-400'}`}>{p.label}</p>
                       <p className="text-xs text-gray-400">{p.desc}</p>
                     </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={paymentMethods[p.key] ?? true}
-                      onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
-                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700">
+                      <Upload size={14} />
+                      Logo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={pickPaymentLogo(p.key)}
+                      />
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={paymentMethods[p.key] ?? true}
+                        onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
+                    </label>
+                  </div>
                 </div>
                 {p.key === 'contact_sales' && (
                   <div className="mt-4 border-t border-gray-200 pt-4">

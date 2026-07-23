@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import { productsApi } from '@/api/products'
@@ -26,34 +27,6 @@ function FilterSelect({ children, ...props }) {
   )
 }
 
-function ProductArt({ tone = 'pink' }) {
-  const palette = {
-    pink: 'from-pink-200 via-pink-300 to-rose-400',
-    rose: 'from-rose-100 via-pink-200 to-rose-300',
-    red: 'from-red-400 via-rose-500 to-pink-700',
-    gold: 'from-amber-100 via-orange-200 to-yellow-300',
-    amber: 'from-amber-700 via-orange-500 to-yellow-400',
-    orange: 'from-orange-100 via-orange-300 to-amber-400',
-    purple: 'from-purple-200 via-fuchsia-300 to-pink-400',
-    set: 'from-pink-200 via-rose-300 to-purple-300',
-  }[tone] || 'from-pink-200 via-pink-300 to-rose-400'
-
-  return (
-    <div className="relative flex h-full items-center justify-center overflow-hidden bg-gradient-to-br from-pink-50 to-rose-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.9),transparent_35%),radial-gradient(circle_at_75%_70%,rgba(236,72,153,0.16),transparent_35%)]" />
-      <div className="relative flex items-end gap-2">
-        <div className={`h-20 w-9 rounded-b-2xl rounded-t-md bg-gradient-to-b ${palette} shadow-xl`}>
-          <div className="mx-auto -mt-6 h-6 w-6 rounded-t bg-gray-950" />
-          <div className="mx-auto mt-6 h-7 w-4 rounded-full bg-white/25" />
-        </div>
-        <div className={`h-14 w-16 rounded-3xl bg-gradient-to-br ${palette} shadow-xl`}>
-          <div className="mx-auto mt-4 h-3 w-10 rounded-full bg-white/35" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function ProductCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
@@ -71,6 +44,18 @@ function ProductCardSkeleton() {
   )
 }
 
+function ProductImageLoading() {
+  return <div className="absolute inset-0 animate-pulse bg-gray-100" />
+}
+
+function ProductImageFallback() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300">
+      <ShoppingBag size={30} />
+    </div>
+  )
+}
+
 function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
@@ -82,6 +67,7 @@ function ProductCard({ product, priority = false }) {
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [showImageLoader, setShowImageLoader] = useState(false)
   const wishlisted = isWishlisted(product.id)
 
   const cartItem = items.find((i) => i.product?.id === product.id)
@@ -115,6 +101,15 @@ function ProductCard({ product, priority = false }) {
     ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
     : null
 
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageFailed(false)
+    setShowImageLoader(false)
+    if (!product.primary_image) return undefined
+    const timer = setTimeout(() => setShowImageLoader(true), 350)
+    return () => clearTimeout(timer)
+  }, [product.primary_image])
+
   return (
     <article
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
@@ -134,7 +129,7 @@ function ProductCard({ product, priority = false }) {
       <div className="relative h-44 overflow-hidden bg-white">
         {product.primary_image && !imageFailed ? (
           <>
-            {!imageLoaded && <ProductArt tone={product.tone} />}
+            {!imageLoaded && showImageLoader && <ProductImageLoading />}
             <img
               src={product.primary_image}
               alt={product.name}
@@ -147,7 +142,7 @@ function ProductCard({ product, priority = false }) {
             />
           </>
         ) : (
-          <ProductArt tone={product.tone} />
+          <ProductImageFallback />
         )}
       </div>
       <div className="p-3">
@@ -195,6 +190,9 @@ function ProductSetCard({ productSet }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
+  const [imageFailed, setImageFailed] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [showImageLoader, setShowImageLoader] = useState(false)
   const imageUrl = productSet.image_url || productSet.image
   const price = Number(productSet.display_price || productSet.discount_price || productSet.price || 0)
   const oldPrice = productSet.old_price || productSet.discount_price ? Number(productSet.price || 0) : 0
@@ -217,22 +215,36 @@ function ProductSetCard({ productSet }) {
   const cartItem = items.find((item) => item.product?.cart_key === cartProduct.cart_key)
   const qty = cartItem?.quantity || 0
 
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageFailed(false)
+    setShowImageLoader(false)
+    if (!imageUrl) return undefined
+    const timer = setTimeout(() => setShowImageLoader(true), 350)
+    return () => clearTimeout(timer)
+  }, [imageUrl])
+
   return (
     <article
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
       onClick={() => navigate(`/product-set/${productSet.id}`)}
     >
       <div className="relative h-44 overflow-hidden bg-white">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={productSet.name}
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
-          />
+        {imageUrl && !imageFailed ? (
+          <>
+            {!imageLoaded && showImageLoader && <ProductImageLoading />}
+            <img
+              src={imageUrl}
+              alt={productSet.name}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageFailed(true)}
+              className={`absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </>
         ) : (
-          <ProductArt tone="set" />
+          <ProductImageFallback />
         )}
         <span className="absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-xs font-black text-pink-600 shadow-sm">
           {t('product.productSetBadge')}
@@ -299,6 +311,7 @@ export default function ProductList() {
   const [sortBy, setSortBy] = useState('-created_at')
   const [page, setPage] = useState(1)
   const [showSearch, setShowSearch] = useState(Boolean(searchParams.get('search')))
+  const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
 
   const { data: categoryData } = useQuery({
     queryKey: ['categories'],
@@ -310,7 +323,7 @@ export default function ProductList() {
     queryFn: () => productsApi.brands.list({ is_active: true }).then((r) => r.data.results || r.data),
   })
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['products-list', search, categoryId, brand, sortBy, page],
     queryFn: () => productsApi.products.list({
       search: search || undefined,
@@ -332,7 +345,7 @@ export default function ProductList() {
         ? '-created_at'
         : sortBy
 
-  const { data: setData = [], isLoading: setsLoading } = useQuery({
+  const { data: setData = [], isLoading: setsLoading, isFetching: setsFetching } = useQuery({
     queryKey: ['shop-product-sets', search, setOrdering],
     queryFn: () => productsApi.sets.list({
       search: search || undefined,
@@ -344,12 +357,21 @@ export default function ProductList() {
     staleTime: 30_000,
   })
 
+  const isGridFetching = isFetching || setsFetching
+
+  useEffect(() => {
+    setShowGridRefetchLoader(false)
+    if (!isGridFetching) return undefined
+    const timer = setTimeout(() => setShowGridRefetchLoader(true), 350)
+    return () => clearTimeout(timer)
+  }, [isGridFetching])
+
   const categories = useMemo(() => categoryData || [], [categoryData])
   const shopBrands = useMemo(() => brandData || [], [brandData])
 
   const products = data?.results || []
   const productSets = (!categoryId && !brand && page === 1) ? setData.filter((set) => set.is_active !== false) : []
-  const isGridLoading = isLoading || setsLoading
+  const isGridLoading = isLoading || setsLoading || (isGridFetching && showGridRefetchLoader)
   const total = (data?.count || 0) + productSets.length
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
   const isSearchResult = Boolean(searchParams.get('search'))

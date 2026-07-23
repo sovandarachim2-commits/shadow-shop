@@ -32,7 +32,7 @@ const CART_PROVINCE_MAP = {
   'Battambang': 'battambang',
 }
 const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
-const ONLINE_PAYMENT_METHODS = ['bakong', 'aba', 'acleda', 'wing']
+const ONLINE_PAYMENT_METHODS = ['bakong', 'aba']
 
 function mapProvince(text) {
   const value = (text || '').toLowerCase()
@@ -150,6 +150,7 @@ export default function Checkout() {
   const [bakongPayment, setBakongPayment] = useState(null)
   const [showBakongPopup, setShowBakongPopup] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showCodConfirm, setShowCodConfirm] = useState(false)
   const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(300)
   const [abaLoading, setAbaLoading] = useState(false)
   const [checkingBakong, setCheckingBakong] = useState(false)
@@ -172,11 +173,13 @@ export default function Checkout() {
   })
 
   const paymentMethods = useMemo(() => {
+    const logoUrls = siteSettings?.payment_methods?.logo_urls || {}
     const base = PAYMENT_METHOD_KEYS.map((key) => ({
       key,
       label: t(`checkout.paymentMethods.${key}.label`),
       badge: t(`checkout.paymentMethods.${key}.badge`),
       desc: t(`checkout.paymentMethods.${key}.desc`),
+      logoUrl: logoUrls[key] || '',
     }))
     const settings = siteSettings?.payment_methods
     if (!settings || Object.keys(settings).length === 0) return base
@@ -212,6 +215,7 @@ export default function Checkout() {
   const couponDiscount = getCouponDiscount(appliedCoupon, subtotal, deliveryFee)
   const grandTotal = subtotal + deliveryFee - couponDiscount
   const contactSalesUrl = String(siteSettings?.payment_methods?.contact_sales_url || '').trim()
+  const selectedPaymentMethod = paymentMethods.find((method) => method.key === paymentMethod)
   const checkoutActionLabel = (submitting || abaLoading)
     ? t('checkout.pleaseWait')
     : paymentMethod === 'contact_sales'
@@ -398,7 +402,9 @@ export default function Checkout() {
     ].filter(Boolean).join('\n')
   }
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async (options = {}) => {
+    const codConfirmed = options?.codConfirmed === true
+
     if (paymentMethod === 'bakong' && bakongPayment && bakongPayment.status !== 'paid') {
       setShowBakongPopup(true)
       return
@@ -407,6 +413,11 @@ export default function Checkout() {
     if (!hasAddress) {
       toast.error(t('checkout.addAddressFirst'))
       navigate('/address-book')
+      return
+    }
+
+    if (paymentMethod === 'cod' && !codConfirmed) {
+      setShowCodConfirm(true)
       return
     }
 
@@ -455,7 +466,13 @@ export default function Checkout() {
       if (paymentMethod === 'contact_sales' && contactSalesUrl && salesWindow) {
         salesWindow.location.href = withTelegramText(contactSalesUrl, buildContactSalesMessage(order))
       }
-      navigate('/order-success', { state: { orderId: order.id, orderNumber: order.order_number } })
+      navigate('/order-success', {
+        state: {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          paymentMethod,
+        },
+      })
     } catch (error) {
       if (salesWindow) salesWindow.close()
       const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail
@@ -568,8 +585,12 @@ export default function Checkout() {
                     paymentMethod === method.key ? 'border-pink-500 bg-pink-50' : 'border-gray-100 bg-white hover:border-pink-200'
                   }`}
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#08172f] text-xs font-bold text-white">
-                    {method.badge}
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#08172f] text-xs font-bold text-white">
+                    {method.logoUrl ? (
+                      <img src={method.logoUrl} alt="" className="h-full w-full bg-white object-contain p-1" />
+                    ) : (
+                      method.badge
+                    )}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold text-gray-950">{method.label}</span>
@@ -652,6 +673,53 @@ export default function Checkout() {
           </button>
         </div>
       </div>
+
+      {showCodConfirm && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-gray-950/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[1.5rem] bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-pink-600">{t('checkout.placeOrder')}</p>
+                <h2 className="mt-1 text-xl font-black text-gray-950">{t('checkout.confirmCodTitle')}</h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-gray-500">{t('checkout.confirmCodText')}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCodConfirm(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 text-gray-500"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <SummaryLine label={t('checkout.paymentMethod')} value={selectedPaymentMethod?.label || t('checkout.paymentMethods.cod.label')} />
+              <SummaryLine label={t('checkout.totalAmount')} value={formatCurrency(grandTotal)} />
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCodConfirm(false)}
+                className="rounded-full border border-gray-200 px-4 py-3 text-sm font-black text-gray-600"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCodConfirm(false)
+                  handlePlaceOrder({ codConfirmed: true })
+                }}
+                disabled={submitting}
+                className="rounded-full bg-pink-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-pink-100 disabled:opacity-60"
+              >
+                {submitting ? t('checkout.pleaseWait') : t('checkout.confirmOrder')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {bakongPayment && showBakongPopup && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-gray-950/55 px-4 py-5 backdrop-blur-sm">

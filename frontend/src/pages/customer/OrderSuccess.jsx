@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import useCartStore from '@/store/cartStore'
 import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
 
-const ONLINE_PAYMENTS = ['bakong', 'aba', 'acleda', 'wing']
+const ONLINE_PAYMENTS = ['bakong', 'aba']
 const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
 
 function isPaymentComplete(order, bakongPayment) {
@@ -26,6 +26,7 @@ export default function OrderSuccess() {
   const orderId = location.state?.orderId
   const orderNumber = location.state?.orderNumber || query.get('order') || query.get('tran_id') || ''
   const checkoutReference = query.get('reference') || ''
+  const statePaymentMethod = location.state?.paymentMethod || ''
   const [bakongPayment, setBakongPayment] = useState(location.state?.bakongPayment || null)
   const removeSelectedItems = useCartStore((s) => s.removeSelectedItems)
 
@@ -66,6 +67,8 @@ export default function OrderSuccess() {
   })
 
   const paid = isPaymentComplete(order, bakongPayment) || checkoutStatus?.status === 'paid'
+  const isContactSales = order?.payment_method === 'contact_sales' || statePaymentMethod === 'contact_sales'
+  const isCashOnDelivery = order?.payment_method === 'cod' || statePaymentMethod === 'cod'
   const isBakongPending = bakongPayment && bakongPayment.status !== 'paid' && !paid
   const isBakongExpired = bakongPayment?.status === 'expired'
   const trackPath = (order?.id || resolvedOrderId) ? `/my-orders/${order?.id || resolvedOrderId}` : '/my-orders'
@@ -110,6 +113,37 @@ export default function OrderSuccess() {
 
     return () => clearInterval(timer)
   }, [bakongPayment?.id, bakongPayment?.status, refetch, refetchCheckoutStatus])
+
+  if (isContactSales) {
+    return (
+      <div className="min-h-[60vh] bg-gray-50">
+        <OrderSuccessModal
+          open
+          variant="pending"
+          title={t('orders.waitingSalesConfirm')}
+          description={t('orders.contactSalesPendingText')}
+          trackLabel={t('orders.viewOrderStatus')}
+          onTrack={() => navigate(trackPath)}
+          onBack={() => navigate('/shop')}
+        />
+      </div>
+    )
+  }
+
+  if (isCashOnDelivery) {
+    return (
+      <div className="min-h-[60vh] bg-gray-50">
+        <OrderSuccessModal
+          open
+          title={t('orders.cashDeliverySuccessTitle')}
+          description={t('orders.cashDeliverySuccessText')}
+          trackLabel={t('orders.viewOrderStatus')}
+          onTrack={() => navigate(trackPath)}
+          onBack={() => navigate('/shop')}
+        />
+      </div>
+    )
+  }
 
   if (paid) {
     return (

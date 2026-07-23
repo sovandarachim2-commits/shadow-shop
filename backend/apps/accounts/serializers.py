@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from .models import Permission, Role, RolePermission, ActivityLog, Address, SiteSettings
 import random
 import re
+import json
 
 User = get_user_model()
 
@@ -283,3 +284,14 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             return request.build_absolute_uri(obj.print_logo.url) if request else obj.print_logo.url
         return None
+
+    def validate_payment_methods(self, value):
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError('Payment methods must be valid JSON.')
+            if not isinstance(parsed, dict):
+                raise serializers.ValidationError('Payment methods must be an object.')
+            return parsed
+        return value
