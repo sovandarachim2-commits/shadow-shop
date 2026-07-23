@@ -3,6 +3,7 @@ import logging
 from threading import Thread
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
+from django.utils.html import escape
 from django.utils import timezone
 from .models import TelegramConfig, NotificationLog
 
@@ -153,6 +154,27 @@ class TelegramService:
     def should_notify_new_order_on_placement(payment_method: str) -> bool:
         return payment_method not in ONLINE_PAY_NOW_METHODS
 
+    @staticmethod
+    def _format_order_items(order) -> str:
+        item_lines = [
+            f"- {escape(item.product_name)} x{item.quantity} @ ${item.unit_price}"
+            for item in order.items.all()[:10]
+        ]
+        item_count = order.items.count()
+        if item_count > 10:
+            item_lines.append(f"- and {item_count - 10} more item(s)")
+        return "\n".join(item_lines) if item_lines else "-"
+
+    @staticmethod
+    def _format_customer_address(order) -> str:
+        customer = order.customer
+        address_parts = [
+            getattr(customer, 'address', ''),
+            getattr(customer, 'notes', ''),
+        ]
+        clean_parts = [str(part).strip() for part in address_parts if str(part).strip()]
+        return escape(", ".join(clean_parts) or "N/A")
+
     def notify_new_order(self, order) -> bool:
         configs = self.get_configs_for('notify_new_order')
         if not configs.exists():
@@ -160,22 +182,43 @@ class TelegramService:
         from apps.orders.serializers import display_seller_name
 
         source = 'Customer Checkout' if getattr(order.seller, 'role', '') == 'customer' else 'Admin/Staff Order'
-        item_lines = [
-            f"- {item.product_name} x{item.quantity} @ ${item.unit_price}"
-            for item in order.items.all()[:10]
-        ]
-        items_text = "\n".join(item_lines) if item_lines else "-"
+        items_text = self._format_order_items(order)
         title = '🛍️ <b>New Order!</b>'
+        payment_method = order.get_payment_method_display() if order.payment_method else 'N/A'
+        seller_name = escape(display_seller_name(order))
+        customer_name = escape(order.customer.name or 'N/A')
+        customer_phone = escape(order.customer.phone or 'N/A')
+
+        if order.payment_method == 'contact_sales':
+            message = (
+                f"<b>សំណើទាក់ទងផ្នែកលក់</b>\n"
+                f"ការបញ្ជាទិញ: <code>#{order.order_number}</code>\n"
+                f"ស្ថានភាព: កំពុងរង់ចាំផ្នែកលក់បញ្ជាក់\n"
+                f"អតិថិជន: {customer_name}\n"
+                f"ទូរស័ព្ទ: {customer_phone}\n"
+                f"អាសយដ្ឋាន: {self._format_customer_address(order)}\n"
+                f"ផលិតផល:\n{items_text}\n"
+                f"សរុបរង: ${order.subtotal}\n"
+                f"ថ្លៃដឹកជញ្ជូន: ${order.delivery_fee}\n"
+                f"បញ្ចុះតម្លៃ: ${order.discount}\n"
+                f"សរុប: ${order.grand_total}\n"
+                f"វិធីបង់ប្រាក់: ទាក់ទងផ្នែកលក់\n"
+                f"ការបង់ប្រាក់: មិនទាន់បង់ប្រាក់\n"
+                f"ប្រភព: {'អតិថិជនបញ្ជាទិញ' if source == 'Customer Checkout' else 'បុគ្គលិកបញ្ជាទិញ'}\n"
+                f"អ្នកលក់: {seller_name}"
+            )
+            return self.send_to_configs(configs, message, 'contact_sales_order', reference=order.order_number)
         message = (
-            f"{title}\n"
+            f"<b>New Order!</b>\n"
             f"Order: <code>#{order.order_number}</code>\n"
             f"Source: {source}\n"
-            f"Customer: {order.customer.name}\n"
-            f"Phone: {order.customer.phone}\n"
+            f"Customer: {customer_name}\n"
+            f"Phone: {customer_phone}\n"
             f"Items:\n{items_text}\n"
             f"Total: ${order.grand_total}\n"
+            f"Payment Method: {payment_method}\n"
             f"Payment: {order.get_payment_status_display()}\n"
-            f"Seller: {display_seller_name(order)}"
+            f"Seller: {seller_name}"
         )
         return self.send_to_configs(configs, message, 'new_order', reference=order.order_number)
 

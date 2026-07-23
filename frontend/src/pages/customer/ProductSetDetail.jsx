@@ -9,6 +9,7 @@ import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { ProductThumb } from '@/components/customer/CustomerUi'
+import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 
 function toCartProduct(productSet, categoryLabel) {
   const imageUrl = productSet.image_url || productSet.image
@@ -30,6 +31,108 @@ function toCartProduct(productSet, categoryLabel) {
   }
 }
 
+function relatedProductAvailable(item) {
+  if (item.type === 'set') return Number(item.current_stock || 0) > 0
+  return item.is_available_for_sale ?? Number(item.current_stock || 0) > 0
+}
+
+function RelatedSetCard({ item, priority = false }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { addItem, updateQuantity, items } = useCartStore()
+  const isSet = item.type === 'set'
+  const cartProduct = isSet
+    ? toCartProduct(item, t('product.productSet'))
+    : (item.display_price ? { ...item, retail_price: item.display_price } : item)
+  const cartKey = isSet ? cartProduct.cart_key : item.id
+  const cartItem = items.find((entry) => isSet
+    ? entry.product?.cart_key === cartKey
+    : entry.product?.id === item.id)
+  const qty = cartItem?.quantity || 0
+  const imageUrl = isSet ? (item.image_url || item.image) : item.primary_image
+  const price = Number(isSet ? (item.display_price || item.discount_price || item.price || 0) : (item.display_price || item.retail_price || 0))
+  const oldPrice = Number(isSet ? (item.old_price || item.price || 0) : (item.old_price || 0))
+  const available = relatedProductAvailable(item)
+  const path = isSet ? `/product-set/${item.id}` : `/product/${item.id}`
+
+  const handleAdd = (e) => {
+    e.stopPropagation()
+    addItem(cartProduct, 1)
+    showCartAddedToast(cartProduct, navigate)
+  }
+
+  return (
+    <article
+      onClick={() => navigate(path)}
+      className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
+    >
+      <div className="relative h-44 overflow-hidden bg-white">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={item.name}
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+            className="h-full w-full object-contain p-3 transition duration-300 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-pink-50">
+            <Gift size={44} className="text-pink-300" />
+          </div>
+        )}
+        {isSet && (
+          <span className="absolute left-3 top-3 rounded-full bg-pink-600 px-3 py-1.5 text-[11px] font-black text-white shadow-lg shadow-pink-100">
+            {t('product.productSetBadge')}
+          </span>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="truncate text-xs font-semibold text-gray-400">
+          {isSet ? t('product.productSet') : (item.brand_name || item.category_name || t('product.cosmetics'))}
+        </p>
+        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{item.name}</h3>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(price)}</span>
+            {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+          </div>
+          {!available ? (
+            <span className="shrink-0 rounded-2xl bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
+          ) : qty === 0 ? (
+            <button onClick={handleAdd} className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95">
+              {t('common.add')}
+            </button>
+          ) : (
+            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
+              <button onClick={() => updateQuantity(cartKey, qty - 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
+              </button>
+              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
+              <button onClick={() => addItem(cartProduct, 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+                <Plus size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function RelatedSetSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
+      <div className="h-44 animate-pulse bg-gray-100" />
+      <div className="space-y-2 p-3">
+        <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
+        <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
+        <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
+        <div className="mt-3 h-8 w-full animate-pulse rounded-xl bg-gray-100" />
+      </div>
+    </div>
+  )
+}
+
 export default function ProductSetDetail() {
   const { t } = useTranslation()
   const { id } = useParams()
@@ -43,6 +146,26 @@ export default function ProductSetDetail() {
     queryKey: ['product-set-detail', id],
     queryFn: () => productsApi.sets.get(id).then((r) => r.data),
     enabled: !!id,
+  })
+  const { data: otherSetsData, isLoading: otherSetsLoading } = useQuery({
+    queryKey: ['product-set-related-sets', id],
+    queryFn: () => productsApi.sets.list({
+      is_active: true,
+      ordering: '-created_at',
+      page_size: 9,
+    }).then((r) => r.data),
+    enabled: !!id,
+    staleTime: 30_000,
+  })
+  const { data: recommendedData, isLoading: recommendedLoading } = useQuery({
+    queryKey: ['product-set-recommended-products', id],
+    queryFn: () => productsApi.products.list({
+      is_active: true,
+      ordering: '-created_at',
+      page_size: 12,
+    }).then((r) => r.data),
+    enabled: !!id,
+    staleTime: 30_000,
   })
 
   const cartProduct = useMemo(() => productSet ? toCartProduct(productSet, t('product.productSet')) : null, [productSet, t])
@@ -68,6 +191,22 @@ export default function ProductSetDetail() {
   }, [productSet])
   const imageUrl = galleryImages[activeImg]?.image || productSet?.image_url || productSet?.image
   const isInStock = setStock > 0
+  const otherSets = (otherSetsData?.results || otherSetsData || [])
+    .filter((item) => String(item.id) !== String(productSet?.id))
+    .map((item) => ({ ...item, type: 'set' }))
+    .slice(0, 8)
+  const productIdsInsideSet = new Set((productSet?.items || [])
+    .map((item) => item.product || item.product_id)
+    .filter(Boolean)
+    .map((itemId) => String(itemId)))
+  const recommendedProducts = (recommendedData?.results || recommendedData || [])
+    .filter((item) => !productIdsInsideSet.has(String(item.id)))
+    .map((item) => ({ ...item, type: 'product' }))
+    .slice(0, 8)
+  const setSlots = otherSets.length > 0 ? Math.min(otherSets.length, 4) : 0
+  const productSlots = setSlots > 0 ? 8 - setSlots : 8
+  const relatedItems = [...otherSets.slice(0, setSlots), ...recommendedProducts.slice(0, productSlots)]
+  const relatedLoading = otherSetsLoading || recommendedLoading
 
   useEffect(() => {
     setActiveImg(0)
@@ -312,6 +451,36 @@ export default function ProductSetDetail() {
           </div>
         </section>
       </div>
+
+      {(relatedLoading || relatedItems.length > 0) && (
+        <section className="mt-10 md:mt-14">
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-pink-600">
+                {t('product.recommendedProducts')}
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
+                {t('product.youMayAlsoLike')}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/shop')}
+              className="hidden rounded-full border border-pink-100 bg-white px-4 py-2 text-sm font-black text-pink-600 shadow-sm transition hover:bg-pink-50 md:inline-flex"
+            >
+              {t('common.viewAll')}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
+            {relatedLoading
+              ? Array.from({ length: 4 }).map((_, index) => <RelatedSetSkeleton key={index} />)
+              : relatedItems.map((item, index) => (
+                <RelatedSetCard key={`${item.type}-${item.id}`} item={item} priority={index < 2} />
+              ))}
+          </div>
+        </section>
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-40 bg-white px-4 pb-4 pt-2 shadow-[0_-8px_25px_rgba(15,23,42,0.08)] md:hidden">
         <div className="mx-auto grid max-w-lg grid-cols-[64px_1fr_1fr] items-center gap-2">

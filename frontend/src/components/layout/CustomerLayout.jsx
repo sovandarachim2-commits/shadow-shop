@@ -76,6 +76,62 @@ const LANGUAGE_OPTIONS = [
   { code: 'km', label: 'Khmer', short: 'KM', flag: '🇰🇭' },
 ]
 
+const DEFAULT_FOOTER_MENUS = {
+  customerService: {
+    titleKey: 'footer.customerService',
+    items: [
+      { labelKey: 'footer.contactUs', url: '', enabled: true },
+      { labelKey: 'footer.faqs', url: '', enabled: true },
+      { labelKey: 'footer.shippingPolicy', url: '', enabled: true },
+      { labelKey: 'footer.returnRefund', url: '', enabled: true },
+      { labelKey: 'footer.terms', url: '', enabled: true },
+    ],
+  },
+  information: {
+    titleKey: 'footer.information',
+    items: [
+      { labelKey: 'footer.aboutUs', url: '', enabled: true },
+      { labelKey: 'footer.privacyPolicy', url: '', enabled: true },
+      { labelKey: 'footer.careers', url: '', enabled: true },
+      { labelKey: 'footer.blog', url: '', enabled: true },
+      { labelKey: 'footer.sitemap', url: '', enabled: true },
+    ],
+  },
+}
+
+function normalizeFooterMenus(value = {}) {
+  return Object.fromEntries(
+    Object.entries(DEFAULT_FOOTER_MENUS).map(([sectionKey, section]) => {
+      const savedSection = value?.[sectionKey] || {}
+      const savedItems = Array.isArray(savedSection.items) ? savedSection.items : []
+      const items = savedItems.length > 0 ? savedItems : section.items
+
+      return [sectionKey, {
+        title: savedSection.title || '',
+        titleKey: section.titleKey,
+        items: items.map((item, index) => ({
+          label: item.label || '',
+          labelKey: item.labelKey || section.items[index]?.labelKey || '',
+          url: item.url || '',
+          enabled: item.enabled !== false,
+        })),
+      }]
+    })
+  )
+}
+
+function FooterMenuItem({ item, children }) {
+  if (item.url) {
+    return (
+      <a href={item.url} className="block transition hover:text-white">
+        {children}
+      </a>
+    )
+  }
+
+  return <p>{children}</p>
+}
+
 export function Logo({ compact = false, inverse = false, iconOnly = false, logoUrl = null, storeName = 'Shadow Shop' }) {
   return (
     <Link to="/" className="flex items-center gap-3">
@@ -144,6 +200,7 @@ export default function CustomerLayout() {
   const storeName = siteSettings?.store_name || 'Shadow Shop'
   const storePhone = siteSettings?.store_phone || ''
   const storeEmail = siteSettings?.store_email || ''
+  const footerMenus = normalizeFooterMenus(siteSettings?.footer_menus)
 
   useEffect(() => {
     if (siteSettings?.favicon_url) {
@@ -488,26 +545,18 @@ export default function CustomerLayout() {
               ))}
             </div>
           </div>
-          <div>
-            <h4 className="font-bold">{t('footer.customerService')}</h4>
-            <div className="mt-4 space-y-2 text-sm text-slate-300">
-              <p>{t('footer.contactUs')}</p>
-              <p>{t('footer.faqs')}</p>
-              <p>{t('footer.shippingPolicy')}</p>
-              <p>{t('footer.returnRefund')}</p>
-              <p>{t('footer.terms')}</p>
+          {Object.entries(footerMenus).map(([sectionKey, section]) => (
+            <div key={sectionKey}>
+              <h4 className="font-bold">{section.title || t(section.titleKey)}</h4>
+              <div className="mt-4 space-y-2 text-sm text-slate-300">
+                {section.items.filter((item) => item.enabled !== false).map((item, index) => (
+                  <FooterMenuItem key={`${sectionKey}-${index}`} item={item}>
+                    {item.label || t(item.labelKey)}
+                  </FooterMenuItem>
+                ))}
+              </div>
             </div>
-          </div>
-          <div>
-            <h4 className="font-bold">{t('footer.information')}</h4>
-            <div className="mt-4 space-y-2 text-sm text-slate-300">
-              <p>{t('footer.aboutUs')}</p>
-              <p>{t('footer.privacyPolicy')}</p>
-              <p>{t('footer.careers')}</p>
-              <p>{t('footer.blog')}</p>
-              <p>{t('footer.sitemap')}</p>
-            </div>
-          </div>
+          ))}
           <div>
             <h4 className="font-bold">{t('footer.downloadApp')}</h4>
             <p className="mt-4 text-sm text-slate-300">{t('footer.downloadAppText')}</p>

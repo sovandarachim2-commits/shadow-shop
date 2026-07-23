@@ -4,12 +4,14 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Star, Heart, ShoppingBag,
   Gift, Brush, Droplet, SprayCan, Trash2, Plus, Minus, RefreshCw, Zap,
+  Sparkles,
 } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { BrandLogo } from '@/components/customer/CustomerUi'
+import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 
@@ -112,7 +114,11 @@ function ProductCard({ product, badge }) {
     : null
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
 
-  const handleAdd = (e) => { e.stopPropagation(); addItem(saleProduct, 1) }
+  const handleAdd = (e) => {
+    e.stopPropagation()
+    addItem(saleProduct, 1)
+    showCartAddedToast(saleProduct, navigate)
+  }
   const handleIncrease = (e) => { e.stopPropagation(); addItem(saleProduct, 1) }
   const handleDecrease = (e) => { e.stopPropagation(); updateQuantity(product.id, qty - 1) }
   const handleWishlist = (e) => {
@@ -218,7 +224,11 @@ function FlashSaleCard({ product }) {
     ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
     : null
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
-  const handleAdd = (e) => { e.stopPropagation(); addItem(saleProduct, 1); toast.success(t('product.addedToCart')) }
+  const handleAdd = (e) => {
+    e.stopPropagation()
+    addItem(saleProduct, 1)
+    showCartAddedToast(saleProduct, navigate)
+  }
   const handleIncrease = (e) => { e.stopPropagation(); addItem(saleProduct, 1) }
   const handleDecrease = (e) => { e.stopPropagation(); updateQuantity(product.id, qty - 1) }
 
@@ -520,10 +530,15 @@ export default function Home() {
         ════════════════════════════════════════════ */}
         {categoryItems.length > 0 && (
           <div className="bg-white">
-            <div className="flex items-center justify-between px-4 pb-1 pt-3.5 md:px-6">
-              <h2 className="text-sm font-black text-gray-950">{t('home.categories')}</h2>
-              <Link to="/shop" className="flex items-center gap-0.5 text-[13px] font-black text-pink-600">
-                {t('common.all')} <ChevronRight size={13} />
+            <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 md:px-6">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
+                  <ShoppingBag size={14} strokeWidth={2.5} />
+                </span>
+                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.categories')}</h2>
+              </div>
+              <Link to="/shop" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                {t('common.all')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
             <div
@@ -689,16 +704,14 @@ export default function Home() {
 
         <div className="h-2 bg-gray-50" />
         {(showFlashSkeleton || flashSale.length > 0) && (
-          <div className="bg-white px-4 pb-4 pt-3.5 md:px-6">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                {/* Badge */}
-                <div className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-pink-600 to-rose-500 px-2.5 py-1 shadow-sm shadow-pink-200">
-                  <Zap size={12} className="fill-white text-white" />
-                  <span className="text-[11px] font-black text-white">{t('home.flashSale')}</span>
-                </div>
-                {/* Countdown */}
-                <div className="flex items-center gap-0.5">
+          <div className="bg-white px-4 pb-4 pt-4 md:px-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
+                  <Zap size={14} className="fill-pink-600" strokeWidth={2.5} />
+                </span>
+                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.flashSale')}</h2>
+                <div className="ml-1 hidden items-center gap-0.5 sm:flex">
                   {[countdown.h, countdown.m, countdown.s].map((v, i) => (
                     <span key={i} className="flex items-center">
                       <span className="flex h-[22px] min-w-[24px] items-center justify-center rounded-md bg-gray-900 px-1 text-[11px] font-black tabular-nums text-white">
@@ -709,8 +722,8 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <Link to="/flash-sale" className="flex items-center gap-0.5 text-[13px] font-bold text-pink-600">
-                {t('common.seeAll')} <ChevronRight size={13} />
+              <Link to="/flash-sale" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
             {/* Mobile: horizontal scroll; Desktop: grid */}
@@ -740,27 +753,32 @@ export default function Home() {
         ════════════════════════════════════════════ */}
         {brands.length > 0 && (
           <div className="bg-white px-4 pb-4 pt-3.5 md:px-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-black text-gray-950">{t('home.shopByBrand')}</h2>
-              <Link to="/shop" className="flex items-center gap-0.5 text-[13px] font-bold text-pink-600">
-                {t('common.viewAll')} <ChevronRight size={13} />
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
+                  <Sparkles size={14} strokeWidth={2.5} />
+                </span>
+                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.shopByBrand')}</h2>
+              </div>
+              <Link to="/shop" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                {t('common.viewAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
-            <div className="brand-marquee overflow-hidden pb-1">
+            <div className="brand-marquee -mx-4 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
               <div className="brand-marquee-track flex w-max">
-                {[0, 1].map((copy) => (
-                  <div key={copy} className="flex shrink-0 gap-4 pr-4" aria-hidden={copy === 1 || undefined}>
+                {[0, 1, 2].map((copy) => (
+                  <div key={copy} className="flex shrink-0 gap-3 pr-3 md:gap-4 md:pr-4" aria-hidden={copy !== 0 || undefined}>
                     {marqueeBrands.map((brand, index) => (
                       <Link
                         key={`${copy}-${brand.id}-${index}`}
                         to={`/shop?brand=${brand.id}`}
-                        tabIndex={copy === 1 ? -1 : undefined}
-                        className="group flex shrink-0 flex-col items-center gap-1.5 transition active:scale-90 md:min-w-[240px] md:flex-row md:gap-5 md:rounded-2xl md:border md:border-gray-100 md:bg-white md:px-5 md:py-3 md:shadow-card md:hover:border-pink-100 md:hover:bg-pink-50"
+                        tabIndex={copy !== 0 ? -1 : undefined}
+                        className="group flex min-w-[84px] flex-col items-center gap-1.5 rounded-2xl border border-gray-100 bg-white px-2.5 py-3 shadow-sm transition active:scale-95 md:min-w-[220px] md:flex-row md:gap-4 md:px-4 md:py-3 md:hover:border-pink-100 md:hover:bg-pink-50"
                       >
-                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm md:h-16 md:w-16">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm md:h-16 md:w-16">
                           <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full transition group-hover:ring-2 group-hover:ring-pink-200" />
                         </div>
-                        <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900 md:max-w-[135px] md:text-left md:text-base">{brand.name}</p>
+                        <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900 group-hover:text-pink-600 md:max-w-[130px] md:text-left md:text-base">{brand.name}</p>
                       </Link>
                     ))}
                   </div>
@@ -776,16 +794,16 @@ export default function Home() {
             BEST SELLERS
         ════════════════════════════════════════════ */}
         {(showBestSkeleton || bestSellers.length > 0) && (
-          <div className="bg-white px-4 pb-4 pt-3.5 md:px-6">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-400 shadow-sm shadow-amber-200">
-                  <Star size={12} className="fill-white text-white" />
+          <div className="bg-white px-4 pb-4 pt-4 md:px-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-500 shadow-sm shadow-amber-100">
+                  <Star size={14} className="fill-amber-500" strokeWidth={2.5} />
                 </span>
-                <h2 className="text-sm font-black text-gray-950">{t('home.bestSellers')}</h2>
+                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.bestSellers')}</h2>
               </div>
-              <Link to="/shop?filter=best_seller" className="flex items-center gap-0.5 text-[13px] font-bold text-pink-600">
-                {t('common.seeAll')} <ChevronRight size={13} />
+              <Link to="/shop?filter=best_seller" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
@@ -803,16 +821,16 @@ export default function Home() {
             NEW ARRIVALS
         ════════════════════════════════════════════ */}
         {(showNewSkeleton || newArrivals.length > 0) && (
-          <div className="bg-white px-4 pb-5 pt-3.5 md:px-6">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="rounded-lg bg-green-500 px-2 py-0.5 text-[9px] font-black tracking-wide text-white shadow-sm shadow-green-200">
-                  NEW
+          <div className="bg-white px-4 pb-5 pt-4 md:px-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 shadow-sm shadow-green-100">
+                  <Gift size={14} strokeWidth={2.5} />
                 </span>
-                <h2 className="text-sm font-black text-gray-950">{t('home.newArrivals')}</h2>
+                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.newArrivals')}</h2>
               </div>
-              <Link to="/shop?filter=new_arrival" className="flex items-center gap-0.5 text-[13px] font-bold text-pink-600">
-                {t('common.seeAll')} <ChevronRight size={13} />
+              <Link to="/shop?filter=new_arrival" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">

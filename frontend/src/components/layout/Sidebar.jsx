@@ -120,6 +120,7 @@ const navItems = [
       { label: 'Payment Methods',   path: '/admin/settings/payment',  icon: CreditCard,    module: 'settings' },
       { label: 'Print Logo',        path: '/admin/settings/print-logo', icon: Image,       module: 'settings' },
       { label: 'Login Logo',        path: '/admin/settings/login-logo', icon: Image,     module: 'settings' },
+      { label: 'Customer Footer',    path: '/admin/settings/customer-footer', icon: FileText, module: 'settings' },
     ],
   },
 ]

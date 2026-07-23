@@ -27,6 +27,30 @@ function GoogleMark({ size = 18 }) {
   )
 }
 
+function loadGoogleIdentityScript() {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve()
+      return
+    }
+
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+    if (existing) {
+      existing.addEventListener('load', resolve, { once: true })
+      existing.addEventListener('error', reject, { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = resolve
+    script.onerror = reject
+    document.head.appendChild(script)
+  })
+}
+
 /* ──────────────────────────────────────────────────
    SHOP LOGO  (mountain icon + SHADOW / SHOP)
 ────────────────────────────────────────────────── */
@@ -327,14 +351,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [telegramOpen, setTelegramOpen] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
-  const [googleOpen, setGoogleOpen] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
   const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '', terms: true })
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
   const telegramWidgetRef = useRef(null)
-  const googleButtonRef = useRef(null)
   const showError = (message, title = t('auth.errorTitle')) => setNotice({ type: 'error', title, message })
   const sl = (k, v) => {
     setLf((f) => ({ ...f, [k]: v }))
@@ -346,15 +368,6 @@ export default function Login() {
     setNotice(null)
   }
 
-  const [socialConfigReady, setSocialConfigReady] = useState(false)
-
-  useEffect(() => {
-    const start = window.requestIdleCallback || ((cb) => window.setTimeout(cb, 180))
-    const cancel = window.cancelIdleCallback || window.clearTimeout
-    const id = start(() => setSocialConfigReady(true))
-    return () => cancel(id)
-  }, [])
-
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
@@ -365,14 +378,12 @@ export default function Login() {
     queryKey: ['telegram-login-config'],
     queryFn: () => authApi.telegramConfig().then((r) => r.data),
     staleTime: 10 * 60 * 1000,
-    enabled: socialConfigReady,
   })
 
   const { data: googleConfig } = useQuery({
     queryKey: ['google-login-config'],
     queryFn: () => authApi.googleConfig().then((r) => r.data),
     staleTime: 10 * 60 * 1000,
-    enabled: socialConfigReady,
   })
 
   const storeName = siteSettings?.store_name || 'Shadow Shop'
@@ -383,6 +394,23 @@ export default function Login() {
   const googleLoginEnabled = Boolean(googleConfig?.configured && googleClientId)
   const isKhmer = i18n.language?.startsWith('km')
   const authFontFamily = isKhmer ? '"Khmer OS Battambang", "Khmer OS", "Noto Sans Khmer", sans-serif' : undefined
+
+  useEffect(() => {
+    const preconnectHosts = ['https://accounts.google.com', 'https://telegram.org']
+    preconnectHosts.forEach((href) => {
+      if (document.querySelector(`link[rel="preconnect"][href="${href}"]`)) return
+      const link = document.createElement('link')
+      link.rel = 'preconnect'
+      link.href = href
+      link.crossOrigin = 'anonymous'
+      document.head.appendChild(link)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!googleLoginEnabled) return
+    loadGoogleIdentityScript().catch(() => {})
+  }, [googleLoginEnabled])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -432,75 +460,7 @@ export default function Login() {
     return () => {
       if (window[callbackName]) delete window[callbackName]
     }
-  }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin])
-
-  useEffect(() => {
-    if (!googleOpen || !googleLoginEnabled || !googleButtonRef.current) return
-
-    let cancelled = false
-
-    const loadGoogleScript = () => new Promise((resolve, reject) => {
-      if (window.google?.accounts?.id) {
-        resolve()
-        return
-      }
-
-      const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
-      if (existing) {
-        existing.addEventListener('load', resolve, { once: true })
-        existing.addEventListener('error', reject, { once: true })
-        return
-      }
-
-      const script = document.createElement('script')
-      script.src = 'https://accounts.google.com/gsi/client'
-      script.async = true
-      script.defer = true
-      script.onload = resolve
-      script.onerror = reject
-      document.head.appendChild(script)
-    })
-
-    loadGoogleScript()
-      .then(() => {
-        if (cancelled || !googleButtonRef.current) return
-
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: async ({ credential }) => {
-            if (!credential) {
-              showError(t('auth.googleCredentialMissing'))
-              return
-            }
-
-            setGoogleLoading(true)
-            try {
-              const loggedInUser = await googleLogin({ credential })
-              toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
-              setGoogleOpen(false)
-            } catch (err) {
-              showError(translateAuthError(err.response?.data, t, 'auth.googleLoginFailed'))
-            } finally {
-              setGoogleLoading(false)
-            }
-          },
-        })
-
-        googleButtonRef.current.innerHTML = ''
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          theme: 'outline',
-          size: 'large',
-          shape: 'rectangular',
-          text: mode === 'register' ? 'signup_with' : 'signin_with',
-          width: 320,
-        })
-      })
-      .catch(() => showError(t('auth.googleLoadFailed')))
-
-    return () => {
-      cancelled = true
-    }
-  }, [googleOpen, googleLoginEnabled, googleClientId, googleLogin, mode, t])
+  }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin, t])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -536,20 +496,51 @@ export default function Login() {
     } finally { setLoading(false) }
   }
 
+  const openGoogleLogin = async () => {
+    if (!googleLoginEnabled) {
+      showError(t('auth.googleNotConfigured'))
+      return
+    }
+
+    setGoogleLoading(true)
+    try {
+      await loadGoogleIdentityScript()
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async ({ credential }) => {
+          if (!credential) {
+            showError(t('auth.googleCredentialMissing'))
+            setGoogleLoading(false)
+            return
+          }
+
+          try {
+            const loggedInUser = await googleLogin({ credential })
+            toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
+          } catch (err) {
+            showError(translateAuthError(err.response?.data, t, 'auth.googleLoginFailed'))
+          } finally {
+            setGoogleLoading(false)
+          }
+        },
+      })
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.() || notification.isDismissedMoment?.()) {
+          setGoogleLoading(false)
+        }
+      })
+    } catch {
+      setGoogleLoading(false)
+      showError(t('auth.googleLoadFailed'))
+    }
+  }
+
   const openTelegramLogin = () => {
     if (!telegramLoginEnabled) {
       showError(t('auth.telegramNotConfigured'))
       return
     }
     setTelegramOpen(true)
-  }
-
-  const openGoogleLogin = () => {
-    if (!googleLoginEnabled) {
-      showError(t('auth.googleNotConfigured'))
-      return
-    }
-    setGoogleOpen(true)
   }
 
   const EyeToggle = ({ show, toggle }) => (
@@ -639,14 +630,14 @@ export default function Login() {
                         <EyeToggle show={showPass} toggle={() => setShowPass((s) => !s)} />
                       </div>
                       <div className="flex justify-end mt-2">
-                        <button type="button" className="text-xs font-bold text-[#EC4D97] transition hover:text-[#E53888] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10">
+                        <button type="button" onClick={() => navigate('/forgot-password')} className="text-xs font-bold text-[#EC4D97] transition hover:text-[#E53888] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10">
                           {t('auth.forgotPassword')}
                         </button>
                       </div>
                     </div>
 
                     <button type="submit" disabled={loading}
-                      className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#FF6CAB,#EC4D97)] text-base font-bold text-white shadow-[0_15px_35px_rgba(236,77,151,0.25)] transition hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#FF62A5,#E53888)] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/20 disabled:scale-100 disabled:opacity-60">
+                      className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] text-base font-bold text-white shadow-[0_15px_35px_rgba(236,25,122,0.28)] transition hover:scale-[1.02] hover:bg-[#D9166F] focus:outline-none focus:ring-4 focus:ring-[#EC197A]/20 active:scale-[0.99] disabled:scale-100 disabled:opacity-60">
                       {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.login')} <ChevronRight size={17} strokeWidth={2.5} /></>}
                     </button>
 
@@ -788,7 +779,7 @@ export default function Login() {
                     {registerErrors.terms && <p className="-mt-2 text-xs font-bold text-red-500">{registerErrors.terms}</p>}
 
                     <button type="submit" disabled={loading}
-                      className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#FF6CAB,#EC4D97)] text-base font-bold text-white shadow-[0_15px_35px_rgba(236,77,151,0.25)] transition hover:scale-[1.02] hover:bg-[linear-gradient(135deg,#FF62A5,#E53888)] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/20 disabled:cursor-wait disabled:scale-100 disabled:opacity-75">
+                      className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] text-base font-bold text-white shadow-[0_15px_35px_rgba(236,25,122,0.28)] transition hover:scale-[1.02] hover:bg-[#D9166F] focus:outline-none focus:ring-4 focus:ring-[#EC197A]/20 active:scale-[0.99] disabled:cursor-wait disabled:scale-100 disabled:opacity-75">
                       {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.createAccount')} <ChevronRight size={17} strokeWidth={2.5} /></>}
                     </button>
 
@@ -830,34 +821,6 @@ export default function Login() {
       </div>
       </div>
 
-      {googleOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#FFF4F8]/80 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-[28px] border border-[#F0D9E6] bg-white p-6 text-center shadow-[0_30px_80px_rgba(236,77,151,0.16)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF4F8]">
-              <GoogleMark size={26} />
-            </div>
-            <h3 className="mt-4 text-xl font-bold text-[#1A1A1A]">{t('auth.continueWithGoogle')}</h3>
-            <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-              {t('auth.chooseGoogleAccount')}
-            </p>
-            <div className="mt-5 flex min-h-[48px] items-center justify-center rounded-2xl border border-[#F0D9E6] bg-[#FFF9FC] px-3 py-4">
-              {googleLoginEnabled ? (
-                <div ref={googleButtonRef} className="flex justify-center" />
-              ) : (
-                <p className="text-sm font-bold text-red-500">{t('auth.googleNotConfiguredShort')}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setGoogleOpen(false)}
-              className="mt-4 h-11 w-full rounded-2xl border border-[#F0D9E6] bg-white text-sm font-bold text-[#6B7280] transition hover:bg-[#FFF4F8] hover:text-[#EC4D97] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10"
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
-        </div>
-      )}
-
       {telegramOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#FFF4F8]/80 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[28px] border border-[#F0D9E6] bg-white p-6 text-center shadow-[0_30px_80px_rgba(236,77,151,0.16)]">
@@ -885,6 +848,7 @@ export default function Login() {
           </div>
         </div>
       )}
+
     </div>
   )
 }

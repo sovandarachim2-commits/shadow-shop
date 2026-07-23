@@ -247,7 +247,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
                   'logo', 'favicon', 'login_logo', 'splash_logo', 'print_logo',
                   'logo_url', 'favicon_url', 'login_logo_url', 'splash_logo_url', 'print_logo_url',
                   'splash_enabled', 'splash_duration_ms', 'print_logo_size', 'print_qr_size', 'currency', 'timezone',
-                  'delivery_fees', 'payment_methods']
+                  'delivery_fees', 'payment_methods', 'footer_menus']
         extra_kwargs = {'logo': {'write_only': True, 'required': False},
                         'favicon': {'write_only': True, 'required': False},
                         'login_logo': {'write_only': True, 'required': False},

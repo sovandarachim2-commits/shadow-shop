@@ -106,6 +106,42 @@ New → Printed → Preparing → Packed → Shipped → Completed
 
 ## Quick Start (Development)
 
+### Local Run (Windows/XAMPP)
+
+Run the backend and frontend from two separate terminals.
+
+Backend:
+
+```powershell
+cd "C:\xampp\htdocs\Shadow Shop\backend"
+venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
+```
+
+Frontend:
+
+```powershell
+cd "C:\xampp\htdocs\Shadow Shop\frontend"
+npm run dev
+```
+
+Open the app:
+
+```text
+http://localhost:5173/
+```
+
+For another device on the same Wi-Fi, use the Network URL shown by Vite, for example:
+
+```text
+http://192.168.110.221:5173/
+```
+
+Notes:
+- Run `npm run dev` from `frontend`, not the repo root.
+- Use `backend\venv`, not the root `.venv`, for Django commands.
+- If Vite fails with `spawn EPERM` while loading `esbuild`, allow the dev server command to run because Windows is blocking `frontend\node_modules\@esbuild\win32-x64\esbuild.exe`.
+- The frontend proxies `/api` requests to the backend on `http://localhost:8001`.
+
 ### Backend
 ```bash
 cd backend
@@ -126,10 +162,6 @@ Run this after pulling new backend changes or deploying updates that add databas
 cd backend
 python manage.py migrate
 ```
-cd "C:\xampp\htdocs\Shadow Shop\backend"
-.\venv\Scripts\Activate.ps1
-python manage.py runserver 0.0.0.0:8001
-
 
 ### Frontend
 ```bash
@@ -151,8 +183,7 @@ Keep both servers running:
 ```bash
 # Backend
 cd "C:\xampp\htdocs\Shadow Shop\backend"
-.\venv\Scripts\Activate.ps1
-python manage.py runserver 0.0.0.0:8001
+venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
 
 # Frontend
 cd "C:\xampp\htdocs\Shadow Shop\frontend"
@@ -162,8 +193,8 @@ npm run dev
 If your computer IP changes, update `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` in `backend/.env`.
 
 ### API Documentation
-- Swagger UI: http://localhost:8000/api/docs/
-- ReDoc: http://localhost:8000/api/redoc/
+- Swagger UI: http://localhost:8001/api/docs/
+- ReDoc: http://localhost:8001/api/redoc/
 
 ## API Endpoints
 

@@ -12,6 +12,9 @@ const AUTH_FREE_PATHS = [
   '/auth/register/',
   '/auth/email/resend-code/',
   '/auth/email/verify-code/',
+  '/auth/password/forgot/',
+  '/auth/password/verify-code/',
+  '/auth/password/reset/',
   '/auth/google/config/',
   '/auth/google/login/',
   '/auth/telegram/config/',
@@ -21,7 +24,6 @@ const AUTH_FREE_PATHS = [
   '/auth/telegram/confirm/',
   '/auth/telegram/otp-login/',
   '/auth/refresh/',
-  '/auth/site-settings/',
 ]
 
 const PUBLIC_GET_PREFIXES = [
@@ -54,6 +56,7 @@ function isAuthFreeRequest(config) {
 function isPublicGetRequest(config) {
   if ((config?.method || 'get').toLowerCase() !== 'get') return false
   const path = requestPath(config)
+  if (path.endsWith('/auth/site-settings/')) return true
   return PUBLIC_GET_PREFIXES.some((prefix) => path.endsWith(prefix) || path.includes(prefix))
 }
 

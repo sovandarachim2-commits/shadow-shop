@@ -8,6 +8,7 @@ import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
+import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 
@@ -91,6 +92,7 @@ function ProductCard({ product, priority = false }) {
   const handleAdd = (e) => {
     e.stopPropagation()
     addItem(saleProduct, 1)
+    showCartAddedToast(saleProduct, navigate)
   }
 
   const handleIncrease = (e) => {
@@ -259,7 +261,11 @@ function ProductSetCard({ productSet }) {
           ) : qty === 0 ? (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); addItem(cartProduct, 1) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                addItem(cartProduct, 1)
+                showCartAddedToast(cartProduct, navigate)
+              }}
               className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4"
             >
               {t('common.add')}
@@ -286,6 +292,7 @@ export default function ProductList() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
+  const wishlistCount = useWishlistStore((s) => s.items.length)
   const [search, setSearch] = useState(searchParams.get('search') || '')
   const [categoryId, setCategoryId] = useState(searchParams.get('category') || '')
   const [brand, setBrand] = useState(searchParams.get('brand') || '')
@@ -378,6 +385,14 @@ export default function ProductList() {
               <div className="flex items-center justify-end gap-2">
                 <button onClick={() => navigate('/search')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
                   <Search size={22} />
+                </button>
+                <button onClick={() => navigate('/wishlist')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
+                  <Heart size={22} />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-500 px-1 text-xs font-bold text-white ring-2 ring-white">
+                      {wishlistCount > 9 ? '9+' : wishlistCount}
+                    </span>
+                  )}
                 </button>
                 <button onClick={() => navigate('/cart')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700 active:scale-95">
                   <ShoppingCart size={22} />

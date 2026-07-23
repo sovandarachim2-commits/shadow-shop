@@ -13,7 +13,7 @@ import { formatAddressLocationKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHe
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
 
-const PAYMENT_METHOD_KEYS = ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash']
+const PAYMENT_METHOD_KEYS = ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales']
 
 const DEFAULT_PROVINCE_FEES = {
   phnom_penh: 3, siem_reap: 6, battambang: 6,
@@ -119,6 +119,18 @@ function formatTimer(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`
 }
 
+function withTelegramText(url, text) {
+  if (!url || !text) return url
+  try {
+    const parsed = new URL(url)
+    parsed.searchParams.set('text', text)
+    return parsed.toString()
+  } catch {
+    const joiner = url.includes('?') ? '&' : '?'
+    return `${url}${joiner}text=${encodeURIComponent(text)}`
+  }
+}
+
 function getCouponDiscount(coupon, subtotal, deliveryFee) {
   if (!coupon) return 0
   if (coupon.reward_type === 'free_delivery') return Math.min(deliveryFee, subtotal + deliveryFee)
@@ -199,6 +211,14 @@ export default function Checkout() {
   const deliveryFee = checkoutItems.length > 0 && hasAddress ? Number(province?.fee || 0) : 0
   const couponDiscount = getCouponDiscount(appliedCoupon, subtotal, deliveryFee)
   const grandTotal = subtotal + deliveryFee - couponDiscount
+  const contactSalesUrl = String(siteSettings?.payment_methods?.contact_sales_url || '').trim()
+  const checkoutActionLabel = (submitting || abaLoading)
+    ? t('checkout.pleaseWait')
+    : paymentMethod === 'contact_sales'
+      ? t('checkout.contactSales')
+      : ONLINE_PAYMENT_METHODS.includes(paymentMethod)
+        ? t('checkout.payNow')
+        : t('checkout.placeOrder')
 
   useEffect(() => {
     if (items.length > 0 && selectedProductIds.length === 0) {
@@ -261,7 +281,7 @@ export default function Checkout() {
     }
 
     checkOrderPayment()
-    const timer = setInterval(checkOrderPayment, 2500)
+    const timer = setInterval(checkOrderPayment, 1200)
 
     return () => {
       stopped = true
@@ -311,7 +331,7 @@ export default function Checkout() {
     }
 
     checkPayment()
-    const timer = setInterval(checkPayment, 2000)
+    const timer = setInterval(checkPayment, 1200)
 
     return () => {
       stopped = true
@@ -359,6 +379,25 @@ export default function Checkout() {
     })),
   })
 
+  const buildContactSalesMessage = (order) => {
+    const itemLines = checkoutItems.map((item) => (
+      `- ${item.product.name} x${item.quantity} = ${formatCurrency(item.product.retail_price * item.quantity)}`
+    ))
+    return [
+      `ការបញ្ជាទិញ #${order.order_number}`,
+      `ស្ថានភាព: កំពុងរង់ចាំផ្នែកលក់បញ្ជាក់`,
+      `អតិថិជន: ${info.name}`,
+      `ទូរស័ព្ទ: ${info.phone}`,
+      `អាសយដ្ឋាន: ${info.address || info.address_line1}`,
+      'ផលិតផល:',
+      ...itemLines,
+      `សរុបរង: ${formatCurrency(subtotal)}`,
+      `ថ្លៃដឹកជញ្ជូន: ${formatCurrency(deliveryFee)}`,
+      `បញ្ចុះតម្លៃ: -${formatCurrency(couponDiscount)}`,
+      `សរុប: ${formatCurrency(grandTotal)}`,
+    ].filter(Boolean).join('\n')
+  }
+
   const handlePlaceOrder = async () => {
     if (paymentMethod === 'bakong' && bakongPayment && bakongPayment.status !== 'paid') {
       setShowBakongPopup(true)
@@ -370,6 +409,10 @@ export default function Checkout() {
       navigate('/address-book')
       return
     }
+
+    const salesWindow = paymentMethod === 'contact_sales' && contactSalesUrl
+      ? window.open('about:blank', '_blank')
+      : null
 
     setSubmitting(true)
     try {
@@ -409,8 +452,12 @@ export default function Checkout() {
 
       const order = result
       removeSelectedItems()
+      if (paymentMethod === 'contact_sales' && contactSalesUrl && salesWindow) {
+        salesWindow.location.href = withTelegramText(contactSalesUrl, buildContactSalesMessage(order))
+      }
       navigate('/order-success', { state: { orderId: order.id, orderNumber: order.order_number } })
     } catch (error) {
+      if (salesWindow) salesWindow.close()
       const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail
       toast.error(Array.isArray(detail) ? detail[0] : detail || t('checkout.placeOrderFailed'))
     } finally {
@@ -532,6 +579,11 @@ export default function Checkout() {
                 </button>
               ))}
             </div>
+            {paymentMethod === 'contact_sales' && (
+              <p className="mt-4 rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3 text-sm font-bold leading-relaxed text-pink-600">
+                {t('checkout.contactSalesNotice')}
+              </p>
+            )}
           </div>
 
           {/* Products */}
@@ -580,7 +632,7 @@ export default function Checkout() {
             disabled={submitting || abaLoading || !hasAddress}
             className="shop-btn-primary mt-6 hidden w-full py-4 disabled:cursor-not-allowed disabled:opacity-60 md:block"
           >
-            {(submitting || abaLoading) ? t('checkout.pleaseWait') : ONLINE_PAYMENT_METHODS.includes(paymentMethod) ? t('checkout.payNow') : t('checkout.placeOrder')}
+            {checkoutActionLabel}
           </button>
         </aside>
       </div>
@@ -596,7 +648,7 @@ export default function Checkout() {
             disabled={submitting || abaLoading || !hasAddress}
             className="rounded-full bg-pink-600 px-6 py-2.5 text-base font-black text-white shadow-lg shadow-pink-200 disabled:opacity-60"
           >
-            {(submitting || abaLoading) ? t('checkout.pleaseWait') : ONLINE_PAYMENT_METHODS.includes(paymentMethod) ? t('checkout.payNow') : t('checkout.placeOrder')}
+            {checkoutActionLabel}
           </button>
         </div>
       </div>

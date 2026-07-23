@@ -177,30 +177,40 @@ html[lang="km"] textarea {
   max-width: 100%;
 }
 
+.brand-marquee {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+.brand-marquee::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes brand-marquee-left {
   from {
     transform: translateX(0);
   }
   to {
-    transform: translateX(-50%);
+    transform: translateX(-33.333333%);
   }
 }
 
 .brand-marquee-track {
-  animation: brand-marquee-left 32s linear infinite;
+  animation: brand-marquee-left 48s linear infinite;
+  transform: translate3d(0, 0, 0);
   will-change: transform;
 }
 
 .brand-marquee:hover .brand-marquee-track,
-.brand-marquee:active .brand-marquee-track {
+.brand-marquee:active .brand-marquee-track,
+.brand-marquee:focus-within .brand-marquee-track {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-marquee {
-    overflow-x: auto;
-  }
-
   .brand-marquee-track {
     animation: none;
   }

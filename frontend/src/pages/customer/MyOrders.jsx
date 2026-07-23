@@ -43,9 +43,7 @@ const COMPLETED_STATUSES = new Set(['completed', 'delivered', 'cancelled'])
 const PAYMENT_METHOD_LABELS = {
   aba: 'ABA Pay',
   bakong: 'Bakong KHQR',
-  cod: 'Cash on Delivery',
-  cash: 'Cash',
-  acleda: 'ACLEDA Bank',
+  acleda: 'ACLEDA',
   wing: 'Wing',
 }
 
@@ -73,14 +71,16 @@ function getItemPrice(order, item) {
 
 function compactStatusLabel(status, t) {
   const label = t(STATUS_LABEL_KEYS[status] || 'orders.status.unknown', { status })
-  if (status === 'shipped') return 'In Transit'
-  if (status === 'preparing') return 'Packing'
-  if (status === 'printed' || status === 'packed') return 'Picked'
+  if (status === 'shipped') return t('orders.status.inTransit')
+  if (status === 'preparing') return t('orders.status.packing')
+  if (status === 'printed' || status === 'packed') return t('orders.status.picked')
   return label
 }
 
-function paymentMethodLabel(method) {
-  return PAYMENT_METHOD_LABELS[method] || method || '-'
+function paymentMethodLabel(method, t) {
+  if (PAYMENT_METHOD_LABELS[method]) return PAYMENT_METHOD_LABELS[method]
+  if (t) return t(`orders.payment.${method}`, { defaultValue: method || '-' })
+  return method || '-'
 }
 
 function PrintLogo({ printLogoUrl, size = 78 }) {
@@ -304,8 +304,8 @@ export default function MyOrders() {
         </div>
         <div className="mb-6 grid max-w-md grid-cols-2 rounded-lg bg-gray-200 p-1">
           {[
-            { key: 'ongoing', label: 'Ongoing' },
-            { key: 'completed', label: 'Completed' },
+            { key: 'ongoing', label: t('orders.ongoing') },
+            { key: 'completed', label: t('orders.completedTab') },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -355,7 +355,7 @@ export default function MyOrders() {
                     type="button"
                     onClick={() => setReceiptOrderId(order.id)}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 active:scale-95"
-                    aria-label="Receipt"
+                    aria-label={t('common.receipt')}
                   >
                     <ReceiptText size={15} />
                   </button>
@@ -418,9 +418,9 @@ export default function MyOrders() {
                 <ChevronLeft size={22} />
               </button>
               <div className="min-w-0 text-center sm:text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-pink-600">Receipt</p>
+                <p className="text-xs font-black uppercase tracking-wide text-pink-600">{t('common.receipt')}</p>
                 <h3 className="truncate text-base font-black text-gray-950">
-                  {receiptOrder?.order_number ? `#${receiptOrder.order_number}` : 'Loading receipt'}
+                  {receiptOrder?.order_number ? `#${receiptOrder.order_number}` : t('common.loadingReceipt')}
                 </h3>
               </div>
               <div className="flex items-center justify-end gap-2">

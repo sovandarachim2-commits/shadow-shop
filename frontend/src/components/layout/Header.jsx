@@ -56,6 +56,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/settings/payment', 'Payment Settings'],
   ['/admin/settings/print-logo', 'Print Settings'],
   ['/admin/settings/login-logo', 'Login Logo'],
+  ['/admin/settings/customer-footer', 'Customer Footer'],
   ['/admin/settings', 'Settings'],
   ['/admin', 'Dashboard'],
 ]

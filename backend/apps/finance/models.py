@@ -47,6 +47,7 @@ class Revenue(models.Model):
         ('wing', 'Wing'),
         ('cod', 'Cash on Delivery'),
         ('cash', 'Cash'),
+        ('contact_sales', 'Contact Sales'),
         ('other', 'Other'),
     ]
 

@@ -79,6 +79,7 @@ const OutItemsHistory = lazyWithReload(() => import('@/pages/admin/operations/Ou
 const DeliveryCustomer = lazyWithReload(() => import('@/pages/admin/operations/DeliveryCustomer'))
 const DeliveryByConfig = lazyWithReload(() => import('@/pages/admin/operations/DeliveryByConfig'))
 const VerifyEmail = lazyWithReload(() => import('@/pages/VerifyEmail'))
+const ForgotPassword = lazyWithReload(() => import('@/pages/ForgotPassword'))
 const Dashboard = lazyWithReload(() => import('@/pages/admin/Dashboard'))
 const NewOrder = lazyWithReload(() => import('@/pages/admin/orders/NewOrder'))
 const OrderList = lazyWithReload(() => import('@/pages/admin/orders/OrderList'))
@@ -447,6 +448,7 @@ export default function App() {
           {/* Auth */}
           <Route path="/login" element={<Login />} />
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
+          <Route path="/forgot-password" element={<LazyPage><ForgotPassword /></LazyPage>} />
 
           {/* Customer App */}
           <Route path="/" element={
@@ -636,6 +638,7 @@ export default function App() {
             <Route path="settings/payment" element={<LazyPage><Settings tab="payment" /></LazyPage>} />
             <Route path="settings/print-logo" element={<LazyPage><Settings tab="printLogo" /></LazyPage>} />
             <Route path="settings/login-logo" element={<LazyPage><Settings tab="loginSplash" /></LazyPage>} />
+            <Route path="settings/customer-footer" element={<LazyPage><Settings tab="customerFooter" /></LazyPage>} />
             <Route path="settings/login-splash" element={<Navigate to="/admin/settings/login-logo" replace />} />
           </Route>
 

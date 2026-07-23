@@ -5,6 +5,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.inventory.models import Stock
+from apps.notifications.models import TelegramConfig
+from apps.notifications.services import TelegramService
 from apps.orders.models import Customer, Order, OrderItem, OrderStatusHistory
 from apps.orders.serializers import CustomerCheckoutSerializer
 from apps.payments.checkout_flow import fulfill_pending_checkout, prepare_online_checkout
@@ -89,6 +91,41 @@ class CustomerOrderFlowTests(TestCase):
         self.assertEqual(order.payment_status, 'unpaid')
         on_commit.call_args.args[0]()
         notify_new_order_async.assert_called_once_with(order.id)
+
+    @patch('django.db.transaction.on_commit')
+    @patch('apps.notifications.services.TelegramService.notify_new_order_async')
+    def test_contact_sales_checkout_queues_new_order_notification(self, notify_new_order_async, on_commit):
+        order = self.create_customer_order('contact_sales')
+
+        self.assertEqual(order.payment_method, 'contact_sales')
+        self.assertEqual(order.payment_status, 'unpaid')
+        on_commit.call_args.args[0]()
+        notify_new_order_async.assert_called_once_with(order.id)
+
+    @patch('apps.notifications.services.requests.post')
+    def test_contact_sales_telegram_message_includes_order_products(self, requests_post):
+        response = Mock(status_code=200, content=b'{}')
+        response.json.return_value = {'result': {'message_id': 123}}
+        requests_post.return_value = response
+        TelegramConfig.objects.create(
+            name='Sales',
+            bot_token='test-token',
+            chat_id='test-chat',
+            notify_new_order=True,
+        )
+
+        order = self.create_customer_order('contact_sales')
+
+        self.assertTrue(TelegramService().notify_new_order(order))
+        payload = requests_post.call_args.kwargs['json']
+        self.assertEqual(payload['chat_id'], 'test-chat')
+        self.assertEqual(order.status, Order.STATUS_NEW)
+        self.assertEqual(order.payment_status, 'unpaid')
+        self.assertIn('<b>សំណើទាក់ទងផ្នែកលក់</b>', payload['text'])
+        self.assertIn('ស្ថានភាព: កំពុងរង់ចាំផ្នែកលក់បញ្ជាក់', payload['text'])
+        self.assertIn('Order Test Product x2 @ $10.00', payload['text'])
+        self.assertIn('អាសយដ្ឋាន: Phnom Penh, Street 1', payload['text'])
+        self.assertIn('វិធីបង់ប្រាក់: ទាក់ទងផ្នែកលក់', payload['text'])
 
     @patch('apps.payments.checkout_flow.TelegramService')
     def test_pay_now_checkout_prepares_pending_checkout_without_creating_order(self, telegram_service):

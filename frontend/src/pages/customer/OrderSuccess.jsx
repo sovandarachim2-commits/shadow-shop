@@ -33,7 +33,7 @@ export default function OrderSuccess() {
     queryKey: ['checkout-status', checkoutReference],
     queryFn: () => ordersApi.orders.checkoutStatus(checkoutReference).then((r) => r.data),
     enabled: !!checkoutReference,
-    refetchInterval: (q) => (q.state.data?.order_id ? false : 3000),
+    refetchInterval: (q) => (q.state.data?.order_id ? false : 1500),
   })
 
   const resolvedOrderId = orderId || checkoutStatus?.order_id
@@ -61,7 +61,7 @@ export default function OrderSuccess() {
     refetchInterval: (q) => {
       const current = q.state.data
       if (!current || isPaymentComplete(current, bakongPayment)) return false
-      return ONLINE_PAYMENTS.includes(current.payment_method) ? 3000 : false
+      return ONLINE_PAYMENTS.includes(current.payment_method) ? 1500 : false
     },
   })
 
@@ -79,11 +79,8 @@ export default function OrderSuccess() {
   useEffect(() => {
     if (!checkoutReference || checkoutStatus?.order_id) return undefined
 
-    const timer = setInterval(() => {
-      refetchCheckoutStatus()
-    }, 3000)
-
-    return () => clearInterval(timer)
+    refetchCheckoutStatus()
+    return undefined
   }, [checkoutReference, checkoutStatus?.order_id, refetchCheckoutStatus])
 
   useEffect(() => {
@@ -109,7 +106,7 @@ export default function OrderSuccess() {
       } finally {
         inFlight = false
       }
-    }, 3000)
+    }, 1500)
 
     return () => clearInterval(timer)
   }, [bakongPayment?.id, bakongPayment?.status, refetch, refetchCheckoutStatus])
@@ -140,7 +137,7 @@ export default function OrderSuccess() {
         </h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-gray-500">
           {checkoutReference
-            ? 'Complete payment to create your order.'
+            ? t('orders.completePaymentToCreate')
             : t('orders.scanPaymentText')}
         </p>
         {checkoutReference && (
@@ -151,7 +148,7 @@ export default function OrderSuccess() {
       {bakongPayment && isBakongPending && (
         <div className="mt-4 rounded-2xl border border-pink-100 bg-white p-5 shadow-card">
           <div className="flex items-center justify-center gap-2 text-sm font-black text-gray-950">
-            <QrCode size={18} /> Bakong KHQR Payment
+            <QrCode size={18} /> {t('orders.bakongKhqrPayment')}
           </div>
           <img
             src={bakongPayment.qr_image}

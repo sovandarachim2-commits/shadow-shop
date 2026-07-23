@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   BarChart3,
@@ -27,14 +28,19 @@ import useAuthStore from '@/store/authStore'
 import { cn } from '@/utils/helpers'
 
 const GENDER_OPTIONS = [
-  { value: '', label: 'Select gender' },
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+  { value: '', labelKey: 'completeProfile.selectGender' },
+  { value: 'male', labelKey: 'completeProfile.genderMale' },
+  { value: 'female', labelKey: 'completeProfile.genderFemale' },
+  { value: 'other', labelKey: 'completeProfile.genderOther' },
+  { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
 ]
 
+function cleanPhoneDisplay(value) {
+  return String(value || '').replace(/^\+?855\s?/, '').trim()
+}
+
 export default function CompleteProfile() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const { user, updateUser } = useAuthStore()
@@ -47,7 +53,7 @@ export default function CompleteProfile() {
   const [step, setStep] = useState('profile')
   const [form, setForm] = useState({
     full_name: [user?.first_name, user?.last_name].filter(Boolean).join(' '),
-    phone: user?.phone || '',
+    phone: cleanPhoneDisplay(user?.phone),
     gender: user?.gender || '',
     email: user?.email || '',
     password: '',
@@ -78,11 +84,11 @@ export default function CompleteProfile() {
     const file = event.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file.')
+      toast.error(t('completeProfile.chooseImage'))
       return
     }
     if (file.size > 6 * 1024 * 1024) {
-      toast.error('Photo is too large. Please choose an image under 6MB.')
+      toast.error(t('completeProfile.photoTooLarge'))
       return
     }
     setAvatarFile(file)
@@ -95,15 +101,15 @@ export default function CompleteProfile() {
       updateUser(data)
       if (needsPassword) {
         setStep('password')
-        toast.success('Profile saved.')
+        toast.success(t('completeProfile.profileSaved'))
         return
       }
-      toast.success('Profile completed.')
+      toast.success(t('completeProfile.profileCompleted'))
       navigate(nextPath, { replace: true })
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.phone?.[0] || body?.first_name?.[0] || body?.gender?.[0] || body?.detail || 'Could not complete profile.'
+      const message = body?.phone?.[0] || body?.first_name?.[0] || body?.gender?.[0] || body?.detail || t('completeProfile.completeFailed')
       toast.error(message)
     },
   })
@@ -112,12 +118,12 @@ export default function CompleteProfile() {
     mutationFn: (data) => authApi.setInitialPassword(data),
     onSuccess: ({ data }) => {
       updateUser(data)
-      toast.success('Password created.')
+      toast.success(t('completeProfile.passwordCreated'))
       navigate(nextPath, { replace: true })
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.password?.[0] || body?.confirm_password?.[0] || body?.detail || 'Could not create password.'
+      const message = body?.password?.[0] || body?.confirm_password?.[0] || body?.detail || t('completeProfile.passwordCreateFailed')
       toast.error(message)
     },
   })
@@ -129,10 +135,10 @@ export default function CompleteProfile() {
     const nextErrors = {}
 
     if (!cleanName || ['google', 'telegram'].includes(cleanName.toLowerCase())) {
-      nextErrors.full_name = 'Please enter your name.'
+      nextErrors.full_name = t('completeProfile.enterName')
     }
-    if (!cleanPhone) nextErrors.phone = 'Please enter your phone number.'
-    if (!form.gender) nextErrors.gender = 'Please select gender.'
+    if (!cleanPhone) nextErrors.phone = t('completeProfile.enterPhone')
+    if (!form.gender) nextErrors.gender = t('completeProfile.selectGenderError')
 
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
@@ -161,8 +167,8 @@ export default function CompleteProfile() {
   const handlePasswordSubmit = (event) => {
     event.preventDefault()
     const nextErrors = {}
-    if (!form.password || form.password.length < 8) nextErrors.password = 'Password must be at least 8 characters.'
-    if (form.password !== form.confirm_password) nextErrors.confirm_password = 'Passwords do not match.'
+    if (!form.password || form.password.length < 8) nextErrors.password = t('completeProfile.passwordMin')
+    if (form.password !== form.confirm_password) nextErrors.confirm_password = t('completeProfile.passwordMismatch')
 
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
@@ -178,20 +184,18 @@ export default function CompleteProfile() {
   if (!user) return null
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-white font-sans text-[#1A1A1A] lg:flex lg:items-center lg:justify-center lg:px-8 lg:py-10">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col bg-white lg:min-h-[820px] lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:overflow-hidden lg:rounded-[32px] lg:border lg:border-gray-200 lg:shadow-[0_24px_70px_rgba(17,24,39,0.08)]">
-        <ProfileVisualPanel />
-
+    <div className="relative min-h-screen bg-white font-sans text-[#1A1A1A] lg:flex lg:items-center lg:justify-center lg:bg-[#F8FAFC] lg:px-8 lg:py-10">
+      <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col bg-white lg:min-h-0 lg:rounded-[28px] lg:border lg:border-gray-200 lg:shadow-[0_24px_70px_rgba(17,24,39,0.08)]">
         <form
           onSubmit={isPasswordStep ? handlePasswordSubmit : handleSubmit}
-          className="relative mx-auto flex w-full max-w-[620px] flex-1 flex-col bg-white px-5 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+0.75rem))] sm:px-8 lg:max-w-none lg:px-16 lg:py-10 xl:px-20"
+          className="relative mx-auto flex w-full flex-1 flex-col bg-white px-5 pb-0 pt-[max(1.25rem,calc(env(safe-area-inset-top)+0.75rem))] sm:px-8 lg:px-10 lg:py-10"
         >
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => isPasswordStep ? setStep('profile') : navigate('/')}
               className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#F2DCE7] bg-white text-[#1A1A1A] shadow-sm transition hover:-translate-y-0.5 hover:border-[#EC4D97]/35 hover:text-[#EC4D97] active:scale-95 focus:outline-none focus:ring-4 focus:ring-[rgba(236,77,151,.10)]"
-              aria-label="Back"
+              aria-label={t('common.back')}
             >
               <ArrowLeft size={20} strokeWidth={2.4} />
             </button>
@@ -199,14 +203,17 @@ export default function CompleteProfile() {
             <StepProgress step={stepNumber} progress={progress} />
           </div>
 
-          <div className="mt-8 text-center lg:hidden">
-            <h1 className="text-3xl font-black tracking-tight text-[#1A1A1A]">
-              {isPasswordStep ? 'Create Your Password' : 'Complete Your Profile'}
+          <div className="mt-6 text-center">
+            <h1 className="text-2xl font-black tracking-tight text-[#1A1A1A] sm:text-3xl">
+              {isPasswordStep ? t('completeProfile.createPasswordTitle') : t('completeProfile.title')}
             </h1>
-            <p className="mx-auto mt-3 max-w-[330px] text-sm font-semibold leading-6 text-[#6B7280]">
+          </div>
+
+          <div className="mt-3 text-center">
+            <p className="mx-auto max-w-[330px] text-sm font-semibold leading-6 text-[#6B7280]">
               {isPasswordStep
-                ? 'Secure your account so you can sign in easily next time.'
-                : 'Add your details to personalize your account and get your orders delivered smoothly.'}
+                ? t('completeProfile.passwordSubtitle')
+                : t('completeProfile.subtitle')}
             </p>
           </div>
 
@@ -220,6 +227,7 @@ export default function CompleteProfile() {
               setShowPassword={setShowPassword}
               setShowConfirmPassword={setShowConfirmPassword}
               isPending={passwordMutation.isPending}
+              t={t}
             />
           ) : (
             <ProfileStep
@@ -232,6 +240,8 @@ export default function CompleteProfile() {
               onAvatarChange={handleAvatarChange}
               isPending={saveMutation.isPending}
               needsPassword={needsPassword}
+              username={user?.username}
+              t={t}
             />
           )}
         </form>
@@ -320,31 +330,24 @@ function ProfileVisualPanel() {
 }
 
 function StepProgress({ step, progress }) {
+  const { t } = useTranslation()
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-end gap-3 sm:gap-4">
-      <span className="shrink-0 text-xs font-black text-[#EC4D97] sm:text-sm">Step {step} of 3</span>
-      <div className="h-2 w-24 overflow-hidden rounded-full bg-[#FFD6E8] sm:w-40">
+    <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
+      <span className="shrink-0 text-xs font-black text-[#EC4D97]">{t('completeProfile.stepProgress', { step })}</span>
+      <div className="h-2 w-24 overflow-hidden rounded-full bg-[#FFE4F0] sm:w-36">
         <div
-          className="h-full rounded-full bg-[linear-gradient(135deg,#FF6CAB,#EC4D97)] shadow-[0_0_16px_rgba(236,77,151,0.24)]"
+          className="h-full rounded-full bg-[#EC4D97]"
           style={{ width: `${progress}%` }}
         />
       </div>
-      <span className="w-9 shrink-0 text-right text-xs font-black text-[#EC4D97] sm:text-sm">{progress}%</span>
     </div>
   )
 }
 
-function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, needsPassword }) {
+function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, needsPassword, username, t }) {
   return (
-    <div className="mt-6 lg:mt-12">
-      <div className="hidden lg:block">
-        <h2 className="text-4xl font-black tracking-tight text-[#1A1A1A]">Complete Your Profile</h2>
-        <p className="mt-3 text-base font-semibold text-[#6B7280]">
-          Add your delivery details and keep your account ready for checkout.
-        </p>
-      </div>
-
-      <div className="mt-8 flex flex-col items-center gap-4 border-b border-[#F2DCE7] pb-7 sm:flex-row sm:justify-center lg:justify-start">
+    <div className="mt-6 flex flex-1 flex-col">
+      <div className="flex items-center justify-center gap-4 rounded-3xl bg-[#FFF8FB] px-4 py-4">
         <AvatarPicker
           avatarPreview={avatarPreview}
           initials={initials}
@@ -352,24 +355,24 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           onAvatarChange={onAvatarChange}
         />
         <div className="text-center sm:text-left">
-          <p className="text-base font-black text-[#1A1A1A]">Profile Photo</p>
+          <p className="text-base font-black text-[#1A1A1A]">{t('completeProfile.profilePhoto')}</p>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="mt-3 hidden h-10 items-center gap-2 rounded-full border border-[#F2DCE7] bg-white px-4 text-xs font-black text-[#EC4D97] shadow-sm transition hover:-translate-y-0.5 hover:border-[#EC4D97]/35 sm:inline-flex"
+            className="mt-2 inline-flex h-10 items-center gap-2 rounded-full border border-[#F2DCE7] bg-white px-4 text-xs font-black text-[#EC4D97] transition hover:border-[#EC4D97]/35"
           >
             <Camera size={15} />
-            Change Photo
+            {t('profile.changePhoto')}
           </button>
         </div>
       </div>
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-5 space-y-4 pb-6">
         <CompleteProfileField
-          label="Full Name"
+          label={t('profile.fullName')}
           required
           icon={UserRound}
-          placeholder="Ex. Tha Seyha"
+          placeholder={t('completeProfile.fullNamePlaceholder')}
           value={form.full_name}
           onChange={(value) => set('full_name', value)}
           error={errors.full_name}
@@ -377,24 +380,31 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
         />
 
         <CompleteProfileField
-          label="Phone Number"
+          label={t('auth.username')}
+          icon={UserRound}
+          value={`@${username || 'user'}`}
+          onChange={() => {}}
+          disabled
+        />
+
+        <CompleteProfileField
+          label={t('profile.phoneNumber')}
           required
           icon={Phone}
           placeholder="077322921"
           value={form.phone}
-          onChange={(value) => set('phone', value)}
+          onChange={(value) => set('phone', cleanPhoneDisplay(value))}
           error={errors.phone}
           autoComplete="tel"
-          prefix="+855"
         />
 
-        <GenderField value={form.gender} onChange={(value) => set('gender', value)} error={errors.gender} />
+        <GenderField value={form.gender} onChange={(value) => set('gender', value)} error={errors.gender} t={t} />
 
         <CompleteProfileField
-          label="Email"
+          label={t('profile.emailAddress')}
           optional
           icon={Mail}
-          placeholder="example@email.com"
+          placeholder={t('auth.emailExample')}
           value={form.email}
           onChange={(value) => set('email', value)}
           autoComplete="email"
@@ -402,32 +412,30 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
         />
       </div>
 
-      <SubmitButton isPending={isPending}>
-        {needsPassword ? 'Continue' : 'Complete Profile'}
-      </SubmitButton>
-
-      <SecureNote />
+      <BottomAction isPending={isPending}>
+        {needsPassword ? t('common.next') : t('completeProfile.completeButton')}
+      </BottomAction>
     </div>
   )
 }
 
-function PasswordStep({ form, errors, set, showPassword, showConfirmPassword, setShowPassword, setShowConfirmPassword, isPending }) {
+function PasswordStep({ form, errors, set, showPassword, showConfirmPassword, setShowPassword, setShowConfirmPassword, isPending, t }) {
   return (
-    <div className="mt-8 lg:mt-20">
-      <div className="mx-auto grid h-20 w-20 place-items-center rounded-[24px] bg-[#FFF4F8] text-[#EC4D97] shadow-[inset_0_0_0_1px_rgba(236,77,151,0.10)] lg:mx-0">
+    <div className="mt-8 flex flex-1 flex-col lg:mt-12">
+      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#FFF4F8] text-[#EC4D97]">
         <Lock size={34} />
       </div>
 
-      <div className="mt-5 text-center lg:text-left">
-        <h2 className="text-4xl font-black tracking-tight text-[#1A1A1A]">Create New Password</h2>
-        <p className="mx-auto mt-3 max-w-md text-base font-semibold leading-7 text-[#6B7280] lg:mx-0">
-          Add a password so you can also sign in with your phone or email next time.
+      <div className="mt-5 text-center">
+        <h2 className="text-2xl font-black tracking-tight text-[#1A1A1A]">{t('completeProfile.createNewPassword')}</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-6 text-[#6B7280]">
+          {t('completeProfile.createNewPasswordHint')}
         </p>
       </div>
 
-      <div className="mt-7 space-y-4">
+      <div className="mt-7 space-y-4 pb-6">
         <PasswordField
-          label="Password"
+          label={t('auth.password')}
           value={form.password}
           onChange={(value) => set('password', value)}
           error={errors.password}
@@ -436,7 +444,7 @@ function PasswordStep({ form, errors, set, showPassword, showConfirmPassword, se
           autoComplete="new-password"
         />
         <PasswordField
-          label="Confirm Password"
+          label={t('auth.confirmPassword')}
           value={form.confirm_password}
           onChange={(value) => set('confirm_password', value)}
           error={errors.confirm_password}
@@ -446,20 +454,20 @@ function PasswordStep({ form, errors, set, showPassword, showConfirmPassword, se
         />
       </div>
 
-      <SubmitButton isPending={isPending}>Create Password</SubmitButton>
-      <SecureNote />
+      <BottomAction isPending={isPending}>{t('completeProfile.createPasswordButton')}</BottomAction>
     </div>
   )
 }
 
 function AvatarPicker({ avatarPreview, initials, fileInputRef, onAvatarChange }) {
+  const { t } = useTranslation()
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        className="grid h-28 w-28 place-items-center overflow-hidden rounded-full border-[6px] border-white bg-[radial-gradient(circle_at_35%_20%,#fff_0%,#FFF4F8_48%,#FFD6E8_100%)] text-[#EC4D97] shadow-[0_16px_35px_rgba(236,77,151,0.16)] transition active:scale-95 sm:h-32 sm:w-32"
-        aria-label="Upload profile photo"
+        className="grid h-24 w-24 place-items-center overflow-hidden rounded-full border border-[#F2DCE7] bg-[#FFF8FB] text-[#EC4D97] transition active:scale-95 sm:h-28 sm:w-28"
+        aria-label={t('completeProfile.uploadProfilePhoto')}
       >
         {avatarPreview ? (
           <img src={avatarPreview} alt="Profile" className="h-full w-full object-cover" />
@@ -472,8 +480,8 @@ function AvatarPicker({ avatarPreview, initials, fileInputRef, onAvatarChange })
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        className="absolute bottom-2 right-0 grid h-10 w-10 place-items-center rounded-full border-4 border-white bg-[#EC4D97] text-white shadow-[0_12px_24px_rgba(236,77,151,0.25)] transition hover:bg-[#E53888] active:scale-95"
-        aria-label="Change profile photo"
+        className="absolute bottom-1 right-0 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-[#EC4D97] text-white transition hover:bg-[#E53888] active:scale-95"
+        aria-label={t('profile.changePhoto')}
       >
         <Camera size={17} fill="currentColor" />
       </button>
@@ -485,20 +493,20 @@ function AvatarPicker({ avatarPreview, initials, fileInputRef, onAvatarChange })
 function CompleteProfileField({ label, required, optional, icon: Icon, placeholder, value, onChange, error, autoComplete, prefix, disabled }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-black text-[#1A1A1A]">
+      <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6B7280]">
         {label} {required && <span className="text-[#EC4D97]">*</span>}
-        {optional && <span className="font-bold text-[#6B7280]"> (Optional)</span>}
+        {optional && <span className="font-bold normal-case tracking-normal text-[#9CA3AF]"> (Optional)</span>}
       </span>
       <div className={cn(
-        'flex min-h-[56px] items-center overflow-hidden rounded-2xl border border-[#F2DCE7] bg-white transition-all focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[rgba(236,77,151,.10)]',
-        error && 'border-[#EF4444] focus-within:border-[#EF4444] focus-within:ring-red-500/10',
-        disabled && 'bg-gray-50 text-[#6B7280]'
+        'flex min-h-[48px] items-center border-b border-gray-200 bg-white transition-colors focus-within:border-[#EC4D97]',
+        error && 'border-[#EC4D97] focus-within:border-[#EC4D97]',
+        disabled && 'text-[#6B7280]'
       )}>
-        <span className="grid h-[56px] w-[56px] shrink-0 place-items-center text-[#EC4D97]">
-          <Icon size={20} strokeWidth={2.1} />
+        <span className="grid h-12 w-8 shrink-0 place-items-center text-[#EC4D97]">
+          <Icon size={18} strokeWidth={2.1} />
         </span>
         {prefix && (
-          <span className="flex h-[56px] shrink-0 items-center gap-1 border-r border-[#F2DCE7] px-4 text-sm font-black text-[#1A1A1A]">
+          <span className="flex h-12 shrink-0 items-center gap-1 pr-3 text-sm font-black text-[#1A1A1A]">
             {prefix}
             <ChevronDown size={15} className="text-[#6B7280]" />
           </span>
@@ -509,59 +517,60 @@ function CompleteProfileField({ label, required, optional, icon: Icon, placehold
           placeholder={placeholder}
           autoComplete={autoComplete}
           disabled={disabled}
-          className="min-w-0 flex-1 bg-transparent px-4 text-sm font-bold text-[#1A1A1A] outline-none placeholder:text-slate-400 disabled:text-slate-400"
+          className="min-w-0 flex-1 bg-transparent px-2 text-sm font-bold text-[#1A1A1A] outline-none placeholder:text-slate-400 disabled:text-[#6B7280]"
         />
       </div>
-      {error && <p className="mt-1.5 text-xs font-bold text-[#EF4444]">{error}</p>}
+      {error && <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>}
     </label>
   )
 }
 
-function GenderField({ value, onChange, error }) {
+function GenderField({ value, onChange, error, t }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-black text-[#1A1A1A]">
-        Gender <span className="text-[#EC4D97]">*</span>
+      <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6B7280]">
+        {t('completeProfile.gender')} <span className="text-[#EC4D97]">*</span>
       </span>
       <div className={cn(
-        'relative flex min-h-[56px] items-center overflow-hidden rounded-2xl border border-[#F2DCE7] bg-white transition-all focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[rgba(236,77,151,.10)]',
-        error && 'border-[#EF4444] focus-within:border-[#EF4444] focus-within:ring-red-500/10'
+        'relative flex min-h-[48px] items-center border-b border-gray-200 bg-white transition-colors focus-within:border-[#EC4D97]',
+        error && 'border-[#EC4D97] focus-within:border-[#EC4D97]'
       )}>
-        <span className="grid h-[56px] w-[56px] shrink-0 place-items-center text-[#EC4D97]">
-          <UsersRound size={20} strokeWidth={2.1} />
+        <span className="grid h-12 w-8 shrink-0 place-items-center text-[#EC4D97]">
+          <UsersRound size={18} strokeWidth={2.1} />
         </span>
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
           className={cn(
-            'h-[56px] min-w-0 flex-1 appearance-none bg-transparent px-4 pr-12 text-sm font-bold outline-none',
+            'h-12 min-w-0 flex-1 appearance-none bg-transparent px-2 pr-10 text-sm font-bold outline-none',
             value ? 'text-[#1A1A1A]' : 'text-slate-400'
           )}
         >
           {GENDER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
           ))}
         </select>
-        <ChevronDown size={18} className="pointer-events-none absolute right-4 text-[#6B7280]" />
+        <ChevronDown size={18} className="pointer-events-none absolute right-1 text-[#6B7280]" />
       </div>
-      {error && <p className="mt-1.5 text-xs font-bold text-[#EF4444]">{error}</p>}
+      {error && <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>}
     </label>
   )
 }
 
 function PasswordField({ label, value, onChange, error, show, onToggle, autoComplete }) {
   const Icon = show ? EyeOff : Eye
+  const { t } = useTranslation()
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-black text-[#1A1A1A]">
+      <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6B7280]">
         {label} <span className="text-[#EC4D97]">*</span>
       </span>
       <div className={cn(
-        'flex min-h-[56px] items-center overflow-hidden rounded-2xl border border-[#F2DCE7] bg-white transition-all focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[rgba(236,77,151,.10)]',
-        error && 'border-[#EF4444] focus-within:border-[#EF4444] focus-within:ring-red-500/10'
+        'flex min-h-[48px] items-center border-b border-gray-200 bg-white transition-colors focus-within:border-[#EC4D97]',
+        error && 'border-[#EC4D97] focus-within:border-[#EC4D97]'
       )}>
-        <span className="grid h-[56px] w-[56px] shrink-0 place-items-center text-[#EC4D97]">
-          <Lock size={20} strokeWidth={2.1} />
+        <span className="grid h-12 w-8 shrink-0 place-items-center text-[#EC4D97]">
+          <Lock size={18} strokeWidth={2.1} />
         </span>
         <input
           type={show ? 'text' : 'password'}
@@ -569,39 +578,43 @@ function PasswordField({ label, value, onChange, error, show, onToggle, autoComp
           onChange={(event) => onChange(event.target.value)}
           autoComplete={autoComplete}
           placeholder="********"
-          className="min-w-0 flex-1 bg-transparent px-4 text-sm font-bold text-[#1A1A1A] outline-none placeholder:text-slate-400"
+          className="min-w-0 flex-1 bg-transparent px-2 text-sm font-bold text-[#1A1A1A] outline-none placeholder:text-slate-400"
         />
         <button
           type="button"
           onClick={onToggle}
-          className="grid h-[56px] w-12 place-items-center text-slate-400 transition hover:text-[#EC4D97]"
-          aria-label={show ? `Hide ${label}` : `Show ${label}`}
+          className="grid h-12 w-10 place-items-center text-slate-400 transition hover:text-[#EC4D97]"
+          aria-label={show ? t('completeProfile.hideField', { label }) : t('completeProfile.showField', { label })}
         >
           <Icon size={20} strokeWidth={2.1} />
         </button>
       </div>
-      {error && <p className="mt-1.5 text-xs font-bold text-[#EF4444]">{error}</p>}
+      {error && <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>}
     </label>
   )
 }
 
-function SubmitButton({ isPending, children }) {
+function BottomAction({ isPending, children }) {
   return (
-    <button
-      type="submit"
-      disabled={isPending}
-      className="mt-7 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#FF6CAB,#EC4D97)] text-base font-black text-white shadow-[0_15px_35px_rgba(236,77,151,0.25)] transition hover:scale-[1.02] hover:bg-[#E53888] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {isPending ? <Loader2 size={22} className="animate-spin" /> : children}
-    </button>
+    <div className="sticky bottom-0 -mx-5 mt-auto border-t border-gray-100 bg-white/95 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:-mx-8 sm:px-8 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pb-0 lg:pt-2 lg:backdrop-blur-0">
+      <button
+        type="submit"
+        disabled={isPending}
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#EC4D97] text-base font-black text-white shadow-[0_14px_30px_rgba(236,77,151,0.24)] transition hover:bg-[#E53888] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isPending ? <Loader2 size={22} className="animate-spin" /> : children}
+      </button>
+      <SecureNote />
+    </div>
   )
 }
 
 function SecureNote() {
+  const { t } = useTranslation()
   return (
     <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs font-bold leading-5 text-[#6B7280]">
       <ShieldCheck size={15} />
-      <span>Your information is secure and will never be shared.</span>
+      <span>{t('completeProfile.secureNote')}</span>
     </div>
   )
 }

@@ -12,6 +12,77 @@ const SECTION_TITLES = {
   payment:  'Payment Methods',
   printLogo: 'Print Logo',
   loginSplash: 'Login Logo',
+  customerFooter: 'Customer Footer',
+}
+
+const DEFAULT_FOOTER_MENUS = {
+  customerService: {
+    title: 'Customer Service',
+    items: [
+      { label: 'Contact Us', url: '', enabled: true },
+      { label: 'FAQs', url: '', enabled: true },
+      { label: 'Shipping Policy', url: '', enabled: true },
+      { label: 'Return & Refund', url: '', enabled: true },
+      { label: 'Terms & Conditions', url: '', enabled: true },
+    ],
+  },
+  information: {
+    title: 'Information',
+    items: [
+      { label: 'About Us', url: '', enabled: true },
+      { label: 'Privacy Policy', url: '', enabled: true },
+      { label: 'Careers', url: '', enabled: true },
+      { label: 'Blog', url: '', enabled: true },
+      { label: 'Sitemap', url: '', enabled: true },
+    ],
+  },
+}
+
+function normalizeFooterMenus(value = {}) {
+  return Object.fromEntries(
+    Object.entries(DEFAULT_FOOTER_MENUS).map(([sectionKey, section]) => {
+      const savedSection = value?.[sectionKey] || {}
+      const savedItems = Array.isArray(savedSection.items) ? savedSection.items : []
+      const items = savedItems.length > 0 ? savedItems : section.items
+
+      return [sectionKey, {
+        title: savedSection.title || section.title,
+        items: items.map((item) => ({
+          label: item.label || '',
+          url: item.url || '',
+          enabled: item.enabled !== false,
+        })),
+      }]
+    })
+  )
+}
+
+function normalizeTelegramUrl(value = '') {
+  const clean = String(value || '').trim()
+  if (!clean) return ''
+  if (clean.startsWith('@')) return `https://t.me/${clean.slice(1)}`
+  if (/^t\.me\//i.test(clean)) return `https://${clean}`
+  if (/^telegram\.me\//i.test(clean)) return `https://${clean}`
+  return clean
+}
+
+function paymentSettingsPayload(paymentMethods) {
+  const payload = {}
+  for (const method of ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales']) {
+    payload[method] = paymentMethods[method] !== false
+  }
+  payload.contact_sales_url = normalizeTelegramUrl(paymentMethods.contact_sales_url)
+  return payload
+}
+
+function apiErrorMessage(error, fallback) {
+  const data = error?.response?.data
+  if (typeof data === 'string') return data
+  if (typeof data?.detail === 'string') return data.detail
+  const first = data && Object.values(data).find(Boolean)
+  if (Array.isArray(first)) return first[0] || fallback
+  if (typeof first === 'string') return first
+  return fallback
 }
 
 export default function Settings({ tab = 'general' }) {
@@ -57,8 +128,13 @@ export default function Settings({ tab = 'general' }) {
       ))
     }
     if (siteSettings.payment_methods && Object.keys(siteSettings.payment_methods).length > 0) {
-      setPaymentMethods((prev) => ({ ...prev, ...siteSettings.payment_methods }))
+      setPaymentMethods((prev) => ({
+        ...prev,
+        ...siteSettings.payment_methods,
+        contact_sales_url: siteSettings.payment_methods.contact_sales_url || '',
+      }))
     }
+    setFooterMenus(normalizeFooterMenus(siteSettings.footer_menus))
     setPrintLogoSize(siteSettings.print_logo_size || 64)
     setPrintQrSize(siteSettings.print_qr_size || 68)
   }, [siteSettings])
@@ -130,18 +206,87 @@ export default function Settings({ tab = 'general' }) {
     { key: 'wing',    label: 'Wing Money',       desc: 'Wing mobile payment' },
     { key: 'cod',     label: 'Cash on Delivery', desc: 'Customer pays upon receipt' },
     { key: 'cash',    label: 'Cash',             desc: 'In-store cash payment' },
+    { key: 'contact_sales', label: 'Contact Sales', desc: 'Customer asks sales team to confirm payment' },
   ]
   const [paymentMethods, setPaymentMethods] = useState(
-    Object.fromEntries(ALL_PAYMENT_METHODS.map((m) => [m.key, true]))
+    {
+      ...Object.fromEntries(ALL_PAYMENT_METHODS.map((m) => [m.key, true])),
+      contact_sales_url: '',
+    }
   )
+  const [footerMenus, setFooterMenus] = useState(normalizeFooterMenus())
 
   const savePaymentMutation = useMutation({
-    mutationFn: () => authApi.siteSettings.update({ payment_methods: paymentMethods }),
+    mutationFn: () => authApi.siteSettings.update({ payment_methods: paymentSettingsPayload(paymentMethods) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] })
       toast.success('Payment methods saved!')
     },
-    onError: () => toast.error('Failed to save payment methods'),
+    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to save payment methods')),
+  })
+
+  const updateFooterSection = (sectionKey, field, value) => {
+    setFooterMenus((current) => ({
+      ...current,
+      [sectionKey]: { ...current[sectionKey], [field]: value },
+    }))
+  }
+
+  const updateFooterItem = (sectionKey, itemIndex, field, value) => {
+    setFooterMenus((current) => ({
+      ...current,
+      [sectionKey]: {
+        ...current[sectionKey],
+        items: current[sectionKey].items.map((item, index) => (
+          index === itemIndex ? { ...item, [field]: value } : item
+        )),
+      },
+    }))
+  }
+
+  const addFooterItem = (sectionKey) => {
+    setFooterMenus((current) => ({
+      ...current,
+      [sectionKey]: {
+        ...current[sectionKey],
+        items: [...current[sectionKey].items, { label: '', url: '', enabled: true }],
+      },
+    }))
+  }
+
+  const deleteFooterItem = (sectionKey, itemIndex) => {
+    setFooterMenus((current) => ({
+      ...current,
+      [sectionKey]: {
+        ...current[sectionKey],
+        items: current[sectionKey].items.filter((_, index) => index !== itemIndex),
+      },
+    }))
+  }
+
+  const saveFooterMutation = useMutation({
+    mutationFn: () => authApi.siteSettings.update({
+      footer_menus: Object.fromEntries(
+        Object.entries(footerMenus).map(([sectionKey, section]) => [
+          sectionKey,
+          {
+            title: section.title.trim(),
+            items: section.items
+              .map((item) => ({
+                label: item.label.trim(),
+                url: item.url.trim(),
+                enabled: item.enabled !== false,
+              }))
+              .filter((item) => item.label),
+          },
+        ])
+      ),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      toast.success('Customer footer saved!')
+    },
+    onError: () => toast.error('Failed to save customer footer'),
   })
 
   // ── Delivery Settings ─────────────────────────────────────────────
@@ -352,7 +497,7 @@ export default function Settings({ tab = 'general' }) {
         </div>
       </div>
 
-      <div className={`form-card mt-6 ${tab === 'telegram' ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className={`form-card mt-6 ${['telegram', 'customerFooter'].includes(tab) ? 'max-w-5xl' : 'max-w-2xl'}`}>
         {tab === 'general' && (
           <div className="space-y-5">
             {/* Logo */}
@@ -1038,25 +1183,40 @@ export default function Settings({ tab = 'general' }) {
           <div className="space-y-3">
             <p className="text-sm text-gray-500">Enable or disable payment methods available at checkout.</p>
             {ALL_PAYMENT_METHODS.map((p) => (
-              <div key={p.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100">
-                    <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
+              <div key={p.key} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-100">
+                      <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
+                    </div>
+                    <div>
+                      <p className={`font-medium text-sm ${paymentMethods[p.key] ? 'text-gray-900' : 'text-gray-400'}`}>{p.label}</p>
+                      <p className="text-xs text-gray-400">{p.desc}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className={`font-medium text-sm ${paymentMethods[p.key] ? 'text-gray-900' : 'text-gray-400'}`}>{p.label}</p>
-                    <p className="text-xs text-gray-400">{p.desc}</p>
-                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={paymentMethods[p.key] ?? true}
+                      onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={paymentMethods[p.key] ?? true}
-                    onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
-                </label>
+                {p.key === 'contact_sales' && (
+                  <div className="mt-4 border-t border-gray-200 pt-4">
+                    <label className="label">Telegram Sales Link</label>
+                    <input
+                      type="text"
+                      className="input-field bg-white"
+                      placeholder="@your_sales_account or https://t.me/your_sales_account"
+                      value={paymentMethods.contact_sales_url || ''}
+                      onChange={(e) => setPaymentMethods((prev) => ({ ...prev, contact_sales_url: e.target.value }))}
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Shown to customers when they choose Contact Sales. Accepts @username, t.me/username, or full URL.</p>
+                  </div>
+                )}
               </div>
             ))}
             <div className="pt-2">
@@ -1068,6 +1228,89 @@ export default function Settings({ tab = 'general' }) {
                 <Save size={15} /> {savePaymentMutation.isPending ? 'Saving...' : 'Save Payment Methods'}
               </button>
             </div>
+          </div>
+        )}
+
+        {tab === 'customerFooter' && (
+          <div className="space-y-5">
+            <div className="rounded-xl bg-pink-50 p-4 text-sm text-pink-800">
+              Manage the menu labels and links shown in the desktop customer footer.
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              {Object.entries(footerMenus).map(([sectionKey, section]) => (
+                <div key={sectionKey} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="mb-4">
+                    <label className="label">Column Title</label>
+                    <input
+                      className="input-field bg-white"
+                      value={section.title}
+                      onChange={(e) => updateFooterSection(sectionKey, 'title', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    {section.items.map((item, itemIndex) => (
+                      <div key={`${sectionKey}-${itemIndex}`} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                        <div className="grid gap-3 md:grid-cols-[1fr_1.3fr_auto_auto] md:items-end">
+                          <div>
+                            <label className="label">Label</label>
+                            <input
+                              className="input-field"
+                              value={item.label}
+                              onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'label', e.target.value)}
+                              placeholder="Menu label"
+                            />
+                          </div>
+                          <div>
+                            <label className="label">URL</label>
+                            <input
+                              className="input-field"
+                              value={item.url}
+                              onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'url', e.target.value)}
+                              placeholder="/contact or https://..."
+                            />
+                          </div>
+                          <label className="flex h-11 items-center gap-2 rounded-xl border border-gray-100 px-3 text-sm font-bold text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={item.enabled !== false}
+                              onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'enabled', e.target.checked)}
+                              className="h-4 w-4 accent-purple-600"
+                            />
+                            Show
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => deleteFooterItem(sectionKey, itemIndex)}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-100 text-red-500 hover:bg-red-50"
+                            title="Delete menu item"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => addFooterItem(sectionKey)}
+                    className="btn-secondary mt-4 flex items-center gap-2 px-4 py-2 text-sm"
+                  >
+                    <Plus size={15} /> Add Menu
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => saveFooterMutation.mutate()}
+              disabled={saveFooterMutation.isPending}
+              className="btn-primary flex items-center gap-2 disabled:opacity-60"
+            >
+              <Save size={15} /> {saveFooterMutation.isPending ? 'Saving...' : 'Save Customer Footer'}
+            </button>
           </div>
         )}
       </div>

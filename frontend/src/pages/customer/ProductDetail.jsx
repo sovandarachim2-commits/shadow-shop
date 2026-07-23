@@ -3,19 +3,143 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Heart, ShoppingCart, Zap, Plus, Minus, Check,
-  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf,
+  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf, Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { CosmeticArt, RatingRow } from '@/components/customer/CustomerUi'
+import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 
 function cleanProductText(value) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function isAvailableForSale(product) {
+  return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
+}
+
+function RelatedProductCard({ product, priority = false }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { addItem, updateQuantity, items } = useCartStore()
+  const { toggle, isWishlisted } = useWishlistStore()
+  const [imageFailed, setImageFailed] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const wishlisted = isWishlisted(product.id)
+  const cartItem = items.find((item) => item.product?.id === product.id)
+  const qty = cartItem?.quantity || 0
+  const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
+  const available = isAvailableForSale(product)
+  const price = Number(product.display_price || product.retail_price || 0)
+  const oldPrice = Number(product.old_price || 0)
+  const discountPct = oldPrice > price ? Math.round((1 - price / oldPrice) * 100) : null
+
+  const handleAdd = (e) => {
+    e.stopPropagation()
+    addItem(saleProduct, 1)
+    showCartAddedToast(saleProduct, navigate)
+  }
+
+  const handleWishlist = (e) => {
+    e.stopPropagation()
+    toggle(product)
+    toast.success(wishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
+  }
+
+  return (
+    <article
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
+      onClick={() => navigate(`/product/${product.id}`)}
+    >
+      <button
+        type="button"
+        onClick={handleWishlist}
+        className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-white/90 shadow-sm transition ${wishlisted ? 'border-pink-200 text-pink-600' : 'border-pink-100 text-gray-500 hover:text-pink-600'}`}
+        aria-label="Toggle wishlist"
+      >
+        <Heart size={17} className={wishlisted ? 'fill-pink-500' : ''} />
+      </button>
+      {discountPct && (
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">
+          -{discountPct}%
+        </span>
+      )}
+      <div className="relative h-44 overflow-hidden bg-white">
+        {product.primary_image && !imageFailed ? (
+          <>
+            {!imageLoaded && <CosmeticArt tone={product.tone} className="min-h-full" />}
+            <img
+              src={product.primary_image}
+              alt={product.name}
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
+              decoding="async"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImageFailed(true)}
+              className={`absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </>
+        ) : (
+          <CosmeticArt tone={product.tone} className="min-h-full" />
+        )}
+      </div>
+      <div className="p-3">
+        <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
+          <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
+          <span className="shrink-0 text-gray-300">/</span>
+          <span className="truncate">{product.category_name || t('product.cosmetics')}</span>
+        </div>
+        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{product.name}</h3>
+        <div className="mt-2 flex items-center gap-1">
+          <Star size={13} className="fill-yellow-400 text-yellow-400" />
+          <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(price)}</span>
+            {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+          </div>
+          {!available ? (
+            <span className="shrink-0 rounded-2xl bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
+          ) : qty === 0 ? (
+            <button onClick={handleAdd} className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95">
+              {t('common.add')}
+            </button>
+          ) : (
+            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
+              <button onClick={() => updateQuantity(product.id, qty - 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
+              </button>
+              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
+              <button onClick={() => addItem(saleProduct, 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+                <Plus size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function RelatedProductSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
+      <div className="h-44 animate-pulse bg-gray-100" />
+      <div className="space-y-2 p-3">
+        <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
+        <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
+        <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
+        <div className="mt-3 h-8 w-full animate-pulse rounded-xl bg-gray-100" />
+      </div>
+    </div>
+  )
 }
 
 export default function ProductDetail() {
@@ -45,6 +169,27 @@ export default function ProductDetail() {
     queryFn: () => productsApi.reviews.list({ product: id }).then((r) => r.data.results || r.data),
     enabled: !!id,
   })
+  const { data: relatedData, isLoading: relatedLoading } = useQuery({
+    queryKey: ['related-products', product?.category, id],
+    queryFn: () => productsApi.products.list({
+      category: product.category,
+      is_active: true,
+      ordering: '-created_at',
+      page_size: 9,
+    }).then((r) => r.data),
+    enabled: Boolean(product?.category),
+    staleTime: 30_000,
+  })
+  const { data: recommendedData, isLoading: recommendedLoading } = useQuery({
+    queryKey: ['recommended-products', id],
+    queryFn: () => productsApi.products.list({
+      is_active: true,
+      ordering: '-created_at',
+      page_size: 12,
+    }).then((r) => r.data),
+    enabled: Boolean(product?.id),
+    staleTime: 30_000,
+  })
   const reviews = reviewData || []
 
   const reviewMutation = useMutation({
@@ -65,13 +210,22 @@ export default function ProductDetail() {
   const oldPrice = Number(product?.old_price || product?.wholesale_price || 0)
   const currentPrice = Number(product?.display_price || product?.retail_price || 0)
   const savedAmount = oldPrice > currentPrice ? oldPrice - currentPrice : 0
-  const discountPercent = oldPrice > currentPrice ? Math.round(((oldPrice - currentPrice) / oldPrice) * 100) : 15
   const saleProduct = product?.display_price ? { ...product, retail_price: product.display_price } : product
   const flashSaleMaxQty = product?.is_flash_sale_active ? Number(product?.flash_sale_max_order_qty || 0) : 0
   const maxPurchaseQty = flashSaleMaxQty > 0 ? (stock > 0 ? Math.min(stock, flashSaleMaxQty) : flashSaleMaxQty) : (stock > 0 ? stock : 9999)
   const productDescription = cleanProductText(product?.description)
   const productBenefits = cleanProductText(product?.benefits)
   const productHowToUse = cleanProductText(product?.how_to_use)
+  const sameCategoryProducts = (relatedData?.results || relatedData || [])
+    .filter((item) => String(item.id) !== String(product?.id))
+    .slice(0, 8)
+  const recommendedProducts = (recommendedData?.results || recommendedData || [])
+    .filter((item) => String(item.id) !== String(product?.id))
+    .filter((item) => !sameCategoryProducts.some((related) => String(related.id) === String(item.id)))
+    .slice(0, 8)
+  const relatedProducts = sameCategoryProducts.length > 0 ? sameCategoryProducts : recommendedProducts
+  const showingSameCategory = sameCategoryProducts.length > 0
+  const productsMoreLoading = relatedLoading || (!showingSameCategory && recommendedLoading)
   const detailTabs = [
     ...(productDescription ? [{ key: 'description', label: t('product.description'), content: productDescription }] : []),
     ...(productBenefits ? [{ key: 'benefits', label: t('product.benefits'), content: productBenefits }] : []),
@@ -82,6 +236,8 @@ export default function ProductDetail() {
 
   useEffect(() => {
     setActiveImg(0)
+    setQty(1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [product?.id])
 
   useEffect(() => {
@@ -126,7 +282,7 @@ export default function ProductDetail() {
 
     addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
     setAdded(true)
-    toast.success(t('product.addedToCart'))
+    showCartAddedToast(saleProduct, navigate, Math.min(qty, maxPurchaseQty || qty))
     setTimeout(() => setAdded(false), 2000)
   }
 
@@ -197,17 +353,14 @@ export default function ProductDetail() {
       </button>
 
       <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-3xl bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">
-          <div className="relative overflow-hidden rounded-3xl bg-white">
-            <span className="absolute left-4 top-4 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black text-white shadow-lg shadow-pink-200">
-              -{discountPercent}%
-            </span>
+        <section className="overflow-hidden rounded-[28px] bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">
+          <div className="relative overflow-hidden rounded-[28px] bg-gray-50 md:bg-white">
             <button
               onClick={() => {
                 setIsWishlisted(!isWishlisted)
                 toast.success(isWishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
               }}
-              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-pink-600 shadow-xl shadow-pink-100"
+              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-pink-600 shadow-xl shadow-pink-100"
             >
               <Heart size={21} className={isWishlisted ? 'fill-pink-500 text-pink-500' : ''} />
             </button>
@@ -232,49 +385,55 @@ export default function ProductDetail() {
               </>
             )}
             <div
-              className="aspect-[1/0.82] max-h-[520px] cursor-grab touch-pan-y select-none active:cursor-grabbing md:aspect-square"
+              className="aspect-square max-h-[520px] cursor-grab touch-pan-y select-none active:cursor-grabbing"
               onPointerDown={handleGalleryPointerDown}
               onPointerMove={handleGalleryPointerMove}
               onPointerUp={handleGalleryPointerEnd}
               onPointerCancel={handleGalleryPointerEnd}
             >
               {currentImage ? (
-                <img src={currentImage.image} alt={product.name} draggable={false} className="h-full w-full object-contain p-3" />
+                <img src={currentImage.image} alt={product.name} draggable={false} className="h-full w-full object-contain p-4 md:p-5" />
               ) : (
                 <CosmeticArt tone={product.tone} className="min-h-full" />
               )}
             </div>
             {images.length > 1 && (
-              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-white/80 px-2 py-1 shadow-sm">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => showImageAt(i)}
-                    aria-label={`Show product image ${i + 1}`}
-                    className={`h-1.5 rounded-full transition-all ${i === activeImg ? 'w-5 bg-pink-600' : 'w-1.5 bg-pink-200'}`}
-                  />
-                ))}
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-2.5 py-1.5 text-[11px] font-black text-pink-600 shadow-sm ring-1 ring-pink-50">
+                <div className="flex gap-1.5">
+                  {images.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => showImageAt(i)}
+                      aria-label={`Show product image ${i + 1}`}
+                      className={`h-2 rounded-full transition-all ${i === activeImg ? 'w-5 bg-pink-600' : 'w-2 bg-pink-200'}`}
+                    />
+                  ))}
+                </div>
+                <span>{activeImg + 1}/{images.length}</span>
               </div>
             )}
           </div>
 
-          <div className="mt-3 flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mt-3 flex justify-center">
+            <div className="flex max-w-full gap-2 overflow-x-auto rounded-2xl bg-gray-50 px-2.5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:bg-white/70">
             {images.length > 0
               ? images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
-                  className={`aspect-square w-20 shrink-0 overflow-hidden rounded-2xl border-2 bg-white md:w-24 ${i === activeImg ? 'border-pink-500' : 'border-transparent'}`}
+                  className={`aspect-square w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white transition md:w-20 ${i === activeImg ? 'border-pink-500 shadow-sm shadow-pink-100' : 'border-transparent opacity-75 hover:opacity-100'}`}
+                  aria-label={`Show product image ${i + 1}`}
                 >
-                  <img src={img.image} alt="" className="h-full w-full object-contain bg-white p-1" />
+                  <img src={img.image} alt="" className="h-full w-full object-cover bg-white" />
                 </button>
               ))
               : ['pink', 'rose', 'red', 'gold'].map((tone, i) => (
-                <button key={tone} onClick={() => setActiveImg(i)} className="aspect-square w-20 shrink-0 overflow-hidden rounded-2xl border border-pink-100 bg-white md:w-24">
+                <button key={tone} onClick={() => setActiveImg(i)} className="aspect-square w-16 shrink-0 overflow-hidden rounded-xl border border-pink-100 bg-white md:w-20">
                   <CosmeticArt tone={tone} className="min-h-full" />
                 </button>
               ))}
+            </div>
           </div>
         </section>
 
@@ -450,6 +609,48 @@ export default function ProductDetail() {
         </section>
       </div>
 
+      {(productsMoreLoading || relatedProducts.length > 0) && (
+        <section className="mt-10 md:mt-14">
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-pink-600">
+                {showingSameCategory ? (product.category_name || 'Related Products') : 'Recommended Products'}
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
+                {showingSameCategory ? 'More From This Category' : 'You May Also Like'}
+              </h2>
+            </div>
+            {showingSameCategory && product.category && (
+              <button
+                type="button"
+                onClick={() => navigate(`/shop?category=${product.category}`)}
+                className="hidden rounded-full border border-pink-100 bg-white px-4 py-2 text-sm font-black text-pink-600 shadow-sm transition hover:bg-pink-50 md:inline-flex"
+              >
+                View all
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
+            {productsMoreLoading
+              ? Array.from({ length: 4 }).map((_, index) => <RelatedProductSkeleton key={index} />)
+              : relatedProducts.map((item, index) => (
+                <RelatedProductCard key={item.id} product={item} priority={index < 2} />
+              ))}
+          </div>
+
+          {showingSameCategory && product.category && (
+            <button
+              type="button"
+              onClick={() => navigate(`/shop?category=${product.category}`)}
+              className="mt-4 flex w-full items-center justify-center rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3 text-sm font-black text-pink-600 md:hidden"
+            >
+              View all {product.category_name || 'products'}
+            </button>
+          )}
+        </section>
+      )}
+
       <div className="fixed inset-x-0 bottom-0 z-40 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] md:hidden">
         <div className="mx-auto grid max-w-lg grid-cols-[112px_1fr] items-center gap-3">
           <div className="flex h-12 items-center justify-between rounded-[1.35rem] border border-gray-200 bg-white px-3 shadow-sm">
@@ -477,7 +678,7 @@ export default function ProductDetail() {
           <button
             onClick={handleAddToCart}
             disabled={!isInStock}
-            className="flex h-12 items-center justify-center gap-2 rounded-[1.35rem] bg-[#1f1c1a] px-4 text-sm font-black text-white shadow-lg shadow-gray-200 transition active:scale-[0.98] disabled:bg-gray-300 disabled:text-gray-500"
+            className="flex h-12 items-center justify-center gap-2 rounded-[1.35rem] bg-pink-600 px-4 text-sm font-black text-white shadow-lg shadow-pink-100 transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-gray-100"
           >
             <span>{isInStock ? t('common.addToCart') : t('common.outOfStock')}</span>
             {isInStock && <span className="opacity-90">{formatCurrency(currentPrice * qty)}</span>}

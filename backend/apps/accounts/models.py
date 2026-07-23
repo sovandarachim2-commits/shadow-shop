@@ -277,6 +277,7 @@ class SiteSettings(models.Model):
     timezone = models.CharField(max_length=50, default='Asia/Phnom_Penh')
     delivery_fees = models.JSONField(default=dict, blank=True)
     payment_methods = models.JSONField(default=dict, blank=True)
+    footer_menus = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = 'site_settings'

@@ -7,7 +7,7 @@ import {
   Package, Heart, CheckCircle2, Pencil, Lock, Loader2, Truck, ShoppingBag,
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
-  Home, Headphones,
+  Home, Headphones, Eye, EyeOff,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -72,6 +72,14 @@ const STATUS_STYLES = {
   cancelled: 'bg-gray-100 text-gray-500',
 }
 
+const GENDER_OPTIONS = [
+  { value: '', labelKey: 'completeProfile.selectGender' },
+  { value: 'male', labelKey: 'completeProfile.genderMale' },
+  { value: 'female', labelKey: 'completeProfile.genderFemale' },
+  { value: 'other', labelKey: 'completeProfile.genderOther' },
+  { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
+]
+
 function actionForOrder(order) {
   if (order.status === 'completed') return { label: 'Buy Again', icon: ShoppingBag, outline: true }
   return { label: 'Track Order', icon: Truck }
@@ -105,10 +113,11 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     full_name: [user.first_name, user.last_name].filter(Boolean).join(' '),
     email: user.email || '',
     phone: user.phone || '',
+    gender: user.gender || '',
   })
 
   const initials = [user.first_name, user.last_name].filter(Boolean).map((n) => n[0]).join('').toUpperCase() || user.username?.[0]?.toUpperCase() || '?'
-  const memberId = `#SS${String(user.id || 0).padStart(6, '0')}`
+  const usernameDisplay = user.username ? `@${user.username}` : `#SS${String(user.id || 0).padStart(6, '0')}`
   const memberSince = user.created_at ? formatDate(user.created_at, 'MMMM yyyy') : t('profile.newMember')
   const defaultAddress = addresses.find((addr) => addr.is_default) || addresses[0]
 
@@ -138,7 +147,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.email?.[0] || body?.phone?.[0] || body?.detail || t('profile.updateProfileFailed')
+      const message = body?.email?.[0] || body?.phone?.[0] || body?.gender?.[0] || body?.detail || t('profile.updateProfileFailed')
       toast.error(message)
     },
   })
@@ -170,6 +179,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     const payload = {
       email: cleanEmail,
       phone: cleanPhone,
+      gender: form.gender,
       first_name: firstName || '',
       last_name: lastParts.join(' '),
     }
@@ -190,33 +200,30 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
         className={cn('flex flex-col bg-white', asPage ? 'min-h-screen' : 'max-h-[94vh]')}
       >
         <div className={cn(
-          'sticky top-0 z-20 flex items-center justify-between border-b border-gray-100 bg-white/95 px-4 pb-3 backdrop-blur',
-          asPage ? 'pt-[calc(0.35rem+env(safe-area-inset-top))]' : 'pt-3'
+          'sticky top-0 z-20 grid grid-cols-[44px_1fr_64px] items-center gap-3 border-b border-gray-100 bg-white/95 px-4 pb-3 backdrop-blur',
+          asPage ? 'pt-[calc(0.45rem+env(safe-area-inset-top))]' : 'pt-3'
         )}>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-700 transition hover:bg-gray-100 active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50 active:scale-95"
             aria-label={t('common.back')}
           >
             <ArrowLeft size={20} />
           </button>
-          <div className="text-center">
-            <h2 className="text-base font-black text-gray-950">{t('profile.editProfile')}</h2>
-            <p className="text-xs font-semibold text-gray-400">{t('profile.editProfileSubtitle')}</p>
-          </div>
+          <h2 className="truncate text-center text-lg font-black text-gray-950">{t('profile.editProfile')}</h2>
           <button
             type="submit"
             disabled={saveMutation.isPending}
-            className="flex h-10 min-w-[66px] items-center justify-center rounded-xl bg-[#E91E63] px-3 text-sm font-black text-white shadow-sm transition hover:bg-pink-600 active:scale-95 disabled:opacity-60"
+            className="flex h-10 items-center justify-center rounded-full px-2 text-sm font-black text-[#E91E63] transition hover:bg-pink-50 active:scale-95 disabled:opacity-60"
           >
             {saveMutation.isPending ? <Loader2 size={17} className="animate-spin" /> : t('common.save')}
           </button>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gray-50 px-4 pb-5 pt-4">
-          <section className="overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm">
-            <div className="bg-gradient-to-r from-pink-50 via-white to-rose-50 px-4 py-5">
+          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+            <div className="px-4 py-5">
               <div className="flex items-center gap-4">
                 <div className="relative shrink-0">
                   <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-[#E91E63] to-pink-300 text-3xl font-black text-white shadow-[0_14px_30px_rgba(233,30,99,0.22)]">
@@ -235,7 +242,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-lg font-black text-gray-950">{form.full_name || user.username || t('profile.yourProfile')}</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-gray-500">{form.email || t('profile.addYourEmail')}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-gray-500">@{user.username || t('profile.yourProfile')}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {avatarPreview && avatarPreview !== user.avatar_url && (
                       <button
@@ -263,6 +270,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               <ProfileField label={t('profile.phoneNumber')} value={form.phone} onChange={(v) => set('phone', v)} icon={Phone} autoComplete="tel" />
               <ProfileField label={t('profile.emailAddress')} type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} error={errors.email} autoComplete="email" />
             </div>
+            <ProfileSelect label={t('completeProfile.gender')} value={form.gender} onChange={(v) => set('gender', v)} icon={User} options={GENDER_OPTIONS} t={t} />
           </ProfileSection>
 
           <ProfileSection title={t('profile.address')} icon={MapPin}>
@@ -294,7 +302,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
           </ProfileSection>
 
           <ProfileSection title={t('profile.accountInfo')} icon={IdCard}>
-            <ProfileInfoRow label={t('profile.memberId')} value={memberId} />
+            <ProfileInfoRow label={t('auth.username')} value={usernameDisplay} />
             <ProfileInfoRow label={t('profile.memberSince')} value={memberSince} />
             <ProfileInfoRow
               label={t('profile.verificationStatus')}
@@ -320,9 +328,11 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   )
 }
 
-function ChangePasswordModal({ onClose }) {
+function ChangePasswordModal({ user, onClose }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [form, setForm] = useState({ old_password: '', new_password: '', confirm_password: '' })
+  const [visible, setVisible] = useState({ old_password: false, new_password: false, confirm_password: false })
 
   const saveMutation = useMutation({
     mutationFn: (data) => authApi.changePassword(data),
@@ -338,9 +348,14 @@ function ChangePasswordModal({ onClose }) {
   })
 
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+  const toggleVisible = (key) => setVisible((current) => ({ ...current, [key]: !current[key] }))
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (form.new_password.length < 8) {
+      toast.error(t('auth.validationPasswordLength'))
+      return
+    }
     if (form.new_password !== form.confirm_password) {
       toast.error(t('profile.passwordsNoMatch'))
       return
@@ -349,39 +364,93 @@ function ChangePasswordModal({ onClose }) {
   }
 
   return (
-    <Modal isOpen onClose={onClose} title={t('profile.changePassword')} size="md">
-      <form onSubmit={handleSubmit} className="space-y-4 p-6">
-        <ProfileField
-          label={t('profile.currentPassword')}
-          type="password"
-          value={form.old_password}
-          onChange={(v) => set('old_password', v)}
-          required
-        />
-        <ProfileField
-          label={t('profile.newPassword')}
-          type="password"
-          value={form.new_password}
-          onChange={(v) => set('new_password', v)}
-          required
-        />
-        <ProfileField
-          label={t('profile.confirmNewPassword')}
-          type="password"
-          value={form.confirm_password}
-          onChange={(v) => set('confirm_password', v)}
-          required
-        />
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="shop-btn-outline flex-1">
+    <Modal isOpen onClose={onClose} size="md" className="overflow-hidden p-0 md:max-w-[460px]">
+      <form onSubmit={handleSubmit} className="bg-white">
+        <div className="border-b border-gray-100 px-5 pb-4 pt-5 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-pink-50 text-[#E91E63]">
+            <Lock size={22} />
+          </div>
+          <h2 className="text-xl font-black text-gray-950">{t('profile.changePassword')}</h2>
+          <p className="mt-1 text-sm font-semibold text-gray-400">{t('profile.changePasswordHint')}</p>
+        </div>
+
+        <div className="space-y-5 px-5 py-5">
+          <CleanPasswordField
+            label={t('profile.currentPassword')}
+            value={form.old_password}
+            onChange={(value) => set('old_password', value)}
+            show={visible.old_password}
+            onToggle={() => toggleVisible('old_password')}
+            autoComplete="current-password"
+            t={t}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              navigate('/forgot-password', { state: { email: user?.email || '' } })
+            }}
+            className="-mt-2 text-sm font-black text-[#E91E63] transition hover:text-[#D9166F]"
+          >
+            {t('profile.forgotPassword')}
+          </button>
+          <CleanPasswordField
+            label={t('profile.newPassword')}
+            value={form.new_password}
+            onChange={(value) => set('new_password', value)}
+            show={visible.new_password}
+            onToggle={() => toggleVisible('new_password')}
+            autoComplete="new-password"
+            t={t}
+          />
+          <CleanPasswordField
+            label={t('profile.confirmNewPassword')}
+            value={form.confirm_password}
+            onChange={(value) => set('confirm_password', value)}
+            show={visible.confirm_password}
+            onToggle={() => toggleVisible('confirm_password')}
+            autoComplete="new-password"
+            t={t}
+          />
+        </div>
+
+        <div className="flex gap-3 border-t border-gray-100 bg-white px-5 pb-5 pt-4">
+          <button type="button" onClick={onClose} className="h-12 flex-1 rounded-full border border-gray-200 bg-white text-sm font-black text-gray-600 transition hover:bg-gray-50 active:scale-[0.99]">
             {t('common.cancel')}
           </button>
-          <button type="submit" disabled={saveMutation.isPending} className="shop-btn-primary flex-1">
+          <button type="submit" disabled={saveMutation.isPending} className="h-12 flex-1 rounded-full bg-[#EC197A] text-sm font-black text-white shadow-[0_12px_28px_rgba(236,25,122,0.24)] transition hover:bg-[#D9166F] active:scale-[0.99] disabled:opacity-60">
             {saveMutation.isPending ? <Loader2 size={18} className="mx-auto animate-spin" /> : t('profile.updatePassword')}
           </button>
         </div>
       </form>
     </Modal>
+  )
+}
+
+function CleanPasswordField({ label, value, onChange, show, onToggle, autoComplete, t }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-black uppercase tracking-wide text-gray-400">{label}</span>
+      <div className="mt-1 flex h-12 items-center gap-3 border-b border-gray-200 transition focus-within:border-[#E91E63]">
+        <Lock size={18} className="shrink-0 text-gray-300" />
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required
+          autoComplete={autoComplete}
+          className="min-w-0 flex-1 bg-transparent text-sm font-black text-gray-950 outline-none placeholder:text-gray-300"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-gray-400 transition hover:bg-pink-50 hover:text-[#E91E63]"
+          aria-label={t(show ? 'completeProfile.hideField' : 'completeProfile.showField', { label })}
+        >
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </label>
   )
 }
 
@@ -434,6 +503,39 @@ function ProfileField({ label, value, onChange, type = 'text', readOnly, require
             readOnly && 'cursor-not-allowed bg-gray-50 text-gray-500'
           )}
         />
+      </div>
+      {error && <p className="mt-1.5 text-xs font-semibold text-red-500">{error}</p>}
+    </label>
+  )
+}
+
+function ProfileSelect({ label, value, onChange, required, icon: Icon, options = [], error, t }) {
+  return (
+    <label className="block">
+      <span className="mb-2 flex items-center gap-1 text-xs font-black uppercase tracking-wide text-gray-400">
+        {label}
+        {required && <span className="text-[#E91E63]">*</span>}
+      </span>
+      <div className="relative">
+        {Icon && (
+          <Icon size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+        )}
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={error ? 'true' : 'false'}
+          className={cn(
+            'h-12 w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 pr-10 text-sm font-bold outline-none transition focus:border-[#E91E63] focus:bg-white focus:ring-4 focus:ring-pink-100',
+            Icon && 'pl-11',
+            value ? 'text-gray-950' : 'text-gray-400',
+            error && 'border-red-300 bg-red-50/40 focus:border-red-400 focus:ring-red-100'
+          )}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>{option.labelKey && t ? t(option.labelKey) : option.label}</option>
+          ))}
+        </select>
+        <ChevronDown size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
       </div>
       {error && <p className="mt-1.5 text-xs font-semibold text-red-500">{error}</p>}
     </label>
@@ -669,6 +771,7 @@ export default function Profile() {
 
   const displayName = user.full_name || (user.first_name ? `${user.first_name} ${user.last_name}` : user.username)
   const email = user.email || '—'
+  const usernameDisplay = user.username ? `@${user.username}` : email
   const phone = user.phone || '—'
   const memberSince = user.created_at ? formatDate(user.created_at, 'MMM yyyy') : '—'
   const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -790,7 +893,7 @@ export default function Profile() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-base font-black text-[#202A44]">{displayName}</p>
-              <p className="mt-1 truncate text-xs font-semibold text-slate-400">{email}</p>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-400">{usernameDisplay}</p>
             </div>
           </button>
         </div>
@@ -868,7 +971,7 @@ export default function Profile() {
                       <div>
                         <h2 className="text-2xl font-black text-gray-950">{displayName}</h2>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
-                          <span>{email}</span>
+                          <span>{usernameDisplay}</span>
                           <span className="text-gray-300">•</span>
                           <span>{phone}</span>
                         </div>
@@ -1336,7 +1439,7 @@ export default function Profile() {
       </div>{/* end hidden lg:flex */}
 
       {activeModal === 'password' && (
-        <ChangePasswordModal onClose={() => setActiveModal(null)} />
+        <ChangePasswordModal user={user} onClose={() => setActiveModal(null)} />
       )}
       {ConfirmDialog}
     </div>

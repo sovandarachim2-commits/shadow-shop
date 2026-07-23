@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
+from django.core.mail import BadHeaderError
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from django_filters.rest_framework import DjangoFilterBackend
@@ -19,6 +20,7 @@ import random
 import string
 import mimetypes
 import requests
+import smtplib
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import HttpResponseRedirect, JsonResponse
@@ -49,16 +51,22 @@ def _absolute_media_url(file_field):
     return f"{base}{url if url.startswith('/') else f'/{url}'}"
 
 
-def _send_email_verification(email, code):
+def _send_email_verification(email, code, purpose='account'):
     from email.utils import formataddr
     from django.utils.html import escape
 
     site = SiteSettings.get_solo()
     store_name = site.store_name or 'Shadow Shop'
-    subject = f"{store_name} verification code"
+    is_password_reset = purpose == 'password_reset'
+    subject = f"{store_name} {'password reset' if is_password_reset else 'verification'} code"
+    ignore_text = (
+        "If you did not request a password reset, you can ignore this email."
+        if is_password_reset
+        else "If you did not create an account, you can ignore this email."
+    )
     message = (
         f"Your {store_name} verification code is {code}.\n\n"
-        "This code expires in 10 minutes. If you did not create an account, you can ignore this email."
+        f"This code expires in 10 minutes. {ignore_text}"
     )
     store_email = (site.store_email or '').strip()
     if store_email:
@@ -90,7 +98,7 @@ def _send_email_verification(email, code):
         {safe_code}
       </p>
       <p style="margin:0;font-size:13px;line-height:1.5;color:#6b7280;text-align:center">
-        This code expires in 10 minutes. If you did not create an account, you can ignore this email.
+        This code expires in 10 minutes. {escape(ignore_text)}
       </p>
     </div>
     '''
@@ -261,6 +269,112 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
             'access': str(refresh.access_token),
             'user': UserSerializer(user, context={'request': request}).data,
         })
+
+
+def _latest_password_reset_verification(email):
+    return EmailVerification.objects.select_related('user').filter(
+        email__iexact=email,
+        user__is_active=True,
+    ).order_by('-created_at').first()
+
+
+class ForgotPasswordRequestView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        if not email:
+            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if not user:
+            return Response({'detail': 'No account found with this email.'}, status=status.HTTP_404_NOT_FOUND)
+
+        latest = _latest_password_reset_verification(email)
+        if latest and latest.created_at >= timezone.now() - timedelta(seconds=45):
+            return Response({'detail': 'Please wait before requesting another code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        code = _verification_code()
+        EmailVerification.objects.create(
+            user=user,
+            email=email,
+            code=code,
+            attempts=0,
+            is_verified=False,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        try:
+            _send_email_verification(email, code, purpose='password_reset')
+        except (BadHeaderError, smtplib.SMTPException, OSError):
+            return Response(
+                {'detail': 'Could not send reset email. Please check email settings and try again.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response({
+            'detail': 'Password reset code has been sent.',
+            'email': email,
+        })
+
+
+class ForgotPasswordVerifyCodeView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        code = ''.join(ch for ch in str(request.data.get('code', '')).strip() if ch.isdigit())
+        if not email or len(code) != 4:
+            return Response({'detail': 'Enter the 4 digit verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        verification = _latest_password_reset_verification(email)
+        if not verification:
+            return Response({'detail': 'Verification code not found. Please request a new code.'}, status=status.HTTP_404_NOT_FOUND)
+        if verification.is_expired:
+            return Response({'detail': 'Verification code expired. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+        if verification.attempts >= 5:
+            return Response({'detail': 'Too many attempts. Please request a new code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        if verification.code != code:
+            verification.attempts += 1
+            verification.save(update_fields=['attempts'])
+            return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        verification.is_verified = True
+        verification.verified_at = timezone.now()
+        verification.save(update_fields=['is_verified', 'verified_at'])
+        return Response({'detail': 'Code verified.', 'email': email})
+
+
+class ForgotPasswordResetView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        code = ''.join(ch for ch in str(request.data.get('code', '')).strip() if ch.isdigit())
+        password = str(request.data.get('password', ''))
+        confirm_password = str(request.data.get('confirm_password', request.data.get('confirmPassword', '')))
+
+        if not email or len(code) != 4:
+            return Response({'detail': 'Enter the 4 digit verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(password) < 8:
+            return Response({'detail': 'Password must be at least 8 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if password != confirm_password:
+            return Response({'detail': 'Passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        verification = _latest_password_reset_verification(email)
+        if not verification or verification.code != code:
+            return Response({'detail': 'Verification code not found. Please request a new code.'}, status=status.HTTP_404_NOT_FOUND)
+        if verification.is_expired:
+            return Response({'detail': 'Verification code expired. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not verification.is_verified:
+            return Response({'detail': 'Please verify the code first.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = verification.user
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        verification.expires_at = timezone.now()
+        verification.save(update_fields=['expires_at'])
+        return Response({'detail': 'Password reset successfully.'})
 
 
 class TelegramLoginView(generics.GenericAPIView):
