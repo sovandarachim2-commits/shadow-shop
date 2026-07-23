@@ -107,7 +107,7 @@ class NewOrderPaymentMethodFilterTests(TestCase):
             if call.args[0].endswith('/sendMessage')
         ]
         self.assertIn('sales-chat', chat_ids)
-        self.assertIn('all-chat', chat_ids)
+        self.assertNotIn('all-chat', chat_ids)  # explicit contact_sales group wins over "all methods"
         self.assertNotIn('warehouse-chat', chat_ids)
 
     @patch('apps.notifications.services.requests.post')
@@ -126,7 +126,7 @@ class NewOrderPaymentMethodFilterTests(TestCase):
             if call.args[0].endswith('/sendMessage')
         ]
         self.assertIn('warehouse-chat', chat_ids)
-        self.assertIn('all-chat', chat_ids)
+        self.assertNotIn('all-chat', chat_ids)  # explicit COD group wins over "all methods"
         self.assertNotIn('sales-chat', chat_ids)
 
     @patch('apps.notifications.services.requests.post')

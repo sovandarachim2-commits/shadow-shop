@@ -1028,7 +1028,10 @@ export default function Settings({ tab = 'general' }) {
                         {key === 'notify_new_order' && telegramForm.notify_new_order !== false && (
                           <div className="mt-3 border-t border-gray-200 pt-3">
                             <p className="mb-1 text-xs font-semibold text-gray-700">Send to this group by payment method</p>
-                            <p className="mb-2 text-xs text-gray-400">Leave empty to send all payment methods.</p>
+                            <p className="mb-2 text-xs text-gray-400">
+                              Select methods for this group. If another group already selects a method (e.g. Contact Sales),
+                              that method goes only there — not to &quot;All methods&quot; groups.
+                            </p>
                             <PaymentZonePicker
                               zones={TELEGRAM_PAYMENT_METHOD_OPTIONS}
                               selectedKeys={telegramForm.new_order_payment_methods || []}

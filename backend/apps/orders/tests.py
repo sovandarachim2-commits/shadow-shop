@@ -195,10 +195,12 @@ class CustomerOrderFlowTests(TestCase):
         self.assertTrue(customer_dm.get('disable_web_page_preview'))
         share = next(
             p for p in send_payloads
-            if p.get('chat_id') == 'test-chat' and 'Sent to customer via bot' in p.get('text', '')
+            if p.get('chat_id') == 'test-chat' and 'ការបញ្ជាទិញរបស់អ្នកត្រូវបានបញ្ជាក់' in p.get('text', '')
         )
-        self.assertIn('ការបញ្ជាទិញរបស់អ្នកត្រូវបានបញ្ជាក់', share['text'])
-        self.assertIn('Copy below if needed', share['text'])
+        self.assertIn(f'#{order.order_number}', share['text'])
+        self.assertNotIn('Copy &amp; send to customer', share['text'])
+        self.assertNotIn('Sent to customer via bot', share['text'])
+        self.assertNotIn('Customer has no linked Telegram', share['text'])
 
     @patch('apps.notifications.services.Thread')
     @patch('apps.notifications.services.requests.post')
@@ -241,15 +243,16 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn('❌ <b>Cancelled</b> by Sales Team', edit_payload['text'])
         self.assertIn('ស្ថានភាព: បានលុបចោល', edit_payload['text'])
         self.assertEqual(edit_payload['reply_markup'], {'inline_keyboard': []})
-        # No linked Telegram → group gets copyable customer message.
+        # No linked Telegram → group still gets clean customer message (no header).
         send_payloads = [
             call.kwargs['json']
             for call in requests_post.call_args_list
             if call.args[0].rsplit('/', 1)[-1] == 'sendMessage'
         ]
-        share = next(p for p in send_payloads if 'Copy &amp; send to customer' in p.get('text', ''))
-        self.assertIn('ការបញ្ជាទិញត្រូវបានលុបចោល', share['text'])
+        share = next(p for p in send_payloads if 'ការបញ្ជាទិញត្រូវបានលុបចោល' in p.get('text', ''))
         self.assertIn(f'#{order.order_number}', share['text'])
+        self.assertNotIn('Copy &amp; send to customer', share['text'])
+        self.assertNotIn('Customer has no linked Telegram', share['text'])
 
     @patch('apps.payments.checkout_flow.TelegramService')
     def test_pay_now_checkout_prepares_pending_checkout_without_creating_order(self, telegram_service):

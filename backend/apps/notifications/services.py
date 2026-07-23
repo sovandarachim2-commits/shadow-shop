@@ -42,7 +42,25 @@ class TelegramService:
 
     def get_new_order_configs(self, payment_method: str = ''):
         configs = list(self.get_configs_for('notify_new_order'))
-        return [config for config in configs if self.config_allows_payment_method(config, payment_method)]
+        allowed = [
+            config for config in configs
+            if self.config_allows_payment_method(config, payment_method)
+        ]
+        method = str(payment_method or '').strip()
+        if not method:
+            return allowed
+
+        # If any destination explicitly selected this payment method, use only those.
+        # Prevents "All methods" groups from also getting Contact Sales / COD, etc.
+        explicit = []
+        for config in allowed:
+            methods = getattr(config, 'new_order_payment_methods', None) or []
+            if not isinstance(methods, (list, tuple)):
+                continue
+            clean = {str(item).strip() for item in methods if str(item).strip()}
+            if method in clean:
+                explicit.append(config)
+        return explicit or allowed
 
     @staticmethod
     def is_placeholder(value: str) -> bool:
@@ -540,12 +558,9 @@ class TelegramService:
             )
 
         if group_chat_id:
-            if sent_to_customer:
-                prefix = '✅ <b>Sent to customer via bot</b>\n📋 Copy below if needed:\n\n'
-            else:
-                prefix = '📋 <b>Copy &amp; send to customer</b>\n\n'
+            # Post only the customer message so sales can copy/forward it cleanly.
             self.send_message(
-                prefix + message,
+                message,
                 event_type=f'contact_sales_customer_share_{action}',
                 chat_id=str(group_chat_id),
                 reference=order.order_number,
