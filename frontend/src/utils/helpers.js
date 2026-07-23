@@ -1,5 +1,6 @@
 import { format, parseISO } from 'date-fns'
 import { cn } from './cn'
+import { normalizeCambodiaPhone } from './phone'
 
 export { cn }
 
@@ -33,7 +34,7 @@ export function getUserContactDefaults(user) {
 
   return {
     full_name,
-    phone: user.phone?.trim() || '',
+    phone: normalizeCambodiaPhone(user.phone),
   }
 }
 

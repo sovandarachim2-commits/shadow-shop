@@ -585,9 +585,9 @@ export default function Checkout() {
                     paymentMethod === method.key ? 'border-pink-500 bg-pink-50' : 'border-gray-100 bg-white hover:border-pink-200'
                   }`}
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#08172f] text-xs font-bold text-white">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100 text-xs font-bold text-gray-500">
                     {method.logoUrl ? (
-                      <img src={method.logoUrl} alt="" className="h-full w-full bg-white object-contain p-1" />
+                      <img src={method.logoUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
                       method.badge
                     )}
@@ -613,7 +613,17 @@ export default function Checkout() {
             <div className="mt-4 space-y-3">
               {checkoutItems.map((item) => (
                 <div key={getCartKey(item)} className="flex items-center gap-3 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                  <ProductThumb product={item.product} size="sm" />
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
+                    {(item.product.primary_image || item.product.image_url || item.product.image) ? (
+                      <img
+                        src={item.product.primary_image || item.product.image_url || item.product.image}
+                        alt={item.product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <ProductThumb product={item.product} size="sm" className="h-14 w-14 rounded-2xl" />
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-gray-950">{item.product.name}</p>
                     <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
@@ -630,7 +640,17 @@ export default function Checkout() {
           <div className="mt-4 hidden space-y-3 lg:block">
             {checkoutItems.map((item) => (
               <div key={getCartKey(item)} className="flex items-center gap-3">
-                <ProductThumb product={item.product} size="sm" />
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
+                  {(item.product.primary_image || item.product.image_url || item.product.image) ? (
+                    <img
+                      src={item.product.primary_image || item.product.image_url || item.product.image}
+                      alt={item.product.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <ProductThumb product={item.product} size="sm" className="h-14 w-14 rounded-2xl" />
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-gray-950">{item.product.name}</p>
                   <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>

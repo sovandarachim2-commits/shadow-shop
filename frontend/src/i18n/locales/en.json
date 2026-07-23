@@ -49,7 +49,9 @@
     "sale": "Sale",
     "or": "OR",
     "receipt": "Receipt",
-    "loadingReceipt": "Loading receipt"
+    "loadingReceipt": "Loading receipt",
+    "phonePlaceholder": "077322921",
+    "invalidPhone": "Enter a Cambodia phone number starting with 0 (9–10 digits)."
   },
   "trust": {
     "authentic": "100% Original",
@@ -693,7 +695,7 @@
     "addTitle": "Add delivery address",
     "formSubtitle": "Save accurate delivery details for faster checkout.",
     "fullNamePlaceholder": "Full name (first and last)",
-    "phonePlaceholder": "Enter phone number",
+    "phonePlaceholder": "077322921",
     "locationPlaceholder": "Province / Capital › District / Khan › Commune / Sangkat",
     "provinceState": "Province / State",
     "cityDistrict": "City / District",

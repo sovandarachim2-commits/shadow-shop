@@ -508,7 +508,7 @@ export default function PrepareItems() {
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Enter phone number"
+                  placeholder="077322921"
                   className="h-11 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3.5 text-sm text-gray-800 placeholder-gray-400 focus:border-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                 />
                 <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors">

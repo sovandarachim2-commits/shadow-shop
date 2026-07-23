@@ -7,6 +7,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { productsApi } from '@/api/products'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency } from '@/utils/helpers'
+import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 
 export default function NewOrder({ embedded = false, onCreated }) {
   const navigate = useNavigate()
@@ -101,6 +102,11 @@ export default function NewOrder({ embedded = false, onCreated }) {
       toast.error('Customer name and phone are required')
       return
     }
+    const phone = normalizeCambodiaPhone(customerInfo.phone)
+    if (!isValidCambodiaPhone(phone)) {
+      toast.error('Enter a Cambodia phone number starting with 0 (9–10 digits)')
+      return
+    }
     if (cartItems.length === 0) {
       toast.error('Add at least one product')
       return
@@ -114,6 +120,8 @@ export default function NewOrder({ embedded = false, onCreated }) {
       })
       return
     }
+
+    const customerPayload = { ...customerInfo, phone }
 
     const payload = {
       customer: null,
@@ -130,10 +138,10 @@ export default function NewOrder({ embedded = false, onCreated }) {
         cost_price: i.product.cost_price,
         discount: i.discount || 0,
       })),
-      customer_info: customerInfo,
+      customer_info: customerPayload,
     }
 
-    ordersApi.customers.create(customerInfo).then((res) => {
+    ordersApi.customers.create(customerPayload).then((res) => {
       createOrderMutation.mutate({ ...payload, customer: res.data.id })
     }).catch(() => {
       toast.error('Failed to save customer info')
@@ -197,15 +205,22 @@ export default function NewOrder({ embedded = false, onCreated }) {
               </div>
               <div>
                 <label className="label">Phone Number *</label>
-                <input className="input-field" placeholder="e.g. 085xxxxxxx" value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })} />
+                <input
+                  className="input-field"
+                  placeholder="077322921"
+                  value={customerInfo.phone}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: normalizeCambodiaPhone(e.target.value) })}
+                />
                 {existingCustomers?.length > 0 && (
                   <div className="mt-1 bg-white border border-gray-200 rounded-xl shadow-soft divide-y">
                     {existingCustomers.map((c) => (
-                      <button key={c.id} onClick={() => handleSelectCustomer(c)}
+                      <button key={c.id} onClick={() => handleSelectCustomer({
+                        ...c,
+                        phone: normalizeCambodiaPhone(c.phone),
+                      })}
                         className="flex items-center gap-2 px-3 py-2 w-full text-left hover:bg-gray-50 text-sm">
                         <span className="font-medium">{c.name}</span>
-                        <span className="text-gray-400">{c.phone}</span>
+                        <span className="text-gray-400">{normalizeCambodiaPhone(c.phone)}</span>
                       </button>
                     ))}
                   </div>

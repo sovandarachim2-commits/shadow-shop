@@ -587,7 +587,7 @@ export default function Settings({ tab = 'general' }) {
               </div>
               <div>
                 <label className="label">Store Phone</label>
-                <input className="input-field" placeholder="+855 xx xxx xxxx" value={generalForm.store_phone}
+                <input className="input-field" placeholder="077322921" value={generalForm.store_phone}
                   onChange={(e) => setGeneralForm((f) => ({ ...f, store_phone: e.target.value }))} />
               </div>
               <div>
@@ -1218,7 +1218,7 @@ export default function Settings({ tab = 'general' }) {
                         <img
                           src={paymentLogoPreviews[p.key] || paymentMethods.logo_urls[p.key]}
                           alt={`${p.label} logo`}
-                          className="h-full w-full object-contain p-1"
+                          className="h-full w-full object-cover"
                         />
                       ) : (
                         <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />

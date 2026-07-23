@@ -156,6 +156,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     ).prefetch_related(
         'items__product__images',
         'items__product_set',
+        'items__product_set__images',
         'items',
         'status_history__changed_by',
     ).annotate(

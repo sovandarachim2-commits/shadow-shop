@@ -17,6 +17,7 @@ import { ordersApi } from '@/api/orders'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
+import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 
 const ACCOUNT_MENU_ITEMS = [
   { icon: User, labelKey: 'profile.menuProfile', descKey: 'profile.menuProfileDesc', view: 'profile' },
@@ -112,7 +113,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   const [form, setForm] = useState({
     full_name: [user.first_name, user.last_name].filter(Boolean).join(' '),
     email: user.email || '',
-    phone: user.phone || '',
+    phone: normalizeCambodiaPhone(user.phone),
     gender: user.gender || '',
   })
 
@@ -162,12 +163,15 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     const nextErrors = {}
     const cleanName = form.full_name.trim()
     const cleanEmail = form.email.trim()
-    const cleanPhone = form.phone.trim()
+    const cleanPhone = normalizeCambodiaPhone(form.phone)
 
     if (!cleanName) nextErrors.full_name = t('profile.enterFullName')
     if (!cleanEmail) nextErrors.email = t('profile.enterEmail')
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       nextErrors.email = t('profile.enterValidEmail')
+    }
+    if (cleanPhone && !isValidCambodiaPhone(cleanPhone)) {
+      nextErrors.phone = t('common.invalidPhone')
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -267,7 +271,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
           <ProfileSection title={t('profile.personalInfo')} icon={User}>
             <ProfileField label={t('profile.fullName')} value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} error={errors.full_name} autoComplete="name" />
             <div className="grid gap-3 sm:grid-cols-2">
-              <ProfileField label={t('profile.phoneNumber')} value={form.phone} onChange={(v) => set('phone', v)} icon={Phone} autoComplete="tel" />
+              <ProfileField label={t('profile.phoneNumber')} value={form.phone} onChange={(v) => set('phone', normalizeCambodiaPhone(v))} icon={Phone} error={errors.phone} autoComplete="tel" placeholder={t('common.phonePlaceholder')} />
               <ProfileField label={t('profile.emailAddress')} type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} error={errors.email} autoComplete="email" />
             </div>
             <ProfileSelect label={t('completeProfile.gender')} value={form.gender} onChange={(v) => set('gender', v)} icon={User} options={GENDER_OPTIONS} t={t} />
@@ -477,7 +481,7 @@ function ProfileInfoRow({ label, value }) {
   )
 }
 
-function ProfileField({ label, value, onChange, type = 'text', readOnly, required, icon: Icon, error, autoComplete }) {
+function ProfileField({ label, value, onChange, type = 'text', readOnly, required, icon: Icon, error, autoComplete, placeholder }) {
   return (
     <label className="block">
       <span className="mb-2 flex items-center gap-1 text-xs font-black uppercase tracking-wide text-gray-400">
@@ -494,6 +498,7 @@ function ProfileField({ label, value, onChange, type = 'text', readOnly, require
           readOnly={readOnly}
           required={required}
           autoComplete={autoComplete}
+          placeholder={placeholder}
           aria-invalid={error ? 'true' : 'false'}
           onChange={onChange ? (e) => onChange(e.target.value) : undefined}
           className={cn(

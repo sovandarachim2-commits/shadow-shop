@@ -5,6 +5,7 @@ from .models import (
     RewardItem, RewardRedemption, RewardSettings, PointTransaction,
 )
 from apps.products.models import Product, ProductSet
+from utils.phone import validate_cambodia_phone
 
 
 def resolve_product_image_url(product, request=None):
@@ -20,11 +21,19 @@ def resolve_product_image_url(product, request=None):
 
 
 def resolve_product_set_image_url(product_set, request=None):
-    if not product_set or not product_set.image:
+    if not product_set:
         return ''
-    if request and hasattr(request, 'build_absolute_uri'):
-        return request.build_absolute_uri(product_set.image.url)
-    return product_set.image.url
+    images = list(product_set.images.all())
+    img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
+    if img and img.image:
+        if request and hasattr(request, 'build_absolute_uri'):
+            return request.build_absolute_uri(img.image.url)
+        return img.image.url
+    if product_set.image:
+        if request and hasattr(request, 'build_absolute_uri'):
+            return request.build_absolute_uri(product_set.image.url)
+        return product_set.image.url
+    return ''
 
 
 def first_order_item_image(order, request=None):
@@ -34,6 +43,8 @@ def first_order_item_image(order, request=None):
         return None
     if first.product_image:
         return first.product_image
+    if first.product_set_id:
+        return resolve_product_set_image_url(first.product_set, request) or None
     return resolve_product_image_url(first.product, request) or None
 
 
@@ -163,6 +174,9 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         fields = '__all__'
         read_only_fields = ['total_orders', 'total_spent', 'created_at', 'updated_at']
+
+    def validate_phone(self, value):
+        return validate_cambodia_phone(value)
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -509,6 +523,8 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
 
         with transaction.atomic():
             if customer_info:
+                if 'phone' in customer_info and customer_info['phone'] not in (None, ''):
+                    customer_info['phone'] = validate_cambodia_phone(customer_info['phone'])
                 for field in ['name', 'phone', 'email', 'address', 'province', 'notes']:
                     if field in customer_info:
                         setattr(order.customer, field, customer_info[field] or '')
@@ -586,6 +602,9 @@ class CustomerCheckoutSerializer(serializers.Serializer):
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, default=0)
     coupon_code = serializers.CharField(required=False, allow_blank=True, write_only=True, default='')
     items = OrderItemWriteSerializer(many=True)
+
+    def validate_phone(self, value):
+        return validate_cambodia_phone(value)
 
     def validate(self, attrs):
         errors = validate_order_target_stock(attrs.get('items', []))

@@ -39,7 +39,7 @@ function PaymentMethodCell({ method, logoUrls = {} }) {
 
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
-      {logoUrl && <img src={logoUrl} alt="" className="h-4 w-4 rounded-full object-contain" />}
+      {logoUrl && <img src={logoUrl} alt="" className="h-4 w-4 rounded-full object-cover" />}
       {paymentMethodLabel(method)}
     </span>
   )

@@ -95,7 +95,7 @@ export function ProductThumb({ product, size = 'md', className = '' }) {
             decoding="async"
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageFailed(true)}
-            className={cn('absolute inset-0 h-full w-full object-contain p-1 transition duration-300', imageLoaded ? 'opacity-100' : 'opacity-0')}
+            className={cn('absolute inset-0 h-full w-full object-cover transition duration-300', imageLoaded ? 'opacity-100' : 'opacity-0')}
           />
         </>
       ) : (

@@ -452,6 +452,100 @@ class TelegramService:
             },
         )
 
+    def _get_customer_telegram_id(self, order) -> str:
+        customer = order.customer
+        user = getattr(customer, 'user', None)
+        if user and getattr(user, 'telegram_id', None):
+            return str(user.telegram_id).strip()
+        seller = getattr(order, 'seller', None)
+        if seller and getattr(seller, 'role', '') == 'customer' and getattr(seller, 'telegram_id', None):
+            return str(seller.telegram_id).strip()
+        return ''
+
+    def _contact_sales_customer_message(self, order, action: str) -> str:
+        customer_name = escape(order.customer.name or 'អតិថិជន')
+        items_text = self._format_order_items(order)
+        address = self._format_customer_address(order)
+        frontend = str(getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+        track_url = f'{frontend}/my-orders/{order.id}' if frontend else ''
+
+        if action == 'confirm':
+            lines = [
+                f'✅ <b>ការបញ្ជាទិញរបស់អ្នកត្រូវបានបញ្ជាក់!</b>',
+                '',
+                f'សួស្តី {customer_name}!',
+                f'ការបញ្ជាទិញ <code>#{order.order_number}</code> ត្រូវបានទទួល និងបញ្ជាក់ដោយផ្នែកលក់ហើយ។',
+                '',
+                '📦 <b>ផលិតផល</b>:',
+                items_text,
+                '',
+                f'សរុបរង: ${order.subtotal}',
+                f'ថ្លៃដឹកជញ្ជូន: ${order.delivery_fee}',
+                f'បញ្ចុះតម្លៃ: ${order.discount}',
+                f'💰 <b>សរុប: ${order.grand_total}</b>',
+                f'📍 អាសយដ្ឋាន: {address}',
+                '',
+                'យើងនឹងរៀបចំដឹកជញ្ជូនឱ្យអ្នកឆាប់ៗនេះ។',
+                'សូមអរគុណដែលជ្រើសរើស Shadow Shop!',
+            ]
+            if track_url:
+                lines.extend(['', f'🔗 តាមដានការបញ្ជាទិញ: {track_url}'])
+            return '\n'.join(lines)
+
+        lines = [
+            f'❌ <b>ការបញ្ជាទិញត្រូវបានលុបចោល</b>',
+            '',
+            f'សួស្តី {customer_name}!',
+            f'ការបញ្ជាទិញ <code>#{order.order_number}</code> ត្រូវបានលុបចោល។',
+            '',
+            '📦 <b>ផលិតផល</b>:',
+            items_text,
+            '',
+            f'💰 សរុប: ${order.grand_total}',
+            '',
+            'ប្រសិនបើអ្នកនៅតែចង់ទិញ សូមបញ្ជាទិញថ្មី ឬទាក់ទងផ្នែកលក់។',
+            'សូមអរគុណ!',
+        ]
+        if track_url:
+            lines.extend(['', f'🔗 មើលការបញ្ជាទិញ: {track_url}'])
+        return '\n'.join(lines)
+
+    def notify_contact_sales_customer(self, order, action: str, group_chat_id=None) -> bool:
+        """DM the customer when possible; always post a forwardable copy in the sales group."""
+        if action not in {'confirm', 'cancel'}:
+            return False
+        if not self.config:
+            self.config = TelegramConfig.objects.filter(is_active=True).first()
+        if not self.config:
+            return False
+
+        message = self._contact_sales_customer_message(order, action)
+        telegram_id = self._get_customer_telegram_id(order)
+        sent_to_customer = False
+        if telegram_id:
+            sent_to_customer = self.send_message(
+                message,
+                event_type=f'contact_sales_customer_{action}',
+                chat_id=telegram_id,
+                reference=order.order_number,
+            )
+
+        if group_chat_id:
+            if sent_to_customer:
+                share_prefix = '📨 <b>Sent to customer via bot</b>\n\n'
+            else:
+                share_prefix = (
+                    '📨 <b>Copy &amp; send to customer</b>\n'
+                    '<i>(Customer has no linked Telegram — please forward this message)</i>\n\n'
+                )
+            self.send_message(
+                share_prefix + message,
+                event_type=f'contact_sales_customer_share_{action}',
+                chat_id=str(group_chat_id),
+                reference=order.order_number,
+            )
+        return sent_to_customer
+
     def _clear_callback_buttons(self, callback_query: dict):
         message = callback_query.get('message') or {}
         chat = message.get('chat') or {}
@@ -464,6 +558,57 @@ class TelegramService:
             {
                 'chat_id': chat_id,
                 'message_id': message_id,
+                'reply_markup': {'inline_keyboard': []},
+            },
+        )
+
+    def _contact_sales_status_message(self, order, action: str, actor: str) -> str:
+        from apps.orders.serializers import display_seller_name
+
+        source = 'Customer Checkout' if getattr(order.seller, 'role', '') == 'customer' else 'Admin/Staff Order'
+        if action == 'confirm':
+            status_line = f"✅ <b>Confirmed</b> by {escape(actor)}"
+            payment_line = 'ការបង់ប្រាក់: បានបង់ប្រាក់'
+            status_km = 'ស្ថានភាព: បានបញ្ជាក់'
+        else:
+            status_line = f"❌ <b>Cancelled</b> by {escape(actor)}"
+            payment_line = 'ការបង់ប្រាក់: មិនទាន់បង់ប្រាក់'
+            status_km = 'ស្ថានភាព: បានលុបចោល'
+
+        return (
+            f"<b>សំណើទាក់ទងផ្នែកលក់</b>\n"
+            f"ការបញ្ជាទិញ: <code>#{order.order_number}</code>\n"
+            f"{status_km}\n"
+            f"អតិថិជន: {escape(order.customer.name or 'N/A')}\n"
+            f"ទូរស័ព្ទ: {escape(order.customer.phone or 'N/A')}\n"
+            f"អាសយដ្ឋាន: {self._format_customer_address(order)}\n"
+            f"ផលិតផល:\n{self._format_order_items(order)}\n"
+            f"សរុបរង: ${order.subtotal}\n"
+            f"ថ្លៃដឹកជញ្ជូន: ${order.delivery_fee}\n"
+            f"បញ្ចុះតម្លៃ: ${order.discount}\n"
+            f"សរុប: ${order.grand_total}\n"
+            f"វិធីបង់ប្រាក់: ទាក់ទងផ្នែកលក់\n"
+            f"{payment_line}\n"
+            f"ប្រភព: {'អតិថិជនបញ្ជាទិញ' if source == 'Customer Checkout' else 'បុគ្គលិកបញ្ជាទិញ'}\n"
+            f"អ្នកលក់: {escape(display_seller_name(order))}\n\n"
+            f"{status_line}"
+        )
+
+    def _finalize_contact_sales_message(self, callback_query: dict, order, action: str, actor: str):
+        message = callback_query.get('message') or {}
+        chat = message.get('chat') or {}
+        chat_id = chat.get('id')
+        message_id = message.get('message_id')
+        if not chat_id or not message_id:
+            return None
+
+        return self._telegram_api_post(
+            'editMessageText',
+            {
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'text': self._contact_sales_status_message(order, action, actor),
+                'parse_mode': 'HTML',
                 'reply_markup': {'inline_keyboard': []},
             },
         )
@@ -498,16 +643,20 @@ class TelegramService:
         from apps.orders.models import Order, OrderStatusHistory
 
         try:
-            order = Order.objects.select_related('customer').get(pk=order_id, payment_method='contact_sales')
+            order = Order.objects.select_related('customer', 'customer__user', 'seller').get(
+                pk=order_id,
+                payment_method='contact_sales',
+            )
         except Order.DoesNotExist:
             self._answer_callback_query(callback_query_id, 'Order not found.', alert=True)
             return True
 
         actor = self._callback_actor(callback_query)
+        group_chat_id = ((callback_query.get('message') or {}).get('chat') or {}).get('id')
         if action == 'cancel':
             if order.status == Order.STATUS_CANCELLED:
                 self._answer_callback_query(callback_query_id, 'Order is already cancelled.')
-                self._clear_callback_buttons(callback_query)
+                self._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
                 return True
             order.status = Order.STATUS_CANCELLED
             order.save(update_fields=['status', 'updated_at'])
@@ -517,19 +666,22 @@ class TelegramService:
                 note=f'Contact sales order cancelled by {actor}',
             )
             self._answer_callback_query(callback_query_id, f'Order #{order.order_number} cancelled.')
-            self._clear_callback_buttons(callback_query)
+            self._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
+            self.notify_contact_sales_customer(order, 'cancel', group_chat_id=group_chat_id)
             return True
 
         if order.status == Order.STATUS_CANCELLED:
             self._answer_callback_query(callback_query_id, 'Cannot confirm a cancelled order.', alert=True)
-            self._clear_callback_buttons(callback_query)
+            self._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
             return True
 
         from apps.finance.models import Revenue
         from apps.orders.rewards import award_points_for_paid_order
 
         with transaction.atomic():
-            order = Order.objects.select_for_update().select_related('customer').get(pk=order.pk)
+            order = Order.objects.select_for_update().select_related(
+                'customer', 'customer__user', 'seller',
+            ).get(pk=order.pk)
             if order.status == Order.STATUS_NEW:
                 order.status = Order.STATUS_PRINTED
             order.payment_status = 'paid'
@@ -559,9 +711,14 @@ class TelegramService:
                     note=f'Contact sales order confirmed and marked paid by {actor}',
                 )
 
-        transaction.on_commit(lambda: TelegramService().notify_payment_received(order))
+        def _after_confirm():
+            service = TelegramService()
+            service.notify_payment_received(order)
+            service.notify_contact_sales_customer(order, 'confirm', group_chat_id=group_chat_id)
+
+        transaction.on_commit(_after_confirm)
         self._answer_callback_query(callback_query_id, f'Order #{order.order_number} confirmed.')
-        self._clear_callback_buttons(callback_query)
+        self._finalize_contact_sales_message(callback_query, order, 'confirm', actor)
         return True
 
     def notify_delivery_update(self, delivery) -> bool:

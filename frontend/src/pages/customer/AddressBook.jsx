@@ -12,6 +12,7 @@ import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
 import { formatAddressRecordKhmer, formatAddressLocationKhmer } from '@/utils/addressHelpers'
 import { getUserContactDefaults } from '@/utils/helpers'
+import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import cambodiaAdmin from '@/data/cambodia_admin.json'
 
@@ -440,15 +441,27 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
   const { t } = useTranslation()
   const [form, setForm] = useState(() =>
     address
-      ? { label: address.label, full_name: address.full_name, phone: address.phone, address_line1: address.address_line1, address_line2: address.address_line2 || '', city: address.city, state: address.state || '', postal_code: address.postal_code || '', country: address.country, is_default: address.is_default }
+      ? {
+          label: address.label,
+          full_name: address.full_name,
+          phone: normalizeCambodiaPhone(address.phone),
+          address_line1: address.address_line1,
+          address_line2: address.address_line2 || '',
+          city: address.city,
+          state: address.state || '',
+          postal_code: address.postal_code || '',
+          country: address.country,
+          is_default: address.is_default,
+        }
       : {
           ...emptyForm,
           full_name: defaultContact?.full_name || '',
-          phone: defaultContact?.phone || '',
+          phone: normalizeCambodiaPhone(defaultContact?.phone),
           is_default: isFirstAddress,
         }
   )
   const [showPicker, setShowPicker] = useState(false)
+  const [phoneError, setPhoneError] = useState('')
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -472,6 +485,17 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
     return parts.join(' › ')
   }, [form.address_line2, form.city, form.state])
 
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    const phone = normalizeCambodiaPhone(form.phone)
+    if (!isValidCambodiaPhone(phone)) {
+      setPhoneError(t('common.invalidPhone'))
+      return
+    }
+    setPhoneError('')
+    onSave({ ...form, phone })
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 px-0 backdrop-blur-[2px] md:items-center md:px-4">
@@ -494,7 +518,7 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
             </div>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); onSave(form) }} className="flex flex-1 flex-col overflow-hidden">
+          <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 space-y-3 overflow-y-auto bg-gray-50/60 px-5 py-4 md:px-6 md:py-5">
 
               {/* Full name */}
@@ -506,19 +530,23 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
               />
 
               {/* Phone */}
-              <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                <div className="flex shrink-0 items-center gap-1 border-r border-gray-200 pr-3 text-sm text-gray-700">
-                  +855 <ChevronDown size={13} className="text-gray-400" />
+              <div>
+                <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+                  <span className="shrink-0 text-sm text-pink-600">*</span>
+                  <input
+                    required
+                    type="tel"
+                    inputMode="numeric"
+                    value={form.phone}
+                    onChange={(e) => {
+                      setPhoneError('')
+                      set('phone', normalizeCambodiaPhone(e.target.value))
+                    }}
+                    placeholder={t('addressBook.phonePlaceholder')}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
+                  />
                 </div>
-                <span className="shrink-0 text-sm text-pink-600">*</span>
-                <input
-                  required
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => set('phone', e.target.value)}
-                  placeholder={t('addressBook.phonePlaceholder')}
-                  className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
-                />
+                {phoneError && <p className="mt-1.5 px-1 text-xs font-semibold text-red-500">{phoneError}</p>}
               </div>
 
               {/* Country */}
@@ -681,7 +709,10 @@ export default function AddressBook() {
       setShowForm(false)
       setEditing(null)
     },
-    onError: () => toast.error(t('addressBook.toast.saveFailed')),
+    onError: (error) => {
+      const phoneError = error?.response?.data?.phone?.[0]
+      toast.error(phoneError || t('addressBook.toast.saveFailed'))
+    },
   })
 
   const deleteMutation = useMutation({

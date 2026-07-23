@@ -26,6 +26,7 @@ import {
 import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
 import { cn } from '@/utils/helpers'
+import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 
 const GENDER_OPTIONS = [
   { value: '', labelKey: 'completeProfile.selectGender' },
@@ -35,8 +36,15 @@ const GENDER_OPTIONS = [
   { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
 ]
 
-function cleanPhoneDisplay(value) {
-  return String(value || '').replace(/^\+?855\s?/, '').trim()
+function buildInitialForm(user) {
+  return {
+    full_name: [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || user?.full_name || '',
+    phone: normalizeCambodiaPhone(user?.phone),
+    gender: user?.gender || '',
+    email: user?.email || '',
+    password: '',
+    confirm_password: '',
+  }
 }
 
 export default function CompleteProfile() {
@@ -51,14 +59,7 @@ export default function CompleteProfile() {
   )
   const needsPassword = user?.has_usable_password === false
   const [step, setStep] = useState('profile')
-  const [form, setForm] = useState({
-    full_name: [user?.first_name, user?.last_name].filter(Boolean).join(' '),
-    phone: cleanPhoneDisplay(user?.phone),
-    gender: user?.gender || '',
-    email: user?.email || '',
-    password: '',
-    confirm_password: '',
-  })
+  const [form, setForm] = useState(() => buildInitialForm(user))
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -131,13 +132,14 @@ export default function CompleteProfile() {
   const handleSubmit = (event) => {
     event.preventDefault()
     const cleanName = form.full_name.trim()
-    const cleanPhone = form.phone.trim()
+    const cleanPhone = normalizeCambodiaPhone(form.phone)
     const nextErrors = {}
 
     if (!cleanName || ['google', 'telegram'].includes(cleanName.toLowerCase())) {
       nextErrors.full_name = t('completeProfile.enterName')
     }
     if (!cleanPhone) nextErrors.phone = t('completeProfile.enterPhone')
+    else if (!isValidCambodiaPhone(cleanPhone)) nextErrors.phone = t('common.invalidPhone')
     if (!form.gender) nextErrors.gender = t('completeProfile.selectGenderError')
 
     if (Object.keys(nextErrors).length) {
@@ -391,9 +393,9 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           label={t('profile.phoneNumber')}
           required
           icon={Phone}
-          placeholder="077322921"
+          placeholder={t('common.phonePlaceholder')}
           value={form.phone}
-          onChange={(value) => set('phone', cleanPhoneDisplay(value))}
+          onChange={(value) => set('phone', normalizeCambodiaPhone(value))}
           error={errors.phone}
           autoComplete="tel"
         />

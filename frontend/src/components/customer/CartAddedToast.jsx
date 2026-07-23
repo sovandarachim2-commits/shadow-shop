@@ -19,7 +19,7 @@ export function showCartAddedToast(product, navigate, quantity = 1) {
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-pink-50">
         {imageUrl ? (
-          <img src={imageUrl} alt={product?.name || ''} className="h-full w-full object-contain p-1" />
+          <img src={imageUrl} alt={product?.name || ''} className="h-full w-full object-cover" />
         ) : (
           <ShoppingBag size={20} className="text-pink-600" />
         )}

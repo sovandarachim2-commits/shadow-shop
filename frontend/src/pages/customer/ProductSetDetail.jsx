@@ -73,7 +73,7 @@ function RelatedSetCard({ item, priority = false }) {
             alt={item.name}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
-            className="h-full w-full object-contain p-3 transition duration-300 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-pink-50">
@@ -339,7 +339,7 @@ export default function ProductSetDetail() {
                 alt={productSet.name}
                 draggable={false}
                 onError={() => setImageFailed(true)}
-                className="h-full w-full object-contain p-4"
+                className="h-full w-full object-cover"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-pink-50 to-rose-100">
@@ -375,7 +375,7 @@ export default function ProductSetDetail() {
                   onClick={() => showImageAt(i)}
                   className={`aspect-square w-20 shrink-0 overflow-hidden rounded-2xl border-2 bg-white md:w-24 ${i === activeImg ? 'border-pink-500' : 'border-transparent'}`}
                 >
-                  <img src={img.image} alt="" draggable={false} className="h-full w-full object-contain bg-white p-1" />
+                  <img src={img.image} alt="" draggable={false} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>

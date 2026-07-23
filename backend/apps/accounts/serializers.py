@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from .models import Permission, Role, RolePermission, ActivityLog, Address, SiteSettings
+from utils.phone import validate_cambodia_phone
 import random
 import re
 import json
@@ -77,6 +78,9 @@ class UserSerializer(serializers.ModelSerializer):
     def get_has_usable_password(self, obj):
         return obj.has_usable_password()
 
+    def validate_phone(self, value):
+        return validate_cambodia_phone(value, allow_blank=True)
+
     def validate_role(self, value):
         if not Role.objects.filter(name=value).exists():
             raise serializers.ValidationError('Select a valid role.')
@@ -100,6 +104,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs.pop('confirm_password'):
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
         return attrs
+
+    def validate_phone(self, value):
+        return validate_cambodia_phone(value, allow_blank=True)
 
     def validate_role(self, value):
         if not Role.objects.filter(name=value).exists():
@@ -146,6 +153,9 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
         if username and User.objects.filter(username__iexact=username, is_active=True).exists():
             raise serializers.ValidationError({'username': 'An account with this username already exists.'})
         return attrs
+
+    def validate_phone(self, value):
+        return validate_cambodia_phone(value, allow_blank=True)
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -233,6 +243,9 @@ class AddressSerializer(serializers.ModelSerializer):
             'is_default', 'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+
+    def validate_phone(self, value):
+        return validate_cambodia_phone(value)
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):

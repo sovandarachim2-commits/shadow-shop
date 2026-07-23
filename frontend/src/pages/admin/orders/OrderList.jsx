@@ -543,7 +543,7 @@ export default function OrderList() {
                     <img
                       src={paymentLogoUrls[selectedPaymentMethod]}
                       alt={`${paymentMethodLabel(selectedPaymentMethod)} logo`}
-                      className="h-full w-full object-contain p-1.5"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
                     <CreditCard size={18} className="text-gray-400" />

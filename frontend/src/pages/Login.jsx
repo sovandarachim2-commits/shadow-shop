@@ -357,8 +357,6 @@ export default function Login() {
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
   const telegramWidgetRef = useRef(null)
-  const googleLoginButtonRef = useRef(null)
-  const googleRegisterButtonRef = useRef(null)
   const showError = (message, title = t('auth.errorTitle')) => setNotice({ type: 'error', title, message })
   const sl = (k, v) => {
     setLf((f) => ({ ...f, [k]: v }))
@@ -436,41 +434,24 @@ export default function Login() {
     if (!googleLoginEnabled || !googleClientId) return undefined
 
     let cancelled = false
-    const renderGoogleButtons = async () => {
+    const initGoogle = async () => {
       try {
         await loadGoogleIdentityScript()
         if (cancelled || !window.google?.accounts?.id) return
-
         window.google.accounts.id.initialize({
           client_id: googleClientId,
           callback: handleGoogleCredential,
-        })
-
-        const options = {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          shape: 'pill',
-          text: mode === 'register' ? 'signup_with' : 'signin_with',
-          logo_alignment: 'left',
-          width: 210,
-        }
-
-        ;[googleLoginButtonRef.current, googleRegisterButtonRef.current].forEach((target) => {
-          if (!target) return
-          target.innerHTML = ''
-          window.google.accounts.id.renderButton(target, options)
         })
       } catch {
         if (!cancelled) showError(t('auth.googleLoadFailed'))
       }
     }
 
-    renderGoogleButtons()
+    initGoogle()
     return () => {
       cancelled = true
     }
-  }, [googleLoginEnabled, googleClientId, handleGoogleCredential, mode, t])
+  }, [googleLoginEnabled, googleClientId, handleGoogleCredential, t])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -568,10 +549,15 @@ export default function Login() {
       window.google.accounts.id.initialize({
         client_id: googleClientId,
         callback: handleGoogleCredential,
+        cancel_on_tap_outside: true,
       })
       window.google.accounts.id.prompt((notification) => {
-        if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.() || notification.isDismissedMoment?.()) {
-          setGoogleLoading(false)
+        const skipped = notification.isNotDisplayed?.()
+          || notification.isSkippedMoment?.()
+          || notification.isDismissedMoment?.()
+        if (!skipped) return
+        setGoogleLoading(false)
+        if (notification.isNotDisplayed?.()) {
           showError(t('auth.googleLoadFailed'))
         }
       })
@@ -694,19 +680,15 @@ export default function Login() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="flex h-12 items-center justify-center overflow-hidden rounded-2xl border border-[#F2DCE7] bg-white">
-                        {googleLoginEnabled ? (
-                          <div ref={googleLoginButtonRef} className="flex justify-center" />
-                        ) : (
-                          <button type="button"
-                            onClick={openGoogleLogin}
-                            disabled={googleLoading}
-                            className="flex h-full w-full items-center justify-center gap-2 text-sm font-bold text-[#1A1A1A] transition hover:bg-[#FFF9FC] focus:outline-none disabled:opacity-60">
-                            {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
-                            {t('auth.google')}
-                          </button>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={openGoogleLogin}
+                        disabled={googleLoading || !googleLoginEnabled}
+                        className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
+                      >
+                        {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
+                        {t('auth.google')}
+                      </button>
 
                       <button type="button"
                         onClick={openTelegramLogin}
@@ -754,14 +736,16 @@ export default function Login() {
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.phoneNumber')}</label>
                       <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10"
                         style={{ height: 52 }}>
-                        <div className="flex items-center gap-1.5 px-3 bg-gray-50 border-r border-gray-200 text-sm font-semibold text-gray-600 shrink-0">
-                          🇰🇭 +855
-                        </div>
                         <div className="flex items-center gap-3 flex-1 px-4">
                           <Phone size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
-                          <input type="tel" value={rf.phone} onChange={(e) => sr('phone', e.target.value)}
-                            placeholder={t('auth.phoneNumber')}
-                            className="flex-1 bg-transparent text-[15px] text-gray-800 outline-none placeholder:text-gray-300" />
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            value={rf.phone}
+                            onChange={(e) => sr('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder={t('common.phonePlaceholder')}
+                            className="flex-1 bg-transparent text-[15px] text-gray-800 outline-none placeholder:text-gray-300"
+                          />
                         </div>
                       </div>
                     </div>
@@ -842,19 +826,15 @@ export default function Login() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="flex h-12 items-center justify-center overflow-hidden rounded-2xl border border-[#F2DCE7] bg-white">
-                        {googleLoginEnabled ? (
-                          <div ref={googleRegisterButtonRef} className="flex justify-center" />
-                        ) : (
-                          <button type="button"
-                            onClick={openGoogleLogin}
-                            disabled={googleLoading}
-                            className="flex h-full w-full items-center justify-center gap-2 text-sm font-bold text-[#1A1A1A] transition hover:bg-[#FFF9FC] focus:outline-none disabled:opacity-60">
-                            {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
-                            {t('auth.google')}
-                          </button>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={openGoogleLogin}
+                        disabled={googleLoading || !googleLoginEnabled}
+                        className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
+                      >
+                        {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
+                        {t('auth.google')}
+                      </button>
 
                       <button type="button"
                         onClick={openTelegramLogin}
