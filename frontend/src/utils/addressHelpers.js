@@ -41,11 +41,30 @@ export const KHMER_FONT_FAMILY = "'Khmer OS Siemreap', 'Khmer OS', 'Noto Sans Kh
 
 const ORDER_PROVINCE_KEYS = {
   phnom_penh: 'Phnom Penh',
-  siem_reap: 'Siem Reap',
+  banteay_meanchey: 'Banteay Meanchey',
   battambang: 'Battambang',
   kampong_cham: 'Kampong Cham',
+  kampong_chhnang: 'Kampong Chhnang',
+  kampong_speu: 'Kampong Speu',
+  kampong_thom: 'Kampong Thom',
+  kampot: 'Kampot',
   kandal: 'Kandal',
+  kep: 'Kep',
+  koh_kong: 'Koh Kong',
+  kratie: 'Kratie',
+  mondulkiri: 'Mondulkiri',
+  oddar_meanchey: 'Oddar Meanchey',
+  pailin: 'Pailin',
+  preah_sihanouk: 'Preah Sihanouk',
+  preah_vihear: 'Preah Vihear',
+  prey_veng: 'Prey Veng',
+  pursat: 'Pursat',
+  ratanakiri: 'Ratanakiri',
+  siem_reap: 'Siem Reap',
+  stung_treng: 'Stung Treng',
+  svay_rieng: 'Svay Rieng',
   takeo: 'Takeo',
+  tboung_khmum: 'Tboung Khmum',
 }
 
 const LOCATION_ALIASES = {

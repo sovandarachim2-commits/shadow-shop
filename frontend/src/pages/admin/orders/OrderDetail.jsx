@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ordersApi } from '@/api/orders'
 import { productsApi } from '@/api/products'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
 
 const STATUS_FLOW = [
   { key: 'new', label: 'New', icon: Package },
@@ -19,16 +20,7 @@ const STATUS_FLOW = [
   { key: 'completed', label: 'Completed', icon: Check },
 ]
 
-const PROVINCES = [
-  { value: 'phnom_penh', label: 'Phnom Penh' },
-  { value: 'siem_reap', label: 'Siem Reap' },
-  { value: 'battambang', label: 'Battambang' },
-  { value: 'kampong_cham', label: 'Kampong Cham' },
-  { value: 'kandal', label: 'Kandal' },
-  { value: 'takeo', label: 'Takeo' },
-  { value: 'prey_veng', label: 'Prey Veng' },
-  { value: 'other', label: 'Other' },
-]
+const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: p.label }))
 
 export function EditOrderModal({ order, onClose, onSaved }) {
   const [search, setSearch] = useState('')

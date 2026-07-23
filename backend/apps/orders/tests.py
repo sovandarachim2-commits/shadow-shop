@@ -136,9 +136,10 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn('អាសយដ្ឋាន: Phnom Penh, Street 1', payload['text'])
         self.assertIn('វិធីបង់ប្រាក់: ទាក់ទងផ្នែកលក់', payload['text'])
 
-    @patch('apps.notifications.services.transaction.on_commit', side_effect=lambda fn: fn())
+    @patch('apps.notifications.services.Thread')
     @patch('apps.notifications.services.requests.post')
-    def test_contact_sales_confirm_button_records_confirmation(self, requests_post, _on_commit):
+    def test_contact_sales_confirm_button_records_confirmation(self, requests_post, thread_cls):
+        thread_cls.side_effect = lambda target=None, daemon=None: type('T', (), {'start': staticmethod(lambda: target())})()
         response = Mock(status_code=200, content=b'{}')
         response.json.return_value = {'ok': True}
         requests_post.return_value = response
@@ -171,7 +172,7 @@ class CustomerOrderFlowTests(TestCase):
         ).exists())
         self.assertTrue(Revenue.objects.filter(order=order, payment_method='contact_sales').exists())
         methods = [call.args[0].rsplit('/', 1)[-1] for call in requests_post.call_args_list]
-        self.assertIn('answerCallbackQuery', methods)
+        self.assertEqual(methods[0], 'answerCallbackQuery')
         self.assertIn('editMessageText', methods)
         edit_payload = next(
             call.kwargs['json']
@@ -191,11 +192,20 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn('ការបញ្ជាទិញរបស់អ្នកត្រូវបានបញ្ជាក់', customer_dm['text'])
         self.assertIn(f'#{order.order_number}', customer_dm['text'])
         self.assertIn('Order Test Product', customer_dm['text'])
-        share = next(p for p in send_payloads if p.get('chat_id') == 'test-chat' and 'Sent to customer via bot' in p.get('text', ''))
-        self.assertIn('Sent to customer via bot', share['text'])
+        self.assertTrue(customer_dm.get('disable_web_page_preview'))
+        self.assertFalse(any(
+            p.get('chat_id') == 'test-chat' and 'Sent to customer via bot' in p.get('text', '')
+            for p in send_payloads
+        ))
+        self.assertFalse(any(
+            'Copy &amp; send to customer' in p.get('text', '')
+            for p in send_payloads
+        ))
 
+    @patch('apps.notifications.services.Thread')
     @patch('apps.notifications.services.requests.post')
-    def test_contact_sales_cancel_button_cancels_order(self, requests_post):
+    def test_contact_sales_cancel_button_cancels_order(self, requests_post, thread_cls):
+        thread_cls.side_effect = lambda target=None, daemon=None: type('T', (), {'start': staticmethod(lambda: target())})()
         response = Mock(status_code=200, content=b'{}')
         response.json.return_value = {'ok': True}
         requests_post.return_value = response
@@ -223,6 +233,7 @@ class CustomerOrderFlowTests(TestCase):
             note='Contact sales order cancelled by Sales Team',
         ).exists())
         methods = [call.args[0].rsplit('/', 1)[-1] for call in requests_post.call_args_list]
+        self.assertEqual(methods[0], 'answerCallbackQuery')
         self.assertIn('editMessageText', methods)
         edit_payload = next(
             call.kwargs['json']
@@ -232,14 +243,11 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn('❌ <b>Cancelled</b> by Sales Team', edit_payload['text'])
         self.assertIn('ស្ថានភាព: បានលុបចោល', edit_payload['text'])
         self.assertEqual(edit_payload['reply_markup'], {'inline_keyboard': []})
-        share = next(
-            call.kwargs['json']
+        # No linked Telegram → no customer DM / group copy message.
+        self.assertFalse(any(
+            call.args[0].rsplit('/', 1)[-1] == 'sendMessage'
             for call in requests_post.call_args_list
-            if call.args[0].rsplit('/', 1)[-1] == 'sendMessage'
-            and 'Copy &amp; send to customer' in call.kwargs['json'].get('text', '')
-        )
-        self.assertIn('ការបញ្ជាទិញត្រូវបានលុបចោល', share['text'])
-        self.assertIn(f'#{order.order_number}', share['text'])
+        ))
 
     @patch('apps.payments.checkout_flow.TelegramService')
     def test_pay_now_checkout_prepares_pending_checkout_without_creating_order(self, telegram_service):

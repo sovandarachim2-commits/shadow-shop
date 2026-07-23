@@ -8,6 +8,7 @@ import { productsApi } from '@/api/products'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
+import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
 
 export default function NewOrder({ embedded = false, onCreated }) {
   const navigate = useNavigate()
@@ -148,16 +149,7 @@ export default function NewOrder({ embedded = false, onCreated }) {
     })
   }
 
-  const PROVINCES = [
-    { value: 'phnom_penh', label: 'Phnom Penh' },
-    { value: 'siem_reap', label: 'Siem Reap' },
-    { value: 'battambang', label: 'Battambang' },
-    { value: 'kampong_cham', label: 'Kampong Cham' },
-    { value: 'kandal', label: 'Kandal' },
-    { value: 'takeo', label: 'Takeo' },
-    { value: 'prey_veng', label: 'Prey Veng' },
-    { value: 'other', label: 'Other' },
-  ]
+  const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: p.label }))
 
   return (
     <div className={embedded ? '' : 'animate-fade-in'}>

@@ -6,6 +6,7 @@ from .models import (
 )
 from apps.products.models import Product, ProductSet
 from utils.phone import validate_cambodia_phone
+from utils.payment_methods import is_payment_method_allowed
 
 
 def resolve_product_image_url(product, request=None):
@@ -610,6 +611,12 @@ class CustomerCheckoutSerializer(serializers.Serializer):
         errors = validate_order_target_stock(attrs.get('items', []))
         if errors:
             raise serializers.ValidationError({'items': errors})
+        method = attrs.get('payment_method')
+        province = attrs.get('province', '')
+        if method and not is_payment_method_allowed(method, province):
+            raise serializers.ValidationError({
+                'payment_method': 'This payment method is not available for the selected delivery zone.',
+            })
         return attrs
 
     @transaction.atomic

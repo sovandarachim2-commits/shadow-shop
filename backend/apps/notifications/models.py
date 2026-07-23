@@ -10,6 +10,8 @@ class TelegramConfig(models.Model):
     topic_id = models.PositiveIntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     notify_new_order = models.BooleanField(default=True)
+    # Empty list = all payment methods. Non-empty = only listed methods.
+    new_order_payment_methods = models.JSONField(default=list, blank=True)
     notify_payment = models.BooleanField(default=True)
     notify_low_stock = models.BooleanField(default=True)
     notify_delivery = models.BooleanField(default=True)

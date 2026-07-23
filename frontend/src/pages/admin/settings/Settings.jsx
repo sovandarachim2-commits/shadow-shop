@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power } from 'lucide-react'
+import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power, ChevronDown, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useState, useRef, useEffect } from 'react'
 import client from '@/api/client'
 import { authApi } from '@/api/auth'
+import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
 
 const SECTION_TITLES = {
   general:  'General Settings',
@@ -73,7 +74,161 @@ function paymentSettingsPayload(paymentMethods) {
   }
   payload.logo_urls = paymentMethods.logo_urls || {}
   payload.contact_sales_url = normalizeTelegramUrl(paymentMethods.contact_sales_url)
+  const allowedZones = {}
+  const source = paymentMethods.allowed_zones || {}
+  for (const method of ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales']) {
+    const zones = Array.isArray(source[method])
+      ? source[method].map((zone) => String(zone).trim()).filter(Boolean)
+      : []
+    if (zones.length > 0) allowedZones[method] = zones
+  }
+  payload.allowed_zones = allowedZones
   return payload
+}
+
+function PaymentZonePicker({
+  zones,
+  selectedKeys = [],
+  onChange,
+  emptySummary = 'All zones',
+  allSelectedSummary = 'All zones selected',
+  searchPlaceholder = 'Search province...',
+  icon: Icon = MapPin,
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const rootRef = useRef(null)
+  const selected = Array.isArray(selectedKeys) ? selectedKeys : []
+  const selectedSet = new Set(selected)
+  const filtered = zones.filter((zone) =>
+    zone.label.toLowerCase().includes(query.trim().toLowerCase())
+  )
+  const allSelected = selected.length > 0 && selected.length === zones.length
+  const summary = selected.length === 0
+    ? emptySummary
+    : allSelected
+      ? allSelectedSummary
+      : `${selected.length} of ${zones.length} selected`
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onDocClick = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const toggleZone = (zoneKey) => {
+    if (selectedSet.has(zoneKey)) {
+      onChange(selected.filter((key) => key !== zoneKey))
+      return
+    }
+    onChange([...selected, zoneKey])
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-purple-200"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Icon size={15} className="shrink-0 text-purple-500" />
+          <span className="truncate text-sm font-medium text-gray-800">{summary}</span>
+        </span>
+        <ChevronDown size={16} className={`shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {selected.length > 0 && !allSelected && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selected.map((key) => {
+            const zone = zones.find((item) => item.key === key)
+            if (!zone) return null
+            return (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 rounded-lg border border-purple-100 bg-purple-50 px-2 py-1 text-xs font-semibold text-purple-700"
+              >
+                {zone.label}
+                <button
+                  type="button"
+                  onClick={() => toggleZone(key)}
+                  className="rounded p-0.5 text-purple-400 hover:bg-purple-100 hover:text-purple-700"
+                  aria-label={`Remove ${zone.label}`}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {open && (
+        <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="border-b border-gray-100 p-2">
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-purple-300 focus:bg-white"
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 px-1">
+              <button
+                type="button"
+                onClick={() => onChange(zones.map((zone) => zone.key))}
+                className="text-xs font-semibold text-purple-600 hover:text-purple-700"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="text-xs font-semibold text-gray-500 hover:text-gray-700"
+              >
+                Clear (all)
+              </button>
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-4 text-center text-xs text-gray-400">No options found</p>
+            ) : (
+              filtered.map((zone) => {
+                const checked = selectedSet.has(zone.key)
+                return (
+                  <label
+                    key={zone.key}
+                    className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-purple-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      checked={checked}
+                      onChange={() => toggleZone(zone.key)}
+                    />
+                    <span className={checked ? 'font-medium text-gray-900' : 'text-gray-600'}>
+                      {zone.label}
+                    </span>
+                  </label>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function apiErrorMessage(error, fallback) {
@@ -133,6 +288,8 @@ export default function Settings({ tab = 'general' }) {
         ...prev,
         ...siteSettings.payment_methods,
         contact_sales_url: siteSettings.payment_methods.contact_sales_url || '',
+        allowed_zones: siteSettings.payment_methods.allowed_zones || {},
+        logo_urls: siteSettings.payment_methods.logo_urls || {},
       }))
     }
     setFooterMenus(normalizeFooterMenus(siteSettings.footer_menus))
@@ -214,6 +371,7 @@ export default function Settings({ tab = 'general' }) {
       ...Object.fromEntries(ALL_PAYMENT_METHODS.map((m) => [m.key, true])),
       contact_sales_url: '',
       logo_urls: {},
+      allowed_zones: {},
     }
   )
   const [paymentLogoFiles, setPaymentLogoFiles] = useState({})
@@ -250,6 +408,16 @@ export default function Settings({ tab = 'general' }) {
     const reader = new FileReader()
     reader.onload = (ev) => setPaymentLogoPreviews((prev) => ({ ...prev, [method]: ev.target.result }))
     reader.readAsDataURL(file)
+  }
+
+  const setPaymentZones = (method, zones) => {
+    setPaymentMethods((prev) => ({
+      ...prev,
+      allowed_zones: {
+        ...(prev.allowed_zones || {}),
+        [method]: zones,
+      },
+    }))
   }
 
   const updateFooterSection = (sectionKey, field, value) => {
@@ -318,19 +486,7 @@ export default function Settings({ tab = 'general' }) {
 
   // ── Delivery Settings ─────────────────────────────────────────────
   const DEFAULT_DELIVERY_FEES = {}
-  const PROVINCE_OPTIONS = [
-    { key: 'phnom_penh', label: 'Phnom Penh' },
-    { key: 'siem_reap', label: 'Siem Reap' },
-    { key: 'battambang', label: 'Battambang' },
-    { key: 'kampong_cham', label: 'Kampong Cham' },
-    { key: 'kandal', label: 'Kandal' },
-    { key: 'takeo', label: 'Takeo' },
-    { key: 'prey_veng', label: 'Prey Veng' },
-    { key: 'svay_rieng', label: 'Svay Rieng' },
-    { key: 'kampot', label: 'Kampot' },
-    { key: 'kep', label: 'Kep' },
-    { key: 'other', label: 'Other' },
-  ]
+  const PROVINCE_OPTIONS = CAMBODIA_PROVINCES
   const DELIVERY_ZONE_LABELS = Object.fromEntries(PROVINCE_OPTIONS.map((z) => [z.key, z.label]))
   const normalizeDeliveryZone = (key, value) => {
     if (value && typeof value === 'object') {
@@ -448,6 +604,18 @@ export default function Settings({ tab = 'general' }) {
   })
 
   // ── Telegram Settings ─────────────────────────────────────────────
+  const TELEGRAM_PAYMENT_METHOD_OPTIONS = [
+    { key: 'bakong', label: 'Bakong KHQR' },
+    { key: 'aba', label: 'ABA Bank' },
+    { key: 'acleda', label: 'ACLEDA Bank' },
+    { key: 'wing', label: 'Wing' },
+    { key: 'cod', label: 'Cash on Delivery' },
+    { key: 'cash', label: 'Cash' },
+    { key: 'contact_sales', label: 'Contact Sales' },
+  ]
+  const TELEGRAM_PAYMENT_LABELS = Object.fromEntries(
+    TELEGRAM_PAYMENT_METHOD_OPTIONS.map((method) => [method.key, method.label])
+  )
   const TELEGRAM_NOTIFICATION_OPTIONS = [
     ['notify_new_order', 'New Orders (customer/admin created)'],
     ['notify_payment', 'Payment Received'],
@@ -460,12 +628,20 @@ export default function Settings({ tab = 'general' }) {
     notify_new_order: true, notify_payment: true,
     notify_low_stock: true, notify_delivery: true,
     notify_daily_summary: true,
+    new_order_payment_methods: [],
   }
   const [telegramForm, setTelegramForm] = useState(emptyTelegramForm)
   const [telegramModal, setTelegramModal] = useState(null)
 
   const openTelegramModal = (config = null) => {
-    setTelegramForm(config ? { ...emptyTelegramForm, ...config, topic_id: config.topic_id || '' } : { ...emptyTelegramForm, name: 'Default' })
+    setTelegramForm(config ? {
+      ...emptyTelegramForm,
+      ...config,
+      topic_id: config.topic_id || '',
+      new_order_payment_methods: Array.isArray(config.new_order_payment_methods)
+        ? config.new_order_payment_methods
+        : [],
+    } : { ...emptyTelegramForm, name: 'Default' })
     setTelegramModal(config ? 'edit' : 'add')
   }
 
@@ -475,7 +651,18 @@ export default function Settings({ tab = 'general' }) {
     bot_username: (data.bot_username || '').replace('@', '').trim(),
     chat_id: String(data.chat_id || '').trim(),
     topic_id: data.topic_id === '' || data.topic_id === null ? null : Number(data.topic_id),
+    new_order_payment_methods: Array.isArray(data.new_order_payment_methods)
+      ? data.new_order_payment_methods.filter(Boolean)
+      : [],
   })
+
+  const summarizeNewOrderMethods = (config) => {
+    if (!config.notify_new_order) return null
+    const methods = Array.isArray(config.new_order_payment_methods) ? config.new_order_payment_methods : []
+    if (methods.length === 0) return 'New orders: all methods'
+    const labels = methods.map((key) => TELEGRAM_PAYMENT_LABELS[key] || key)
+    return `New orders: ${labels.join(', ')}`
+  }
 
   const { data: telegramConfigs } = useQuery({
     queryKey: ['telegram-configs'],
@@ -696,6 +883,11 @@ export default function Settings({ tab = 'general' }) {
                           </span>
                         ))}
                       </div>
+                      {summarizeNewOrderMethods(config) && (
+                        <p className="mt-2 text-xs font-medium text-gray-500">
+                          {summarizeNewOrderMethods(config)}
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -823,15 +1015,35 @@ export default function Settings({ tab = 'general' }) {
                   <div className="mt-4 space-y-2">
                     <label className="label">Notifications to send</label>
                     {TELEGRAM_NOTIFICATION_OPTIONS.map(([key, label]) => (
-                      <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl bg-gray-50 p-3 hover:bg-gray-100">
-                        <input
-                          type="checkbox"
-                          checked={telegramForm[key] !== false}
-                          onChange={(e) => setTelegramForm((f) => ({ ...f, [key]: e.target.checked }))}
-                          className="h-4 w-4 accent-purple-600"
-                        />
-                        <span className="text-sm">{label}</span>
-                      </label>
+                      <div key={key} className="rounded-xl bg-gray-50 p-3">
+                        <label className="flex cursor-pointer items-center gap-3 hover:opacity-90">
+                          <input
+                            type="checkbox"
+                            checked={telegramForm[key] !== false}
+                            onChange={(e) => setTelegramForm((f) => ({ ...f, [key]: e.target.checked }))}
+                            className="h-4 w-4 accent-purple-600"
+                          />
+                          <span className="text-sm">{label}</span>
+                        </label>
+                        {key === 'notify_new_order' && telegramForm.notify_new_order !== false && (
+                          <div className="mt-3 border-t border-gray-200 pt-3">
+                            <p className="mb-1 text-xs font-semibold text-gray-700">Send to this group by payment method</p>
+                            <p className="mb-2 text-xs text-gray-400">Leave empty to send all payment methods.</p>
+                            <PaymentZonePicker
+                              zones={TELEGRAM_PAYMENT_METHOD_OPTIONS}
+                              selectedKeys={telegramForm.new_order_payment_methods || []}
+                              onChange={(methods) => setTelegramForm((f) => ({
+                                ...f,
+                                new_order_payment_methods: methods,
+                              }))}
+                              emptySummary="All payment methods"
+                              allSelectedSummary="All payment methods selected"
+                              searchPlaceholder="Search payment method..."
+                              icon={CreditCard}
+                            />
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
 
@@ -1264,6 +1476,15 @@ export default function Settings({ tab = 'general' }) {
                     <p className="mt-1 text-xs text-gray-400">Shown to customers when they choose Contact Sales. Accepts @username, t.me/username, or full URL.</p>
                   </div>
                 )}
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <label className="label">Available zones</label>
+                  <p className="mb-2 text-xs text-gray-400">Leave empty (All zones) to allow this method everywhere.</p>
+                  <PaymentZonePicker
+                    zones={PROVINCE_OPTIONS}
+                    selectedKeys={paymentMethods.allowed_zones?.[p.key] || []}
+                    onChange={(zones) => setPaymentZones(p.key, zones)}
+                  />
+                </div>
               </div>
             ))}
             <div className="pt-2">

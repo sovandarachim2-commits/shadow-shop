@@ -10,38 +10,27 @@ import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, getUserContactDefaults } from '@/utils/helpers'
 import { formatAddressLocationKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
+import { CAMBODIA_PROVINCE_LABELS, toProvinceKey } from '@/utils/cambodiaProvinces'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
 
 const PAYMENT_METHOD_KEYS = ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales']
 
 const DEFAULT_PROVINCE_FEES = {
-  phnom_penh: 3, siem_reap: 6, battambang: 6,
-  kampong_cham: 5, kandal: 4, takeo: 4, other: 8,
+  phnom_penh: 3,
+  kandal: 4,
+  takeo: 4,
+  kampong_cham: 5,
+  siem_reap: 6,
+  battambang: 6,
 }
 const getCartKey = (item) => item.product.cart_key || item.product.id
-const PROVINCE_LABELS = {
-  phnom_penh: 'Phnom Penh', siem_reap: 'Siem Reap', battambang: 'Battambang',
-  kampong_cham: 'Kampong Cham', kandal: 'Kandal', takeo: 'Takeo', other: 'Other',
-}
-
-const CART_PROVINCE_MAP = {
-  'Phnom Penh': 'phnom_penh',
-  'Kandal Province': 'kandal',
-  'Siem Reap': 'siem_reap',
-  'Battambang': 'battambang',
-}
+const PROVINCE_LABELS = CAMBODIA_PROVINCE_LABELS
 const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
 const ONLINE_PAYMENT_METHODS = ['bakong', 'aba']
 
 function mapProvince(text) {
-  const value = (text || '').toLowerCase()
-  if (value.includes('phnom')) return 'phnom_penh'
-  if (value.includes('siem')) return 'siem_reap'
-  if (value.includes('battambang')) return 'battambang'
-  if (value.includes('kandal')) return 'kandal'
-  if (value.includes('kampong cham')) return 'kampong_cham'
-  return 'phnom_penh'
+  return toProvinceKey(text)
 }
 
 function readSavedCartAddress() {
@@ -53,7 +42,7 @@ function readSavedCartAddress() {
       name: addr.name || '',
       phone: addr.phone || '',
       email: addr.email || '',
-      province: CART_PROVINCE_MAP[addr.province] || mapProvince(addr.province),
+      province: mapProvince(addr.province),
       district: addr.district || '',
       address: [addr.address, addr.subdistrict, addr.district, addr.zip].filter(Boolean).join(', '),
     }
@@ -172,20 +161,6 @@ export default function Checkout() {
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
   })
 
-  const paymentMethods = useMemo(() => {
-    const logoUrls = siteSettings?.payment_methods?.logo_urls || {}
-    const base = PAYMENT_METHOD_KEYS.map((key) => ({
-      key,
-      label: t(`checkout.paymentMethods.${key}.label`),
-      badge: t(`checkout.paymentMethods.${key}.badge`),
-      desc: t(`checkout.paymentMethods.${key}.desc`),
-      logoUrl: logoUrls[key] || '',
-    }))
-    const settings = siteSettings?.payment_methods
-    if (!settings || Object.keys(settings).length === 0) return base
-    return base.filter((m) => settings[m.key] !== false)
-  }, [siteSettings, t])
-
   const provinces = useMemo(() => {
     const fees = (siteSettings?.delivery_fees && Object.keys(siteSettings.delivery_fees).length > 0)
       ? siteSettings.delivery_fees
@@ -210,6 +185,27 @@ export default function Checkout() {
   const province = hasAddress
     ? (provinces.find((p) => p.value === info.province) || provinces.find((p) => p.is_default) || provinces[0])
     : null
+
+  const paymentMethods = useMemo(() => {
+    const logoUrls = siteSettings?.payment_methods?.logo_urls || {}
+    const allowedZones = siteSettings?.payment_methods?.allowed_zones || {}
+    const zoneKey = province?.value || info?.province || ''
+    const base = PAYMENT_METHOD_KEYS.map((key) => ({
+      key,
+      label: t(`checkout.paymentMethods.${key}.label`),
+      badge: t(`checkout.paymentMethods.${key}.badge`),
+      desc: t(`checkout.paymentMethods.${key}.desc`),
+      logoUrl: logoUrls[key] || '',
+    }))
+    const settings = siteSettings?.payment_methods
+    return base.filter((m) => {
+      if (settings && Object.keys(settings).length > 0 && settings[m.key] === false) return false
+      const zones = allowedZones[m.key]
+      if (!Array.isArray(zones) || zones.length === 0) return true
+      if (!zoneKey) return true
+      return zones.includes(zoneKey)
+    })
+  }, [siteSettings, t, province?.value, info?.province])
   const subtotal = checkoutItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
   const deliveryFee = checkoutItems.length > 0 && hasAddress ? Number(province?.fee || 0) : 0
   const couponDiscount = getCouponDiscount(appliedCoupon, subtotal, deliveryFee)

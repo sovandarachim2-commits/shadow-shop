@@ -306,5 +306,34 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Payment methods must be valid JSON.')
             if not isinstance(parsed, dict):
                 raise serializers.ValidationError('Payment methods must be an object.')
-            return parsed
-        return value
+            value = parsed
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Payment methods must be an object.')
+
+        method_keys = {'bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales', 'other'}
+        cleaned = dict(value)
+        raw_zones = cleaned.get('allowed_zones') or {}
+        if raw_zones and not isinstance(raw_zones, dict):
+            raise serializers.ValidationError({'allowed_zones': 'Must be an object of method → zone list.'})
+
+        allowed_zones = {}
+        for method, zones in (raw_zones.items() if isinstance(raw_zones, dict) else []):
+            if method not in method_keys:
+                continue
+            if not isinstance(zones, (list, tuple)):
+                raise serializers.ValidationError({
+                    'allowed_zones': f'Zones for "{method}" must be a list of zone keys.',
+                })
+            cleaned_zones = []
+            seen = set()
+            for zone in zones:
+                key = str(zone or '').strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                cleaned_zones.append(key)
+            if cleaned_zones:
+                allowed_zones[method] = cleaned_zones
+
+        cleaned['allowed_zones'] = allowed_zones
+        return cleaned

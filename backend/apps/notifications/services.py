@@ -22,6 +22,20 @@ class TelegramService:
         return TelegramConfig.objects.filter(is_active=True, **{flag: True})
 
     @staticmethod
+    def config_allows_payment_method(config, payment_method: str) -> bool:
+        methods = getattr(config, 'new_order_payment_methods', None) or []
+        if not isinstance(methods, (list, tuple)):
+            return True
+        clean = [str(method).strip() for method in methods if str(method).strip()]
+        if not clean:
+            return True
+        return str(payment_method or '').strip() in clean
+
+    def get_new_order_configs(self, payment_method: str = ''):
+        configs = list(self.get_configs_for('notify_new_order'))
+        return [config for config in configs if self.config_allows_payment_method(config, payment_method)]
+
+    @staticmethod
     def is_placeholder(value: str) -> bool:
         clean = (value or '').strip()
         return not clean or clean in {
@@ -70,6 +84,7 @@ class TelegramService:
         reply_to_message_id: int = None,
         reference: str = '',
         reply_markup: dict = None,
+        disable_web_page_preview: bool = False,
     ) -> bool:
         if not self.config:
             self.last_error_message = 'Telegram config is not set.'
@@ -100,13 +115,21 @@ class TelegramService:
                 'text': message,
                 'parse_mode': 'HTML',
             }
-            thread_id = message_thread_id if message_thread_id is not None else self.config.topic_id
+            # Forum topics only apply to the configured group chat, never private DMs.
+            if message_thread_id is not None:
+                thread_id = message_thread_id
+            elif str(recipient) == str(self.config.chat_id or ''):
+                thread_id = self.config.topic_id
+            else:
+                thread_id = None
             if thread_id:
                 payload['message_thread_id'] = thread_id
             if reply_to_message_id:
                 payload['reply_to_message_id'] = reply_to_message_id
             if reply_markup:
                 payload['reply_markup'] = reply_markup
+            if disable_web_page_preview:
+                payload['disable_web_page_preview'] = True
 
             response = requests.post(url, json=payload, timeout=10)
             response_data = response.json() if response.content else {}
@@ -162,13 +185,13 @@ class TelegramService:
 
     @staticmethod
     def _format_order_items(order) -> str:
+        items = list(order.items.all())
         item_lines = [
             f"- {escape(item.product_name)} x{item.quantity} @ ${item.unit_price}"
-            for item in order.items.all()[:10]
+            for item in items[:10]
         ]
-        item_count = order.items.count()
-        if item_count > 10:
-            item_lines.append(f"- and {item_count - 10} more item(s)")
+        if len(items) > 10:
+            item_lines.append(f"- and {len(items) - 10} more item(s)")
         return "\n".join(item_lines) if item_lines else "-"
 
     @staticmethod
@@ -182,14 +205,13 @@ class TelegramService:
         return escape(", ".join(clean_parts) or "N/A")
 
     def notify_new_order(self, order) -> bool:
-        configs = self.get_configs_for('notify_new_order')
-        if not configs.exists():
+        configs = self.get_new_order_configs(order.payment_method)
+        if not configs:
             return False
         from apps.orders.serializers import display_seller_name
 
         source = 'Customer Checkout' if getattr(order.seller, 'role', '') == 'customer' else 'Admin/Staff Order'
         items_text = self._format_order_items(order)
-        title = '🛍️ <b>New Order!</b>'
         payment_method = order.get_payment_method_display() if order.payment_method else 'N/A'
         seller_name = escape(display_seller_name(order))
         customer_name = escape(order.customer.name or 'N/A')
@@ -247,8 +269,8 @@ class TelegramService:
         return self.send_to_configs(configs, message, 'new_order', reference=order.order_number)
 
     def notify_order_edited(self, order) -> bool:
-        configs = self.get_configs_for('notify_new_order')
-        if not configs.exists():
+        configs = self.get_new_order_configs(order.payment_method)
+        if not configs:
             return False
 
         original_log = NotificationLog.objects.filter(
@@ -421,7 +443,7 @@ class TelegramService:
 
         return transaction_id, paid_at or order.updated_at
 
-    def _telegram_api_post(self, method: str, payload: dict):
+    def _telegram_api_post(self, method: str, payload: dict, timeout: int = 10):
         token = self.get_bot_token()
         if self.is_placeholder(token):
             self.last_error_message = 'Telegram bot token is not configured.'
@@ -430,7 +452,7 @@ class TelegramService:
             response = requests.post(
                 f"https://api.telegram.org/bot{token}/{method}",
                 json=payload,
-                timeout=10,
+                timeout=timeout,
             )
             if response.status_code != 200:
                 self.last_error_message = response.text
@@ -450,6 +472,7 @@ class TelegramService:
                 'text': text,
                 'show_alert': alert,
             },
+            timeout=5,
         )
 
     def _get_customer_telegram_id(self, order) -> str:
@@ -511,7 +534,7 @@ class TelegramService:
         return '\n'.join(lines)
 
     def notify_contact_sales_customer(self, order, action: str, group_chat_id=None) -> bool:
-        """DM the customer when possible; always post a forwardable copy in the sales group."""
+        """Send confirm/cancel notice as a private bot DM to the customer only."""
         if action not in {'confirm', 'cancel'}:
             return False
         if not self.config:
@@ -519,32 +542,17 @@ class TelegramService:
         if not self.config:
             return False
 
-        message = self._contact_sales_customer_message(order, action)
         telegram_id = self._get_customer_telegram_id(order)
-        sent_to_customer = False
-        if telegram_id:
-            sent_to_customer = self.send_message(
-                message,
-                event_type=f'contact_sales_customer_{action}',
-                chat_id=telegram_id,
-                reference=order.order_number,
-            )
+        if not telegram_id:
+            return False
 
-        if group_chat_id:
-            if sent_to_customer:
-                share_prefix = '📨 <b>Sent to customer via bot</b>\n\n'
-            else:
-                share_prefix = (
-                    '📨 <b>Copy &amp; send to customer</b>\n'
-                    '<i>(Customer has no linked Telegram — please forward this message)</i>\n\n'
-                )
-            self.send_message(
-                share_prefix + message,
-                event_type=f'contact_sales_customer_share_{action}',
-                chat_id=str(group_chat_id),
-                reference=order.order_number,
-            )
-        return sent_to_customer
+        return self.send_message(
+            self._contact_sales_customer_message(order, action),
+            event_type=f'contact_sales_customer_{action}',
+            chat_id=telegram_id,
+            reference=order.order_number,
+            disable_web_page_preview=True,
+        )
 
     def _clear_callback_buttons(self, callback_query: dict):
         message = callback_query.get('message') or {}
@@ -626,6 +634,26 @@ class TelegramService:
         )
         return full_name or str(user.get('id') or 'Telegram user')
 
+    @classmethod
+    def _run_async(cls, fn) -> None:
+        def runner():
+            from django.db import close_old_connections
+            import threading
+
+            # Avoid closing the shared DB connection when tests run this sync on the main thread.
+            is_background = threading.current_thread() is not threading.main_thread()
+            if is_background:
+                close_old_connections()
+            try:
+                fn()
+            except Exception as e:
+                logger.error(f'Async Telegram follow-up failed: {e}')
+            finally:
+                if is_background:
+                    close_old_connections()
+
+        Thread(target=runner, daemon=True).start()
+
     def handle_contact_sales_callback(self, callback_query: dict) -> bool:
         data = callback_query.get('data') or ''
         parts = data.split(':')
@@ -643,7 +671,7 @@ class TelegramService:
         from apps.orders.models import Order, OrderStatusHistory
 
         try:
-            order = Order.objects.select_related('customer', 'customer__user', 'seller').get(
+            order = Order.objects.select_related('customer', 'customer__user', 'seller').prefetch_related('items').get(
                 pk=order_id,
                 payment_method='contact_sales',
             )
@@ -653,11 +681,13 @@ class TelegramService:
 
         actor = self._callback_actor(callback_query)
         group_chat_id = ((callback_query.get('message') or {}).get('chat') or {}).get('id')
+
         if action == 'cancel':
             if order.status == Order.STATUS_CANCELLED:
                 self._answer_callback_query(callback_query_id, 'Order is already cancelled.')
                 self._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
                 return True
+
             order.status = Order.STATUS_CANCELLED
             order.save(update_fields=['status', 'updated_at'])
             OrderStatusHistory.objects.create(
@@ -665,9 +695,15 @@ class TelegramService:
                 status=Order.STATUS_CANCELLED,
                 note=f'Contact sales order cancelled by {actor}',
             )
+            # Stop Telegram loading spinner before slower follow-up API calls.
             self._answer_callback_query(callback_query_id, f'Order #{order.order_number} cancelled.')
-            self._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
-            self.notify_contact_sales_customer(order, 'cancel', group_chat_id=group_chat_id)
+
+            def _after_cancel():
+                service = TelegramService()
+                service._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
+                service.notify_contact_sales_customer(order, 'cancel', group_chat_id=group_chat_id)
+
+            self._run_async(_after_cancel)
             return True
 
         if order.status == Order.STATUS_CANCELLED:
@@ -681,7 +717,7 @@ class TelegramService:
         with transaction.atomic():
             order = Order.objects.select_for_update().select_related(
                 'customer', 'customer__user', 'seller',
-            ).get(pk=order.pk)
+            ).prefetch_related('items').get(pk=order.pk)
             if order.status == Order.STATUS_NEW:
                 order.status = Order.STATUS_PRINTED
             order.payment_status = 'paid'
@@ -711,14 +747,16 @@ class TelegramService:
                     note=f'Contact sales order confirmed and marked paid by {actor}',
                 )
 
+        # Answer immediately so the Confirm button stops spinning.
+        self._answer_callback_query(callback_query_id, f'Order #{order.order_number} confirmed.')
+
         def _after_confirm():
             service = TelegramService()
+            service._finalize_contact_sales_message(callback_query, order, 'confirm', actor)
             service.notify_payment_received(order)
             service.notify_contact_sales_customer(order, 'confirm', group_chat_id=group_chat_id)
 
-        transaction.on_commit(_after_confirm)
-        self._answer_callback_query(callback_query_id, f'Order #{order.order_number} confirmed.')
-        self._finalize_contact_sales_message(callback_query, order, 'confirm', actor)
+        self._run_async(_after_confirm)
         return True
 
     def notify_delivery_update(self, delivery) -> bool:

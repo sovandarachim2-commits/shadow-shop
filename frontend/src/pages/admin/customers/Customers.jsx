@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Users, Phone, MapPin, ShoppingBag, Search, Plus } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency, formatDate } from '@/utils/helpers'
+import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
 
 export default function Customers() {
   const [search, setSearch] = useState('')
@@ -42,10 +43,9 @@ export default function Customers() {
             onChange={(e) => setProvince(e.target.value)}
           >
             <option value="">All Provinces</option>
-            <option value="phnom_penh">Phnom Penh</option>
-            <option value="siem_reap">Siem Reap</option>
-            <option value="battambang">Battambang</option>
-            <option value="kandal">Kandal</option>
+            {CAMBODIA_PROVINCES.map((p) => (
+              <option key={p.key} value={p.key}>{p.label}</option>
+            ))}
             <option value="other">Other</option>
           </select>
         </div>
