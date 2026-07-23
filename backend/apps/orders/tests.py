@@ -193,14 +193,12 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn(f'#{order.order_number}', customer_dm['text'])
         self.assertIn('Order Test Product', customer_dm['text'])
         self.assertTrue(customer_dm.get('disable_web_page_preview'))
-        self.assertFalse(any(
-            p.get('chat_id') == 'test-chat' and 'Sent to customer via bot' in p.get('text', '')
-            for p in send_payloads
-        ))
-        self.assertFalse(any(
-            'Copy &amp; send to customer' in p.get('text', '')
-            for p in send_payloads
-        ))
+        share = next(
+            p for p in send_payloads
+            if p.get('chat_id') == 'test-chat' and 'Sent to customer via bot' in p.get('text', '')
+        )
+        self.assertIn('ការបញ្ជាទិញរបស់អ្នកត្រូវបានបញ្ជាក់', share['text'])
+        self.assertIn('Copy below if needed', share['text'])
 
     @patch('apps.notifications.services.Thread')
     @patch('apps.notifications.services.requests.post')
@@ -243,11 +241,15 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn('❌ <b>Cancelled</b> by Sales Team', edit_payload['text'])
         self.assertIn('ស្ថានភាព: បានលុបចោល', edit_payload['text'])
         self.assertEqual(edit_payload['reply_markup'], {'inline_keyboard': []})
-        # No linked Telegram → no customer DM / group copy message.
-        self.assertFalse(any(
-            call.args[0].rsplit('/', 1)[-1] == 'sendMessage'
+        # No linked Telegram → group gets copyable customer message.
+        send_payloads = [
+            call.kwargs['json']
             for call in requests_post.call_args_list
-        ))
+            if call.args[0].rsplit('/', 1)[-1] == 'sendMessage'
+        ]
+        share = next(p for p in send_payloads if 'Copy &amp; send to customer' in p.get('text', ''))
+        self.assertIn('ការបញ្ជាទិញត្រូវបានលុបចោល', share['text'])
+        self.assertIn(f'#{order.order_number}', share['text'])
 
     @patch('apps.payments.checkout_flow.TelegramService')
     def test_pay_now_checkout_prepares_pending_checkout_without_creating_order(self, telegram_service):

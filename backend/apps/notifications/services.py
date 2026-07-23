@@ -21,6 +21,15 @@ class TelegramService:
     def get_configs_for(self, flag: str):
         return TelegramConfig.objects.filter(is_active=True, **{flag: True})
 
+    def resolve_config_for_chat(self, chat_id=None):
+        """Prefer the Telegram destination that matches this chat/group."""
+        if chat_id is not None and str(chat_id).strip() != '':
+            chat_key = str(chat_id).strip()
+            for config in TelegramConfig.objects.filter(is_active=True):
+                if str(config.chat_id).strip() == chat_key:
+                    return config
+        return TelegramConfig.objects.filter(is_active=True).first()
+
     @staticmethod
     def config_allows_payment_method(config, payment_method: str) -> bool:
         methods = getattr(config, 'new_order_payment_methods', None) or []
@@ -477,19 +486,73 @@ class TelegramService:
 
     def _get_customer_telegram_id(self, order) -> str:
         """Return private Telegram chat id for the customer (never a group id)."""
-        customer = order.customer
-        user = getattr(customer, 'user', None)
-        telegram_id = ''
+        candidates = []
+        customer = getattr(order, 'customer', None)
+        user = getattr(customer, 'user', None) if customer else None
         if user and getattr(user, 'telegram_id', None):
-            telegram_id = str(user.telegram_id).strip()
+            candidates.append(str(user.telegram_id).strip())
+
+        seller = getattr(order, 'seller', None)
+        if seller and getattr(seller, 'role', '') == 'customer' and getattr(seller, 'telegram_id', None):
+            candidates.append(str(seller.telegram_id).strip())
+
+        for telegram_id in candidates:
+            if telegram_id and not telegram_id.startswith('-'):
+                return telegram_id
+        return ''
+
+    def notify_contact_sales_customer(self, order, action: str, group_chat_id=None) -> bool:
+        """DM customer when possible, and always post a copyable message in the sales group."""
+        if action not in {'confirm', 'cancel'}:
+            return False
+
+        if group_chat_id is not None:
+            self.config = self.resolve_config_for_chat(group_chat_id)
+        if not self.config:
+            self.config = TelegramConfig.objects.filter(is_active=True).first()
+        if not self.config:
+            return False
+
+        message = self._contact_sales_customer_message(order, action)
+        telegram_id = self._get_customer_telegram_id(order)
+        sent_to_customer = False
+
+        if telegram_id:
+            sent_to_customer = self.send_message(
+                message,
+                event_type=f'contact_sales_customer_{action}',
+                chat_id=telegram_id,
+                reference=order.order_number,
+                disable_web_page_preview=True,
+            )
+            if not sent_to_customer:
+                logger.warning(
+                    'Contact sales %s: private DM failed for order %s: %s',
+                    action,
+                    getattr(order, 'order_number', order.pk),
+                    self.last_error_message or 'unknown error',
+                )
         else:
-            seller = getattr(order, 'seller', None)
-            if seller and getattr(seller, 'role', '') == 'customer' and getattr(seller, 'telegram_id', None):
-                telegram_id = str(seller.telegram_id).strip()
-        # Group/supergroup chat ids are negative — never use those for customer DMs.
-        if not telegram_id or telegram_id.startswith('-'):
-            return ''
-        return telegram_id
+            logger.info(
+                'Contact sales %s: no linked Telegram for order %s — group copy only',
+                action,
+                getattr(order, 'order_number', order.pk),
+            )
+
+        if group_chat_id:
+            if sent_to_customer:
+                prefix = '✅ <b>Sent to customer via bot</b>\n📋 Copy below if needed:\n\n'
+            else:
+                prefix = '📋 <b>Copy &amp; send to customer</b>\n\n'
+            self.send_message(
+                prefix + message,
+                event_type=f'contact_sales_customer_share_{action}',
+                chat_id=str(group_chat_id),
+                reference=order.order_number,
+                disable_web_page_preview=True,
+            )
+
+        return sent_to_customer
 
     def _contact_sales_customer_message(self, order, action: str) -> str:
         customer_name = escape(order.customer.name or 'អតិថិជន')
@@ -538,32 +601,6 @@ class TelegramService:
         if track_url:
             lines.extend(['', f'🔗 មើលការបញ្ជាទិញ: {track_url}'])
         return '\n'.join(lines)
-
-    def notify_contact_sales_customer(self, order, action: str, group_chat_id=None) -> bool:
-        """Private bot DM only after sales confirm/cancel. Never posts this text to a group."""
-        if action not in {'confirm', 'cancel'}:
-            return False
-        if not self.config:
-            self.config = TelegramConfig.objects.filter(is_active=True).first()
-        if not self.config:
-            return False
-
-        telegram_id = self._get_customer_telegram_id(order)
-        if not telegram_id:
-            logger.info(
-                'Contact sales %s: skip private DM for order %s (customer has no linked Telegram)',
-                action,
-                getattr(order, 'order_number', order.pk),
-            )
-            return False
-
-        return self.send_message(
-            self._contact_sales_customer_message(order, action),
-            event_type=f'contact_sales_customer_{action}',
-            chat_id=telegram_id,
-            reference=order.order_number,
-            disable_web_page_preview=True,
-        )
 
     def _clear_callback_buttons(self, callback_query: dict):
         message = callback_query.get('message') or {}
@@ -710,9 +747,14 @@ class TelegramService:
             self._answer_callback_query(callback_query_id, f'Order #{order.order_number} cancelled.')
 
             def _after_cancel():
+                from apps.orders.models import Order
                 service = TelegramService()
-                service._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
-                service.notify_contact_sales_customer(order, 'cancel', group_chat_id=group_chat_id)
+                service.config = service.resolve_config_for_chat(group_chat_id)
+                fresh_order = Order.objects.select_related(
+                    'customer', 'customer__user', 'seller',
+                ).prefetch_related('items').get(pk=order.pk)
+                service._finalize_contact_sales_message(callback_query, fresh_order, 'cancel', actor)
+                service.notify_contact_sales_customer(fresh_order, 'cancel', group_chat_id=group_chat_id)
 
             self._run_async(_after_cancel)
             return True
@@ -762,10 +804,15 @@ class TelegramService:
         self._answer_callback_query(callback_query_id, f'Order #{order.order_number} confirmed.')
 
         def _after_confirm():
+            from apps.orders.models import Order
             service = TelegramService()
-            service._finalize_contact_sales_message(callback_query, order, 'confirm', actor)
-            service.notify_payment_received(order)
-            service.notify_contact_sales_customer(order, 'confirm', group_chat_id=group_chat_id)
+            service.config = service.resolve_config_for_chat(group_chat_id)
+            fresh_order = Order.objects.select_related(
+                'customer', 'customer__user', 'seller',
+            ).prefetch_related('items').get(pk=order.pk)
+            service._finalize_contact_sales_message(callback_query, fresh_order, 'confirm', actor)
+            service.notify_payment_received(fresh_order)
+            service.notify_contact_sales_customer(fresh_order, 'confirm', group_chat_id=group_chat_id)
 
         self._run_async(_after_confirm)
         return True
