@@ -328,11 +328,14 @@ export default function ProductSetDetail() {
             <div
               ref={galleryScrollRef}
               onScroll={handleGalleryScroll}
-              className="flex aspect-square w-full max-h-[420px] min-h-[360px] snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] md:max-h-none md:min-h-[480px] lg:min-h-[560px] [&::-webkit-scrollbar]:hidden"
+              className="flex aspect-square w-full min-w-0 max-h-[420px] min-h-[360px] snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] md:max-h-none md:min-h-[480px] lg:min-h-[560px] [&::-webkit-scrollbar]:hidden"
             >
               {galleryImages.length > 0 && !imageFailed ? (
                 galleryImages.map((img, i) => (
-                  <div key={img.id ?? i} className="h-full w-full shrink-0 snap-center snap-always">
+                  <div
+                    key={img.id ?? i}
+                    className="box-border h-full w-full min-w-full shrink-0 grow-0 basis-full snap-center snap-always overflow-hidden"
+                  >
                     <img
                       src={img.image}
                       alt={`${productSet.name} ${i + 1}`}
@@ -340,12 +343,12 @@ export default function ProductSetDetail() {
                       loading={i === 0 ? 'eager' : 'lazy'}
                       decoding="async"
                       onError={() => setImageFailed(true)}
-                      className="h-full w-full object-contain p-3 md:p-4"
+                      className="h-full w-full max-h-full max-w-full object-contain p-3 md:p-4"
                     />
                   </div>
                 ))
               ) : (
-                <div className="flex h-full w-full shrink-0 snap-center items-center justify-center bg-gradient-to-br from-pink-50 to-rose-100">
+                <div className="box-border flex h-full w-full min-w-full shrink-0 grow-0 basis-full snap-center items-center justify-center overflow-hidden bg-gradient-to-br from-pink-50 to-rose-100">
                   <div className="flex h-28 w-28 items-center justify-center rounded-[32px] bg-pink-600 text-white shadow-xl shadow-pink-200">
                     <Gift size={50} />
                   </div>

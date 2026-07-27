@@ -104,6 +104,16 @@ export default function Cart() {
     }
   }, [items.length, selectedProductIds.length, selectAll])
 
+  // Warm cart thumbnails so they paint quickly on open
+  useEffect(() => {
+    items.slice(0, 6).forEach((item) => {
+      const url = item?.product?.primary_image || item?.product?.image_url || item?.product?.image || item?.product?.images?.[0]?.image
+      if (!url) return
+      const img = new Image()
+      img.src = url
+    })
+  }, [items])
+
   useEffect(() => {
     setPromoCode(appliedCoupon?.coupon_code || '')
   }, [appliedCoupon?.coupon_code])
@@ -226,7 +236,7 @@ export default function Cart() {
 
       <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[1fr_380px]">
         <section className="space-y-3">
-          {items.map((item) => {
+          {items.map((item, index) => {
             const cartKey = getCartKey(item)
             return (
             <article key={cartKey} className="relative rounded-[1.6rem] bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft md:p-4">
@@ -234,7 +244,7 @@ export default function Cart() {
                 <X size={17} />
               </button>
               <div className="grid grid-cols-[84px_1fr] gap-3 pr-5 md:flex md:gap-4">
-                <ProductThumb product={item.product} size="lg" className="h-20 w-20 shrink-0 rounded-xl md:h-24 md:w-24" />
+                <ProductThumb product={item.product} size="lg" priority={index < 6} className="h-20 w-20 shrink-0 rounded-xl md:h-24 md:w-24" />
                 <div className="min-w-0 flex-1">
                   <div className="flex gap-3">
                     <div className="flex-1">

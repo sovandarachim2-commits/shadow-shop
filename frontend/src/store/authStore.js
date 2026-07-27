@@ -43,6 +43,9 @@ const useAuthStore = create(
 
       googleLogin: async (payload) => {
         const { data } = await authApi.googleLogin(payload)
+        if (!data?.access || !data?.refresh || !data?.user) {
+          throw new Error('Google login returned incomplete data')
+        }
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
         set({

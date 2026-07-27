@@ -478,12 +478,13 @@ export default function Home() {
     }, 4500)
   }
 
-  const BANNER_GAP = 12
-
   const getBannerStep = (track) => {
-    const slide = track?.children?.[0]
-    if (!slide) return track?.clientWidth || 1
-    return slide.getBoundingClientRect().width + BANNER_GAP
+    const first = track?.children?.[0]
+    const second = track?.children?.[1]
+    if (!first) return track?.clientWidth || 1
+    if (!second) return first.getBoundingClientRect().width || track.clientWidth || 1
+    // Includes gap between slides (12px mobile / 18px desktop)
+    return second.offsetLeft - first.offsetLeft
   }
 
   const scrollToBanner = (index, behavior = 'smooth') => {
@@ -505,7 +506,7 @@ export default function Home() {
 
   useEffect(() => {
     banners.forEach((banner, index) => {
-      if (!banner?.image_url || index > 2) return
+      if (!banner?.image_url || index > 4) return
       const img = new Image()
       img.src = banner.image_url
     })
@@ -635,7 +636,7 @@ export default function Home() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
                   <ShoppingBag size={14} strokeWidth={2.5} />
                 </span>
-                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.categories')}</h2>
+                <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.categories')}</h2>
               </div>
               <Link to="/shop" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
                 {t('common.all')} <ChevronRight size={13} strokeWidth={3} />
@@ -697,7 +698,7 @@ export default function Home() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-pink-100 text-sm shadow-sm shadow-pink-100">
                   🎁
                 </span>
-                <h2 className="text-xl font-black leading-none text-gray-950 md:text-2xl">{t('nav.promotions')}</h2>
+                <h2 className="text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('nav.promotions')}</h2>
               </div>
               <Link
                 to="/shop"
@@ -708,20 +709,20 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Peek carousel: main 83%, next preview ~17%, gap 12px, side pad 16px */}
+            {/* Mobile 1+0.1 (90%/10%, gap 12) · Desktop 3+0.1 (gap 18) */}
             <div
               ref={bannerScrollRef}
               onScroll={handleBannerScroll}
               onPointerDown={handleBannerPointerDown}
               onTouchStart={handleBannerPointerDown}
-              className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-4 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-              style={{ scrollPaddingLeft: 16 }}
+              className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-4 md:gap-[18px] md:px-6 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+              style={{ scrollPaddingInline: 16 }}
             >
               {banners.map((banner, idx) => (
                 <Link
                   key={banner.id}
                   to={banner.button_link || '/shop'}
-                  className="group block w-[83%] min-w-[83%] shrink-0 snap-start"
+                  className="group block w-[90%] min-w-[90%] shrink-0 snap-start md:w-[calc((100%-54px)/3.1)] md:min-w-[calc((100%-54px)/3.1)]"
                 >
                   <div className="aspect-[2/1] w-full overflow-hidden rounded-[22px] bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active:scale-[0.995] md:rounded-[28px]">
                     {banner.image_url ? (
@@ -772,7 +773,7 @@ export default function Home() {
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
                     <Zap size={14} className="fill-pink-600" strokeWidth={2.5} />
                   </span>
-                  <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.flashSale')}</h2>
+                  <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.flashSale')}</h2>
                   {flashSaleSectionTimer && (
                     <div className="hidden items-center gap-1 sm:flex">
                       <span className="text-[11px] font-black text-pink-600">{flashSaleSectionTimer.label}</span>
@@ -858,7 +859,7 @@ export default function Home() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
                   <Sparkles size={14} strokeWidth={2.5} />
                 </span>
-                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.shopByBrand')}</h2>
+                <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.shopByBrand')}</h2>
               </div>
               <Link to="/shop" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
                 {t('common.viewAll')} <ChevronRight size={13} strokeWidth={3} />
@@ -900,7 +901,7 @@ export default function Home() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-500 shadow-sm shadow-amber-100">
                   <Star size={14} className="fill-amber-500" strokeWidth={2.5} />
                 </span>
-                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.bestSellers')}</h2>
+                <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.bestSellers')}</h2>
               </div>
               <Link to="/shop?filter=best_seller" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
                 {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
@@ -927,7 +928,7 @@ export default function Home() {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 shadow-sm shadow-green-100">
                   <Gift size={14} strokeWidth={2.5} />
                 </span>
-                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.newArrivals')}</h2>
+                <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.newArrivals')}</h2>
               </div>
               <Link to="/shop?filter=new_arrival" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
                 {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />

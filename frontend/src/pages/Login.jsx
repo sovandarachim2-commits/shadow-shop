@@ -36,8 +36,39 @@ function loadGoogleIdentityScript() {
 
     const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
     if (existing) {
-      existing.addEventListener('load', resolve, { once: true })
-      existing.addEventListener('error', reject, { once: true })
+      // Script tag already in DOM — load may have already fired.
+      if (existing.dataset.loaded === '1' || window.google?.accounts?.id) {
+        if (window.google?.accounts?.id) resolve()
+        else reject(new Error('Google Identity script loaded without API'))
+        return
+      }
+
+      let settled = false
+      const done = (ok, error) => {
+        if (settled) return
+        settled = true
+        window.clearInterval(poll)
+        if (ok) resolve()
+        else reject(error || new Error('Google Identity script failed'))
+      }
+
+      existing.addEventListener('load', () => {
+        existing.dataset.loaded = '1'
+        if (window.google?.accounts?.id) done(true)
+        else done(false, new Error('Google Identity API unavailable'))
+      }, { once: true })
+      existing.addEventListener('error', () => done(false, new Error('Google Identity script failed')), { once: true })
+
+      let tries = 0
+      const poll = window.setInterval(() => {
+        tries += 1
+        if (window.google?.accounts?.id) {
+          existing.dataset.loaded = '1'
+          done(true)
+        } else if (tries >= 40) {
+          done(false, new Error('Google Identity script timed out'))
+        }
+      }, 50)
       return
     }
 
@@ -45,9 +76,54 @@ function loadGoogleIdentityScript() {
     script.src = 'https://accounts.google.com/gsi/client'
     script.async = true
     script.defer = true
-    script.onload = resolve
-    script.onerror = reject
+    script.onload = () => {
+      script.dataset.loaded = '1'
+      if (window.google?.accounts?.id) resolve()
+      else reject(new Error('Google Identity API unavailable'))
+    }
+    script.onerror = () => reject(new Error('Google Identity script failed'))
     document.head.appendChild(script)
+  })
+}
+
+function triggerGoogleButtonFallback() {
+  return new Promise((resolve, reject) => {
+    if (!window.google?.accounts?.id) {
+      reject(new Error('Google Identity API unavailable'))
+      return
+    }
+
+    const host = document.createElement('div')
+    host.setAttribute('aria-hidden', 'true')
+    host.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none'
+    document.body.appendChild(host)
+
+    try {
+      window.google.accounts.id.renderButton(host, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'pill',
+        width: 280,
+      })
+    } catch (error) {
+      host.remove()
+      reject(error)
+      return
+    }
+
+    window.setTimeout(() => {
+      const btn = host.querySelector('div[role="button"]')
+      if (!btn) {
+        host.remove()
+        reject(new Error('Google button failed to render'))
+        return
+      }
+      btn.click()
+      window.setTimeout(() => host.remove(), 2500)
+      resolve()
+    }, 60)
   })
 }
 
@@ -339,7 +415,7 @@ function NoticePopup({ notice, t, onClose }) {
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, register, googleLogin, telegramLogin, isAuthenticated, user } = useAuthStore()
+  const { login, register, googleLogin, completeTelegramBotLogin, isAuthenticated, user } = useAuthStore()
   const { t, i18n } = useTranslation()
   const [mode, setMode] = useState(location.state?.mode === 'register' ? 'register' : 'login')
   const [showPass, setShowPass] = useState(false)
@@ -347,12 +423,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [telegramOpen, setTelegramOpen] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
+  const [telegramBotLink, setTelegramBotLink] = useState('')
+  const [telegramSessionToken, setTelegramSessionToken] = useState('')
+  const [telegramWaiting, setTelegramWaiting] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
   const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '', terms: true })
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
-  const telegramWidgetRef = useRef(null)
+  const telegramPollRef = useRef(null)
   const showError = (message, title = t('auth.errorTitle')) => setNotice({ type: 'error', title, message })
   const sl = (k, v) => {
     setLf((f) => ({ ...f, [k]: v }))
@@ -376,10 +455,11 @@ export default function Login() {
     staleTime: 10 * 60 * 1000,
   })
 
-  const { data: googleConfig } = useQuery({
+  const { data: googleConfig, isLoading: googleConfigLoading, isError: googleConfigError, refetch: refetchGoogleConfig } = useQuery({
     queryKey: ['google-login-config'],
     queryFn: () => authApi.googleConfig().then((r) => r.data),
     staleTime: 10 * 60 * 1000,
+    retry: 2,
   })
 
   const storeName = siteSettings?.store_name || 'Shadow Shop'
@@ -391,7 +471,8 @@ export default function Login() {
   const isKhmer = i18n.language?.startsWith('km')
   const authFontFamily = isKhmer ? '"Khmer OS Battambang", "Khmer OS", "Noto Sans Khmer", sans-serif' : undefined
 
-  const handleGoogleCredential = useCallback(async ({ credential }) => {
+  const handleGoogleCredential = useCallback(async (response) => {
+    const credential = typeof response === 'string' ? response : response?.credential
     if (!credential) {
       showError(t('auth.googleCredentialMissing'))
       setGoogleLoading(false)
@@ -401,9 +482,14 @@ export default function Login() {
     setGoogleLoading(true)
     try {
       const loggedInUser = await googleLogin({ credential })
-      toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
+      if (!loggedInUser) {
+        showError(t('auth.googleLoginFailed'))
+        return
+      }
+      toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username || 'Google' }))
     } catch (err) {
-      showError(translateAuthError(err.response?.data, t, 'auth.googleLoginFailed'))
+      const message = translateAuthError(err?.response?.data || err?.message, t, 'auth.googleLoginFailed')
+      showError(message || t('auth.googleLoginFailed'))
     } finally {
       setGoogleLoading(false)
     }
@@ -437,9 +523,13 @@ export default function Login() {
         window.google.accounts.id.initialize({
           client_id: googleClientId,
           callback: handleGoogleCredential,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          itp_support: true,
+          use_fedcm_for_prompt: false,
         })
       } catch {
-        if (!cancelled) showError(t('auth.googleLoadFailed'))
+        // Soft fail — button click will retry / show a clear error
       }
     }
 
@@ -447,7 +537,7 @@ export default function Login() {
     return () => {
       cancelled = true
     }
-  }, [googleLoginEnabled, googleClientId, handleGoogleCredential, t])
+  }, [googleLoginEnabled, googleClientId, handleGoogleCredential])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -467,37 +557,50 @@ export default function Login() {
   }, [isAuthenticated, user, navigate, location.state?.from])
 
   useEffect(() => {
-    if (!telegramOpen || !telegramLoginEnabled || !telegramWidgetRef.current) return
+    if (!telegramOpen || !telegramSessionToken) return undefined
 
-    const callbackName = 'shadowShopTelegramAuth'
-    window[callbackName] = async (telegramUser) => {
-      setTelegramLoading(true)
+    let cancelled = false
+    const poll = async () => {
       try {
-        const loggedInUser = await telegramLogin(telegramUser)
-        toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
-        setTelegramOpen(false)
+        const { data } = await authApi.telegramLoginPoll({ token: telegramSessionToken })
+        if (cancelled) return
+        if (data?.status === 'ready') {
+          if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
+          setTelegramWaiting(false)
+          setTelegramLoading(true)
+          try {
+            const loggedInUser = completeTelegramBotLogin(data)
+            toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username || 'Telegram' }))
+            setTelegramOpen(false)
+            setTelegramSessionToken('')
+            setTelegramBotLink('')
+          } catch (err) {
+            showError(translateAuthError(err?.message, t, 'auth.telegramLoginFailed'))
+          } finally {
+            setTelegramLoading(false)
+          }
+          return
+        }
+        if (data?.status === 'expired' || data?.status === 'used' || data?.status === 'error') {
+          if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
+          setTelegramWaiting(false)
+          setTelegramLoading(false)
+          showError(data?.detail || t('auth.telegramLoginFailed'))
+        }
       } catch (err) {
-        showError(translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed'))
-      } finally {
-        setTelegramLoading(false)
+        if (cancelled) return
+        // Keep waiting on transient network errors
       }
     }
 
-    telegramWidgetRef.current.innerHTML = ''
-    const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-widget.js?22'
-    script.async = true
-    script.setAttribute('data-telegram-login', telegramBotUsername)
-    script.setAttribute('data-size', 'large')
-    script.setAttribute('data-radius', '10')
-    script.setAttribute('data-request-access', 'write')
-    script.setAttribute('data-onauth', `${callbackName}(user)`)
-    telegramWidgetRef.current.appendChild(script)
-
+    setTelegramWaiting(true)
+    poll()
+    telegramPollRef.current = window.setInterval(poll, 2000)
     return () => {
-      if (window[callbackName]) delete window[callbackName]
+      cancelled = true
+      if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
     }
-  }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin, t])
+  }, [telegramOpen, telegramSessionToken, completeTelegramBotLogin, t])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -534,7 +637,19 @@ export default function Login() {
   }
 
   const openGoogleLogin = async () => {
-    if (!googleLoginEnabled) {
+    if (googleConfigLoading) {
+      showError(t('checkout.pleaseWait'))
+      return
+    }
+    if (googleConfigError) {
+      try {
+        await refetchGoogleConfig()
+      } catch {
+        showError(t('auth.googleLoadFailed'))
+        return
+      }
+    }
+    if (!googleLoginEnabled || !googleClientId) {
       showError(t('auth.googleNotConfigured'))
       return
     }
@@ -542,18 +657,50 @@ export default function Login() {
     setGoogleLoading(true)
     try {
       await loadGoogleIdentityScript()
+      if (!window.google?.accounts?.id) {
+        throw new Error('Google Identity API unavailable')
+      }
+
       window.google.accounts.id.initialize({
         client_id: googleClientId,
         callback: handleGoogleCredential,
+        auto_select: false,
         cancel_on_tap_outside: true,
+        itp_support: true,
+        use_fedcm_for_prompt: false,
       })
-      window.google.accounts.id.prompt((notification) => {
-        const skipped = notification.isNotDisplayed?.()
-          || notification.isSkippedMoment?.()
-          || notification.isDismissedMoment?.()
-        if (!skipped) return
+
+      let settled = false
+      const finishIfIdle = () => {
+        if (settled) return
+        settled = true
         setGoogleLoading(false)
-        if (notification.isNotDisplayed?.()) {
+      }
+
+      window.google.accounts.id.prompt(async (notification) => {
+        const dismissedReason = notification.getDismissedReason?.() || ''
+        if (notification.isDismissedMoment?.() && dismissedReason === 'credential_returned') {
+          // Credential is delivered via callback — keep loading until login finishes
+          return
+        }
+
+        if (notification.isDismissedMoment?.()) {
+          // User closed One Tap — no error
+          finishIfIdle()
+          return
+        }
+
+        const blocked = notification.isNotDisplayed?.() || notification.isSkippedMoment?.()
+        if (!blocked) return
+
+        try {
+          await triggerGoogleButtonFallback()
+          // Keep spinner briefly; callback or user cancel will clear it
+          window.setTimeout(() => {
+            if (!settled) finishIfIdle()
+          }, 8000)
+        } catch {
+          finishIfIdle()
           showError(t('auth.googleLoadFailed'))
         }
       })
@@ -563,12 +710,39 @@ export default function Login() {
     }
   }
 
-  const openTelegramLogin = () => {
+  const closeTelegramLogin = () => {
+    if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
+    setTelegramOpen(false)
+    setTelegramLoading(false)
+    setTelegramWaiting(false)
+    setTelegramSessionToken('')
+    setTelegramBotLink('')
+  }
+
+  const openTelegramLogin = async () => {
     if (!telegramLoginEnabled) {
       showError(t('auth.telegramNotConfigured'))
       return
     }
-    setTelegramOpen(true)
+
+    setTelegramLoading(true)
+    try {
+      const { data } = await authApi.telegramLoginStart()
+      if (!data?.bot_link || !data?.token) {
+        showError(t('auth.telegramNotConfigured'))
+        return
+      }
+      setTelegramBotLink(data.bot_link)
+      setTelegramSessionToken(data.token)
+      setTelegramOpen(true)
+      setTelegramWaiting(true)
+      // Open Telegram so the user can tap Start (message permission in the app)
+      window.open(data.bot_link, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      showError(translateAuthError(err?.response?.data, t, 'auth.telegramLoginFailed'))
+    } finally {
+      setTelegramLoading(false)
+    }
   }
 
   const EyeToggle = ({ show, toggle }) => (
@@ -679,7 +853,7 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={openGoogleLogin}
-                        disabled={googleLoading || !googleLoginEnabled}
+                        disabled={googleLoading || googleConfigLoading || (Boolean(googleConfig) && !googleLoginEnabled)}
                         className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
                       >
                         {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
@@ -825,7 +999,7 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={openGoogleLogin}
-                        disabled={googleLoading || !googleLoginEnabled}
+                        disabled={googleLoading || googleConfigLoading || (Boolean(googleConfig) && !googleLoginEnabled)}
                         className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
                       >
                         {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
@@ -859,22 +1033,34 @@ export default function Login() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#FFF4F8]/80 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[28px] border border-[#F0D9E6] bg-white p-6 text-center shadow-[0_30px_80px_rgba(236,77,151,0.16)]">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-500">
-              <Send size={24} fill="#2AABEE" />
+              {telegramWaiting || telegramLoading ? <Loader2 size={24} className="animate-spin text-sky-500" /> : <Send size={24} fill="#2AABEE" />}
             </div>
             <h3 className="mt-4 text-xl font-bold text-[#1A1A1A]">{t('auth.continueWithTelegram')}</h3>
             <p className="mt-2 text-sm leading-6 text-[#6B7280]">
               {t('auth.approveTelegramLogin')}
             </p>
-            <div className="mt-5 flex min-h-[48px] items-center justify-center rounded-2xl border border-[#F0D9E6] bg-[#FFF9FC] px-3 py-4">
-              {telegramLoginEnabled ? (
-                <div ref={telegramWidgetRef} className="flex justify-center" />
-              ) : (
-                <p className="text-sm font-bold text-red-500">{t('auth.telegramNotConfiguredShort')}</p>
-              )}
-            </div>
+            <ol className="mt-4 space-y-2 rounded-2xl border border-[#F0D9E6] bg-[#FFF9FC] px-4 py-3 text-left text-sm font-semibold text-[#4B5563]">
+              <li>1. {t('auth.telegramStepOpen')}</li>
+              <li>2. {t('auth.telegramStepStart')}</li>
+              <li>3. {t('auth.telegramStepReturn')}</li>
+            </ol>
+            {telegramBotLink && (
+              <a
+                href={telegramBotLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#2AABEE] text-sm font-bold text-white transition hover:bg-[#1f9ad8]"
+              >
+                <Send size={16} fill="currentColor" />
+                {t('auth.openTelegramApp')}
+              </a>
+            )}
+            <p className="mt-3 text-xs font-semibold text-[#9CA3AF]">
+              {telegramWaiting ? t('auth.waitingTelegramApproval') : t('auth.approveTelegramLogin')}
+            </p>
             <button
               type="button"
-              onClick={() => setTelegramOpen(false)}
+              onClick={closeTelegramLogin}
               className="mt-4 h-11 w-full rounded-2xl border border-[#F0D9E6] bg-white text-sm font-bold text-[#6B7280] transition hover:bg-[#FFF4F8] hover:text-[#EC4D97] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10"
             >
               {t('common.cancel')}

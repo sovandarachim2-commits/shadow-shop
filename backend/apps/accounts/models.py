@@ -187,7 +187,7 @@ class Address(models.Model):
     label = models.CharField(max_length=10, choices=LABEL_CHOICES, default='home')
     full_name = models.CharField(max_length=150)
     phone = models.CharField(max_length=20)
-    address_line1 = models.CharField(max_length=255)
+    address_line1 = models.CharField(max_length=255, blank=True)
     address_line2 = models.CharField(max_length=255, blank=True)
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100, blank=True)

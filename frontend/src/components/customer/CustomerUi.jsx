@@ -62,26 +62,26 @@ export function BrandLogo({ brand, size = 'md', className = '' }) {
   )
 }
 
-export function ProductThumb({ product, size = 'md', className = '' }) {
+export function ProductThumb({ product, size = 'md', className = '', priority = false }) {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageFailed, setImageFailed] = useState(false)
-  const [showImageLoader, setShowImageLoader] = useState(false)
+  const [showImageLoader, setShowImageLoader] = useState(priority)
   const sizes = {
     sm: 'h-14 w-14',
     md: 'h-20 w-20',
     lg: 'h-28 w-28',
     full: 'h-full w-full',
   }
-  const imageUrl = product?.primary_image || product?.image_url || product?.image
+  const imageUrl = product?.primary_image || product?.image_url || product?.image || product?.images?.[0]?.image
 
   useEffect(() => {
     setImageLoaded(false)
     setImageFailed(false)
-    setShowImageLoader(false)
+    setShowImageLoader(priority)
     if (!imageUrl) return undefined
-    const timer = setTimeout(() => setShowImageLoader(true), 350)
+    const timer = setTimeout(() => setShowImageLoader(true), priority ? 0 : 120)
     return () => clearTimeout(timer)
-  }, [imageUrl])
+  }, [imageUrl, priority])
 
   return (
     <div className={cn('relative overflow-hidden rounded-2xl bg-gray-100', sizes[size], className)}>
@@ -91,11 +91,16 @@ export function ProductThumb({ product, size = 'md', className = '' }) {
           <img
             src={imageUrl}
             alt={product?.name || 'Product'}
-            loading="lazy"
-            decoding="async"
+            loading={priority ? 'eager' : 'lazy'}
+            decoding={priority ? 'sync' : 'async'}
+            fetchPriority={priority ? 'high' : 'auto'}
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageFailed(true)}
-            className="absolute inset-0 h-full w-full object-cover transition duration-300"
+            className={cn(
+              'absolute inset-0 h-full w-full object-cover',
+              priority ? '' : 'transition-opacity duration-200',
+              !priority && !imageLoaded ? 'opacity-0' : 'opacity-100',
+            )}
           />
         </>
       ) : (

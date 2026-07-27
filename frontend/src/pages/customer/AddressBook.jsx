@@ -183,11 +183,13 @@ function Toggle({ checked, onChange }) {
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 ${checked ? 'bg-pink-600' : 'bg-gray-200'}`}
+      className={`relative h-7 w-12 shrink-0 overflow-hidden rounded-full p-0.5 transition-colors duration-200 ${checked ? 'bg-pink-600' : 'bg-gray-200'}`}
     >
       <span
-        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0.5'}`}
+        className={`block h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`}
       />
     </button>
   )
@@ -586,9 +588,8 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
                 </>
               )}
 
-              {/* Street address */}
+              {/* Street address (optional) */}
               <FlatInput
-                required
                 value={form.address_line1}
                 onChange={(v) => set('address_line1', v)}
                 placeholder={t('addressBook.streetPlaceholder')}

@@ -502,6 +502,45 @@ class GoogleLoginConfigView(generics.GenericAPIView):
 class GoogleLoginView(generics.GenericAPIView):
     permission_classes = [AllowAny]
 
+    def _verify_google_credential(self, credential, client_id):
+        last_detail = 'Google login could not be verified.'
+        for attempt in range(2):
+            try:
+                response = requests.get(
+                    'https://oauth2.googleapis.com/tokeninfo',
+                    params={'id_token': credential},
+                    timeout=10,
+                )
+            except requests.RequestException:
+                if attempt == 0:
+                    continue
+                return None, last_detail
+
+            try:
+                payload = response.json() if response.content else {}
+            except ValueError:
+                payload = {}
+
+            if not isinstance(payload, dict):
+                payload = {}
+
+            if response.status_code == 200 and payload.get('sub'):
+                if payload.get('aud') != client_id:
+                    return None, 'Google login client does not match this site.'
+                return payload, None
+
+            last_detail = (
+                payload.get('error_description')
+                or payload.get('error')
+                or 'Google login is invalid.'
+            )
+            # Retry once on empty/transient Google responses
+            if attempt == 0 and (response.status_code >= 500 or not payload):
+                continue
+            break
+
+        return None, last_detail
+
     def post(self, request):
         credential = str(request.data.get('credential', '')).strip()
         client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
@@ -512,21 +551,9 @@ class GoogleLoginView(generics.GenericAPIView):
         if not credential:
             return Response({'detail': 'Google login credential is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            response = requests.get(
-                'https://oauth2.googleapis.com/tokeninfo',
-                params={'id_token': credential},
-                timeout=8,
-            )
-            payload = response.json()
-        except Exception:
-            return Response({'detail': 'Google login could not be verified.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if response.status_code != 200:
-            return Response({'detail': payload.get('error_description') or 'Google login is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if payload.get('aud') != client_id:
-            return Response({'detail': 'Google login client does not match this site.'}, status=status.HTTP_400_BAD_REQUEST)
+        payload, error_detail = self._verify_google_credential(credential, client_id)
+        if not payload:
+            return Response({'detail': error_detail}, status=status.HTTP_400_BAD_REQUEST)
 
         google_id = str(payload.get('sub', '')).strip()
         email = str(payload.get('email', '')).strip().lower()

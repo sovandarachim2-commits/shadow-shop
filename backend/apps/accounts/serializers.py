@@ -283,6 +283,9 @@ class AddressSerializer(serializers.ModelSerializer):
             'is_default', 'created_at',
         ]
         read_only_fields = ['id', 'created_at']
+        extra_kwargs = {
+            'address_line1': {'required': False, 'allow_blank': True},
+        }
 
     def validate_phone(self, value):
         return validate_cambodia_phone(value)
