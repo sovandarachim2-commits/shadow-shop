@@ -24,6 +24,7 @@ Scopes (combine as needed; default = orders):
     --scope all-test     orders + customers + carts + rewards + activity
 
 Optional:
+    --full                     Stronger cleanup: customer login users + prepare/out records + daily summaries
     --include-manual-records   Also delete PrepareRecord / OutRecord
     --delete-customer-users    Delete users with role=customer (never staff/admin)
     --delete-daily-summaries   Delete finance daily summaries
@@ -33,7 +34,8 @@ Optional:
 Examples:
     python backend/scripts/clean_test_data.py --scope all-test
     python backend/scripts/clean_test_data.py --scope all-test --execute
-    python backend/scripts/clean_test_data.py --scope all-test --execute --confirm "CLEAN TEST DATA" --yes
+    python backend/scripts/clean_test_data.py --scope all-test --full --execute
+    python backend/scripts/clean_test_data.py --scope all-test --full --execute --confirm "CLEAN TEST DATA" --yes
 """
 
 from __future__ import annotations
@@ -246,6 +248,11 @@ def main() -> None:
         help='orders | customers | carts | rewards | activity | all-test (repeatable)',
     )
     parser.add_argument('--execute', action='store_true', help='Actually delete. Without this, dry-run only.')
+    parser.add_argument(
+        '--full',
+        action='store_true',
+        help='Also delete customer login users, prepare/out records, and daily summaries.',
+    )
     parser.add_argument('--include-manual-records', action='store_true', help='Also delete PrepareRecord/OutRecord.')
     parser.add_argument('--delete-customer-users', action='store_true', help='Delete role=customer users (never staff).')
     parser.add_argument('--delete-daily-summaries', action='store_true', help='Delete finance daily summaries.')
@@ -254,6 +261,16 @@ def main() -> None:
     args = parser.parse_args()
 
     scopes = parse_scopes(args.scope)
+    if args.full:
+        # Full test wipe of transactional data (still keeps catalog + staff)
+        if not args.scope:
+            scopes = set(ALL_TEST_SCOPES)
+        else:
+            scopes |= ALL_TEST_SCOPES
+        args.include_manual_records = True
+        args.delete_customer_users = True
+        args.delete_daily_summaries = True
+
     if 'customers' in scopes and 'orders' not in scopes and Order.objects.exists():
         print('Note: customers scope requires clearing orders first — adding --scope orders automatically.')
         scopes.add('orders')
@@ -261,6 +278,17 @@ def main() -> None:
     settings_module = os.environ.get('DJANGO_SETTINGS_MODULE', '')
     print(f'Settings: {settings_module}')
     print(f'Scopes:   {", ".join(sorted(scopes))}')
+    if args.full or args.delete_customer_users:
+        print('Flags:   delete customer login users = YES (admin/staff kept)')
+    else:
+        print('Flags:   delete customer login users = NO (pass --full or --delete-customer-users)')
+    if args.include_manual_records:
+        print('Flags:   prepare/out records = YES')
+    if args.delete_daily_summaries:
+        print('Flags:   daily summaries = YES')
+
+    print('\nNOT deleted (by design): products, brands, categories, banners, sets,')
+    print('site settings, telegram/payment config, admin/staff users, stock, reward catalog.')
 
     before = collect_counts(
         scopes,
