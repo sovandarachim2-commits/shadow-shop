@@ -48,7 +48,7 @@ const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
   { path: '/shop', key: 'nav.shop' },
   { path: '/profile/rewards', key: 'profile.rewards' },
-  { path: '/flash-sale', key: 'home.flashSale' },
+  { path: '/shop?filter=flash_sale', key: 'home.flashSale' },
   { path: '/shop?filter=new_arrival', key: 'nav.newArrivals' },
 ]
 
@@ -227,7 +227,6 @@ export default function CustomerLayout() {
   const hideMobileHeader =
     location.pathname === '/shop' ||
     location.pathname === '/search' ||
-    location.pathname === '/flash-sale' ||
     location.pathname === '/wishlist' ||
     (location.pathname === '/cart' && cartItems.length > 0) ||
     (location.pathname === '/checkout' && hasCheckoutItems) ||
@@ -252,7 +251,7 @@ export default function CustomerLayout() {
         hideMobileHeader && 'hidden md:block'
       )}>
         <div className="hidden md:block">
-          <div className="mx-auto flex max-w-[1500px] items-center gap-5 px-6 py-4">
+          <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-5 py-3 xl:gap-4 xl:px-6">
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -312,10 +311,12 @@ export default function CustomerLayout() {
                 </div>
               )}
             </div>
-            <Logo logoUrl={logoUrl} storeName={storeName} />
+            <div className="w-[174px] shrink-0 xl:w-[205px]">
+              <Logo logoUrl={logoUrl} storeName={storeName} />
+            </div>
             <form
               onSubmit={submitSearch}
-              className="mx-auto flex w-full max-w-xl items-center rounded-xl border border-gray-200 bg-white shadow-sm transition focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-100"
+              className="mx-auto flex h-11 min-w-[240px] flex-1 items-center rounded-xl border border-gray-200 bg-white shadow-sm transition focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-100 xl:max-w-xl"
             >
               <Search size={17} className="ml-4 text-gray-400" />
               <input
@@ -323,24 +324,25 @@ export default function CustomerLayout() {
                 value={headerSearch}
                 onChange={(e) => setHeaderSearch(e.target.value)}
                 placeholder={t('header.searchPlaceholder')}
-                className="h-11 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-gray-400"
+                className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-gray-400"
               />
               <button type="submit" className="shop-btn-primary mr-1.5 h-8 w-10 px-0 py-0">
                 <Search size={16} />
               </button>
             </form>
-            <div className="flex items-center gap-5 text-sm font-semibold text-gray-700">
+            <div className="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-700 xl:gap-2.5">
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setIsLanguageMenuOpen((open) => !open)}
-                  className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-black text-gray-800 shadow-sm transition hover:border-pink-300 hover:text-pink-600"
+                  className="flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-800 shadow-sm transition hover:border-pink-300 hover:text-pink-600"
                   title="Switch Language"
                   aria-haspopup="menu"
                   aria-expanded={isLanguageMenuOpen}
                 >
                   <span className="text-lg leading-none">{currentLanguage.flag}</span>
-                  <span>{currentLanguage.label}</span>
+                  <span className="hidden xl:inline">{currentLanguage.label}</span>
+                  <span className="xl:hidden">{currentLanguage.short}</span>
                   <ChevronDown size={15} className={cn('text-gray-500 transition-transform', isLanguageMenuOpen && 'rotate-180')} />
                 </button>
 
@@ -369,7 +371,11 @@ export default function CustomerLayout() {
                   </div>
                 )}
               </div>
-              <Link to="/wishlist" className="relative flex items-center gap-2 hover:text-pink-600">
+              <Link
+                to="/wishlist"
+                className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-gray-700 transition hover:border-pink-100 hover:bg-pink-50 hover:text-pink-600 2xl:w-auto 2xl:px-3"
+                title={t('nav.wishlist')}
+              >
                 <span className="relative">
                   <Heart size={17} />
                   {wishlistCount > 0 && (
@@ -378,18 +384,32 @@ export default function CustomerLayout() {
                     </span>
                   )}
                 </span>
-                {t('nav.wishlist')}
+                <span className="hidden whitespace-nowrap 2xl:inline">{t('nav.wishlist')}</span>
               </Link>
-              <Link to="/my-orders" className="flex items-center gap-2 hover:text-pink-600">
-                <ClipboardList size={17} /> {t('nav.orders')}
+              <Link
+                to="/my-orders"
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-gray-700 transition hover:border-pink-100 hover:bg-pink-50 hover:text-pink-600 2xl:w-auto 2xl:px-3"
+                title={t('nav.orders')}
+              >
+                <ClipboardList size={17} />
+                <span className="hidden whitespace-nowrap 2xl:inline">{t('nav.orders')}</span>
               </Link>
-              <Link to="/profile" className="flex items-center gap-2 hover:text-pink-600">
-                <User size={17} /> {t('nav.account')}
+              <Link
+                to="/profile"
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-gray-700 transition hover:border-pink-100 hover:bg-pink-50 hover:text-pink-600 2xl:w-auto 2xl:px-3"
+                title={t('nav.account')}
+              >
+                <User size={17} />
+                <span className="hidden whitespace-nowrap 2xl:inline">{t('nav.account')}</span>
               </Link>
-              <Link to="/cart" className="relative flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 hover:border-pink-200 hover:text-pink-600">
-                <ShoppingCart size={19} />
-                <span>{t('nav.cart')}</span>
-                <span className="text-xs text-gray-400">{formatCurrency(subtotal)}</span>
+              <Link
+                to="/cart"
+                className="relative flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 shadow-sm transition hover:border-pink-200 hover:text-pink-600"
+                title={t('nav.cart')}
+              >
+                <ShoppingCart size={19} className="shrink-0" />
+                <span className="hidden 2xl:inline">{t('nav.cart')}</span>
+                <span className="text-xs font-black text-gray-400">{formatCurrency(subtotal)}</span>
                 {totalItems > 0 && (
                   <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-600 px-1.5 text-xs font-bold text-white">
                     {totalItems > 9 ? '9+' : totalItems}

@@ -55,3 +55,17 @@ class SlowRequestLoggingMiddleware:
                 stats['db_seconds'] if self.instrument_db else 0.0,
             )
         return response
+
+
+class MediaCacheControlMiddleware:
+    """Allow browsers/CDNs to cache immutable uploaded media aggressively."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        media_url = getattr(settings, 'MEDIA_URL', '/media/')
+        if request.path.startswith(media_url) and response.status_code == 200:
+            response.setdefault('Cache-Control', 'public, max-age=31536000, immutable')
+        return response

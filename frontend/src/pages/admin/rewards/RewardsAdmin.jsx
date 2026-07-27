@@ -49,7 +49,7 @@ import { productsApi } from '@/api/products'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import PageHeader from '@/components/shared/PageHeader'
-import { cn, formatDate } from '@/utils/helpers'
+import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 
 const REWARD_TYPES = [
   { value: 'voucher', label: 'Voucher' },
@@ -78,7 +78,7 @@ const SAMPLE_MONTHS = [
 
 const ADMIN_EARN_RULES = [
   { title: 'Shopping Reward', icon: ShoppingCart, status: 'Auto', text: 'Paid orders create point transactions. Current rule: $1 = 10 pts.', tone: 'bg-pink-50 text-pink-600' },
-  { title: 'Daily Check-in', icon: CalendarDays, status: 'Plan', text: 'Future customer check-in bonus. Use manual points until automated.', tone: 'bg-sky-50 text-sky-600' },
+  { title: 'Daily Check-in', icon: CalendarDays, status: 'Auto', text: 'Customers can check in once per day when Daily check-in bonus is greater than 0.', tone: 'bg-sky-50 text-sky-600' },
   { title: 'Lucky Spin', icon: RotateCw, status: 'Plan', text: 'Future spin game for points, coupons, or lucky box entries.', tone: 'bg-amber-50 text-amber-600' },
   { title: 'Review Reward', icon: Camera, status: 'Manual', text: 'Add points from Customer Points after approving a useful review.', tone: 'bg-violet-50 text-violet-600' },
   { title: 'Invite Friend', icon: UserPlus, status: 'Manual', text: 'Add points after the invited friend completes their first order.', tone: 'bg-emerald-50 text-emerald-600' },
@@ -208,7 +208,8 @@ function toDateInput(value) {
 
 function toApiDate(value) {
   if (!value) return null
-  return new Date(value).toISOString()
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
 }
 
 function StatCard({ title, value, icon: Icon, tone = 'bg-pink-50 text-pink-600', hint }) {
@@ -1177,8 +1178,10 @@ function RewardFormModal({ reward, onClose }) {
     if (isPhysicalReward && form.gift_product) payload.append('gift_product', Number(form.gift_product))
     if (form.stock !== '') payload.append('stock', Number(form.stock))
     if (form.per_customer_limit !== '') payload.append('per_customer_limit', Number(form.per_customer_limit))
-    if (form.starts_at) payload.append('starts_at', toApiDate(form.starts_at))
-    if (form.ends_at) payload.append('ends_at', toApiDate(form.ends_at))
+    const startsAt = toApiDate(form.starts_at)
+    const endsAt = toApiDate(form.ends_at)
+    if (startsAt) payload.append('starts_at', startsAt)
+    if (endsAt) payload.append('ends_at', endsAt)
     if (imageFile) {
       payload.append('reward_image', imageFile)
     }
@@ -1191,8 +1194,8 @@ function RewardFormModal({ reward, onClose }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/45 p-4 backdrop-blur-sm">
       <button type="button" className="absolute inset-0 cursor-default" onClick={onClose} aria-label="Close reward form" />
-      <section className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)]">
-        <div className="border-b border-gray-100 bg-white px-6 py-5">
+      <section className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[1.6rem] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)]">
+        <div className="border-b border-gray-100 bg-white px-5 py-4 md:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EC3F8F]">Shadow Shop Rewards Admin</p>
@@ -1204,171 +1207,211 @@ function RewardFormModal({ reward, onClose }) {
             </button>
           </div>
         </div>
-      <form onSubmit={handleSubmit} className="grid flex-1 gap-4 overflow-y-auto bg-[#F8F9FC] p-6 md:grid-cols-2">
-        <label className="md:col-span-2">
-          <span className="label">Reward name</span>
-          <input className="input-field" value={form.name} onChange={(e) => set('name', e.target.value)} required />
-        </label>
-        <label className="md:col-span-2">
-          <span className="label">Description</span>
-          <textarea className="input-field min-h-24" value={form.description} onChange={(e) => set('description', e.target.value)} />
-        </label>
-        <div className="md:col-span-2">
-          <span className="label">Reward image</span>
-          <div className="flex items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-200 bg-white transition hover:border-purple-400"
-            >
-              {displayImage ? (
-                <img src={displayImage} alt="Reward preview" className="h-full w-full object-contain p-1" />
-              ) : (
-                <Upload size={24} className="text-gray-300" />
-              )}
-            </button>
-            <div className="min-w-0 flex-1">
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="btn-secondary px-4 py-2 text-sm">
-                {displayImage ? 'Change Image' : 'Upload Image'}
-              </button>
-              {imagePreview && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImageFile(null)
-                    setImagePreview(null)
-                    setClearRewardImage(Boolean(reward?.reward_image_url))
-                    if (fileInputRef.current) fileInputRef.current.value = ''
-                  }}
-                  className="ml-3 inline-flex items-center gap-1 text-xs font-bold text-red-500"
-                >
-                  <X size={13} /> Remove
-                </button>
-              )}
-              <p className="mt-2 text-xs font-semibold text-gray-400">Optional image for the customer reward card.</p>
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickImage} />
-          </div>
-        </div>
-        <div className="md:col-span-2">
-          <span className="label">Reward Type</span>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { value: 'discount', label: 'Discount', note: 'Money or percent off' },
-              { value: 'free_delivery', label: 'Free Delivery', note: 'Shipping coupon' },
-              { value: 'gift', label: 'Gift Product', note: 'Exchange for product' },
-              { value: 'voucher', label: 'Voucher', note: 'Coupon code' },
-              { value: 'lucky_box', label: 'Lucky Box', note: 'Physical reward' },
-              { value: 'manual', label: 'Manual', note: 'Staff handled reward' },
-            ].map((type) => (
-              <button
-                key={type.value}
-                type="button"
-                onClick={() => setRewardType(type.value)}
-                className={cn(
-                  'flex items-start gap-2 rounded-xl border px-3 py-3 text-left transition',
-                  form.type === type.value ? 'border-[#EC3F8F] bg-pink-50 text-[#EC3F8F]' : 'border-gray-200 bg-white text-gray-600 hover:border-pink-200'
-                )}
-              >
-                <span className={cn('mt-0.5 h-3 w-3 shrink-0 rounded-full border', form.type === type.value ? 'border-[#EC3F8F] bg-[#EC3F8F]' : 'border-gray-300')} />
-                <span>
-                  <span className="block text-xs font-black">{type.label}</span>
-                  <span className="mt-0.5 block text-[11px] font-semibold opacity-70">{type.note}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <label>
-          <span className="label">Points required</span>
-          <input className="input-field" type="number" min="1" value={form.points_required} onChange={(e) => set('points_required', e.target.value)} required />
-        </label>
-        <label>
-          <span className="label">Status</span>
-          <select className="select-field" value={form.is_active ? 'active' : 'archived'} onChange={(e) => set('is_active', e.target.value === 'active')}>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-        </label>
-        {isPhysicalReward && (
-          <label className="md:col-span-2">
-            <span className="label">Gift product for display</span>
-            <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-              <select className="select-field" value={form.gift_product || ''} onChange={(e) => set('gift_product', e.target.value)}>
-                <option value="">Select product</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.code} - {product.name}
-                  </option>
-                ))}
-              </select>
-              <div className="flex min-h-[58px] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
-                  {selectedProduct?.primary_image ? (
-                    <img src={selectedProduct.primary_image} alt={selectedProduct.name} className="h-full w-full object-contain p-1" />
-                  ) : (
-                    <Award size={18} className="text-gray-300" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-black text-gray-800">{selectedProduct?.name || 'No product selected'}</p>
-                  <p className="text-[11px] font-semibold text-gray-400">{selectedProduct?.code || 'Shown to customers'}</p>
+      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto bg-[#F8F9FC] p-4 md:p-5">
+        <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+          <div className="space-y-4">
+            <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]"><Ticket size={18} /></span>
+                <div>
+                  <h3 className="text-sm font-black text-gray-950">Basic info</h3>
+                  <p className="text-xs font-semibold text-gray-400">Customer-facing reward details.</p>
                 </div>
               </div>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="label">Reward name</span>
+                  <input className="input-field h-11 bg-white" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+                </label>
+                <label className="block">
+                  <span className="label">Description</span>
+                  <textarea className="input-field min-h-[92px] resize-none bg-white" value={form.description} onChange={(e) => set('description', e.target.value)} />
+                </label>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <span className="label">Reward image</span>
+              <div className="flex items-center gap-4 rounded-2xl border border-pink-50 bg-pink-50/35 p-3">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-[104px] w-[104px] shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-pink-200 bg-white transition hover:border-[#EC3F8F]"
+                >
+                  {displayImage ? (
+                    <img src={displayImage} alt="Reward preview" className="h-full w-full object-contain p-1.5" />
+                  ) : (
+                    <Upload size={24} className="text-pink-300" />
+                  )}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-black text-gray-700 shadow-sm ring-1 ring-gray-100 transition hover:text-[#EC3F8F]">
+                    {displayImage ? 'Change Image' : 'Upload Image'}
+                  </button>
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageFile(null)
+                        setImagePreview(null)
+                        setClearRewardImage(Boolean(reward?.reward_image_url))
+                        if (fileInputRef.current) fileInputRef.current.value = ''
+                      }}
+                      className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-500 sm:ml-3 sm:mt-0"
+                    >
+                      <X size={13} /> Remove
+                    </button>
+                  )}
+                  <p className="mt-2 text-xs font-semibold leading-5 text-gray-400">Optional image shown on the customer reward card.</p>
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={pickImage} />
+              </div>
+            </section>
+          </div>
+
+          <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]"><Gift size={18} /></span>
+              <div>
+                <h3 className="text-sm font-black text-gray-950">Reward setup</h3>
+                <p className="text-xs font-semibold text-gray-400">Pick a type, points, and reward value.</p>
+              </div>
             </div>
-          </label>
-        )}
-        {isCouponReward && (
-          <label>
-            <span className="label">Coupon value</span>
-            <div className="grid grid-cols-[130px_1fr] gap-2">
-              <select className="select-field" value={form.coupon_discount_type} onChange={(e) => set('coupon_discount_type', e.target.value)}>
-                {DISCOUNT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+            <span className="label">Reward Type</span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { value: 'discount', label: 'Discount', note: 'Money or percent off' },
+                { value: 'free_delivery', label: 'Free Delivery', note: 'Shipping coupon' },
+                { value: 'gift', label: 'Gift Product', note: 'Exchange for product' },
+                { value: 'voucher', label: 'Voucher', note: 'Coupon code' },
+                { value: 'lucky_box', label: 'Lucky Box', note: 'Physical reward' },
+                { value: 'manual', label: 'Manual', note: 'Staff handled reward' },
+              ].map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setRewardType(type.value)}
+                  className={cn(
+                    'flex min-h-[64px] items-start gap-2 rounded-xl border px-3 py-3 text-left transition',
+                    form.type === type.value ? 'border-[#EC3F8F] bg-pink-50 text-[#EC3F8F] shadow-sm shadow-pink-100' : 'border-gray-200 bg-white text-gray-600 hover:border-pink-200'
+                  )}
+                >
+                  <span className={cn('mt-0.5 h-3 w-3 shrink-0 rounded-full border', form.type === type.value ? 'border-[#EC3F8F] bg-[#EC3F8F]' : 'border-gray-300')} />
+                  <span>
+                    <span className="block text-xs font-black">{type.label}</span>
+                    <span className="mt-0.5 block text-[11px] font-semibold opacity-70">{type.note}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="label">Points required</span>
+                <input className="input-field h-11 bg-white" type="number" min="1" value={form.points_required} onChange={(e) => set('points_required', e.target.value)} required />
+              </label>
+              <label className="block">
+                <span className="label">Status</span>
+                <select className="select-field h-11 bg-white" value={form.is_active ? 'active' : 'archived'} onChange={(e) => set('is_active', e.target.value === 'active')}>
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              {isCouponReward && (
+                <label className="block sm:col-span-2">
+                  <span className="label">Coupon value</span>
+                  <div className="grid grid-cols-[130px_1fr] gap-2">
+                    <select className="select-field h-11 bg-white" value={form.coupon_discount_type} onChange={(e) => set('coupon_discount_type', e.target.value)}>
+                      {DISCOUNT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                    </select>
+                    <input className="input-field h-11 bg-white" type="number" min="0" step="0.01" value={form.coupon_value} onChange={(e) => set('coupon_value', e.target.value)} />
+                  </div>
+                </label>
+              )}
+              {isPhysicalReward && (
+                <label className="block sm:col-span-2">
+                  <span className="label">Gift product for display</span>
+                  <div className="grid gap-3">
+                    <select className="select-field h-11 bg-white" value={form.gift_product || ''} onChange={(e) => set('gift_product', e.target.value)}>
+                      <option value="">Select product</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.code} - {product.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex min-h-[58px] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+                        {selectedProduct?.primary_image ? (
+                          <img src={selectedProduct.primary_image} alt={selectedProduct.name} className="h-full w-full object-contain p-1" />
+                        ) : (
+                          <Award size={18} className="text-gray-300" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-black text-gray-800">{selectedProduct?.name || 'No product selected'}</p>
+                        <p className="text-[11px] font-semibold text-gray-400">{selectedProduct?.code || 'Shown to customers'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <section className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]"><CalendarDays size={18} /></span>
+            <div>
+              <h3 className="text-sm font-black text-gray-950">Rules and schedule</h3>
+              <p className="text-xs font-semibold text-gray-400">Limits, member tier, and active dates.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {usesOrderCondition && (
+              <label className="block">
+                <span className="label">Minimum order amount</span>
+                <input className="input-field h-11 bg-white" type="number" min="0" step="0.01" value={form.minimum_order_amount} onChange={(e) => set('minimum_order_amount', e.target.value)} />
+              </label>
+            )}
+            <label className="block">
+              <span className="label">Stock quantity</span>
+              <input className="input-field h-11 bg-white" type="number" min="0" placeholder="Blank means no limit" value={form.stock} onChange={(e) => set('stock', e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="label">Per-customer limit</span>
+              <input className="input-field h-11 bg-white" type="number" min="0" placeholder="Blank means no limit" value={form.per_customer_limit} onChange={(e) => set('per_customer_limit', e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="label">Member tier requirement</span>
+              <select className="select-field h-11 bg-white" value={form.member_tier_requirement} onChange={(e) => set('member_tier_requirement', e.target.value)}>
+                <option value="all">All members</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="platinum">Platinum</option>
               </select>
-              <input className="input-field" type="number" min="0" step="0.01" value={form.coupon_value} onChange={(e) => set('coupon_value', e.target.value)} />
-            </div>
-          </label>
-        )}
-        {usesOrderCondition && (
-          <label>
-            <span className="label">Minimum order amount</span>
-            <input className="input-field" type="number" min="0" step="0.01" value={form.minimum_order_amount} onChange={(e) => set('minimum_order_amount', e.target.value)} />
-          </label>
-        )}
-        <label>
-          <span className="label">Stock quantity</span>
-          <input className="input-field" type="number" min="0" placeholder="Blank means no limit" value={form.stock} onChange={(e) => set('stock', e.target.value)} />
-        </label>
-        <label>
-          <span className="label">Per-customer limit</span>
-          <input className="input-field" type="number" min="0" placeholder="Blank means no limit" value={form.per_customer_limit} onChange={(e) => set('per_customer_limit', e.target.value)} />
-        </label>
-        <label>
-          <span className="label">Member tier requirement</span>
-          <select className="select-field" value={form.member_tier_requirement} onChange={(e) => set('member_tier_requirement', e.target.value)}>
-            <option value="all">All members</option>
-            <option value="silver">Silver</option>
-            <option value="gold">Gold</option>
-            <option value="platinum">Platinum</option>
-          </select>
-        </label>
-        <label>
-          <span className="label">Start date</span>
-          <input className="input-field" type="datetime-local" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} />
-        </label>
-        <label>
-          <span className="label">End date</span>
-          <input className="input-field" type="datetime-local" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} />
-        </label>
-        <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-white px-6 py-4 md:col-span-2">
+            </label>
+            <label className="block">
+              <span className="label">Start date</span>
+              <input className="input-field h-11 bg-white" type="datetime-local" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="label">End date</span>
+              <input className="input-field h-11 bg-white" type="datetime-local" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} />
+            </label>
+          </div>
+        </section>
+
+        <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-white px-4 py-3 md:-mx-5 md:-mb-5 md:px-5">
           {saveError && (
             <div className="mr-auto flex min-w-0 max-w-full items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 md:max-w-[62%]">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
               <span className="min-w-0 break-words">{saveError}</span>
             </div>
           )}
-          <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-          <button type="submit" disabled={saveMutation.isPending} className="rounded-xl bg-[#EC3F8F] px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-pink-200 transition hover:bg-pink-600 disabled:opacity-50">
+          <button type="button" onClick={onClose} className="inline-flex h-11 items-center justify-center rounded-xl bg-gray-100 px-5 text-sm font-black text-gray-600 transition hover:bg-gray-200">Cancel</button>
+          <button type="submit" disabled={saveMutation.isPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#EC3F8F] px-5 text-sm font-black text-white shadow-lg shadow-pink-200 transition hover:bg-pink-600 disabled:opacity-50">
             {saveMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
             Save Reward
           </button>
@@ -1380,11 +1423,12 @@ function RewardFormModal({ reward, onClose }) {
 }
 
 export function RewardItemsAdmin() {
+  const createType = new URLSearchParams(window.location.search).get('type') || ''
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [page, setPage] = useState(1)
   const [editingReward, setEditingReward] = useState(() => (
-    new URLSearchParams(window.location.search).get('new') === '1' ? {} : null
+    new URLSearchParams(window.location.search).get('new') === '1' ? { type: createType || 'discount' } : null
   ))
   const [statusFilter, setStatusFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -1758,7 +1802,7 @@ export function RewardItemsAdmin() {
         )}
       </div>
 
-      {editingReward && <RewardFormModal reward={editingReward.id ? editingReward : null} onClose={() => setEditingReward(null)} />}
+      {editingReward && <RewardFormModal reward={editingReward} onClose={() => setEditingReward(null)} />}
       {ConfirmDialog}
     </div>
   )
@@ -2492,60 +2536,158 @@ export function RewardMemberTiersAdmin() {
 }
 
 export function RewardCouponsAdmin() {
+  const navigate = useNavigate()
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['admin-reward-redemptions', 'coupons'],
+    queryFn: () => ordersApi.adminRewards.redemptions.list({ page_size: 500 }).then((r) => r.data),
+  })
+  const issuedCoupons = unwrapList(data).filter((item) => item.coupon_code)
+  const activeCoupons = issuedCoupons.filter((item) => item.status === 'active')
+  const usedCoupons = issuedCoupons.filter((item) => ['used', 'completed'].includes(item.status))
+  const percentUsed = issuedCoupons.length ? Math.round((usedCoupons.length / issuedCoupons.length) * 100) : 0
+
+  const copyCoupon = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code)
+      toast.success(`Copied ${code}`)
+    } catch {
+      toast.error('Copy failed')
+    }
+  }
+
+  const exportCoupons = () => {
+    const header = ['Coupon Code', 'Customer', 'Reward', 'Discount', 'Minimum Order', 'Valid Until', 'Status']
+    const rows = issuedCoupons.map((coupon) => [
+      coupon.coupon_code,
+      coupon.user_name || '',
+      coupon.reward_name || '',
+      formatCouponDiscount(coupon),
+      formatCurrency(coupon.minimum_order_amount || 0),
+      coupon.ends_at ? formatDate(coupon.ends_at) : 'No expiry',
+      coupon.status || '',
+    ])
+    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `promo-codes-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success('Promo codes exported')
+  }
+
   return (
-    <div>
+    <div className="space-y-5">
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-navy-900">Coupons</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Manage reward coupon codes, usage limits, and validity</p>
+          <h1 className="text-2xl font-bold text-navy-900">Promo Codes</h1>
+          <p className="mt-0.5 text-sm text-gray-500">Control reward coupon codes customers can apply in cart and checkout.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PlaceholderActionButton icon={Download}>Export</PlaceholderActionButton>
-          <PlaceholderActionButton icon={Copy}>Bulk Generate</PlaceholderActionButton>
-          <PlaceholderActionButton icon={Plus}>Create Coupon</PlaceholderActionButton>
+          <button type="button" onClick={exportCoupons} disabled={!issuedCoupons.length} className="btn-secondary h-11">
+            <Download size={16} /> Export
+          </button>
+          <button type="button" onClick={() => navigate('/admin/rewards/products?new=1&type=discount')} className="btn-primary h-11">
+            <Plus size={16} /> Create Coupon
+          </button>
         </div>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <PremiumKpiCard title="Issued Codes" value={issuedCoupons.length.toLocaleString()} trend="All generated coupons" icon={Ticket} tone="bg-pink-50 text-[#EC3F8F]" />
+        <PremiumKpiCard title="Active Codes" value={activeCoupons.length.toLocaleString()} trend="Ready for checkout" icon={Check} tone="bg-emerald-50 text-emerald-600" />
+        <PremiumKpiCard title="Used Codes" value={usedCoupons.length.toLocaleString()} trend={`${percentUsed}% redeemed`} icon={Percent} tone="bg-amber-50 text-amber-600" />
+      </div>
+
       <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
         <div className="form-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Coupon Code</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Customer</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Reward</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Type</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Discount</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Usage</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Min Order</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Valid Until</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {COUPONS.map((coupon) => (
-                <tr key={coupon.code} className="data-table-row">
-                  <td className="px-4 py-3 font-mono text-xs font-black text-gray-800">{coupon.code}</td>
-                  <td className="px-4 py-3 text-gray-600">{coupon.type}</td>
-                  <td className="px-4 py-3 font-black text-[#EC3F8F]">{coupon.discount}</td>
-                  <td className="px-4 py-3 text-gray-600">{coupon.usage}</td>
-                  <td className="px-4 py-3 text-gray-500">{coupon.valid}</td>
+              {issuedCoupons.map((coupon) => (
+                <tr key={coupon.id} className="data-table-row">
+                  <td className="px-4 py-3 font-mono text-xs font-black text-gray-800">{coupon.coupon_code}</td>
+                  <td className="px-4 py-3 text-gray-600">{coupon.user_name || '-'}</td>
+                  <td className="px-4 py-3 font-semibold text-gray-800">{coupon.reward_name || '-'}</td>
+                  <td className="px-4 py-3 capitalize text-gray-600">{coupon.reward_type?.replaceAll('_', ' ') || '-'}</td>
+                  <td className="px-4 py-3 font-black text-[#EC3F8F]">{formatCouponDiscount(coupon)}</td>
+                  <td className="px-4 py-3 text-gray-600">{formatCurrency(coupon.minimum_order_amount || 0)}</td>
+                  <td className="px-4 py-3 text-gray-500">{coupon.ends_at ? formatDate(coupon.ends_at) : 'No expiry'}</td>
                   <td className="px-4 py-3"><StatusBadge value={coupon.status} /></td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => toast.error('Coupon editing needs a backend endpoint before it can save')} className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-pink-50 hover:text-[#EC3F8F]"><Edit3 size={15} /></button></td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => copyCoupon(coupon.coupon_code)} className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-pink-50 hover:text-[#EC3F8F]" title="Copy code">
+                      <Copy size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {isLoading && <p className="py-8 text-center text-sm font-semibold text-gray-400">Loading promo codes...</p>}
+          {isError && (
+            <div className="py-8 text-center">
+              <p className="text-sm font-black text-red-600">Promo codes could not load.</p>
+              <button onClick={() => refetch()} className="mt-3 btn-secondary">Retry</button>
+            </div>
+          )}
+          {!isLoading && !isError && issuedCoupons.length === 0 && (
+            <div className="py-12 text-center">
+              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-pink-50 text-[#EC3F8F]">
+                <Ticket size={24} />
+              </div>
+              <p className="mt-4 text-sm font-black text-gray-800">No promo codes yet</p>
+              <p className="mt-1 text-xs font-semibold text-gray-400">Create a discount reward, then customers can redeem points to generate codes.</p>
+              <button onClick={() => navigate('/admin/rewards/products?new=1&type=discount')} className="btn-primary mx-auto mt-4">
+                <Plus size={16} /> Create Coupon
+              </button>
+            </div>
+          )}
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <h2 className="text-base font-black text-gray-950">Coupon usage</h2>
           <div className="mx-auto mt-8 flex h-44 w-44 items-center justify-center rounded-full border-[22px] border-pink-500 border-r-gray-100 border-t-pink-200">
             <div className="text-center">
-              <p className="text-3xl font-black text-gray-950">64%</p>
+              <p className="text-3xl font-black text-gray-950">{percentUsed}%</p>
               <p className="text-xs font-bold text-gray-400">Used</p>
+            </div>
+          </div>
+          <div className="mt-7 space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-gray-500">Active</span>
+              <span className="font-black text-emerald-600">{activeCoupons.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-gray-500">Used</span>
+              <span className="font-black text-[#EC3F8F]">{usedCoupons.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-gray-500">Total</span>
+              <span className="font-black text-gray-900">{issuedCoupons.length}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
   )
+}
+
+function formatCouponDiscount(coupon) {
+  if (coupon.reward_type === 'free_delivery') return 'Free delivery'
+  const value = Number(coupon.coupon_value || 0)
+  return coupon.coupon_discount_type === 'percent' ? `${value}%` : formatCurrency(value)
 }
 
 export function RewardCampaignsAdmin() {

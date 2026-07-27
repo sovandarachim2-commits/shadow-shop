@@ -3,11 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Star, Heart, ShoppingBag,
-  Gift, Brush, Droplet, SprayCan, Trash2, Plus, Minus, RefreshCw, Zap,
-  Sparkles,
+  Gift, Brush, Droplet, SprayCan, Trash2, Plus, Minus, RefreshCw, Zap, ShoppingCart,
+  Sparkles, Clock3,
 } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
+import { formatFlashSaleCountdown, getFlashSaleTimerState, hasFlashSaleTimer, isVisibleFlashSaleItem } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { BrandLogo } from '@/components/customer/CustomerUi'
@@ -47,7 +48,95 @@ function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
 
+function ProductImageLoading() {
+  return <div className="absolute inset-0 animate-pulse bg-gray-100" />
+}
+
+function ProductImageFallback() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300">
+      <ShoppingBag size={30} />
+    </div>
+  )
+}
+
+function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addLabel, addToCartLabel, soldOutLabel }) {
+  if (!available) {
+    return (
+      <span className="flex h-[42px] w-full items-center justify-center rounded-xl bg-gray-100 text-[13px] font-semibold text-gray-400 sm:h-12 sm:text-sm">
+        {soldOutLabel}
+      </span>
+    )
+  }
+
+  if (qty === 0) {
+    return (
+      <button
+        onClick={onAdd}
+        className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold leading-none text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:px-4 sm:text-sm"
+      >
+        <ShoppingCart size={17} />
+        <span className="sm:hidden">{addLabel}</span>
+        <span className="hidden sm:inline">{addToCartLabel}</span>
+      </button>
+    )
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
+      <button onClick={onDecrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+        {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
+      </button>
+      <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
+      <button onClick={onIncrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+        <Plus size={16} />
+      </button>
+    </div>
+  )
+}
+
 // ─── Countdown to midnight ────────────────────────────────────────────────────
+function FlashSaleTimer({ item, nowMs, compact = false }) {
+  const timer = getFlashSaleTimerState(item, nowMs)
+  if (!timer?.value) return null
+
+  return (
+    <div className={`mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 font-black leading-none text-pink-600 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
+      <Clock3 size={compact ? 11 : 12} />
+      <span>{timer.label} {timer.value}</span>
+    </div>
+  )
+}
+
+function getFlashSaleSectionTimer(items, nowMs) {
+  const candidates = items
+    .map((item) => {
+      const startMs = item.flash_sale_starts_at ? new Date(item.flash_sale_starts_at).getTime() : null
+      const endMs = item.flash_sale_ends_at ? new Date(item.flash_sale_ends_at).getTime() : null
+      if (Number.isFinite(endMs) && endMs < nowMs) return null
+      if (Number.isFinite(startMs) && startMs > nowMs) {
+        return { type: 'starts', targetMs: startMs, startMs: nowMs, endMs: startMs }
+      }
+      if (Number.isFinite(endMs)) {
+        return { type: 'ends', targetMs: endMs, startMs: Number.isFinite(startMs) ? startMs : nowMs, endMs }
+      }
+      return null
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.targetMs - b.targetMs)
+
+  const timer = candidates[0]
+  if (!timer) return null
+
+  const totalMs = Math.max(1, timer.endMs - timer.startMs)
+  const elapsedMs = Math.min(totalMs, Math.max(0, nowMs - timer.startMs))
+  return {
+    label: timer.type === 'starts' ? 'Starts in' : 'Ends in',
+    value: formatFlashSaleCountdown(timer.targetMs, nowMs),
+    progress: timer.type === 'starts' ? 0 : Math.round((elapsedMs / totalMs) * 100),
+  }
+}
+
 function useCountdown() {
   const calc = () => {
     const now = new Date()
@@ -97,13 +186,14 @@ function CosmeticMockup({ tone = 'pink' }) {
 }
 
 // ─── Product card ─────────────────────────────────────────────────────────────
-function ProductCard({ product, badge }) {
+function ProductCard({ product, badge, nowMs, priority = false }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
   const { toggle, isWishlisted } = useWishlistStore()
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [showImageLoader, setShowImageLoader] = useState(false)
   const wishlisted = isWishlisted(product.id)
   const cartItem = items.find((i) => i.product?.id === product.id)
   const qty = cartItem?.quantity || 0
@@ -127,6 +217,15 @@ function ProductCard({ product, badge }) {
     toast.success(wishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
   }
 
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageFailed(false)
+    setShowImageLoader(false)
+    if (!product.primary_image) return undefined
+    const timer = setTimeout(() => setShowImageLoader(true), 350)
+    return () => clearTimeout(timer)
+  }, [product.primary_image])
+
   return (
     <article
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-soft"
@@ -149,30 +248,29 @@ function ProductCard({ product, badge }) {
         )}
       </div>
       {/* Image */}
-      <div className="relative h-44 overflow-hidden bg-white">
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
           <>
-            {!imageLoaded && <CosmeticMockup tone={product.tone} />}
+            {!imageLoaded && showImageLoader && <ProductImageLoading />}
             <img
               src={product.primary_image}
               alt={product.name}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className={`absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-              loading="lazy"
+              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
               decoding="async"
             />
           </>
         ) : (
-          <CosmeticMockup tone={product.tone} />
+          <ProductImageFallback />
         )}
       </div>
       {/* Info */}
-      <div className="p-3">
+      <div className="flex min-h-[166px] flex-col p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
-          <span className="shrink-0 text-gray-300">/</span>
-          <span className="truncate">{product.category_name || t('product.cosmetics')}</span>
         </div>
         <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{product.name}</h3>
         <div className="mt-2 flex items-center gap-1">
@@ -180,32 +278,22 @@ function ProductCard({ product, badge }) {
           <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
           <span className="text-xs text-gray-300">(126)</span>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(product.display_price || product.retail_price)}</span>
-            {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
-          </div>
-          {!available ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">Sold Out</span>
-          ) : qty === 0 ? (
-            <button
-              onClick={handleAdd}
-              className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4"
-            >
-              <span className="md:hidden">{t('common.add')}</span>
-              <span className="hidden md:inline">{t('common.addToCart')}</span>
-            </button>
-          ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
-              <button onClick={handleDecrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
-              </button>
-              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
-              <button onClick={handleIncrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                <Plus size={12} />
-              </button>
-            </div>
-          )}
+        <div className="mt-3 min-w-0">
+          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
+          {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
+        </div>
+        <FlashSaleTimer item={product} nowMs={nowMs} />
+        <div className="mt-auto pt-3">
+          <ProductCardButton
+            available={available}
+            qty={qty}
+            onAdd={handleAdd}
+            onIncrease={handleIncrease}
+            onDecrease={handleDecrease}
+            addLabel={t('common.add')}
+            addToCartLabel={t('common.addToCart')}
+            soldOutLabel={t('common.soldOut')}
+          />
         </div>
       </div>
     </article>
@@ -213,7 +301,7 @@ function ProductCard({ product, badge }) {
 }
 
 // ─── Flash sale card ──────────────────────────────────────────────────────────
-function FlashSaleCard({ product }) {
+function FlashSaleCard({ product, nowMs }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
   const navigate = useNavigate()
@@ -255,6 +343,7 @@ function FlashSaleCard({ product }) {
         <p className="line-clamp-2 min-h-[30px] text-[11px] font-semibold leading-tight text-gray-800">{product.name}</p>
         <p className="mt-1.5 text-sm font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</p>
         {product.old_price && <p className="text-[10px] font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</p>}
+        <FlashSaleTimer item={product} nowMs={nowMs} compact />
         {!available ? (
           <div className="mt-2 w-full rounded-xl bg-gray-100 py-1.5 text-center text-[11px] font-black text-gray-400">Sold Out</div>
         ) : qty === 0 ? (
@@ -284,7 +373,7 @@ function FlashSaleCard({ product }) {
 export default function Home() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const countdown = useCountdown()
+  const [nowMs, setNowMs] = useState(Date.now())
   const [categoryPage, setCategoryPage] = useState(0)
   const [activeBannerIndex, setActiveBannerIndex] = useState(0)
   const [desktopBannerIndex, setDesktopBannerIndex] = useState(0)
@@ -293,6 +382,7 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const categoryScrollRef = useRef(null)
   const bannerScrollRef = useRef(null)
+  const flashSaleScrollRef = useRef(null)
   const desktopBannerScrollRef = useRef(null)
   const desktopBannerDragRef = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false, blockClick: false })
   const refreshStart = useRef({ x: 0, y: 0 })
@@ -307,6 +397,19 @@ export default function Home() {
     queryFn: () => productsApi.home.feed().then((r) => r.data),
     ...HOME_QUERY_OPTIONS,
   })
+  const {
+    data: directFlashData = [],
+    isLoading: directFlashLoading,
+  } = useQuery({
+    queryKey: ['home-flash-sale-fallback'],
+    queryFn: () => productsApi.products.list({
+      is_featured: true,
+      is_active: true,
+      page_size: 24,
+    }).then((r) => (r.data.results || r.data || []).filter((item) => isVisibleFlashSaleItem(item)).slice(0, 10)),
+    enabled: !homeLoading && (homeData?.flash_sale?.length || 0) === 0,
+    staleTime: 30_000,
+  })
   const bannersData = homeData?.banners
   const categoriesData = homeData?.categories
   const brandsData = homeData?.brands
@@ -314,7 +417,7 @@ export default function Home() {
   const flashData = homeData?.flash_sale
   const newArrivalData = homeData?.new_arrivals
   const showBestSkeleton = homeLoading && !bestSellerData
-  const showFlashSkeleton = homeLoading && !flashData
+  const showFlashSkeleton = (homeLoading && !flashData) || directFlashLoading
   const showNewSkeleton = homeLoading && !newArrivalData
   const banners = useMemo(() => bannersData || [], [bannersData])
   const categories = useMemo(() => categoriesData || [], [categoriesData])
@@ -325,8 +428,23 @@ export default function Home() {
     return Array.from({ length: repeats }, () => brands).flat()
   }, [brands])
   const bestSellers = useMemo(() => bestSellerData || [], [bestSellerData])
-  const flashSale = useMemo(() => flashData || [], [flashData])
+  const flashSale = useMemo(() => {
+    const source = flashData?.length ? flashData : directFlashData
+    return source.filter((item) => isVisibleFlashSaleItem(item, nowMs))
+  }, [flashData, directFlashData, nowMs])
   const newArrivals = useMemo(() => newArrivalData || [], [newArrivalData])
+  const hasVisibleFlashSaleTimers = useMemo(
+    () => [...flashSale, ...bestSellers, ...newArrivals].some(hasFlashSaleTimer),
+    [flashSale, bestSellers, newArrivals],
+  )
+  const flashSaleSectionTimer = useMemo(
+    () => getFlashSaleSectionTimer(flashSale, nowMs),
+    [flashSale, nowMs],
+  )
+  const flashSaleSectionTimerParts = useMemo(
+    () => flashSaleSectionTimer?.value?.split(/[: ]/) || [],
+    [flashSaleSectionTimer],
+  )
 
   const categoryItems = useMemo(() => {
     const realCategories = categories
@@ -399,6 +517,12 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [banners.length, desktopBannerPages])
 
+  useEffect(() => {
+    if (!hasVisibleFlashSaleTimers) return undefined
+    const interval = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [hasVisibleFlashSaleTimers])
+
   const getDesktopBannerIndexFromScroll = () => {
     const el = desktopBannerScrollRef.current
     const item = el?.children?.[0]
@@ -461,6 +585,12 @@ export default function Home() {
       if (desktopBannerPages <= 1) return 0
       return (current + direction + desktopBannerPages) % desktopBannerPages
     })
+  }
+
+  const scrollFlashSale = (direction) => {
+    const el = flashSaleScrollRef.current
+    if (!el) return
+    el.scrollBy({ left: direction * Math.max(240, el.clientWidth * 0.85), behavior: 'smooth' })
   }
 
   // ── Banner auto-slide ──────────────────────────────────────────────────────
@@ -705,42 +835,81 @@ export default function Home() {
         <div className="h-2 bg-gray-50" />
         {(showFlashSkeleton || flashSale.length > 0) && (
           <div className="bg-white px-4 pb-4 pt-4 md:px-6">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
-                  <Zap size={14} className="fill-pink-600" strokeWidth={2.5} />
-                </span>
-                <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.flashSale')}</h2>
-                <div className="ml-1 hidden items-center gap-0.5 sm:flex">
-                  {[countdown.h, countdown.m, countdown.s].map((v, i) => (
-                    <span key={i} className="flex items-center">
-                      <span className="flex h-[22px] min-w-[24px] items-center justify-center rounded-md bg-gray-900 px-1 text-[11px] font-black tabular-nums text-white">
-                        {v}
-                      </span>
-                      {i < 2 && <span className="mx-0.5 text-xs font-black text-gray-400">:</span>}
-                    </span>
-                  ))}
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink-100 text-pink-600 shadow-sm shadow-pink-100">
+                    <Zap size={14} className="fill-pink-600" strokeWidth={2.5} />
+                  </span>
+                  <h2 className="min-w-0 truncate text-xl font-black leading-none text-gray-950 md:text-2xl">{t('home.flashSale')}</h2>
+                  {flashSaleSectionTimer && (
+                    <div className="hidden items-center gap-1 sm:flex">
+                      <span className="text-[11px] font-black text-pink-600">{flashSaleSectionTimer.label}</span>
+                      {flashSaleSectionTimerParts.map((v, i) => (
+                        <span key={`${v}-${i}`} className="flex items-center">
+                          <span className="flex h-[22px] min-w-[24px] items-center justify-center rounded-md bg-gray-900 px-1 text-[11px] font-black tabular-nums text-white">
+                            {v}
+                          </span>
+                          {i < flashSaleSectionTimerParts.length - 1 && <span className="mx-0.5 text-xs font-black text-gray-400">:</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
+                {flashSaleSectionTimer && (
+                  <div className="mt-2 h-1.5 max-w-md overflow-hidden rounded-full bg-pink-100">
+                    <div className="h-full rounded-full bg-pink-600 transition-all" style={{ width: `${flashSaleSectionTimer.progress}%` }} />
+                  </div>
+                )}
               </div>
-              <Link to="/flash-sale" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
-                {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
-              </Link>
+              <div className="flex shrink-0 items-center gap-2">
+                {flashSale.length > 1 && (
+                  <div className="hidden items-center gap-1 sm:flex">
+                    <button
+                      type="button"
+                      onClick={() => scrollFlashSale(-1)}
+                      className="grid h-8 w-8 place-items-center rounded-xl border border-gray-100 bg-white text-gray-700 shadow-sm transition hover:border-pink-100 hover:text-pink-600 active:scale-95"
+                      aria-label="Scroll flash sale left"
+                    >
+                      <ChevronLeft size={16} strokeWidth={2.6} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollFlashSale(1)}
+                      className="grid h-8 w-8 place-items-center rounded-xl border border-gray-100 bg-white text-gray-700 shadow-sm transition hover:border-pink-100 hover:text-pink-600 active:scale-95"
+                      aria-label="Scroll flash sale right"
+                    >
+                      <ChevronRight size={16} strokeWidth={2.6} />
+                    </button>
+                  </div>
+                )}
+                <Link to="/shop?filter=flash_sale" className="flex items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                  {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
+                </Link>
+              </div>
             </div>
-            {/* Mobile: horizontal scroll; Desktop: grid */}
-            <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden">
-              {showFlashSkeleton
-                ? Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="h-56 w-[136px] shrink-0 animate-pulse rounded-2xl bg-gray-100" />
-                  ))
-                : flashSale.map((p) => <FlashSaleCard key={p.id} product={p} />)
-              }
-            </div>
-            <div className="hidden md:grid md:grid-cols-5 md:gap-3 lg:grid-cols-6">
+            <div
+              ref={flashSaleScrollRef}
+              className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 scroll-smooth [scrollbar-width:none] md:-mx-6 md:gap-4 md:px-6 [&::-webkit-scrollbar]:hidden"
+            >
               {showFlashSkeleton
                 ? Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="aspect-square animate-pulse rounded-2xl bg-gray-100" />
-                  ))
-                : flashSale.slice(0, 6).map((p) => <FlashSaleCard key={p.id} product={p} />)
+                  <div key={i} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
+                    <div className="aspect-square animate-pulse bg-gray-100" />
+                    <div className="space-y-2 p-3">
+                      <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
+                      <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
+                      <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
+                      <div className="h-5 w-16 animate-pulse rounded bg-gray-100" />
+                      <div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" />
+                    </div>
+                  </div>
+                ))
+                : flashSale.map((p, i) => (
+                  <div key={p.id} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
+                    <ProductCard product={p} nowMs={nowMs} priority={i < 4} />
+                  </div>
+                ))
               }
             </div>
           </div>
@@ -806,10 +975,10 @@ export default function Home() {
                 {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
               {showBestSkeleton
-                ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
-                : bestSellers.slice(0, 12).map((p) => <ProductCard key={p.id} product={p} badge={t('home.bestBadge')} />)
+                ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"><div className="aspect-square animate-pulse bg-gray-100" /><div className="space-y-2 p-3"><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" /><div className="h-4 w-full animate-pulse rounded bg-gray-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" /><div className="h-5 w-16 animate-pulse rounded bg-gray-100" /><div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" /></div></div>)
+                : bestSellers.slice(0, 12).map((p, i) => <ProductCard key={p.id} product={p} badge={t('home.bestBadge')} nowMs={nowMs} priority={i < 4} />)
               }
             </div>
           </div>
@@ -833,10 +1002,10 @@ export default function Home() {
                 {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 md:gap-4 lg:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
               {showNewSkeleton
-                ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-80 animate-pulse rounded-2xl bg-gray-100" />)
-                : newArrivals.slice(0, 12).map((p) => <ProductCard key={p.id} product={p} badge={t('common.new')} />)
+                ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"><div className="aspect-square animate-pulse bg-gray-100" /><div className="space-y-2 p-3"><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" /><div className="h-4 w-full animate-pulse rounded bg-gray-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" /><div className="h-5 w-16 animate-pulse rounded bg-gray-100" /><div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" /></div></div>)
+                : newArrivals.slice(0, 12).map((p, i) => <ProductCard key={p.id} product={p} badge={t('common.new')} nowMs={nowMs} priority={i < 4} />)
               }
             </div>
           </div>

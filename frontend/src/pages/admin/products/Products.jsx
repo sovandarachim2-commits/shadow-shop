@@ -259,6 +259,7 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
           <Upload size={22} className="text-gray-400" />
           <p className="text-sm font-semibold text-gray-500">Click to upload images</p>
           <p className="text-xs text-gray-400">PNG, JPG, WEBP — first image becomes primary</p>
+          <p className="text-xs font-semibold text-purple-500">Recommended size: 1200 x 1200 px</p>
           <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
         </div>
         {previews.length > 0 && (
@@ -502,6 +503,7 @@ function ImageManagerModal({ product, onClose }) {
               {uploading ? 'Uploading...' : 'Click to upload more images'}
             </p>
             <p className="text-xs text-gray-400">PNG, JPG, WEBP · Multiple files supported</p>
+            <p className="text-xs font-semibold text-purple-500">Recommended size: 1200 x 1200 px</p>
             <input ref={fileRef} type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} />
           </div>
         </div>

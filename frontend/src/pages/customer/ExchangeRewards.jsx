@@ -19,6 +19,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
+import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
 import { cn, formatDate } from '@/utils/helpers'
 
 const CATEGORY_FILTER_KEYS = ['all', 'voucher', 'gift', 'discount', 'free_delivery']
@@ -204,6 +205,7 @@ export default function ExchangeRewards() {
   const queryClient = useQueryClient()
   const [exchangingId, setExchangingId] = useState(null)
   const [activeCategory, setActiveCategory] = useState('all')
+  const [redeemedCoupon, setRedeemedCoupon] = useState(null)
   const typeMeta = getTypeMeta(t)
   const sampleRewards = getSampleRewards(t)
 
@@ -218,7 +220,11 @@ export default function ExchangeRewards() {
     onSuccess: (nextData) => {
       queryClient.setQueryData(['customer-rewards-summary'], nextData)
       const code = nextData.redemption?.coupon_code
-      toast.success(code ? t('rewardsPage.toast.exchangedWithCode', { code }) : t('rewardsPage.toast.exchanged'))
+      if (code) {
+        setRedeemedCoupon(nextData.redemption)
+      } else {
+        toast.success(t('rewardsPage.toast.exchanged'))
+      }
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || t('rewardsPage.toast.exchangeFailed'))
@@ -280,6 +286,7 @@ export default function ExchangeRewards() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 md:bg-white md:pb-6">
+      <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
       <div className="mx-auto flex w-full max-w-[560px] flex-col px-4 pb-6 pt-[max(0.35rem,env(safe-area-inset-top))] md:max-w-[1440px] md:px-6 md:pt-6">
         <header className="sticky top-0 z-30 -mx-4 flex min-h-[54px] items-center justify-between gap-3 bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:mb-4 md:min-h-0 md:bg-transparent md:px-0">
           <div className="min-w-0">

@@ -198,6 +198,8 @@ export default function FlashSales() {
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['home-feed'] })
+      queryClient.invalidateQueries({ queryKey: ['home-flash-sale-fallback'] })
       setShowModal(false)
       setEditProduct(null)
       toast.success('Flash sale saved')
@@ -217,6 +219,8 @@ export default function FlashSales() {
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['home-feed'] })
+      queryClient.invalidateQueries({ queryKey: ['home-flash-sale-fallback'] })
       toast.success('Flash sale removed')
     },
     onError: () => toast.error('Failed to remove flash sale'),

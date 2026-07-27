@@ -30,7 +30,7 @@ from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerif
 from .serializers import (
     CustomTokenObtainPairSerializer, UserSerializer, UserCreateSerializer,
     ChangePasswordSerializer, SetInitialPasswordSerializer, CustomerRegisterSerializer, PermissionSerializer, RoleSerializer,
-    RolePermissionSerializer, ActivityLogSerializer, AddressSerializer, SiteSettingsSerializer,
+    RolePermissionSerializer, ActivityLogSerializer, AddressSerializer, SiteSettingsSerializer, generate_customer_username,
 )
 from utils.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
 
@@ -236,12 +236,12 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
             return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
 
         data = pending.data or {}
-        username = data.get('username') or email
+        username = data.get('username') or generate_customer_username()
         with transaction.atomic():
             if User.objects.filter(email__iexact=email, is_active=True).exists():
                 return Response({'detail': 'This email is already verified. Please login.'}, status=status.HTTP_400_BAD_REQUEST)
             if User.objects.filter(username__iexact=username, is_active=True).exists():
-                return Response({'detail': 'An account with this username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+                username = generate_customer_username()
             User.objects.filter(
                 email__iexact=email,
                 role='customer',
@@ -360,8 +360,8 @@ class ForgotPasswordResetView(generics.GenericAPIView):
 
         if not email or len(code) != 4:
             return Response({'detail': 'Enter the 4 digit verification code.'}, status=status.HTTP_400_BAD_REQUEST)
-        if len(password) < 8:
-            return Response({'detail': 'Password must be at least 8 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not password:
+            return Response({'detail': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
         if password != confirm_password:
             return Response({'detail': 'Passwords do not match.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -812,11 +812,8 @@ class UserViewSet(viewsets.ModelViewSet):
     def reset_password(self, request, pk=None):
         user = self.get_object()
         new_password = request.data.get('password')
-        if not new_password or len(new_password) < 8:
-            return Response(
-                {'detail': 'Password must be at least 8 characters.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if not new_password:
+            return Response({'detail': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.save()
         return Response({'detail': 'Password reset successfully.'})

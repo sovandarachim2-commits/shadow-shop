@@ -48,7 +48,7 @@ export default function OrderSuccessModal({
         <button
           type="button"
           onClick={onTrack}
-          className={`${secondaryLabel && onSecondary ? 'mt-3' : 'mt-8'} w-full rounded-full bg-gray-950 py-4 text-sm font-bold text-white transition active:scale-[0.98]`}
+          className={`${secondaryLabel && onSecondary ? 'mt-3' : 'mt-8'} shop-btn-primary h-12 w-full rounded-xl px-5 py-0 text-sm shadow-lg shadow-pink-100 active:scale-[0.98]`}
         >
           {trackLabel || t('orders.trackYourOrder')}
         </button>

@@ -86,6 +86,7 @@ const navItems = [
     children: [
       { label: 'Overview', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
       { label: 'Rewards', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
+      { label: 'Promo Codes', path: '/admin/rewards/coupons', icon: Percent, module: 'rewards' },
       { label: 'Redeem Requests', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards' },
       { label: 'Earning & Tiers', path: '/admin/rewards/settings', icon: Sliders, module: 'rewards' },
       { label: 'Point Transactions', path: '/admin/rewards/transactions', icon: Activity, module: 'rewards' },

@@ -157,6 +157,7 @@ function SetForm({ set, onSave, onClose, saving }) {
               <p className="mt-2 text-xs font-semibold text-gray-400">
                 PNG, JPG, WEBP. This image appears on Lucky Box and set cards.
               </p>
+              <p className="mt-1 text-xs font-semibold text-purple-500">Recommended size: 1200 x 1200 px</p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -469,6 +470,7 @@ function SetImageManagerModal({ productSet, onClose }) {
               {uploading ? 'Uploading...' : 'Click to upload more images'}
             </p>
             <p className="text-xs text-gray-400">PNG, JPG, WEBP - Multiple files supported</p>
+            <p className="text-xs font-semibold text-purple-500">Recommended size: 1200 x 1200 px</p>
             <input ref={fileRef} type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} />
           </div>
         </div>

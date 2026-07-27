@@ -29,6 +29,52 @@ const PROVINCE_LABELS = CAMBODIA_PROVINCE_LABELS
 const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
 const ONLINE_PAYMENT_METHODS = ['bakong', 'aba']
 
+function getCheckoutImageUrl(product) {
+  return product?.primary_image || product?.image_url || product?.image || ''
+}
+
+function getCardImageUrl(url) {
+  if (!url || url.includes('__card.webp')) return url
+
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const fileName = parsed.pathname.split('/').pop()
+    if (!fileName || !fileName.includes('.')) return url
+    parsed.pathname = parsed.pathname.replace(/([^/]+)\.[^/.]+$/, '$1__card.webp')
+    return parsed.href
+  } catch {
+    return url.replace(/([^/]+)\.[^/.?#]+(\?.*)?$/, '$1__card.webp$2')
+  }
+}
+
+function CheckoutItemImage({ product, className = 'h-14 w-14 rounded-2xl', priority = false }) {
+  const originalUrl = getCheckoutImageUrl(product)
+  const cardUrl = getCardImageUrl(originalUrl)
+  const [src, setSrc] = useState(cardUrl)
+
+  useEffect(() => {
+    setSrc(cardUrl)
+  }, [cardUrl])
+
+  if (!originalUrl) {
+    return <ProductThumb product={product} size="sm" className={className} />
+  }
+
+  return (
+    <img
+      src={src}
+      alt={product.name}
+      className="h-full w-full object-cover"
+      loading={priority ? 'eager' : 'lazy'}
+      decoding="async"
+      fetchPriority={priority ? 'high' : 'auto'}
+      onError={() => {
+        if (src !== originalUrl) setSrc(originalUrl)
+      }}
+    />
+  )
+}
+
 function mapProvince(text) {
   return toProvinceKey(text)
 }
@@ -408,7 +454,7 @@ export default function Checkout() {
 
     if (!hasAddress) {
       toast.error(t('checkout.addAddressFirst'))
-      navigate('/address-book')
+      navigate('/address-book', { state: { from: '/cart' } })
       return
     }
 
@@ -534,7 +580,7 @@ export default function Checkout() {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-950">{t('checkout.deliveryAddress')}</h2>
               <button
-                onClick={() => navigate('/address-book')}
+                onClick={() => navigate('/address-book', { state: { from: '/checkout' } })}
                 className="text-sm font-bold text-pink-600"
               >
                 {t('checkout.change')}
@@ -560,7 +606,7 @@ export default function Checkout() {
               <div className="mt-4 rounded-2xl border border-dashed border-gray-200 p-6 text-center">
                 <p className="text-sm font-semibold text-gray-600">{t('checkout.noAddress')}</p>
                 <button
-                  onClick={() => navigate('/address-book')}
+                  onClick={() => navigate('/address-book', { state: { from: '/cart' } })}
                   className="mt-4 rounded-full bg-pink-600 px-6 py-2.5 text-sm font-bold text-white"
                 >
                   {t('checkout.addAddress')}
@@ -607,18 +653,10 @@ export default function Checkout() {
           <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-card lg:hidden">
             <h2 className="text-sm font-bold text-gray-950">{t('checkout.orderItems')}</h2>
             <div className="mt-4 space-y-3">
-              {checkoutItems.map((item) => (
+              {checkoutItems.map((item, index) => (
                 <div key={getCartKey(item)} className="flex items-center gap-3 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
                   <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
-                    {(item.product.primary_image || item.product.image_url || item.product.image) ? (
-                      <img
-                        src={item.product.primary_image || item.product.image_url || item.product.image}
-                        alt={item.product.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <ProductThumb product={item.product} size="sm" className="h-14 w-14 rounded-2xl" />
-                    )}
+                    <CheckoutItemImage product={item.product} priority={index < 2} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-gray-950">{item.product.name}</p>
@@ -634,18 +672,10 @@ export default function Checkout() {
         <aside className="h-fit rounded-3xl border border-pink-100 bg-gradient-to-br from-white to-pink-50 p-5 shadow-soft lg:sticky lg:top-36">
           <h2 className="text-lg font-black text-gray-950">{t('checkout.orderSummary')}</h2>
           <div className="mt-4 hidden space-y-3 lg:block">
-            {checkoutItems.map((item) => (
+            {checkoutItems.map((item, index) => (
               <div key={getCartKey(item)} className="flex items-center gap-3">
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
-                  {(item.product.primary_image || item.product.image_url || item.product.image) ? (
-                    <img
-                      src={item.product.primary_image || item.product.image_url || item.product.image}
-                      alt={item.product.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <ProductThumb product={item.product} size="sm" className="h-14 w-14 rounded-2xl" />
-                  )}
+                  <CheckoutItemImage product={item.product} priority={index < 2} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-gray-950">{item.product.name}</p>

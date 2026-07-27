@@ -5,6 +5,7 @@ from .models import (
     RewardItem, RewardRedemption, RewardSettings, PointTransaction,
 )
 from apps.products.models import Product, ProductSet
+from utils.image_optimization import card_variant_url
 from utils.phone import validate_cambodia_phone
 from utils.payment_methods import is_payment_method_allowed
 
@@ -15,9 +16,7 @@ def resolve_product_image_url(product, request=None):
     images = list(product.images.all())
     img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
     if img and img.image:
-        if request and hasattr(request, 'build_absolute_uri'):
-            return request.build_absolute_uri(img.image.url)
-        return img.image.url
+        return card_variant_url(img.image, request)
     return ''
 
 
@@ -27,13 +26,9 @@ def resolve_product_set_image_url(product_set, request=None):
     images = list(product_set.images.all())
     img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
     if img and img.image:
-        if request and hasattr(request, 'build_absolute_uri'):
-            return request.build_absolute_uri(img.image.url)
-        return img.image.url
+        return card_variant_url(img.image, request)
     if product_set.image:
-        if request and hasattr(request, 'build_absolute_uri'):
-            return request.build_absolute_uri(product_set.image.url)
-        return product_set.image.url
+        return card_variant_url(product_set.image, request)
     return ''
 
 
@@ -778,6 +773,10 @@ class RewardItemSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             return request.build_absolute_uri(obj.reward_image.url) if request else obj.reward_image.url
         return None
+
+    def create(self, validated_data):
+        validated_data.pop('clear_reward_image', None)
+        return super().create(validated_data)
 
     def update(self, instance, validated_data):
         clear_reward_image = validated_data.pop('clear_reward_image', False)

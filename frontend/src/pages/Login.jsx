@@ -263,10 +263,6 @@ function validateRegisterForm(form, t) {
   if (!email) errors.email = t('auth.validationEmailRequired')
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = t('auth.validationEmailInvalid')
   if (!form.password) errors.password = t('auth.validationPasswordRequired')
-  else if (form.password.length < 8) errors.password = t('auth.validationPasswordLength')
-  else if (!/[A-Z]/.test(form.password)) errors.password = t('auth.validationPasswordUpper')
-  else if (!/[a-z]/.test(form.password)) errors.password = t('auth.validationPasswordLower')
-  else if (!/\d/.test(form.password)) errors.password = t('auth.validationPasswordNumber')
   if (!form.confirm_password) errors.confirm_password = t('auth.validationConfirmRequired')
   else if (form.password !== form.confirm_password) errors.confirm_password = t('auth.validationPasswordMismatch')
   if (!form.terms) errors.terms = t('auth.validationTermsRequired')
@@ -528,7 +524,7 @@ export default function Login() {
     const [firstName, ...rest] = full_name.trim().split(/\s+/)
     setLoading(true)
     try {
-      await register({ username: cleanEmail, email: cleanEmail, phone: '', first_name: firstName || '', last_name: rest.join(' '), password, confirm_password })
+      await register({ email: cleanEmail, phone: '', first_name: firstName || '', last_name: rest.join(' '), password, confirm_password })
       toast.success(t('auth.verificationCodeSent'))
       navigate('/verify-email', { state: { email: cleanEmail, from: location.state?.from || '/' } })
     } catch (err) {
@@ -642,11 +638,11 @@ export default function Login() {
 
                   <div className="space-y-4">
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.email')}</label>
+                      <label className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.emailOrUsername')}</label>
                       <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
                         <Mail size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
                         <input type="text" value={lf.username} onChange={(e) => sl('username', e.target.value)}
-                          placeholder={t('auth.emailPlaceholder')}
+                          placeholder={t('auth.emailOrUsernamePlaceholder')}
                           className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
                       </div>
                     </div>

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Sum
 from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from utils.image_optimization import card_variant_url
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -124,10 +125,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         images = list(obj.images.all())
         img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
         if img and img.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(img.image.url)
-            return img.image.url
+            return card_variant_url(img.image, self.context.get('request'))
         return None
 
     def get_current_stock(self, obj):
@@ -305,8 +303,7 @@ class ProductSetSerializer(serializers.ModelSerializer):
         images = list(obj.images.all())
         img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
         if img and img.image:
-            request = self.context.get('request')
-            return request.build_absolute_uri(img.image.url) if request else img.image.url
+            return card_variant_url(img.image, self.context.get('request'))
         if obj.image:
             request = self.context.get('request')
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url

@@ -1,12 +1,13 @@
 ﻿import { useMemo, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal } from 'lucide-react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal, Clock3 } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import { cn, formatCurrency } from '@/utils/helpers'
+import { getFlashSaleTimerState, hasFlashSaleTimer } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
@@ -30,15 +31,13 @@ function FilterSelect({ children, ...props }) {
 function ProductCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
-      <div className="h-44 animate-pulse bg-gray-100" />
-      <div className="p-3 space-y-2">
+      <div className="aspect-square animate-pulse bg-gray-100" />
+      <div className="space-y-2 p-3">
         <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
-        <div className="mt-3 flex items-center justify-between">
-          <div className="h-5 w-16 animate-pulse rounded bg-gray-100" />
-          <div className="h-8 w-20 animate-pulse rounded-xl bg-gray-100" />
-        </div>
+        <div className="h-5 w-16 animate-pulse rounded bg-gray-100" />
+        <div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" />
       </div>
     </div>
   )
@@ -60,7 +59,54 @@ function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
 
-function ProductCard({ product, priority = false }) {
+function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addLabel, addToCartLabel, soldOutLabel }) {
+  if (!available) {
+    return (
+      <span className="flex h-[42px] w-full items-center justify-center rounded-xl bg-gray-100 text-[13px] font-semibold text-gray-400 sm:h-12 sm:text-sm">
+        {soldOutLabel}
+      </span>
+    )
+  }
+
+  if (qty === 0) {
+    return (
+      <button
+        onClick={onAdd}
+        className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold leading-none text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:px-4 sm:text-sm"
+      >
+        <ShoppingCart size={17} />
+        <span className="sm:hidden">{addLabel}</span>
+        <span className="hidden sm:inline">{addToCartLabel}</span>
+      </button>
+    )
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
+      <button onClick={onDecrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+        {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
+      </button>
+      <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
+      <button onClick={onIncrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+        <Plus size={16} />
+      </button>
+    </div>
+  )
+}
+
+function FlashSaleTimer({ item, nowMs }) {
+  const timer = getFlashSaleTimerState(item, nowMs)
+  if (!timer?.value) return null
+
+  return (
+    <div className="mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 text-[11px] font-black leading-none text-pink-600">
+      <Clock3 size={12} />
+      <span>{timer.label} {timer.value}</span>
+    </div>
+  )
+}
+
+function ProductCard({ product, priority = false, nowMs }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
   const { toggle, isWishlisted } = useWishlistStore()
@@ -126,7 +172,7 @@ function ProductCard({ product, priority = false }) {
           -{discountPct}%
         </span>
       )}
-      <div className="relative h-44 overflow-hidden bg-white">
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
           <>
             {!imageLoaded && showImageLoader && <ProductImageLoading />}
@@ -134,22 +180,20 @@ function ProductCard({ product, priority = false }) {
               src={product.primary_image}
               alt={product.name}
               loading={priority ? 'eager' : 'lazy'}
-              fetchpriority={priority ? 'high' : 'auto'}
+              fetchPriority={priority ? 'high' : 'auto'}
               decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className={`absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
             />
           </>
         ) : (
           <ProductImageFallback />
         )}
       </div>
-      <div className="p-3">
+      <div className="flex min-h-[166px] flex-col p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
-          <span className="shrink-0 text-gray-300">/</span>
-          <span className="truncate">{product.category_name || t('product.cosmetics')}</span>
         </div>
         <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{product.name}</h3>
         <div className="mt-2 flex items-center gap-1">
@@ -157,36 +201,29 @@ function ProductCard({ product, priority = false }) {
           <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
           <span className="text-xs text-gray-300">(126)</span>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(product.display_price || product.retail_price)}</span>
-            {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
-          </div>
-          {!available ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
-          ) : qty === 0 ? (
-            <button onClick={handleAdd} className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4">
-              <span className="md:hidden">{t('common.add')}</span>
-              <span className="hidden md:inline">{t('common.addToCart')}</span>
-            </button>
-          ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
-              <button onClick={handleDecrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
-              </button>
-              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
-              <button onClick={handleIncrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                <Plus size={12} />
-              </button>
-            </div>
-          )}
+        <div className="mt-3 min-w-0">
+          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
+          {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
+        </div>
+        <FlashSaleTimer item={product} nowMs={nowMs} />
+        <div className="mt-auto pt-3">
+          <ProductCardButton
+            available={available}
+            qty={qty}
+            onAdd={handleAdd}
+            onIncrease={handleIncrease}
+            onDecrease={handleDecrease}
+            addLabel={t('common.add')}
+            addToCartLabel={t('common.addToCart')}
+            soldOutLabel={t('common.soldOut')}
+          />
         </div>
       </div>
     </article>
   )
 }
 
-function ProductSetCard({ productSet }) {
+function ProductSetCard({ productSet, nowMs, priority = false }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
@@ -229,18 +266,19 @@ function ProductSetCard({ productSet }) {
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
       onClick={() => navigate(`/product-set/${productSet.id}`)}
     >
-      <div className="relative h-44 overflow-hidden bg-white">
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
         {imageUrl && !imageFailed ? (
           <>
             {!imageLoaded && showImageLoader && <ProductImageLoading />}
             <img
               src={imageUrl}
               alt={productSet.name}
-              loading="lazy"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
               decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className={`absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
             />
           </>
         ) : (
@@ -250,11 +288,9 @@ function ProductSetCard({ productSet }) {
           {t('product.productSetBadge')}
         </span>
       </div>
-      <div className="p-3">
+      <div className="flex min-h-[166px] flex-col p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{t('product.productSet')}</span>
-          <span className="shrink-0 text-gray-300">/</span>
-          <span className="truncate">{t('product.itemsInside', { count: productSet.items?.length || 0 })}</span>
         </div>
         <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
         <div className="mt-2 flex items-center gap-1">
@@ -263,36 +299,32 @@ function ProductSetCard({ productSet }) {
             {setStock > 0 ? t('common.inStock') : t('common.soldOut')}
           </span>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(price)}</span>
-            {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-          </div>
-          {setStock <= 0 ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3.5 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
-          ) : qty === 0 ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                addItem(cartProduct, 1)
-                showCartAddedToast(cartProduct, navigate)
-              }}
-              className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 sm:px-4"
-            >
-              {t('common.add')}
-            </button>
-          ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
-              <button onClick={() => updateQuantity(cartProduct.cart_key, qty - 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
-              </button>
-              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
-              <button onClick={() => updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30 disabled:opacity-40" disabled={qty >= setStock}>
-                <Plus size={12} />
-              </button>
-            </div>
-          )}
+        <div className="mt-3 min-w-0">
+          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(price)}</span>
+          {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+        </div>
+        <FlashSaleTimer item={productSet} nowMs={nowMs} />
+        <div className="mt-auto pt-3">
+          <ProductCardButton
+            available={setStock > 0}
+            qty={qty}
+            onAdd={(e) => {
+              e.stopPropagation()
+              addItem(cartProduct, 1)
+              showCartAddedToast(cartProduct, navigate)
+            }}
+            onIncrease={(e) => {
+              e.stopPropagation()
+              updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))
+            }}
+            onDecrease={(e) => {
+              e.stopPropagation()
+              updateQuantity(cartProduct.cart_key, qty - 1)
+            }}
+            addLabel={t('common.add')}
+            addToCartLabel={t('common.addToCart')}
+            soldOutLabel={t('common.soldOut')}
+          />
         </div>
       </div>
     </article>
@@ -305,36 +337,55 @@ export default function ProductList() {
   const navigate = useNavigate()
   const cartItems = useCartStore((s) => s.items)
   const wishlistCount = useWishlistStore((s) => s.items.length)
-  const [search, setSearch] = useState(searchParams.get('search') || '')
-  const [categoryId, setCategoryId] = useState(searchParams.get('category') || '')
-  const [brand, setBrand] = useState(searchParams.get('brand') || '')
+  const activeFilter = searchParams.get('filter') || ''
+  const searchParam = searchParams.get('search') || ''
+  const categoryParam = searchParams.get('category') || ''
+  const brandParam = searchParams.get('brand') || ''
+  const [nowMs, setNowMs] = useState(Date.now())
+  const [search, setSearch] = useState(searchParam)
+  const [categoryId, setCategoryId] = useState(categoryParam)
+  const [brand, setBrand] = useState(brandParam)
   const [sortBy, setSortBy] = useState('-created_at')
   const [page, setPage] = useState(1)
   const [showSearch, setShowSearch] = useState(Boolean(searchParams.get('search')))
   const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
 
+  useEffect(() => {
+    setSearch(searchParam)
+    setCategoryId(categoryParam)
+    setBrand(brandParam)
+    setShowSearch(Boolean(searchParam))
+    setPage(1)
+  }, [activeFilter, brandParam, categoryParam, searchParam])
+
   const { data: categoryData } = useQuery({
     queryKey: ['categories'],
     queryFn: () => productsApi.categories.list({ is_active: true }).then((r) => r.data.results || r.data),
+    staleTime: 10 * 60 * 1000,
   })
 
   const { data: brandData } = useQuery({
     queryKey: ['brands-shop'],
     queryFn: () => productsApi.brands.list({ is_active: true }).then((r) => r.data.results || r.data),
+    staleTime: 10 * 60 * 1000,
   })
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['products-list', search, categoryId, brand, sortBy, page],
+    queryKey: ['products-list', search, categoryId, brand, sortBy, page, activeFilter],
     queryFn: () => productsApi.products.list({
       search: search || undefined,
       category: categoryId || undefined,
       brand: brand || undefined,
+      active_flash_sale: activeFilter === 'flash_sale' ? true : undefined,
+      is_new_arrival: activeFilter === 'new_arrival' ? true : undefined,
+      is_best_seller: activeFilter === 'best_seller' ? true : undefined,
       ordering: sortBy,
       page,
       page_size: 12,
       is_active: true,
     }).then((r) => r.data),
-    staleTime: 30_000,
+    staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   })
 
   const setOrdering = sortBy === 'retail_price'
@@ -345,16 +396,18 @@ export default function ProductList() {
         ? '-created_at'
         : sortBy
 
-  const { data: setData = [], isLoading: setsLoading, isFetching: setsFetching } = useQuery({
-    queryKey: ['shop-product-sets', search, setOrdering],
+  const { data: setData = [], isFetching: setsFetching } = useQuery({
+    queryKey: ['shop-product-sets', search, setOrdering, activeFilter],
     queryFn: () => productsApi.sets.list({
       search: search || undefined,
+      active_flash_sale: activeFilter === 'flash_sale' ? true : undefined,
       ordering: setOrdering,
       page_size: 100,
       is_active: true,
     }).then((r) => r.data.results ?? r.data ?? []),
-    enabled: !categoryId && !brand && page === 1,
-    staleTime: 30_000,
+    enabled: !categoryId && !brand && page === 1 && (!activeFilter || activeFilter === 'flash_sale'),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
   })
 
   const isGridFetching = isFetching || setsFetching
@@ -370,11 +423,18 @@ export default function ProductList() {
   const shopBrands = useMemo(() => brandData || [], [brandData])
 
   const products = data?.results || []
-  const productSets = (!categoryId && !brand && page === 1) ? setData.filter((set) => set.is_active !== false) : []
-  const isGridLoading = isLoading || setsLoading || (isGridFetching && showGridRefetchLoader)
+  const productSets = (!categoryId && !brand && page === 1 && (!activeFilter || activeFilter === 'flash_sale')) ? setData.filter((set) => set.is_active !== false) : []
+  const hasVisibleFlashSaleTimers = products.some(hasFlashSaleTimer) || productSets.some(hasFlashSaleTimer)
+  const isGridLoading = (isLoading && !data) || (isGridFetching && showGridRefetchLoader && products.length === 0 && productSets.length === 0)
   const total = (data?.count || 0) + productSets.length
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
   const isSearchResult = Boolean(searchParams.get('search'))
+
+  useEffect(() => {
+    if (!hasVisibleFlashSaleTimers) return undefined
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasVisibleFlashSaleTimers])
 
   return (
     <div className="min-h-screen bg-white">
@@ -527,13 +587,13 @@ export default function ProductList() {
             </p>
           </div>
 
-          <div className="relative z-0 grid grid-cols-2 justify-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
+          <div className="relative z-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
             {isGridLoading
               ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)
               : (
                 <>
-                  {productSets.map((set) => <ProductSetCard key={`set-${set.id}`} productSet={set} />)}
-                  {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 6} />)}
+                  {productSets.map((set, i) => <ProductSetCard key={`set-${set.id}`} productSet={set} nowMs={nowMs} priority={i < 4} />)}
+                  {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 6} nowMs={nowMs} />)}
                 </>
               )}
           </div>

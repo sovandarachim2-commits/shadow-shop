@@ -3,7 +3,7 @@ import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
 import km from './locales/km.json'
 
-const saved = localStorage.getItem('shadow-shop-lang') || 'en'
+const saved = localStorage.getItem('shadow-shop-lang') || 'km'
 
 i18n
   .use(initReactI18next)

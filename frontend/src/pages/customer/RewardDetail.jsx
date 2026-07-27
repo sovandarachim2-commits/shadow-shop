@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +16,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
+import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { cn, formatDate } from '@/utils/helpers'
 
@@ -42,6 +44,7 @@ export default function RewardDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [redeemedCoupon, setRedeemedCoupon] = useState(null)
   const TYPE_META = getTypeMeta(t)
 
   const { data, isLoading, isError } = useQuery({
@@ -54,8 +57,12 @@ export default function RewardDetail() {
     onSuccess: (nextData) => {
       queryClient.setQueryData(['customer-rewards-summary'], nextData)
       const code = nextData.redemption?.coupon_code
-      toast.success(code ? t('rewardsPage.toast.exchangedWithCode', { code }) : t('rewardsPage.toast.exchanged'))
-      navigate('/profile/rewards')
+      if (code) {
+        setRedeemedCoupon(nextData.redemption)
+      } else {
+        toast.success(t('rewardsPage.toast.exchanged'))
+        navigate('/profile/rewards')
+      }
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || t('rewardsPage.toast.exchangeFailed'))
@@ -100,6 +107,7 @@ export default function RewardDetail() {
 
   return (
     <div className="mx-auto w-full max-w-[760px] bg-white pb-24 md:max-w-[1440px] md:px-6 md:pb-0 md:pt-6">
+      <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
       <div className="mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center gap-2 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />

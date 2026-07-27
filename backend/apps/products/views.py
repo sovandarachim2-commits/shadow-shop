@@ -15,6 +15,7 @@ from .serializers import (
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
 )
 from .flash_sale_stats import attach_flash_sale_stats
+from utils.image_optimization import ensure_card_variant, optimize_uploaded_image
 from utils.permissions import IsAdminOrSuperAdmin, IsStaff
 from utils.storefront_cache import (
     HOME_FEED_CACHE_KEY,
@@ -201,10 +202,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         for i, image in enumerate(images):
             img = ProductImage.objects.create(
                 product=product,
-                image=image,
+                image=optimize_uploaded_image(image),
                 is_primary=(is_primary and i == 0),
                 order=product.images.count() + i,
             )
+            ensure_card_variant(img.image)
             created.append(ProductImageSerializer(img, context={'request': request}).data)
         return Response(created, status=status.HTTP_201_CREATED)
 
@@ -315,10 +317,11 @@ class ProductSetViewSet(viewsets.ModelViewSet):
         for i, image in enumerate(images):
             img = ProductSetImage.objects.create(
                 product_set=product_set,
-                image=image,
+                image=optimize_uploaded_image(image),
                 is_primary=(is_primary and i == 0),
                 order=product_set.images.count() + i,
             )
+            ensure_card_variant(img.image)
             created.append(ProductSetImageSerializer(img, context={'request': request}).data)
         return Response(created, status=status.HTTP_201_CREATED)
 

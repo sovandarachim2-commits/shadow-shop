@@ -82,7 +82,7 @@ function RelatedProductCard({ product, priority = false }) {
               decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className={`absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
             />
           </>
         ) : (

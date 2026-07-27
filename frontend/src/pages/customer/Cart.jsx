@@ -74,7 +74,7 @@ export default function Cart() {
     if (selectedCount <= 0) return
     if (!isAuthenticated) {
       toast.error(t('cart.loginBeforeCheckout'))
-      navigate('/login', { state: { from: '/checkout' } })
+      navigate('/login', { state: { from: '/cart' } })
       return
     }
     startTransition(() => navigate('/checkout'))

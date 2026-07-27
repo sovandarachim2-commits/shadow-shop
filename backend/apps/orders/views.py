@@ -26,10 +26,18 @@ from .rewards import (
 from utils.permissions import HasModulePermission, IsStaff, IsSeller, IsCashier, user_has_module_permission
 from utils.pagination import StandardPagination
 
+DAILY_CHECKIN_NOTE = 'Daily check-in bonus'
+
 
 class OrderPagination(StandardPagination):
     page_size = 100
     max_page_size = 1000
+
+
+def today_local_bounds():
+    local_now = timezone.localtime(timezone.now())
+    start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start, start + timedelta(days=1)
 
 
 def get_order_print_stock_issues(order):
@@ -647,6 +655,7 @@ class RewardsViewSet(viewsets.ViewSet):
         reward_settings = RewardSettings.get_solo()
         next_tier_points = get_next_tier_points(current_points)
         progress_pct = 100 if next_tier_points <= current_points else round((current_points / next_tier_points) * 100)
+        today_start, tomorrow_start = today_local_bounds()
         items = RewardItem.objects.filter(is_active=True).select_related('gift_product').prefetch_related('gift_product__images').order_by('points_required', 'name')
         redemptions = RewardRedemption.objects.filter(user=request.user).select_related('reward_item', 'reward_item__gift_product').prefetch_related('reward_item__gift_product__images')[:20]
         transactions = PointTransaction.objects.filter(user=request.user).select_related('order')[:20]
@@ -669,8 +678,9 @@ class RewardsViewSet(viewsets.ViewSet):
             'checked_in_today': PointTransaction.objects.filter(
                 user=request.user,
                 type=PointTransaction.TYPE_EARN,
-                note='Daily check-in bonus',
-                created_at__date=timezone.localdate(),
+                note=DAILY_CHECKIN_NOTE,
+                created_at__gte=today_start,
+                created_at__lt=tomorrow_start,
             ).exists(),
         }
 
@@ -728,11 +738,13 @@ class RewardsViewSet(viewsets.ViewSet):
                     {'detail': 'Daily check-in rewards are not enabled yet.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            today_start, tomorrow_start = today_local_bounds()
             if PointTransaction.objects.filter(
                 user=request.user,
                 type=PointTransaction.TYPE_EARN,
-                note='Daily check-in bonus',
-                created_at__date=timezone.localdate(),
+                note=DAILY_CHECKIN_NOTE,
+                created_at__gte=today_start,
+                created_at__lt=tomorrow_start,
             ).exists():
                 return Response(
                     {'detail': 'You already checked in today.'},
@@ -742,7 +754,7 @@ class RewardsViewSet(viewsets.ViewSet):
                 user=request.user,
                 points=bonus,
                 type=PointTransaction.TYPE_EARN,
-                note='Daily check-in bonus',
+                note=DAILY_CHECKIN_NOTE,
             )
         return Response(self._summary(request))
 

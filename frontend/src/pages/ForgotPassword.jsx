@@ -122,8 +122,8 @@ export default function ForgotPassword() {
 
   const resetPassword = async (event) => {
     event.preventDefault()
-    if (password.length < 8) {
-      setNotice({ type: 'error', message: t('auth.validationPasswordLength') })
+    if (!password) {
+      setNotice({ type: 'error', message: t('auth.validationPasswordRequired') })
       return
     }
     if (password !== confirmPassword) {

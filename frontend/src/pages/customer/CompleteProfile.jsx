@@ -110,7 +110,7 @@ export default function CompleteProfile() {
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.phone?.[0] || body?.first_name?.[0] || body?.gender?.[0] || body?.detail || t('completeProfile.completeFailed')
+      const message = body?.email?.[0] || body?.phone?.[0] || body?.first_name?.[0] || body?.gender?.[0] || body?.detail || t('completeProfile.completeFailed')
       toast.error(message)
     },
   })
@@ -133,6 +133,7 @@ export default function CompleteProfile() {
     event.preventDefault()
     const cleanName = form.full_name.trim()
     const cleanPhone = normalizeCambodiaPhone(form.phone)
+    const cleanEmail = form.email.trim().toLowerCase()
     const nextErrors = {}
 
     if (!cleanName || ['google', 'telegram'].includes(cleanName.toLowerCase())) {
@@ -141,6 +142,9 @@ export default function CompleteProfile() {
     if (!cleanPhone) nextErrors.phone = t('completeProfile.enterPhone')
     else if (!isValidCambodiaPhone(cleanPhone)) nextErrors.phone = t('common.invalidPhone')
     if (!form.gender) nextErrors.gender = t('completeProfile.selectGenderError')
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      nextErrors.email = t('profile.enterValidEmail')
+    }
 
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
@@ -153,6 +157,7 @@ export default function CompleteProfile() {
       last_name: lastParts.join(' '),
       phone: cleanPhone,
       gender: form.gender,
+      email: cleanEmail,
     }
 
     if (avatarFile) {
@@ -169,7 +174,7 @@ export default function CompleteProfile() {
   const handlePasswordSubmit = (event) => {
     event.preventDefault()
     const nextErrors = {}
-    if (!form.password || form.password.length < 8) nextErrors.password = t('completeProfile.passwordMin')
+    if (!form.password) nextErrors.password = t('completeProfile.passwordMin')
     if (form.password !== form.confirm_password) nextErrors.confirm_password = t('completeProfile.passwordMismatch')
 
     if (Object.keys(nextErrors).length) {
@@ -387,6 +392,7 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           value={`@${username || 'user'}`}
           onChange={() => {}}
           disabled
+          helper={t('completeProfile.usernameEditLater')}
         />
 
         <CompleteProfileField
@@ -400,7 +406,7 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           autoComplete="tel"
         />
 
-        <GenderField value={form.gender} onChange={(value) => set('gender', value)} error={errors.gender} t={t} />
+        <GenderField value={form.gender} onChange={(value) => set('gender', value)} error={errors.gender} t={t} requiredHint={!form.gender} />
 
         <CompleteProfileField
           label={t('profile.emailAddress')}
@@ -409,8 +415,9 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           placeholder={t('auth.emailExample')}
           value={form.email}
           onChange={(value) => set('email', value)}
+          error={errors.email}
           autoComplete="email"
-          disabled
+          disabled={Boolean(user?.email)}
         />
       </div>
 
@@ -492,17 +499,21 @@ function AvatarPicker({ avatarPreview, initials, fileInputRef, onAvatarChange })
   )
 }
 
-function CompleteProfileField({ label, required, optional, icon: Icon, placeholder, value, onChange, error, autoComplete, prefix, disabled }) {
+function CompleteProfileField({ label, required, optional, icon: Icon, placeholder, value, onChange, error, autoComplete, prefix, disabled, helper }) {
+  const needsValue = required && !String(value || '').trim()
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6B7280]">
-        {label} {required && <span className="text-[#EC4D97]">*</span>}
-        {optional && <span className="font-bold normal-case tracking-normal text-[#9CA3AF]"> (Optional)</span>}
+      <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-wide text-[#6B7280]">
+        <span>
+          {label} {required && <span className="text-[#EC4D97]">*</span>}
+          {optional && <span className="font-bold normal-case tracking-normal text-[#9CA3AF]"> (Optional)</span>}
+        </span>
+        {needsValue && <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] text-[#EC4D97]">{t('completeProfile.required')}</span>}
       </span>
       <div className={cn(
-        'flex min-h-[48px] items-center border-b border-gray-200 bg-white transition-colors focus-within:border-[#EC4D97]',
-        error && 'border-[#EC4D97] focus-within:border-[#EC4D97]',
-        disabled && 'text-[#6B7280]'
+        'flex min-h-[54px] items-center rounded-2xl border bg-white px-3 shadow-sm transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-pink-100',
+        error ? 'border-[#EC4D97] bg-pink-50/30' : needsValue ? 'border-pink-200 bg-pink-50/20' : 'border-gray-200',
+        disabled && 'bg-gray-50 text-[#6B7280] shadow-none'
       )}>
         <span className="grid h-12 w-8 shrink-0 place-items-center text-[#EC4D97]">
           <Icon size={18} strokeWidth={2.1} />
@@ -522,20 +533,27 @@ function CompleteProfileField({ label, required, optional, icon: Icon, placehold
           className="min-w-0 flex-1 bg-transparent px-2 text-sm font-bold text-[#1A1A1A] outline-none placeholder:text-slate-400 disabled:text-[#6B7280]"
         />
       </div>
-      {error && <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>}
+      {error ? (
+        <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>
+      ) : helper ? (
+        <p className="mt-1.5 text-xs font-semibold text-slate-400">{helper}</p>
+      ) : needsValue ? (
+        <p className="mt-1.5 text-xs font-semibold text-[#EC4D97]">{t('completeProfile.fillThisField')}</p>
+      ) : null}
     </label>
   )
 }
 
-function GenderField({ value, onChange, error, t }) {
+function GenderField({ value, onChange, error, t, requiredHint = false }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#6B7280]">
-        {t('completeProfile.gender')} <span className="text-[#EC4D97]">*</span>
+      <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-wide text-[#6B7280]">
+        <span>{t('completeProfile.gender')} <span className="text-[#EC4D97]">*</span></span>
+        {requiredHint && <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] text-[#EC4D97]">{t('completeProfile.required')}</span>}
       </span>
       <div className={cn(
-        'relative flex min-h-[48px] items-center border-b border-gray-200 bg-white transition-colors focus-within:border-[#EC4D97]',
-        error && 'border-[#EC4D97] focus-within:border-[#EC4D97]'
+        'relative flex min-h-[54px] items-center rounded-2xl border bg-white px-3 shadow-sm transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-pink-100',
+        error ? 'border-[#EC4D97] bg-pink-50/30' : requiredHint ? 'border-pink-200 bg-pink-50/20' : 'border-gray-200'
       )}>
         <span className="grid h-12 w-8 shrink-0 place-items-center text-[#EC4D97]">
           <UsersRound size={18} strokeWidth={2.1} />
@@ -554,7 +572,11 @@ function GenderField({ value, onChange, error, t }) {
         </select>
         <ChevronDown size={18} className="pointer-events-none absolute right-1 text-[#6B7280]" />
       </div>
-      {error && <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>}
+      {error ? (
+        <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{error}</p>
+      ) : requiredHint ? (
+        <p className="mt-1.5 text-xs font-semibold text-[#EC4D97]">{t('completeProfile.chooseGenderHint')}</p>
+      ) : null}
     </label>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -688,9 +688,11 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
 export default function AddressBook() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const defaultContact = useMemo(() => getUserContactDefaults(user), [user])
+  const returnTo = ['/cart', '/checkout'].includes(location.state?.from) ? location.state.from : ''
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirm, ConfirmDialog] = useConfirm()
@@ -708,6 +710,7 @@ export default function AddressBook() {
       toast.success(editing ? t('addressBook.toast.updated') : t('addressBook.toast.saved'))
       setShowForm(false)
       setEditing(null)
+      if (returnTo) navigate(returnTo, { replace: true })
     },
     onError: (error) => {
       const phoneError = error?.response?.data?.phone?.[0]
@@ -785,7 +788,7 @@ export default function AddressBook() {
 
       {/* Header */}
       <div className="grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center gap-3 border-b border-gray-100 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-        <button onClick={() => navigate('/profile')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+        <button onClick={() => navigate(returnTo || '/profile')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={22} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('addressBook.title')}</h1>

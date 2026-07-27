@@ -103,6 +103,7 @@ const Expenses = lazyWithReload(() => import('@/pages/admin/finance/Expenses'))
 const ProfitReport = lazyWithReload(() => import('@/pages/admin/finance/ProfitReport'))
 const RewardDashboardAdmin = lazyWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'))
 const RewardItemsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardItemsAdmin')
+const RewardCouponsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardCouponsAdmin')
 const RewardPointsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardPointsAdmin')
 const RewardRedemptionsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardRedemptionsAdmin')
 const RewardSettingsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardSettingsAdmin')
@@ -136,7 +137,6 @@ const RedeemRewards = lazyWithReload(() => import('@/pages/customer/RedeemReward
 const MyCoupons = lazyWithReload(() => import('@/pages/customer/MyCoupons'))
 const RewardDetail = lazyWithReload(() => import('@/pages/customer/RewardDetail'))
 const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
-const FlashSale = lazyWithReload(() => import('@/pages/customer/FlashSale'))
 const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
 
 const QUERY_CACHE_KEY = 'shadow-shop-query-cache'
@@ -460,7 +460,6 @@ export default function App() {
             <Route path="search" element={<LazyPage><SearchPage /></LazyPage>} />
             <Route path="shop" element={<LazyPage><ProductList /></LazyPage>} />
             <Route path="lucky-box" element={<LazyPage><LuckyBox /></LazyPage>} />
-            <Route path="flash-sale" element={<LazyPage><FlashSale /></LazyPage>} />
             <Route path="product/:id" element={<LazyPage><ProductDetail /></LazyPage>} />
             <Route path="product-set/:id" element={<LazyPage><ProductSetDetail /></LazyPage>} />
             <Route path="cart" element={<LazyPage><Cart /></LazyPage>} />
@@ -612,7 +611,7 @@ export default function App() {
             <Route path="rewards/products" element={<LazyPage><RewardItemsAdmin /></LazyPage>} />
             <Route path="rewards/exchanges" element={<LazyPage><RewardRedemptionsAdmin /></LazyPage>} />
             <Route path="rewards/tiers" element={<Navigate to="/admin/rewards/settings" replace />} />
-            <Route path="rewards/coupons" element={<Navigate to="/admin/rewards/products" replace />} />
+            <Route path="rewards/coupons" element={<LazyPage><RewardCouponsAdmin /></LazyPage>} />
             <Route path="rewards/campaigns" element={<Navigate to="/admin/rewards/settings" replace />} />
             <Route path="rewards/categories" element={<Navigate to="/admin/rewards/products" replace />} />
             <Route path="rewards/settings" element={<LazyPage><RewardSettingsAdmin /></LazyPage>} />

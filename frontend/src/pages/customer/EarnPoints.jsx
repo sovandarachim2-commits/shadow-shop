@@ -8,7 +8,7 @@ import {
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 
-function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, disabled }) {
+function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, disabled, completed = false }) {
   return (
     <div className="flex min-h-[82px] items-center gap-3 border-b border-gray-100 px-3 py-3 last:border-b-0">
       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-pink-50 text-pink-600">
@@ -20,7 +20,16 @@ function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, 
         {reward && <span className="mt-1.5 inline-flex rounded-md bg-pink-50 px-2 py-1 text-[10px] font-black text-pink-600">{reward}</span>}
       </div>
       {actionLabel ? (
-        <button type="button" onClick={action} disabled={disabled} className="min-w-[76px] rounded-lg border border-pink-500 px-3 py-2 text-xs font-black text-pink-600 disabled:border-gray-200 disabled:text-gray-400">
+        <button
+          type="button"
+          onClick={action}
+          disabled={disabled}
+          className={`min-w-[76px] rounded-lg border px-3 py-2 text-xs font-black transition ${
+            completed
+              ? 'border-gray-200 bg-gray-100 text-gray-500'
+              : 'border-pink-500 text-pink-600 disabled:border-gray-200 disabled:text-gray-400'
+          }`}
+        >
           {actionLabel}
         </button>
       ) : (
@@ -137,8 +146,9 @@ export default function EarnPoints() {
             description={data?.checked_in_today ? t('rewardsPage.earn.checkedInToday') : t('rewardsPage.earn.checkInOnce')}
             reward={dailyEnabled ? t('rewardsPage.pointsReward', { count: rules.daily_checkin_bonus }) : t('rewardsPage.comingSoon')}
             action={() => checkinMutation.mutate()}
-            actionLabel={checkinMutation.isPending ? t('rewardsPage.earn.wait') : data?.checked_in_today ? t('rewardsPage.earn.done') : t('rewardsPage.earn.checkIn')}
+            actionLabel={!dailyEnabled ? t('rewardsPage.comingSoon') : checkinMutation.isPending ? t('rewardsPage.earn.wait') : data?.checked_in_today ? t('rewardsPage.earn.done') : t('rewardsPage.earn.checkIn')}
             disabled={!dailyEnabled || data?.checked_in_today || checkinMutation.isPending}
+            completed={dailyEnabled && data?.checked_in_today}
           />
           <EarnRow
             icon={Cake}

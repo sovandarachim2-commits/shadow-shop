@@ -515,7 +515,7 @@ export default function MyOrders() {
                         <p className="text-sm font-black text-gray-950">{formatCurrency(getItemPrice(order, item))}</p>
                         <button
                           onClick={() => navigate(`/my-orders/${order.id}`)}
-                          className="rounded-md bg-gray-950 px-5 py-2 text-[11px] font-black text-white active:scale-95"
+                          className="inline-flex h-9 items-center justify-center rounded-lg bg-pink-600 px-4 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-95"
                         >
                           {t('orders.trackOrder')}
                         </button>

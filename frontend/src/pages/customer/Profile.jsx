@@ -7,7 +7,7 @@ import {
   Package, Heart, CheckCircle2, Pencil, Lock, Loader2, Truck, ShoppingBag,
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
-  Home, Headphones, Eye, EyeOff,
+  Home, Headphones, Eye, EyeOff, Clock,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -112,6 +112,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   const [errors, setErrors] = useState({})
   const [form, setForm] = useState({
     full_name: [user.first_name, user.last_name].filter(Boolean).join(' '),
+    username: user.username || '',
     email: user.email || '',
     phone: normalizeCambodiaPhone(user.phone),
     gender: user.gender || '',
@@ -148,7 +149,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.email?.[0] || body?.phone?.[0] || body?.gender?.[0] || body?.detail || t('profile.updateProfileFailed')
+      const message = body?.username?.[0] || body?.email?.[0] || body?.phone?.[0] || body?.gender?.[0] || body?.detail || t('profile.updateProfileFailed')
       toast.error(message)
     },
   })
@@ -162,11 +163,15 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     e.preventDefault()
     const nextErrors = {}
     const cleanName = form.full_name.trim()
-    const cleanEmail = form.email.trim()
+    const cleanUsername = form.username.trim().replace(/^@+/, '').toLowerCase()
+    const cleanEmail = form.email.trim().toLowerCase()
     const cleanPhone = normalizeCambodiaPhone(form.phone)
 
     if (!cleanName) nextErrors.full_name = t('profile.enterFullName')
-    if (!cleanEmail) nextErrors.email = t('profile.enterEmail')
+    if (!cleanUsername) nextErrors.username = 'Enter username'
+    if (cleanUsername && !/^[a-z0-9._]{3,24}$/.test(cleanUsername)) {
+      nextErrors.username = 'Use 3-24 letters, numbers, dot, or underscore'
+    }
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       nextErrors.email = t('profile.enterValidEmail')
     }
@@ -181,6 +186,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
 
     const [firstName, ...lastParts] = form.full_name.trim().split(/\s+/)
     const payload = {
+      username: cleanUsername,
       email: cleanEmail,
       phone: cleanPhone,
       gender: form.gender,
@@ -201,11 +207,11 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   const content = (
       <form
         onSubmit={handleSubmit}
-        className={cn('flex flex-col bg-white', asPage ? 'min-h-screen' : 'max-h-[94vh]')}
+        className={cn('flex flex-col bg-white', asPage ? 'min-h-screen md:min-h-0 md:max-h-[88vh]' : 'max-h-[94vh]')}
       >
         <div className={cn(
           'sticky top-0 z-20 grid grid-cols-[44px_1fr_64px] items-center gap-3 border-b border-gray-100 bg-white/95 px-4 pb-3 backdrop-blur',
-          asPage ? 'pt-[calc(0.45rem+env(safe-area-inset-top))]' : 'pt-3'
+          asPage ? 'pt-[calc(0.45rem+env(safe-area-inset-top))] md:pt-3' : 'pt-3'
         )}>
           <button
             type="button"
@@ -270,9 +276,10 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
 
           <ProfileSection title={t('profile.personalInfo')} icon={User}>
             <ProfileField label={t('profile.fullName')} value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} error={errors.full_name} autoComplete="name" />
+            <ProfileField label={t('auth.username')} value={form.username} onChange={(v) => set('username', v.replace(/^@+/, '').toLowerCase())} required icon={IdCard} error={errors.username} autoComplete="username" placeholder="user1234567" />
             <div className="grid gap-3 sm:grid-cols-2">
               <ProfileField label={t('profile.phoneNumber')} value={form.phone} onChange={(v) => set('phone', normalizeCambodiaPhone(v))} icon={Phone} error={errors.phone} autoComplete="tel" placeholder={t('common.phonePlaceholder')} />
-              <ProfileField label={t('profile.emailAddress')} type="email" value={form.email} onChange={(v) => set('email', v)} required icon={Mail} error={errors.email} autoComplete="email" />
+              <ProfileField label={t('profile.emailAddress')} type="email" value={form.email} onChange={(v) => set('email', v)} icon={Mail} error={errors.email} autoComplete="email" />
             </div>
             <ProfileSelect label={t('completeProfile.gender')} value={form.gender} onChange={(v) => set('gender', v)} icon={User} options={GENDER_OPTIONS} t={t} />
           </ProfileSection>
@@ -319,14 +326,16 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
 
   if (asPage) {
     return (
-      <div className="min-h-screen bg-white">
-        {content}
+      <div className="min-h-screen bg-white md:flex md:items-center md:justify-center md:bg-gray-50/80 md:px-6 md:py-10">
+        <div className="w-full bg-white md:max-w-[560px] md:overflow-hidden md:rounded-3xl md:border md:border-gray-100 md:shadow-[0_22px_70px_rgba(15,23,42,0.16)]">
+          {content}
+        </div>
       </div>
     )
   }
 
   return (
-    <Modal isOpen onClose={onClose} size="md" className="max-h-[94vh] overflow-hidden p-0 md:max-w-[520px]">
+    <Modal isOpen onClose={onClose} size="xl" className="overflow-hidden p-0 md:max-w-[760px]">
       {content}
     </Modal>
   )
@@ -356,8 +365,8 @@ function ChangePasswordModal({ user, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (form.new_password.length < 8) {
-      toast.error(t('auth.validationPasswordLength'))
+    if (!form.new_password) {
+      toast.error(t('auth.validationPasswordRequired'))
       return
     }
     if (form.new_password !== form.confirm_password) {
@@ -946,15 +955,40 @@ export default function Profile() {
       {/* ═══════════════════════════════════════════
           DESKTOP LAYOUT
       ═══════════════════════════════════════════ */}
-      <div className="hidden lg:flex lg:mx-auto lg:w-full lg:max-w-[1440px]">
+      <div className="hidden lg:flex lg:mx-auto lg:w-full lg:max-w-[1680px]">
 
         {/* ── Sidebar ──────────────────────────────── */}
         {/* ── Main Content ────────────────────────── */}
-        <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 via-white to-pink-50/40 p-6">
-          <div className="mx-auto max-w-[1340px] space-y-5">
+        <div className="flex-1 overflow-auto bg-slate-50 p-8">
+          <div className="mx-auto max-w-[1600px] space-y-7">
 
           {/* ══ ACCOUNT OVERVIEW ══ */}
-          {activeView === 'profile' && <>
+          {activeView === 'profile' && (
+            <DesktopProfileOverview
+              t={t}
+              user={user}
+              displayName={displayName}
+              usernameDisplay={usernameDisplay}
+              email={email}
+              phone={phone}
+              memberSince={memberSince}
+              initials={initials}
+              addresses={addresses}
+              accountOrders={accountOrders}
+              orderCounts={orderCounts}
+              rewardPoints={rewardPoints}
+              nextTierPoints={nextTierPoints}
+              membershipLevel={membershipLevel}
+              progressPct={progressPct}
+              wishlistCount={wishlistItems.length}
+              currentLanguage={currentLanguage}
+              navigate={navigate}
+              setActiveView={setActiveView}
+              setActiveModal={setActiveModal}
+              handleLogout={handleLogout}
+            />
+          )}
+          {false && activeView === 'profile' && <>
 
             {/* Row 1 — Profile card + Points card */}
             <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
@@ -1446,7 +1480,300 @@ export default function Profile() {
       {activeModal === 'password' && (
         <ChangePasswordModal user={user} onClose={() => setActiveModal(null)} />
       )}
+      {activeModal === 'edit-profile' && (
+        <EditProfileModal
+          user={user}
+          addresses={addresses}
+          onEditAddress={() => {
+            setActiveModal(null)
+            navigate('/address-book')
+          }}
+          onClose={() => setActiveModal(null)}
+          onSaved={() => setActiveModal(null)}
+        />
+      )}
       {ConfirmDialog}
+    </div>
+  )
+}
+
+function DesktopProfileOverview({
+  t,
+  user,
+  displayName,
+  usernameDisplay,
+  email,
+  phone,
+  memberSince,
+  initials,
+  addresses,
+  accountOrders,
+  orderCounts,
+  rewardPoints,
+  nextTierPoints,
+  membershipLevel,
+  progressPct,
+  wishlistCount,
+  currentLanguage,
+  navigate,
+  setActiveView,
+  setActiveModal,
+  handleLogout,
+}) {
+  const defaultAddress = addresses.find((addr) => addr.is_default) || addresses[0]
+  const orderTotal = accountOrders.length
+  const completedOrders = orderCounts.completed || 0
+  const completionRate = orderTotal > 0 ? Math.round((completedOrders / orderTotal) * 100) : progressPct
+  const memberCode = `#SS${String(user.id || 0).padStart(6, '0')}`
+  const fullAddress = defaultAddress
+    ? [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state, defaultAddress.postal_code].filter(Boolean).join(', ')
+    : t('profile.noDefaultAddress')
+  const activityItems = accountOrders.slice(0, 4).map((order, index) => ({
+    color: ['bg-emerald-500', 'bg-sky-500', 'bg-purple-500', 'bg-amber-500'][index] || 'bg-pink-500',
+    title: `Order #${order.order_number}`,
+    text: `${orderStatusLabel(t, order.status)} - ${formatCurrency(order.grand_total)}`,
+    date: formatDate(order.created_at),
+    action: () => navigate(`/my-orders/${order.id}`),
+  }))
+
+  if (activityItems.length === 0) {
+    activityItems.push({
+      color: 'bg-pink-500',
+      title: t('profile.yourProfile'),
+      text: t('profile.memberSince'),
+      date: memberSince,
+      action: () => setActiveModal('edit-profile'),
+    })
+  }
+
+  const stats = [
+    { icon: ShoppingBag, value: orderTotal.toLocaleString(), label: t('profile.myOrders') },
+    { icon: Gift, value: rewardPoints.toLocaleString(), label: t('profile.myPoints') },
+    { icon: Heart, value: wishlistCount.toLocaleString(), label: t('wishlist.title') },
+    { icon: Star, value: `${completionRate}%`, label: t('profile.memberLevel', { level: membershipLevel }) },
+  ]
+
+  return (
+    <div className="space-y-7">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-950">{t('profile.title')}</h1>
+          <p className="mt-1 text-base font-semibold text-slate-500">Manage your personal information and account settings</p>
+        </div>
+        <button
+          onClick={() => setActiveModal('edit-profile')}
+          className="inline-flex h-12 items-center gap-2 rounded-xl bg-pink-600 px-6 text-sm font-black text-white shadow-lg shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.98]"
+        >
+          <Pencil size={17} />
+          {t('profile.editProfile')}
+        </button>
+      </div>
+
+      <section className="rounded-2xl border border-slate-100 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+        <div className="grid grid-cols-[minmax(360px,1.15fr)_minmax(620px,1.85fr)] items-center gap-9">
+          <div className="flex items-center gap-7">
+            <div className="relative h-40 w-40 shrink-0">
+              <div className="h-full w-full overflow-hidden rounded-full bg-gradient-to-br from-pink-500 to-purple-600 shadow-lg shadow-pink-100">
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-5xl font-black text-white">
+                    {initials}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setActiveModal('edit-profile')}
+                className="absolute bottom-2 right-0 flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-white text-pink-500 shadow-md transition hover:bg-pink-50"
+                aria-label={t('profile.changePhoto')}
+              >
+                <Camera size={19} />
+              </button>
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-3xl font-black text-slate-950">{displayName}</h2>
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-base font-bold text-slate-500">
+                <span>{usernameDisplay}</span>
+                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-black text-emerald-600">
+                  <CheckCircle2 size={14} />
+                  {t('profile.verified')}
+                </span>
+              </div>
+              <p className="mt-4 text-sm font-semibold text-slate-400">{t('profile.memberSince')} {memberSince}</p>
+              <p className="mt-4 max-w-md text-base font-semibold leading-7 text-slate-600">
+                {user.email || memberCode}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 divide-x divide-slate-100">
+            {stats.map(({ icon: Icon, value, label }) => (
+              <button
+                key={label}
+                onClick={() => label === t('profile.myOrders') ? navigate('/my-orders') : setActiveView('profile')}
+                className="flex min-h-[145px] flex-col items-center justify-center gap-4 px-5 text-center transition hover:bg-slate-50"
+              >
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-pink-50 text-pink-500">
+                  <Icon size={30} strokeWidth={2} />
+                </span>
+                <span className="text-3xl font-black text-slate-950">{value}</span>
+                <span className="text-base font-semibold text-slate-500">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-3 gap-7">
+        <DesktopProfileCard title={t('profile.personalInfo')} icon={User}>
+          <DesktopInfoRow icon={User} label={t('profile.fullName')} value={displayName} />
+          <DesktopInfoRow icon={IdCard} label="Username" value={usernameDisplay} />
+          <DesktopInfoRow icon={Mail} label={t('profile.emailAddress')} value={email} />
+          <DesktopInfoRow icon={Phone} label={t('profile.phoneNumber')} value={phone} />
+          <DesktopInfoRow icon={Languages} label={t('profile.chooseLanguage')} value={currentLanguage.label} />
+          <DesktopInfoRow icon={Home} label={t('profile.memberSince')} value={memberSince} />
+        </DesktopProfileCard>
+
+        <DesktopProfileCard title={t('profile.accountInfo')} icon={IdCard}>
+          <DesktopInfoRow icon={Shield} label="Role" value={user.role || 'Customer'} badge />
+          <DesktopInfoRow icon={CheckCircle2} label={t('profile.verificationStatus')} value={t('profile.verified')} success />
+          <DesktopInfoRow icon={ShoppingBag} label={t('profile.myOrders')} value={orderTotal.toLocaleString()} />
+          <DesktopInfoRow icon={Gift} label={t('profile.myPoints')} value={`${rewardPoints.toLocaleString()} / ${nextTierPoints.toLocaleString()}`} />
+          <DesktopInfoRow icon={Star} label="Member Level" value={membershipLevel} />
+          <DesktopInfoRow icon={Percent} label="Progress" value={`${progressPct}%`} success />
+        </DesktopProfileCard>
+
+        <DesktopProfileCard title="Primary Address" icon={MapPin}>
+          <div className="space-y-4">
+            <div>
+              <p className="text-base font-black text-slate-900">{defaultAddress?.label || t('profile.defaultAddress')}</p>
+              <p className="mt-2 min-h-[72px] text-base font-semibold leading-7 text-slate-500">{fullAddress}</p>
+            </div>
+            <div className="grid grid-cols-[72px_1fr] gap-y-2 text-base">
+              <span className="font-black text-slate-700">Email:</span>
+              <span className="font-semibold text-slate-500">{email}</span>
+              <span className="font-black text-slate-700">Phone:</span>
+              <span className="font-semibold text-slate-500">{phone}</span>
+            </div>
+            <div className="relative h-[112px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100">
+              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(45deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(315deg,rgba(255,255,255,.78)_25%,#eef2f7_25%)] bg-[length:38px_38px] bg-[position:19px_0,19px_0,0_0,0_0]" />
+              <MapPin className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[58%] text-pink-600 drop-shadow" size={42} fill="currentColor" strokeWidth={1.5} />
+            </div>
+          </div>
+        </DesktopProfileCard>
+
+        <DesktopProfileCard title="Notification Preferences" icon={Bell}>
+          <DesktopToggleRow icon={Mail} title="Email Notifications" text="Receive email updates about orders and activities" enabled />
+          <DesktopToggleRow icon={Phone} title="SMS Notifications" text="Receive SMS alerts for important updates" />
+          <DesktopToggleRow icon={Bell} title="Push Notifications" text="Receive push notifications in browser" enabled />
+          <DesktopToggleRow icon={Gift} title="Marketing Updates" text="Receive updates about new features and promotions" />
+        </DesktopProfileCard>
+
+        <DesktopProfileCard title="Recent Activity" icon={Clock}>
+          <div className="space-y-1">
+            {activityItems.map((item) => (
+              <button key={`${item.title}-${item.date}`} onClick={item.action} className="group grid w-full grid-cols-[28px_1fr] gap-3 rounded-xl py-2 text-left transition hover:bg-slate-50">
+                <span className="relative flex justify-center pt-1.5">
+                  <span className={cn('h-3 w-3 rounded-full ring-4 ring-white', item.color)} />
+                </span>
+                <span>
+                  <span className="block text-base font-black text-slate-800 group-hover:text-pink-600">{item.title}</span>
+                  <span className="block text-sm font-semibold text-slate-500">{item.text}</span>
+                  <span className="block text-sm font-semibold text-slate-400">{item.date}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => navigate('/my-orders')} className="mt-4 inline-flex items-center gap-2 text-base font-black text-pink-600 hover:text-pink-700">
+            {t('profile.viewAll')} <ChevronRight size={17} />
+          </button>
+        </DesktopProfileCard>
+
+        <DesktopProfileCard title="Security" icon={Shield}>
+          <DesktopActionRow icon={Lock} title={t('profile.password')} text="Keep your password updated" action="Change" onClick={() => setActiveModal('password')} />
+          <DesktopActionRow icon={Shield} title="Two-Factor Authentication" text="Add extra security to your account" action="Manage" onClick={() => setActiveModal('password')} />
+          <DesktopActionRow icon={IdCard} title="Active Sessions" text="Current browser session" action="View" onClick={() => setActiveView('profile')} />
+          <DesktopActionRow icon={LogOut} title={t('profile.logout')} text="Sign out from this device" action={t('profile.logout')} onClick={handleLogout} danger />
+        </DesktopProfileCard>
+      </div>
+    </div>
+  )
+}
+
+function DesktopProfileCard({ title, icon: Icon, children }) {
+  return (
+    <section className="min-h-[330px] rounded-2xl border border-slate-100 bg-white p-7 shadow-[0_16px_42px_rgba(15,23,42,0.055)]">
+      <div className="mb-6 flex items-center gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-pink-500">
+          <Icon size={19} />
+        </span>
+        <h2 className="text-xl font-black text-slate-950">{title}</h2>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function DesktopInfoRow({ icon: Icon, label, value, badge = false, success = false }) {
+  return (
+    <div className="grid grid-cols-[32px_minmax(140px,1fr)_minmax(160px,1fr)] items-center gap-3 border-b border-slate-100 py-3.5 last:border-0">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-400">
+        <Icon size={16} />
+      </span>
+      <span className="text-base font-bold text-slate-500">{label}</span>
+      <span className="text-right text-base font-black text-slate-700">
+        {badge || success ? (
+          <span className={cn('inline-flex rounded-full px-3 py-1 text-sm font-black', success ? 'bg-emerald-100 text-emerald-600' : 'bg-pink-50 text-pink-600')}>
+            {value}
+          </span>
+        ) : value}
+      </span>
+    </div>
+  )
+}
+
+function DesktopToggleRow({ icon: Icon, title, text, enabled = false }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-400">
+          <Icon size={17} />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-base font-black text-slate-800">{title}</span>
+          <span className="block truncate text-sm font-semibold text-slate-500">{text}</span>
+        </span>
+      </div>
+      <button
+        type="button"
+        aria-pressed={enabled}
+        className={cn('relative h-8 w-14 shrink-0 rounded-full transition', enabled ? 'bg-pink-600' : 'bg-slate-200')}
+      >
+        <span className={cn('absolute top-1 h-6 w-6 rounded-full bg-white shadow transition', enabled ? 'left-7' : 'left-1')} />
+      </button>
+    </div>
+  )
+}
+
+function DesktopActionRow({ icon: Icon, title, text, action, onClick, danger = false }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-4 last:border-0">
+      <div className="flex min-w-0 items-center gap-4">
+        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', danger ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400')}>
+          <Icon size={18} />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-base font-black text-slate-800">{title}</span>
+          <span className="block truncate text-sm font-semibold text-slate-500">{text}</span>
+        </span>
+      </div>
+      <button
+        onClick={onClick}
+        className={cn('h-9 shrink-0 rounded-xl px-4 text-sm font-black transition', danger ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-pink-50 text-pink-600 hover:bg-pink-100')}
+      >
+        {action}
+      </button>
     </div>
   )
 }

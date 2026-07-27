@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, Gift, Loader2, Package, Percent, ShoppingCart, Star, Ticket, Truck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
+import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
 import useCartStore from '@/store/cartStore'
 import { cn } from '@/utils/helpers'
 
@@ -65,6 +66,7 @@ export default function RedeemRewards() {
   const cartCount = useCartStore((state) => state.items.reduce((total, item) => total + item.quantity, 0))
   const [activeFilter, setActiveFilter] = useState('all')
   const [redeemingId, setRedeemingId] = useState(null)
+  const [redeemedCoupon, setRedeemedCoupon] = useState(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -77,7 +79,11 @@ export default function RedeemRewards() {
     onSuccess: (nextData) => {
       queryClient.setQueryData(['customer-rewards-summary'], nextData)
       const code = nextData.redemption?.coupon_code
-      toast.success(code ? t('rewardsPage.toast.redeemedWithCode', { code }) : t('rewardsPage.toast.redeemed'))
+      if (code) {
+        setRedeemedCoupon(nextData.redemption)
+      } else {
+        toast.success(t('rewardsPage.toast.redeemed'))
+      }
     },
     onError: (error) => toast.error(error.response?.data?.detail || t('rewardsPage.toast.redeemFailed')),
     onSettled: () => setRedeemingId(null),
@@ -109,6 +115,7 @@ export default function RedeemRewards() {
 
   return (
     <div className="min-h-screen bg-white pb-8">
+      <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
       <div className="mx-auto w-full max-w-[620px] px-4 md:max-w-[1440px] md:px-6 md:pt-6">
         <header className="sticky top-0 z-30 -mx-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-4 md:flex md:min-h-0 md:items-start md:justify-between md:bg-transparent md:px-0 md:pt-0">
           <button type="button" onClick={() => navigate('/profile/rewards')} className="flex h-10 w-10 items-center justify-center rounded-full text-gray-950 md:hidden">
