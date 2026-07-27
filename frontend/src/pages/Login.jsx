@@ -415,7 +415,7 @@ function NoticePopup({ notice, t, onClose }) {
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, register, googleLogin, completeTelegramBotLogin, isAuthenticated, user } = useAuthStore()
+  const { login, register, googleLogin, telegramLogin, isAuthenticated, user } = useAuthStore()
   const { t, i18n } = useTranslation()
   const [mode, setMode] = useState(location.state?.mode === 'register' ? 'register' : 'login')
   const [showPass, setShowPass] = useState(false)
@@ -423,15 +423,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [telegramOpen, setTelegramOpen] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
-  const [telegramBotLink, setTelegramBotLink] = useState('')
-  const [telegramSessionToken, setTelegramSessionToken] = useState('')
-  const [telegramWaiting, setTelegramWaiting] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
   const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '', terms: true })
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
-  const telegramPollRef = useRef(null)
+  const telegramWidgetRef = useRef(null)
   const showError = (message, title = t('auth.errorTitle')) => setNotice({ type: 'error', title, message })
   const sl = (k, v) => {
     setLf((f) => ({ ...f, [k]: v }))
@@ -557,50 +554,37 @@ export default function Login() {
   }, [isAuthenticated, user, navigate, location.state?.from])
 
   useEffect(() => {
-    if (!telegramOpen || !telegramSessionToken) return undefined
+    if (!telegramOpen || !telegramLoginEnabled || !telegramWidgetRef.current) return
 
-    let cancelled = false
-    const poll = async () => {
+    const callbackName = 'shadowShopTelegramAuth'
+    window[callbackName] = async (telegramUser) => {
+      setTelegramLoading(true)
       try {
-        const { data } = await authApi.telegramLoginPoll({ token: telegramSessionToken })
-        if (cancelled) return
-        if (data?.status === 'ready') {
-          if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
-          setTelegramWaiting(false)
-          setTelegramLoading(true)
-          try {
-            const loggedInUser = completeTelegramBotLogin(data)
-            toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username || 'Telegram' }))
-            setTelegramOpen(false)
-            setTelegramSessionToken('')
-            setTelegramBotLink('')
-          } catch (err) {
-            showError(translateAuthError(err?.message, t, 'auth.telegramLoginFailed'))
-          } finally {
-            setTelegramLoading(false)
-          }
-          return
-        }
-        if (data?.status === 'expired' || data?.status === 'used' || data?.status === 'error') {
-          if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
-          setTelegramWaiting(false)
-          setTelegramLoading(false)
-          showError(data?.detail || t('auth.telegramLoginFailed'))
-        }
+        const loggedInUser = await telegramLogin(telegramUser)
+        toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
+        setTelegramOpen(false)
       } catch (err) {
-        if (cancelled) return
-        // Keep waiting on transient network errors
+        showError(translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed'))
+      } finally {
+        setTelegramLoading(false)
       }
     }
 
-    setTelegramWaiting(true)
-    poll()
-    telegramPollRef.current = window.setInterval(poll, 2000)
+    telegramWidgetRef.current.innerHTML = ''
+    const script = document.createElement('script')
+    script.src = 'https://telegram.org/js/telegram-widget.js?22'
+    script.async = true
+    script.setAttribute('data-telegram-login', telegramBotUsername)
+    script.setAttribute('data-size', 'large')
+    script.setAttribute('data-radius', '10')
+    script.setAttribute('data-request-access', 'write')
+    script.setAttribute('data-onauth', `${callbackName}(user)`)
+    telegramWidgetRef.current.appendChild(script)
+
     return () => {
-      cancelled = true
-      if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
+      if (window[callbackName]) delete window[callbackName]
     }
-  }, [telegramOpen, telegramSessionToken, completeTelegramBotLogin, t])
+  }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin, t])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -710,39 +694,12 @@ export default function Login() {
     }
   }
 
-  const closeTelegramLogin = () => {
-    if (telegramPollRef.current) window.clearInterval(telegramPollRef.current)
-    setTelegramOpen(false)
-    setTelegramLoading(false)
-    setTelegramWaiting(false)
-    setTelegramSessionToken('')
-    setTelegramBotLink('')
-  }
-
-  const openTelegramLogin = async () => {
+  const openTelegramLogin = () => {
     if (!telegramLoginEnabled) {
       showError(t('auth.telegramNotConfigured'))
       return
     }
-
-    setTelegramLoading(true)
-    try {
-      const { data } = await authApi.telegramLoginStart()
-      if (!data?.bot_link || !data?.token) {
-        showError(t('auth.telegramNotConfigured'))
-        return
-      }
-      setTelegramBotLink(data.bot_link)
-      setTelegramSessionToken(data.token)
-      setTelegramOpen(true)
-      setTelegramWaiting(true)
-      // Open Telegram so the user can tap Start (message permission in the app)
-      window.open(data.bot_link, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      showError(translateAuthError(err?.response?.data, t, 'auth.telegramLoginFailed'))
-    } finally {
-      setTelegramLoading(false)
-    }
+    setTelegramOpen(true)
   }
 
   const EyeToggle = ({ show, toggle }) => (
@@ -1033,34 +990,22 @@ export default function Login() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#FFF4F8]/80 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[28px] border border-[#F0D9E6] bg-white p-6 text-center shadow-[0_30px_80px_rgba(236,77,151,0.16)]">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-500">
-              {telegramWaiting || telegramLoading ? <Loader2 size={24} className="animate-spin text-sky-500" /> : <Send size={24} fill="#2AABEE" />}
+              <Send size={24} fill="#2AABEE" />
             </div>
             <h3 className="mt-4 text-xl font-bold text-[#1A1A1A]">{t('auth.continueWithTelegram')}</h3>
             <p className="mt-2 text-sm leading-6 text-[#6B7280]">
               {t('auth.approveTelegramLogin')}
             </p>
-            <ol className="mt-4 space-y-2 rounded-2xl border border-[#F0D9E6] bg-[#FFF9FC] px-4 py-3 text-left text-sm font-semibold text-[#4B5563]">
-              <li>1. {t('auth.telegramStepOpen')}</li>
-              <li>2. {t('auth.telegramStepStart')}</li>
-              <li>3. {t('auth.telegramStepReturn')}</li>
-            </ol>
-            {telegramBotLink && (
-              <a
-                href={telegramBotLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#2AABEE] text-sm font-bold text-white transition hover:bg-[#1f9ad8]"
-              >
-                <Send size={16} fill="currentColor" />
-                {t('auth.openTelegramApp')}
-              </a>
-            )}
-            <p className="mt-3 text-xs font-semibold text-[#9CA3AF]">
-              {telegramWaiting ? t('auth.waitingTelegramApproval') : t('auth.approveTelegramLogin')}
-            </p>
+            <div className="mt-5 flex min-h-[48px] items-center justify-center rounded-2xl border border-[#F0D9E6] bg-[#FFF9FC] px-3 py-4">
+              {telegramLoginEnabled ? (
+                <div ref={telegramWidgetRef} className="flex justify-center" />
+              ) : (
+                <p className="text-sm font-bold text-red-500">{t('auth.telegramNotConfiguredShort')}</p>
+              )}
+            </div>
             <button
               type="button"
-              onClick={closeTelegramLogin}
+              onClick={() => setTelegramOpen(false)}
               className="mt-4 h-11 w-full rounded-2xl border border-[#F0D9E6] bg-white text-sm font-bold text-[#6B7280] transition hover:bg-[#FFF4F8] hover:text-[#EC4D97] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10"
             >
               {t('common.cancel')}
