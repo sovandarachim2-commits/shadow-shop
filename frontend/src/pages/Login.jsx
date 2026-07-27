@@ -429,6 +429,7 @@ export default function Login() {
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
   const telegramWidgetRef = useRef(null)
+  const googleIdentityInitRef = useRef(null)
   const showError = (message, title = t('auth.errorTitle')) => setNotice({ type: 'error', title, message })
   const sl = (k, v) => {
     setLf((f) => ({ ...f, [k]: v }))
@@ -492,6 +493,28 @@ export default function Login() {
     }
   }, [googleLogin, t])
 
+  const initializeGoogleIdentity = useCallback(async () => {
+    await loadGoogleIdentityScript()
+    if (!window.google?.accounts?.id) {
+      throw new Error('Google Identity API unavailable')
+    }
+
+    const currentInit = googleIdentityInitRef.current
+    if (currentInit?.clientId === googleClientId && currentInit?.callback === handleGoogleCredential) {
+      return
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+      itp_support: true,
+      use_fedcm_for_prompt: true,
+    })
+    googleIdentityInitRef.current = { clientId: googleClientId, callback: handleGoogleCredential }
+  }, [googleClientId, handleGoogleCredential])
+
   useEffect(() => {
     const preconnectHosts = ['https://accounts.google.com', 'https://telegram.org']
     preconnectHosts.forEach((href) => {
@@ -515,16 +538,8 @@ export default function Login() {
     let cancelled = false
     const initGoogle = async () => {
       try {
-        await loadGoogleIdentityScript()
-        if (cancelled || !window.google?.accounts?.id) return
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleGoogleCredential,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          itp_support: true,
-          use_fedcm_for_prompt: false,
-        })
+        if (cancelled) return
+        await initializeGoogleIdentity()
       } catch {
         // Soft fail — button click will retry / show a clear error
       }
@@ -534,7 +549,7 @@ export default function Login() {
     return () => {
       cancelled = true
     }
-  }, [googleLoginEnabled, googleClientId, handleGoogleCredential])
+  }, [googleLoginEnabled, googleClientId, initializeGoogleIdentity])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -640,19 +655,7 @@ export default function Login() {
 
     setGoogleLoading(true)
     try {
-      await loadGoogleIdentityScript()
-      if (!window.google?.accounts?.id) {
-        throw new Error('Google Identity API unavailable')
-      }
-
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: handleGoogleCredential,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-        itp_support: true,
-        use_fedcm_for_prompt: false,
-      })
+      await initializeGoogleIdentity()
 
       let settled = false
       const finishIfIdle = () => {

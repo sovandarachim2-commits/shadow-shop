@@ -500,6 +500,7 @@ function AvatarPicker({ avatarPreview, initials, fileInputRef, onAvatarChange })
 }
 
 function CompleteProfileField({ label, required, optional, icon: Icon, placeholder, value, onChange, error, autoComplete, prefix, disabled, helper }) {
+  const { t } = useTranslation()
   const needsValue = required && !String(value || '').trim()
   return (
     <label className="block">
