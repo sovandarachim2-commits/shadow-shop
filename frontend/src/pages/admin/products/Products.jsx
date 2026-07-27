@@ -118,6 +118,7 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
     brand: product?.brand || '',
     description: product?.description || '',
     benefits: product?.benefits || '',
+    ingredients: product?.ingredients || '',
     how_to_use: product?.how_to_use || '',
     unit: product?.unit || 'piece',
     cost_price: product?.cost_price || '',
@@ -219,6 +220,10 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
         <div className="md:col-span-2">
           <label className="label">Description</label>
           <textarea className="input-field resize-none" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} />
+        </div>
+        <div className="md:col-span-2">
+          <label className="label">Ingredients</label>
+          <textarea className="input-field resize-none" rows={2} value={form.ingredients} onChange={(e) => set('ingredients', e.target.value)} placeholder="List product ingredients" />
         </div>
         <div className="md:col-span-2">
           <label className="label">Benefits</label>

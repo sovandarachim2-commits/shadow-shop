@@ -11,7 +11,7 @@ const PAGE_GROUPS = [
     label: 'Sales',
     children: [
       { module: 'orders', label: 'Orders' },
-      { module: 'orders', label: 'Customers' },
+      { module: 'customers', label: 'Customers' },
     ],
   },
   {
@@ -31,8 +31,8 @@ const PAGE_GROUPS = [
     label: 'Inventory',
     children: [
       { module: 'inventory', label: 'Stock Dashboard' },
-      { module: 'inventory', label: 'Stock Movement' },
-      { module: 'inventory', label: 'Stock Transfers' },
+      { module: 'inventory_movements', label: 'Stock Movement' },
+      { module: 'inventory_transfers', label: 'Stock Transfers' },
     ],
   },
   {
@@ -40,7 +40,7 @@ const PAGE_GROUPS = [
     label: 'Operations',
     children: [
       { module: 'print', label: 'Print Center' },
-      { module: 'print', label: 'Print History' },
+      { module: 'print_history', label: 'Print History' },
       { module: 'scanner', label: 'Scanner' },
       { module: 'delivery', label: 'Delivery' },
     ],
@@ -57,8 +57,8 @@ const PAGE_GROUPS = [
     label: 'Finance',
     children: [
       { module: 'finance', label: 'Revenue' },
-      { module: 'finance', label: 'Expenses' },
-      { module: 'finance', label: 'Profit Report' },
+      { module: 'finance_expenses', label: 'Expenses' },
+      { module: 'finance_profit', label: 'Profit Report' },
     ],
   },
   {
@@ -66,11 +66,12 @@ const PAGE_GROUPS = [
     label: 'Rewards',
     children: [
       { module: 'rewards', label: 'Overview' },
-      { module: 'rewards', label: 'Rewards' },
-      { module: 'rewards', label: 'Redeem Requests' },
-      { module: 'rewards', label: 'Earning & Tiers' },
-      { module: 'rewards', label: 'Point Transactions' },
-      { module: 'rewards', label: 'Customer Points' },
+      { module: 'rewards_products', label: 'Reward Products' },
+      { module: 'rewards_coupons', label: 'Promo Codes' },
+      { module: 'rewards_exchanges', label: 'Redeem Requests' },
+      { module: 'rewards_settings', label: 'Earning & Tiers' },
+      { module: 'rewards_transactions', label: 'Point Transactions' },
+      { module: 'rewards_points', label: 'Customer Points' },
     ],
   },
   {
@@ -78,8 +79,8 @@ const PAGE_GROUPS = [
     label: 'Reports',
     children: [
       { module: 'reports', label: 'Sales Report' },
-      { module: 'reports', label: 'Product Report' },
-      { module: 'reports', label: 'Inventory Report' },
+      { module: 'reports_products', label: 'Product Report' },
+      { module: 'reports_inventory', label: 'Inventory Report' },
     ],
   },
   {
@@ -87,8 +88,8 @@ const PAGE_GROUPS = [
     label: 'Administration',
     children: [
       { module: 'users', label: 'Users' },
-      { module: 'users', label: 'Roles & Permissions' },
-      { module: 'users', label: 'Activity Logs' },
+      { module: 'users_roles', label: 'Roles & Permissions' },
+      { module: 'users_activity', label: 'Activity Logs' },
     ],
   },
   {
@@ -96,10 +97,12 @@ const PAGE_GROUPS = [
     label: 'Settings',
     children: [
       { module: 'settings', label: 'General Settings' },
-      { module: 'settings', label: 'Telegram Settings' },
-      { module: 'settings', label: 'Delivery Settings' },
-      { module: 'settings', label: 'Payment Methods' },
-      { module: 'settings', label: 'Print Logo' },
+      { module: 'settings_telegram', label: 'Telegram Settings' },
+      { module: 'settings_delivery', label: 'Delivery Settings' },
+      { module: 'settings_payment', label: 'Payment Methods' },
+      { module: 'settings_print_logo', label: 'Print Logo' },
+      { module: 'settings_login_logo', label: 'Login Logo' },
+      { module: 'settings_customer_footer', label: 'Customer Footer' },
     ],
   },
   { key: 'storefront', label: 'Store Visit', module: 'storefront' },

@@ -6,7 +6,7 @@ import { productsApi } from '@/api/products'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import PageHeader from '@/components/shared/PageHeader'
 
-function compressBannerImage(file, maxWidth = 1600, quality = 0.85) {
+function compressBannerImage(file, maxWidth = 1600, quality = 0.88) {
   return new Promise((resolve) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -95,14 +95,15 @@ function BannerForm({ banner, onClose, onSaved }) {
           {/* Image upload */}
           <div
             onClick={() => !compressing && fileRef.current.click()}
-            className="relative mb-5 flex h-40 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-purple-300"
+            className="relative mb-5 flex aspect-[2/1] min-h-[160px] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 transition hover:border-purple-300"
           >
             {preview ? (
               <img src={preview} alt="preview" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex flex-col items-center gap-2 text-gray-400">
-                <ImageIcon size={32} />
+              <div className="flex flex-col items-center gap-2 px-4 text-center text-gray-400">
+                <ImageIcon size={36} />
                 <span className="text-sm font-semibold">Click to upload banner image</span>
+                <span className="text-xs font-medium">Recommended 1600×800 (2:1)</span>
               </div>
             )}
             {compressing && (
@@ -224,12 +225,12 @@ export default function Banners() {
             <div key={banner.id} className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
               <GripVertical size={18} className="shrink-0 cursor-grab text-gray-300" />
               {/* Thumbnail */}
-              <div className="h-16 w-24 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-pink-50 to-rose-100">
+              <div className="h-24 w-36 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-pink-50 to-rose-100">
                 {banner.image_url ? (
                   <img src={banner.image_url} alt={banner.title} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center">
-                    <ImageIcon size={20} className="text-pink-300" />
+                    <ImageIcon size={24} className="text-pink-300" />
                   </div>
                 )}
               </div>

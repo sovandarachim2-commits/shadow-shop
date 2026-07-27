@@ -85,7 +85,6 @@ export default function BottomNavigation({
             stroke="rgba(236,47,131,0.28)"
             strokeWidth="1.5"
           />
-          <path d="M0 102H390" stroke="rgba(236,47,131,0.28)" strokeWidth="2" />
         </svg>
 
         <nav

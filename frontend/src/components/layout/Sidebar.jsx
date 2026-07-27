@@ -30,7 +30,7 @@ const navItems = [
     icon: ShoppingCart,
     children: [
       { label: 'Orders',     path: '/admin/orders',     icon: ClipboardList, module: 'orders' },
-      { label: 'Customers',  path: '/admin/customers',  icon: Users,         module: 'orders' },
+      { label: 'Customers',  path: '/admin/customers',  icon: Users,         module: 'customers' },
     ],
   },
   {
@@ -50,8 +50,8 @@ const navItems = [
     icon: Warehouse,
     children: [
       { label: 'Stock Dashboard', path: '/admin/inventory',           icon: LayoutDashboard, module: 'inventory' },
-      { label: 'Stock Movement',  path: '/admin/inventory/movements', icon: ArrowLeftRight,  module: 'inventory' },
-      { label: 'Stock Transfers', path: '/admin/inventory/transfers', icon: Truck,           module: 'inventory' },
+      { label: 'Stock Movement',  path: '/admin/inventory/movements', icon: ArrowLeftRight,  module: 'inventory_movements' },
+      { label: 'Stock Transfers', path: '/admin/inventory/transfers', icon: Truck,           module: 'inventory_transfers' },
     ],
   },
   {
@@ -59,7 +59,7 @@ const navItems = [
     icon: Printer,
     children: [
       { label: 'Print Center',  path: '/admin/print',         icon: Printer,  module: 'print'    },
-      { label: 'Print History', path: '/admin/print/history', icon: FileText, module: 'print'    },
+      { label: 'Print History', path: '/admin/print/history', icon: FileText, module: 'print_history' },
       { label: 'Scanner',       path: '/admin/scanner',       icon: ScanLine, module: 'scanner'  },
       { label: 'Delivery',      path: '/admin/delivery',      icon: Truck,    module: 'delivery' },
     ],
@@ -76,8 +76,8 @@ const navItems = [
     icon: DollarSign,
     children: [
       { label: 'Revenue',      path: '/admin/finance/revenue',   icon: TrendingUp, module: 'finance' },
-      { label: 'Expenses',     path: '/admin/finance/expenses',  icon: Receipt,    module: 'finance' },
-      { label: 'Profit Report',path: '/admin/finance/profit',    icon: PieChart,   module: 'finance' },
+      { label: 'Expenses',     path: '/admin/finance/expenses',  icon: Receipt,    module: 'finance_expenses' },
+      { label: 'Profit Report',path: '/admin/finance/profit',    icon: PieChart,   module: 'finance_profit' },
     ],
   },
   {
@@ -85,12 +85,12 @@ const navItems = [
     icon: Gift,
     children: [
       { label: 'Overview', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
-      { label: 'Reward Products', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
-      { label: 'Promo Codes', path: '/admin/rewards/coupons', icon: Percent, module: 'rewards' },
-      { label: 'Redeem Requests', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards' },
-      { label: 'Earning & Tiers', path: '/admin/rewards/settings', icon: Sliders, module: 'rewards' },
-      { label: 'Point Transactions', path: '/admin/rewards/transactions', icon: Activity, module: 'rewards' },
-      { label: 'Customer Points', path: '/admin/rewards/points', icon: Award, module: 'rewards' },
+      { label: 'Reward Products', path: '/admin/rewards/products', icon: Gift, module: 'rewards_products' },
+      { label: 'Promo Codes', path: '/admin/rewards/coupons', icon: Percent, module: 'rewards_coupons' },
+      { label: 'Redeem Requests', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards_exchanges' },
+      { label: 'Earning & Tiers', path: '/admin/rewards/settings', icon: Sliders, module: 'rewards_settings' },
+      { label: 'Point Transactions', path: '/admin/rewards/transactions', icon: Activity, module: 'rewards_transactions' },
+      { label: 'Customer Points', path: '/admin/rewards/points', icon: Award, module: 'rewards_points' },
     ],
   },
   {
@@ -98,8 +98,8 @@ const navItems = [
     icon: BarChart3,
     children: [
       { label: 'Sales Report',     path: '/admin/reports/sales',     icon: BarChart3, module: 'reports' },
-      { label: 'Product Report',   path: '/admin/reports/products',  icon: Package,   module: 'reports' },
-      { label: 'Inventory Report', path: '/admin/reports/inventory', icon: Warehouse, module: 'reports' },
+      { label: 'Product Report',   path: '/admin/reports/products',  icon: Package,   module: 'reports_products' },
+      { label: 'Inventory Report', path: '/admin/reports/inventory', icon: Warehouse, module: 'reports_inventory' },
     ],
   },
   {
@@ -107,8 +107,8 @@ const navItems = [
     icon: Shield,
     children: [
       { label: 'Users',              path: '/admin/users',    icon: Users,    module: 'users' },
-      { label: 'Roles & Permissions',path: '/admin/roles',    icon: Shield,   module: 'users' },
-      { label: 'Activity Logs',      path: '/admin/activity', icon: Activity, module: 'users' },
+      { label: 'Roles & Permissions',path: '/admin/roles',    icon: Shield,   module: 'users_roles' },
+      { label: 'Activity Logs',      path: '/admin/activity', icon: Activity, module: 'users_activity' },
     ],
   },
   {
@@ -116,12 +116,12 @@ const navItems = [
     icon: Settings,
     children: [
       { label: 'General Settings',  path: '/admin/settings',          icon: Sliders,       module: 'settings' },
-      { label: 'Telegram Settings', path: '/admin/settings/telegram', icon: MessageCircle, module: 'settings' },
-      { label: 'Delivery Settings', path: '/admin/settings/delivery', icon: MapPin,        module: 'settings' },
-      { label: 'Payment Methods',   path: '/admin/settings/payment',  icon: CreditCard,    module: 'settings' },
-      { label: 'Print Logo',        path: '/admin/settings/print-logo', icon: Image,       module: 'settings' },
-      { label: 'Login Logo',        path: '/admin/settings/login-logo', icon: Image,     module: 'settings' },
-      { label: 'Customer Footer',    path: '/admin/settings/customer-footer', icon: FileText, module: 'settings' },
+      { label: 'Telegram Settings', path: '/admin/settings/telegram', icon: MessageCircle, module: 'settings_telegram' },
+      { label: 'Delivery Settings', path: '/admin/settings/delivery', icon: MapPin,        module: 'settings_delivery' },
+      { label: 'Payment Methods',   path: '/admin/settings/payment',  icon: CreditCard,    module: 'settings_payment' },
+      { label: 'Print Logo',        path: '/admin/settings/print-logo', icon: Image,       module: 'settings_print_logo' },
+      { label: 'Login Logo',        path: '/admin/settings/login-logo', icon: Image,     module: 'settings_login_logo' },
+      { label: 'Customer Footer',    path: '/admin/settings/customer-footer', icon: FileText, module: 'settings_customer_footer' },
     ],
   },
 ]
