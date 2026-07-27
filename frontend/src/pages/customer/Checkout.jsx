@@ -168,9 +168,12 @@ function withTelegramText(url, text) {
 
 function getCouponDiscount(coupon, subtotal, deliveryFee) {
   if (!coupon) return 0
-  if (coupon.reward_type === 'free_delivery') return Math.min(deliveryFee, subtotal + deliveryFee)
+  if (coupon.reward_type === 'free_delivery' || coupon.discount_type === 'free_delivery') return Math.min(deliveryFee, subtotal + deliveryFee)
   const value = Number(coupon.coupon_value || 0)
-  const discount = coupon.discount_type === 'percent' ? subtotal * value / 100 : value
+  const applyTo = coupon.apply_to || 'products'
+  const base = applyTo === 'delivery' ? deliveryFee : applyTo === 'order' ? subtotal + deliveryFee : subtotal
+  let discount = coupon.discount_type === 'percent' ? base * value / 100 : value
+  if (coupon.max_discount_amount) discount = Math.min(discount, Number(coupon.max_discount_amount))
   return Math.min(Math.max(discount, 0), subtotal + deliveryFee)
 }
 
@@ -453,7 +456,7 @@ export default function Checkout() {
     }
 
     if (!hasAddress) {
-      toast.error(t('checkout.addAddressFirst'))
+      toast.error(t('checkout.addAddressFirst'), { id: 'add-delivery-address-first', duration: 1800 })
       navigate('/address-book', { state: { from: '/cart' } })
       return
     }

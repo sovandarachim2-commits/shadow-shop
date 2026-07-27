@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   AlertCircle,
@@ -8,6 +8,8 @@ import {
   Archive,
   BellRing,
   Bot,
+  Cake,
+  CalendarCheck,
   CalendarDays,
   Camera,
   Check,
@@ -21,6 +23,7 @@ import {
   FileText,
   FolderKanban,
   Gift,
+  Info,
   Layers3,
   Loader2,
   Mail,
@@ -28,10 +31,13 @@ import {
   MoreHorizontal,
   Package,
   Plus,
+  Power,
   Percent,
   RotateCw,
   Search,
   SlidersHorizontal,
+  ShieldCheck,
+  Star,
   Ticket,
   Trash2,
   Truck,
@@ -39,7 +45,10 @@ import {
   Upload,
   UserPlus,
   UserRound,
+  Users,
+  Warehouse,
   X,
+  DollarSign,
   ShoppingCart,
   Tag,
   Zap,
@@ -59,6 +68,33 @@ const REWARD_TYPES = [
   { value: 'lucky_box', label: 'Lucky Box' },
   { value: 'manual', label: 'Manual Reward' },
 ]
+
+const REWARD_TYPE_GUIDE = {
+  discount: {
+    title: 'Point coupon',
+    text: 'Customer spends points and receives a money or percent discount coupon for checkout.',
+  },
+  free_delivery: {
+    title: 'Delivery reward',
+    text: 'Customer spends points and receives a free delivery coupon for checkout.',
+  },
+  gift: {
+    title: 'Product reward',
+    text: 'Use a reward-only item, or link an existing store product when the item is also sold in the shop.',
+  },
+  voucher: {
+    title: 'Voucher reward',
+    text: 'Customer spends points and receives a checkout voucher with optional minimum order.',
+  },
+  lucky_box: {
+    title: 'Lucky box reward',
+    text: 'Attach a product as the visible reward item, then fulfill the redemption from reward orders.',
+  },
+  manual: {
+    title: 'Manual reward',
+    text: 'Customer spends points and your staff handles the reward manually after redemption.',
+  },
+}
 
 const DISCOUNT_TYPES = [
   { value: 'amount', label: 'Amount' },
@@ -179,6 +215,12 @@ const emptyReward = {
   is_active: true,
 }
 
+function getCreateRewardFromSearch(search) {
+  const params = new URLSearchParams(search)
+  if (params.get('new') !== '1') return null
+  return { type: params.get('type') || 'discount' }
+}
+
 function unwrapList(data) {
   return data?.results ?? data ?? []
 }
@@ -241,6 +283,23 @@ function PremiumKpiCard({ title, value, trend, icon: Icon, tone, trendTone = 'te
           <p className="mt-2 text-[28px] font-black leading-none tracking-tight text-gray-950">{value}</p>
           <p className={cn('mt-3 text-sm font-black', trendTone)}>{trend || hint}</p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function OverviewKpiCard({ title, value, subtitle, icon: Icon, tone }) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-black uppercase text-gray-400">{title}</p>
+          <p className="mt-2 text-2xl font-black leading-none text-gray-950">{value}</p>
+          {subtitle && <p className="mt-2 truncate text-xs font-semibold text-gray-500">{subtitle}</p>}
+        </div>
+        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tone)}>
+          <Icon size={18} />
+        </span>
       </div>
     </div>
   )
@@ -508,6 +567,7 @@ function RewardProgramOverview() {
 }
 
 export default function RewardDashboardAdmin() {
+  const navigate = useNavigate()
   const { data: stats } = useQuery({
     queryKey: ['admin-reward-stats'],
     queryFn: () => ordersApi.adminRewards.items.stats().then((r) => r.data),
@@ -568,62 +628,80 @@ export default function RewardDashboardAdmin() {
     expiringPoints: Number(stats?.expiring_points || 0) || 0,
     physicalRewardsLeft: Number(availablePhysicalRewards || 0) || 0,
   }
-  const topRewards = Object.values(popularRewards)
+  const topRewards = Object.values(popularRewards).sort((a, b) => Number(b.count || 0) - Number(a.count || 0)).slice(0, 5)
   const topRewardMax = Math.max(...topRewards.map((item) => Number(item.count ?? item.redeemed ?? 0)), 1)
   const recentRequests = redemptions.slice(0, 5)
   const expiringCustomers = pointsData.filter((customer) => Number(customer.points || 0) > 0).slice(0, 5)
 
   return (
     <div className="min-h-screen space-y-5 bg-[#F8F9FC]">
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
-        <PremiumKpiCard title="Total Points Issued" value={dashboardValues.totalPointsIssued.toLocaleString()} trend="+12.5% this month" icon={Gift} tone="bg-pink-50 text-[#EC3F8F]" />
-        <PremiumKpiCard title="Total Points Redeemed" value={dashboardValues.totalPointsRedeemed.toLocaleString()} trend="+9.3% this month" icon={Award} tone="bg-orange-50 text-orange-500" />
-        <PremiumKpiCard title="Active Members" value={dashboardValues.activeMembers.toLocaleString()} trend="+8.7% this month" icon={UserRound} tone="bg-violet-50 text-violet-600" />
-        <PremiumKpiCard title="Pending Requests" value={dashboardValues.pendingRequests.toLocaleString()} trend="-3.2% this month" trendTone="text-pink-600" icon={FileText} tone="bg-sky-50 text-sky-600" />
-        <PremiumKpiCard title="Expiring Points" value={dashboardValues.expiringPoints.toLocaleString()} trend="This month" trendTone="text-gray-500" icon={Clock} tone="bg-pink-50 text-[#EC3F8F]" />
-        <PremiumKpiCard title="Physical Rewards Left" value={dashboardValues.physicalRewardsLeft.toLocaleString()} trend="In Stock" trendTone="text-gray-500" icon={ShoppingCart} tone="bg-emerald-50 text-emerald-600" />
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#EC3F8F]">Rewards Overview</p>
+            <h1 className="mt-1 text-2xl font-black text-gray-950">Points, redemptions, and reward health</h1>
+            <p className="mt-1 text-sm font-semibold text-gray-500">A quick operational view of what needs attention today.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => navigate('/admin/rewards/products?new=1')} className="btn-primary h-11">
+              <Plus size={16} /> Reward Item
+            </button>
+            <button type="button" onClick={() => navigate('/admin/rewards/redemptions')} className="btn-secondary h-11">
+              <FileText size={16} /> Redemptions
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.24fr_1fr_0.78fr]">
-        <PremiumChartCard title="Points Activity (Last 6 Months)" subtitle="">
-          <div className="mb-4 flex justify-end">
-            <button className="rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-black text-gray-600 shadow-sm">Last 6 Months</button>
-          </div>
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <OverviewKpiCard title="Issued" value={dashboardValues.totalPointsIssued.toLocaleString()} subtitle="Total points" icon={Gift} tone="bg-pink-50 text-[#EC3F8F]" />
+        <OverviewKpiCard title="Redeemed" value={dashboardValues.totalPointsRedeemed.toLocaleString()} subtitle="Spent by members" icon={Award} tone="bg-orange-50 text-orange-500" />
+        <OverviewKpiCard title="Members" value={dashboardValues.activeMembers.toLocaleString()} subtitle="With balance" icon={UserRound} tone="bg-violet-50 text-violet-600" />
+        <OverviewKpiCard title="Pending" value={dashboardValues.pendingRequests.toLocaleString()} subtitle="Need review" icon={FileText} tone="bg-sky-50 text-sky-600" />
+        <OverviewKpiCard title="Expiring" value={dashboardValues.expiringPoints.toLocaleString()} subtitle="This month" icon={Clock} tone="bg-amber-50 text-amber-600" />
+        <OverviewKpiCard title="Stock Left" value={dashboardValues.physicalRewardsLeft.toLocaleString()} subtitle="Physical rewards" icon={ShoppingCart} tone="bg-emerald-50 text-emerald-600" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.5fr_0.9fr]">
+        <PremiumChartCard title="Points Activity" subtitle="Last 6 months">
           <MiniLineChart />
         </PremiumChartCard>
-        <DonutDistributionCard totalPoints={dashboardValues.totalPointsIssued} />
-        <PremiumChartCard title="Top Redeemed Rewards" subtitle="">
-          <div className="mb-5 flex justify-end">
-            <button className="rounded-xl border border-gray-100 bg-white px-4 py-2 text-sm font-black text-gray-600 shadow-sm">This Month</button>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-black text-gray-950">Top Redeemed Rewards</h2>
+              <p className="mt-1 text-xs font-semibold text-gray-400">Most exchanged reward items</p>
+            </div>
+            <button type="button" onClick={() => navigate('/admin/rewards/redemptions')} className="text-xs font-black text-[#EC3F8F]">View All</button>
           </div>
-          <div className="space-y-6">
+          <div className="space-y-3">
             {topRewards.map((item, index) => {
               const Icon = [Ticket, Truck, ShoppingCart, Percent, Package][index] || Gift
               const value = Number(item.count ?? item.redeemed ?? 0)
               return (
-                <div key={item.name} className="grid grid-cols-[24px_48px_1fr_auto] items-center gap-4">
-                  <span className="text-lg font-black text-gray-800">{index + 1}</span>
-                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]">
-                    <Icon size={24} />
+                <div key={item.name} className="flex items-center gap-3 rounded-xl bg-[#F8F9FC] px-3 py-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-black text-gray-500">{index + 1}</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]">
+                    <Icon size={18} />
                   </span>
-                  <span className="font-black text-gray-900">{item.name}</span>
-                  <span className="font-black text-gray-700">{value.toLocaleString()}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-black text-gray-900">{item.name}</span>
+                  <span className="shrink-0 text-sm font-black text-gray-700">{value.toLocaleString()}</span>
                 </div>
               )
             })}
             {topRewards.length === 0 && <p className="py-8 text-center text-sm font-semibold text-gray-400">No redeemed rewards yet.</p>}
           </div>
-        </PremiumChartCard>
+        </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.75fr_0.5fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-black text-gray-950">Recent Redeem Requests</h2>
               <p className="mt-1 text-xs font-semibold text-gray-400">Latest customer exchange activity</p>
             </div>
-            <button className="text-xs font-black text-[#EC3F8F]">View All</button>
+            <button type="button" onClick={() => navigate('/admin/rewards/redemptions')} className="text-xs font-black text-[#EC3F8F]">View All</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -663,7 +741,7 @@ export default function RewardDashboardAdmin() {
               <h2 className="text-base font-black text-gray-950">Points Expiring Soon</h2>
               <p className="mt-1 text-xs font-semibold text-gray-400">Customers needing reminder follow-up</p>
             </div>
-            <button className="text-xs font-black text-[#EC3F8F]">View All</button>
+            <button type="button" onClick={() => navigate('/admin/rewards/points')} className="text-xs font-black text-[#EC3F8F]">View All</button>
           </div>
           <div className="space-y-3">
             {expiringCustomers.map((customer, index) => (
@@ -684,39 +762,6 @@ export default function RewardDashboardAdmin() {
             {expiringCustomers.length === 0 && <div className="rounded-xl bg-[#F8F9FC] px-4 py-8 text-center text-sm font-semibold text-gray-400">No customers with points to remind.</div>}
           </div>
         </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-7 shadow-sm">
-          <h2 className="text-xl font-black text-gray-950">Quick Actions</h2>
-          <div className="mt-8 space-y-5">
-            {[
-              ['Add Reward', Gift, 'bg-[#EC3F8F] text-white shadow-lg shadow-pink-100'],
-              ['Create Campaign', Send, 'bg-pink-50 text-[#EC3F8F]'],
-              ['Manage Tiers', Crown, 'bg-pink-50 text-[#EC3F8F]'],
-              ['Export Report', Download, 'bg-pink-50 text-[#EC3F8F]'],
-            ].map(([label, Icon, cls]) => (
-              <button key={label} onClick={() => toast.error(`${label} needs route wiring before it can open from this card`)} className={cn('flex h-16 w-full items-center gap-5 rounded-xl px-6 text-lg font-black transition active:scale-[0.99]', cls)}>
-                <Icon size={26} /> {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-5">
-        {BOTTOM_REWARD_METRICS.map((metric) => {
-          const Icon = metric.icon
-          return (
-            <div key={metric.title} className="flex items-center gap-4 border-gray-100 xl:border-r xl:last:border-r-0">
-              <span className={cn('flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl', metric.tone)}>
-                <Icon size={25} />
-              </span>
-              <div>
-                <p className="text-sm font-black text-gray-500">{metric.title}</p>
-                <p className="mt-1 text-2xl font-black text-gray-950">{metric.value}</p>
-                <p className="mt-1 text-sm font-black text-emerald-600">{metric.trend}</p>
-              </div>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
@@ -1082,6 +1127,7 @@ function EarningRuleDrawer({ rule, onClose, onSave }) {
 
 function RewardFormModal({ reward, onClose }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const isEdit = Boolean(reward?.id)
   const fileInputRef = useRef(null)
   const [form, setForm] = useState(() => ({
@@ -1099,6 +1145,7 @@ function RewardFormModal({ reward, onClose }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(reward?.reward_image_url || null)
   const [clearRewardImage, setClearRewardImage] = useState(false)
+  const [physicalSource, setPhysicalSource] = useState(reward?.gift_product ? 'store_product' : 'reward_only')
   const [saveError, setSaveError] = useState('')
 
   const { data: productsData } = useQuery({
@@ -1112,6 +1159,7 @@ function RewardFormModal({ reward, onClose }) {
   const isCouponReward = ['voucher', 'discount'].includes(form.type)
   const isDeliveryReward = form.type === 'free_delivery'
   const usesOrderCondition = isCouponReward || isDeliveryReward
+  const selectedGuide = REWARD_TYPE_GUIDE[form.type] || REWARD_TYPE_GUIDE.discount
 
   const saveMutation = useMutation({
     mutationFn: (payload) => isEdit
@@ -1143,6 +1191,11 @@ function RewardFormModal({ reward, onClose }) {
       gift_product: ['gift', 'lucky_box'].includes(value) ? current.gift_product : '',
       coupon_value: ['voucher', 'discount'].includes(value) ? current.coupon_value : '0.00',
     }))
+  }
+
+  const setRewardSource = (source) => {
+    setPhysicalSource(source)
+    if (source === 'reward_only') set('gift_product', '')
   }
 
   const displayImage = imagePreview || selectedProduct?.primary_image || null
@@ -1199,8 +1252,8 @@ function RewardFormModal({ reward, onClose }) {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EC3F8F]">Shadow Shop Rewards Admin</p>
-              <h2 className="mt-1 text-xl font-black text-gray-950">{isEdit ? 'Edit Reward' : 'Create New Reward'}</h2>
-              <p className="mt-1 text-sm font-semibold text-gray-400">Only the fields needed for this reward type are shown.</p>
+              <h2 className="mt-1 text-xl font-black text-gray-950">{isEdit ? 'Edit Reward Item' : 'Create Reward Item'}</h2>
+              <p className="mt-1 text-sm font-semibold text-gray-400">Use this page for point rewards. Reward-only items do not need to be sold in the store.</p>
             </div>
             <button type="button" onClick={onClose} className="rounded-xl bg-gray-100 p-2 text-gray-500 hover:bg-pink-50 hover:text-[#EC3F8F]">
               <X size={18} />
@@ -1304,6 +1357,10 @@ function RewardFormModal({ reward, onClose }) {
                 </button>
               ))}
             </div>
+            <div className="mt-3 rounded-2xl border border-pink-100 bg-pink-50/70 p-3">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-[#EC3F8F]">{selectedGuide.title}</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">{selectedGuide.text}</p>
+            </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="block">
@@ -1330,27 +1387,81 @@ function RewardFormModal({ reward, onClose }) {
               )}
               {isPhysicalReward && (
                 <label className="block sm:col-span-2">
-                  <span className="label">Gift product for display</span>
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                    <span className="label mb-0">Reward item source</span>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/admin/products')}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gray-100 px-3 text-xs font-black text-gray-600 transition hover:bg-pink-50 hover:text-[#EC3F8F]"
+                    >
+                      <Package size={13} /> Manage Products
+                    </button>
+                  </div>
                   <div className="grid gap-3">
-                    <select className="select-field h-11 bg-white" value={form.gift_product || ''} onChange={(e) => set('gift_product', e.target.value)}>
-                      <option value="">Select product</option>
-                      {products.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.code} - {product.name}
-                        </option>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {[
+                        { value: 'reward_only', label: 'Reward-only item', note: 'Not shown for sale in store' },
+                        { value: 'store_product', label: 'Link store product', note: 'Use an existing product' },
+                      ].map((source) => (
+                        <button
+                          key={source.value}
+                          type="button"
+                          onClick={() => setRewardSource(source.value)}
+                          className={cn(
+                            'flex min-h-[58px] items-start gap-2 rounded-xl border px-3 py-3 text-left transition',
+                            physicalSource === source.value ? 'border-[#EC3F8F] bg-pink-50 text-[#EC3F8F]' : 'border-gray-200 bg-white text-gray-600 hover:border-pink-200'
+                          )}
+                        >
+                          <span className={cn('mt-0.5 h-3 w-3 shrink-0 rounded-full border', physicalSource === source.value ? 'border-[#EC3F8F] bg-[#EC3F8F]' : 'border-gray-300')} />
+                          <span>
+                            <span className="block text-xs font-black">{source.label}</span>
+                            <span className="mt-0.5 block text-[11px] font-semibold opacity-70">{source.note}</span>
+                          </span>
+                        </button>
                       ))}
-                    </select>
-                    <div className="flex min-h-[58px] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
-                        {selectedProduct?.primary_image ? (
+                    </div>
+                    {physicalSource === 'store_product' && (
+                      <select className="select-field h-11 bg-white" value={form.gift_product || ''} onChange={(e) => set('gift_product', e.target.value)}>
+                        <option value="">Select product</option>
+                        {products.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.code} - {product.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="flex min-h-[72px] items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+                        {physicalSource === 'reward_only' && displayImage ? (
+                          <img src={displayImage} alt={form.name || 'Reward item'} className="h-full w-full object-contain p-1" />
+                        ) : selectedProduct?.primary_image ? (
                           <img src={selectedProduct.primary_image} alt={selectedProduct.name} className="h-full w-full object-contain p-1" />
                         ) : (
                           <Award size={18} className="text-gray-300" />
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-black text-gray-800">{selectedProduct?.name || 'No product selected'}</p>
-                        <p className="text-[11px] font-semibold text-gray-400">{selectedProduct?.code || 'Shown to customers'}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-black text-gray-800">
+                          {physicalSource === 'reward_only' ? (form.name || 'Reward-only item') : (selectedProduct?.name || 'No product selected')}
+                        </p>
+                        <p className="text-[11px] font-semibold text-gray-400">
+                          {physicalSource === 'reward_only'
+                            ? 'Uses reward name, reward image, and reward stock only'
+                            : (selectedProduct?.code || 'Choose a product only when this item is also sold in store')}
+                        </p>
+                        {physicalSource === 'reward_only' && (
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black">
+                            <span className="rounded-full bg-white px-2 py-1 text-gray-500">Store hidden</span>
+                            <span className="rounded-full bg-white px-2 py-1 text-gray-500">Stock from Reward Stock</span>
+                          </div>
+                        )}
+                        {physicalSource === 'store_product' && selectedProduct && (
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black">
+                            <span className="rounded-full bg-white px-2 py-1 text-gray-500">Price {formatCurrency(selectedProduct.price || 0)}</span>
+                            {'stock' in selectedProduct && <span className="rounded-full bg-white px-2 py-1 text-gray-500">Stock {selectedProduct.stock ?? 0}</span>}
+                            {selectedProduct.is_active === false && <span className="rounded-full bg-red-50 px-2 py-1 text-red-500">Inactive product</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1397,7 +1508,7 @@ function RewardFormModal({ reward, onClose }) {
               <input className="input-field h-11 bg-white" type="datetime-local" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} />
             </label>
             <label className="block">
-              <span className="label">End date</span>
+              <span className="label">Expire date</span>
               <input className="input-field h-11 bg-white" type="datetime-local" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} />
             </label>
           </div>
@@ -1423,13 +1534,12 @@ function RewardFormModal({ reward, onClose }) {
 }
 
 export function RewardItemsAdmin() {
-  const createType = new URLSearchParams(window.location.search).get('type') || ''
+  const navigate = useNavigate()
+  const location = useLocation()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [page, setPage] = useState(1)
-  const [editingReward, setEditingReward] = useState(() => (
-    new URLSearchParams(window.location.search).get('new') === '1' ? { type: createType || 'discount' } : null
-  ))
+  const [editingReward, setEditingReward] = useState(() => getCreateRewardFromSearch(location.search))
   const [statusFilter, setStatusFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [tierFilter, setTierFilter] = useState('')
@@ -1438,6 +1548,24 @@ export function RewardItemsAdmin() {
   const importInputRef = useRef(null)
   const [confirm, ConfirmDialog] = useConfirm()
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const createReward = getCreateRewardFromSearch(location.search)
+    if (createReward) setEditingReward(createReward)
+  }, [location.search])
+
+  const closeRewardForm = () => {
+    setEditingReward(null)
+    const params = new URLSearchParams(location.search)
+    if (params.get('new') === '1') {
+      params.delete('new')
+      params.delete('type')
+      navigate({
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : '',
+      }, { replace: true })
+    }
+  }
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-reward-items', search, typeFilter, page],
@@ -1624,6 +1752,39 @@ export function RewardItemsAdmin() {
 
   return (
     <div className="space-y-5 bg-[#F8F9FC]">
+      <div className="rounded-2xl border border-pink-100 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EC3F8F]">Point Reward Items</p>
+            <h1 className="mt-1 text-xl font-black text-gray-950">Create rewards customers can exchange with points</h1>
+            <p className="mt-1 text-sm font-semibold text-gray-500">Create reward-only gifts, coupons, delivery rewards, or link a store product only when the same item is sold in the shop.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => navigate('/admin/products')} className="btn-secondary h-11 justify-center">
+              <Package size={16} /> Products
+            </button>
+            <button type="button" onClick={() => setEditingReward({ type: 'gift' })} className="h-11 justify-center rounded-xl bg-[#EC3F8F] px-4 text-sm font-black text-white shadow-lg shadow-pink-200 transition hover:bg-pink-600">
+              <Gift size={16} className="inline" /> New Product Reward
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {[
+            { icon: Gift, title: '1. Reward-only item', text: 'Use reward name, image, points, and reward stock when it is not for sale.' },
+            { icon: Package, title: '2. Optional store link', text: 'Attach a product only when the reward item is also sold in the shop.' },
+            { icon: Ticket, title: '3. Customer exchange', text: 'Customer spends points, then admin fulfills from redemptions.' },
+          ].map((item) => (
+            <div key={item.title} className="flex gap-3 rounded-xl border border-gray-100 bg-[#F8F9FC] p-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]"><item.icon size={18} /></span>
+              <div>
+                <p className="text-sm font-black text-gray-900">{item.title}</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">{item.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
           { title: 'Total Rewards', value: stats.total.toLocaleString(), subtitle: 'All time', icon: Gift, tone: 'bg-pink-50 text-[#EC3F8F]' },
@@ -1802,8 +1963,258 @@ export function RewardItemsAdmin() {
         )}
       </div>
 
-      {editingReward && <RewardFormModal reward={editingReward} onClose={() => setEditingReward(null)} />}
+      {editingReward && <RewardFormModal reward={editingReward} onClose={closeRewardForm} />}
       {ConfirmDialog}
+    </div>
+  )
+}
+
+export function RewardStockAdmin() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [draftStocks, setDraftStocks] = useState({})
+  const [savingId, setSavingId] = useState(null)
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['admin-reward-stock'],
+    queryFn: () => ordersApi.adminRewards.items.list({ page_size: 300 }).then((r) => r.data),
+  })
+
+  const rewardItems = unwrapList(data).filter((reward) => ['gift', 'lucky_box', 'manual'].includes(reward.type))
+  const stockRows = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase()
+    return rewardItems
+      .map((reward) => {
+        const currentStock = reward.stock === null || reward.stock === undefined ? null : Number(reward.stock || 0)
+        const stockStatus = currentStock === null ? 'unlimited' : currentStock <= 0 ? 'out' : currentStock <= 5 ? 'low' : 'healthy'
+        return {
+          ...reward,
+          currentStock,
+          stockStatus,
+          image: reward.reward_image_url || reward.gift_product_image,
+          productLabel: reward.gift_product_name || reward.type_label || 'Reward item',
+        }
+      })
+      .filter((reward) => {
+        const haystack = `${reward.name} ${reward.productLabel} ${reward.gift_product_code || ''}`.toLowerCase()
+        const matchesSearch = !normalizedSearch || haystack.includes(normalizedSearch)
+        const matchesStatus = !statusFilter || reward.stockStatus === statusFilter
+        return matchesSearch && matchesStatus
+      })
+  }, [rewardItems, search, statusFilter])
+
+  const stats = {
+    tracked: rewardItems.filter((reward) => reward.stock !== null && reward.stock !== undefined).length,
+    unlimited: rewardItems.filter((reward) => reward.stock === null || reward.stock === undefined).length,
+    low: rewardItems.filter((reward) => reward.stock !== null && reward.stock !== undefined && Number(reward.stock || 0) > 0 && Number(reward.stock || 0) <= 5).length,
+    out: rewardItems.filter((reward) => reward.stock !== null && reward.stock !== undefined && Number(reward.stock || 0) <= 0).length,
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: ({ reward, stock }) => {
+      const payload = { stock: stock === null ? null : Math.max(0, Number(stock || 0)) }
+      return ordersApi.adminRewards.items.update(reward.id, payload)
+    },
+    onMutate: ({ reward }) => setSavingId(reward.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-reward-stock'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-reward-items'] })
+      toast.success('Reward stock updated')
+    },
+    onError: (error) => toast.error(error?.response?.data?.detail || 'Could not update reward stock'),
+    onSettled: () => setSavingId(null),
+  })
+
+  const displayStock = (reward) => {
+    if (Object.prototype.hasOwnProperty.call(draftStocks, reward.id)) return draftStocks[reward.id]
+    return reward.currentStock === null ? '' : String(reward.currentStock)
+  }
+
+  const setDraftStock = (reward, value) => {
+    setDraftStocks((current) => ({ ...current, [reward.id]: value }))
+  }
+
+  const saveStock = (reward, stockValue = displayStock(reward)) => {
+    const nextStock = stockValue === '' || stockValue === null ? null : Number(stockValue)
+    if (nextStock !== null && (Number.isNaN(nextStock) || nextStock < 0)) {
+      toast.error('Stock must be 0 or more')
+      return
+    }
+    updateMutation.mutate({ reward, stock: nextStock })
+  }
+
+  const adjustStock = (reward, delta) => {
+    const base = reward.currentStock === null ? 0 : Number(displayStock(reward) || 0)
+    const nextStock = Math.max(0, base + delta)
+    setDraftStock(reward, String(nextStock))
+    saveStock(reward, nextStock)
+  }
+
+  return (
+    <div className="space-y-5 bg-[#F8F9FC]">
+      <div className="rounded-2xl border border-pink-100 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EC3F8F]">Reward Stock</p>
+            <h1 className="mt-1 text-2xl font-black text-gray-950">Control stock for point reward products</h1>
+            <p className="mt-1 text-sm font-semibold text-gray-500">Use this page for exchange stock only. Normal shop stock still stays in Products.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => navigate('/admin/rewards/products?new=1&type=gift')} className="btn-primary h-11">
+              <Plus size={16} /> Add Reward Product
+            </button>
+            <button type="button" onClick={() => navigate('/admin/rewards/products')} className="btn-secondary h-11">
+              <Gift size={16} /> Reward Products
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        {[
+          { title: 'Tracked Stock', value: stats.tracked, icon: Warehouse, tone: 'bg-pink-50 text-[#EC3F8F]' },
+          { title: 'Unlimited', value: stats.unlimited, icon: Package, tone: 'bg-sky-50 text-sky-600' },
+          { title: 'Low Stock', value: stats.low, icon: AlertCircle, tone: 'bg-amber-50 text-amber-600' },
+          { title: 'Out of Stock', value: stats.out, icon: ShoppingCart, tone: 'bg-red-50 text-red-600' },
+        ].map((item) => (
+          <div key={item.title} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-4">
+              <span className={cn('flex h-12 w-12 items-center justify-center rounded-2xl', item.tone)}>
+                <item.icon size={22} />
+              </span>
+              <div>
+                <p className="text-xs font-black text-gray-500">{item.title}</p>
+                <p className="mt-1 text-2xl font-black text-gray-950">{Number(item.value || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[1fr_190px_auto]">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input className="input-field h-11 bg-[#F8F9FC] pl-9" placeholder="Search reward stock..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="select-field h-11 bg-[#F8F9FC]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All Stock</option>
+            <option value="healthy">Healthy</option>
+            <option value="low">Low Stock</option>
+            <option value="out">Out of Stock</option>
+            <option value="unlimited">Unlimited</option>
+          </select>
+          <button type="button" onClick={() => refetch()} className="btn-secondary h-11">
+            <RotateCw size={16} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div>
+            <h2 className="text-xl font-black text-gray-950">Reward Stock Items</h2>
+            <p className="mt-1 text-xs font-semibold text-gray-400">Add, deduct, or set unlimited exchange stock.</p>
+          </div>
+          <span className="rounded-full bg-pink-50 px-3 py-1.5 text-xs font-black text-[#EC3F8F]">{stockRows.length} items</span>
+        </div>
+
+        {isError && (
+          <div className="m-5 rounded-2xl border border-red-100 bg-red-50 p-4">
+            <p className="text-sm font-black text-red-700">Reward stock could not load</p>
+            <button type="button" onClick={() => refetch()} className="mt-3 rounded-xl bg-white px-4 py-2 text-sm font-black text-red-600 shadow-sm">Retry</button>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="space-y-3 p-5">
+            {[...Array(6)].map((_, index) => <div key={index} className="h-16 animate-pulse rounded-2xl bg-gray-100" />)}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-[#FBFCFE]">
+                  <th className="px-5 py-4 text-left text-xs font-black uppercase text-gray-400">Reward Product</th>
+                  <th className="px-5 py-4 text-left text-xs font-black uppercase text-gray-400">Type</th>
+                  <th className="px-5 py-4 text-right text-xs font-black uppercase text-gray-400">Points</th>
+                  <th className="px-5 py-4 text-left text-xs font-black uppercase text-gray-400">Status</th>
+                  <th className="px-5 py-4 text-center text-xs font-black uppercase text-gray-400">Stock</th>
+                  <th className="px-5 py-4 text-right text-xs font-black uppercase text-gray-400">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stockRows.map((reward, index) => {
+                  const isUnlimited = reward.currentStock === null && !Object.prototype.hasOwnProperty.call(draftStocks, reward.id)
+                  const statusStyles = {
+                    healthy: 'bg-emerald-50 text-emerald-700',
+                    low: 'bg-amber-50 text-amber-700',
+                    out: 'bg-red-50 text-red-700',
+                    unlimited: 'bg-sky-50 text-sky-700',
+                  }
+                  const statusLabel = {
+                    healthy: 'Healthy',
+                    low: 'Low Stock',
+                    out: 'Out of Stock',
+                    unlimited: 'Unlimited',
+                  }
+                  return (
+                    <tr key={reward.id} className="border-b border-gray-50 transition hover:bg-pink-50/30">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <RewardThumb reward={reward} fallbackIndex={index} />
+                          <div className="min-w-0">
+                            <p className="truncate font-black text-gray-950">{reward.name}</p>
+                            <p className="mt-1 truncate text-xs font-semibold text-gray-400">{reward.productLabel}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4"><span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-600">{reward.type_label || reward.type}</span></td>
+                      <td className="px-5 py-4 text-right font-black text-gray-900">{Number(reward.points_required || 0).toLocaleString()}</td>
+                      <td className="px-5 py-4"><span className={cn('rounded-full px-3 py-1 text-xs font-black', statusStyles[reward.stockStatus])}>{statusLabel[reward.stockStatus]}</span></td>
+                      <td className="px-5 py-4">
+                        <div className="mx-auto grid w-[190px] grid-cols-[38px_1fr_38px] items-center overflow-hidden rounded-xl border border-gray-200 bg-white">
+                          <button type="button" disabled={savingId === reward.id} onClick={() => adjustStock(reward, -1)} className="flex h-10 items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-40"><Minus size={15} /></button>
+                          <input
+                            className="h-10 min-w-0 border-x border-gray-200 text-center text-sm font-black text-gray-950 outline-none"
+                            type="number"
+                            min="0"
+                            placeholder="Unlimited"
+                            value={displayStock(reward)}
+                            onChange={(e) => setDraftStock(reward, e.target.value)}
+                          />
+                          <button type="button" disabled={savingId === reward.id} onClick={() => adjustStock(reward, 1)} className="flex h-10 items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-40"><Plus size={15} /></button>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button type="button" disabled={savingId === reward.id} onClick={() => saveStock(reward)} className="rounded-xl bg-[#EC3F8F] px-3 py-2 text-xs font-black text-white shadow-sm disabled:opacity-50">
+                            {savingId === reward.id ? <Loader2 size={14} className="inline animate-spin" /> : <Check size={14} className="inline" />} Save
+                          </button>
+                          <button type="button" disabled={savingId === reward.id || isUnlimited} onClick={() => saveStock(reward, '')} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 disabled:opacity-50">Unlimited</button>
+                          <button type="button" onClick={() => navigate(`/admin/rewards/products?new=0`)} className="rounded-xl bg-gray-100 px-3 py-2 text-xs font-black text-gray-600">Products</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {stockRows.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-50 text-[#EC3F8F]"><Warehouse size={30} /></span>
+                <h2 className="mt-4 text-lg font-black text-gray-950">No reward stock items found</h2>
+                <p className="mt-1 max-w-sm text-sm font-semibold text-gray-400">Create a Gift Product, Lucky Box, or Manual reward first.</p>
+                <button type="button" onClick={() => navigate('/admin/rewards/products?new=1&type=gift')} className="mt-5 rounded-xl bg-[#EC3F8F] px-5 py-3 text-sm font-black text-white shadow-lg shadow-pink-200">
+                  <Plus size={16} className="inline" /> Add Reward Product
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -2536,15 +2947,41 @@ export function RewardMemberTiersAdmin() {
 }
 
 export function RewardCouponsAdmin() {
-  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [editingPromo, setEditingPromo] = useState(null)
+  const [showPromoModal, setShowPromoModal] = useState(false)
+  const [confirm, ConfirmDialog] = useConfirm()
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['admin-reward-redemptions', 'coupons'],
-    queryFn: () => ordersApi.adminRewards.redemptions.list({ page_size: 500 }).then((r) => r.data),
+    queryKey: ['admin-promo-codes', search],
+    queryFn: () => ordersApi.adminRewards.promoCodes.list({
+      search: search || undefined,
+      page_size: 500,
+    }).then((r) => r.data),
   })
-  const issuedCoupons = unwrapList(data).filter((item) => item.coupon_code)
-  const activeCoupons = issuedCoupons.filter((item) => item.status === 'active')
-  const usedCoupons = issuedCoupons.filter((item) => ['used', 'completed'].includes(item.status))
-  const percentUsed = issuedCoupons.length ? Math.round((usedCoupons.length / issuedCoupons.length) * 100) : 0
+  const promoCodes = unwrapList(data)
+  const activePromos = promoCodes.filter((item) => item.is_active)
+  const usedCount = promoCodes.reduce((sum, item) => sum + Number(item.usage_count || 0), 0)
+  const usageLimit = promoCodes.reduce((sum, item) => sum + Number(item.usage_limit || 0), 0)
+  const percentUsed = usageLimit ? Math.round((usedCount / usageLimit) * 100) : 0
+
+  const toggleMutation = useMutation({
+    mutationFn: (id) => ordersApi.adminRewards.promoCodes.toggleActive(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-promo-codes'] })
+      toast.success('Promo status updated')
+    },
+    onError: (error) => toast.error(formatApiError(error.response?.data, 'Could not update promo code')),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => ordersApi.adminRewards.promoCodes.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-promo-codes'] })
+      toast.success('Promo code deleted')
+    },
+    onError: (error) => toast.error(formatApiError(error.response?.data, 'Could not delete promo code')),
+  })
 
   const copyCoupon = async (code) => {
     try {
@@ -2555,16 +2992,31 @@ export function RewardCouponsAdmin() {
     }
   }
 
+  const requestDelete = async (promo) => {
+    const ok = await confirm('Delete promo code?', `Delete ${promo.code}? Used order history will stay protected.`, {
+      confirmText: 'Delete',
+      cancelText: 'Keep',
+      tone: 'danger',
+      icon: 'warning',
+    })
+    if (ok) deleteMutation.mutate(promo.id)
+  }
+
   const exportCoupons = () => {
-    const header = ['Coupon Code', 'Customer', 'Reward', 'Discount', 'Minimum Order', 'Valid Until', 'Status']
-    const rows = issuedCoupons.map((coupon) => [
-      coupon.coupon_code,
-      coupon.user_name || '',
-      coupon.reward_name || '',
-      formatCouponDiscount(coupon),
-      formatCurrency(coupon.minimum_order_amount || 0),
-      coupon.ends_at ? formatDate(coupon.ends_at) : 'No expiry',
-      coupon.status || '',
+    const header = ['Coupon Code', 'Name', 'Type', 'Apply Scope', 'Value', 'Minimum Order', 'Max Discount', 'Usage', 'Per Customer', 'Start Date', 'End Date', 'Status']
+    const rows = promoCodes.map((promo) => [
+      promo.code,
+      promo.name,
+      promoLabel(promo),
+      applyScopeLabel(promo),
+      promoValue(promo),
+      formatCurrency(promo.minimum_order_amount || 0),
+      promo.max_discount_amount ? formatCurrency(promo.max_discount_amount) : '',
+      `${promo.usage_count || 0}/${promo.usage_limit || 'unlimited'}`,
+      promo.per_customer_limit || 'unlimited',
+      promo.starts_at ? formatDate(promo.starts_at) : '',
+      promo.ends_at ? formatDate(promo.ends_at) : '',
+      promo.is_active ? 'Active' : 'Inactive',
     ])
     const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -2582,60 +3034,95 @@ export function RewardCouponsAdmin() {
       <div className="page-header">
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Promo Codes</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Control reward coupon codes customers can apply in cart and checkout.</p>
+          <p className="mt-0.5 text-sm text-gray-500">Create public cart codes for product discounts, delivery discounts, and free delivery.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={exportCoupons} disabled={!issuedCoupons.length} className="btn-secondary h-11">
+          <button type="button" onClick={exportCoupons} disabled={!promoCodes.length} className="btn-secondary h-11">
             <Download size={16} /> Export
           </button>
-          <button type="button" onClick={() => navigate('/admin/rewards/products?new=1&type=discount')} className="btn-primary h-11">
-            <Plus size={16} /> Create Coupon
+          <button type="button" onClick={() => { setEditingPromo(null); setShowPromoModal(true) }} className="btn-primary h-11">
+            <Plus size={16} /> New Coupon Code
           </button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <PremiumKpiCard title="Issued Codes" value={issuedCoupons.length.toLocaleString()} trend="All generated coupons" icon={Ticket} tone="bg-pink-50 text-[#EC3F8F]" />
-        <PremiumKpiCard title="Active Codes" value={activeCoupons.length.toLocaleString()} trend="Ready for checkout" icon={Check} tone="bg-emerald-50 text-emerald-600" />
-        <PremiumKpiCard title="Used Codes" value={usedCoupons.length.toLocaleString()} trend={`${percentUsed}% redeemed`} icon={Percent} tone="bg-amber-50 text-amber-600" />
+        <PremiumKpiCard title="Promo Codes" value={promoCodes.length.toLocaleString()} trend="Admin-created cart codes" icon={Ticket} tone="bg-pink-50 text-[#EC3F8F]" />
+        <PremiumKpiCard title="Active Codes" value={activePromos.length.toLocaleString()} trend="Ready for checkout" icon={Check} tone="bg-emerald-50 text-emerald-600" />
+        <PremiumKpiCard title="Uses" value={usedCount.toLocaleString()} trend={usageLimit ? `${percentUsed}% of total limit` : 'No total limit set'} icon={Percent} tone="bg-amber-50 text-amber-600" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
-        <div className="form-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Coupon Code</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Customer</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Reward</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Type</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Discount</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Min Order</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Valid Until</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {issuedCoupons.map((coupon) => (
-                <tr key={coupon.id} className="data-table-row">
-                  <td className="px-4 py-3 font-mono text-xs font-black text-gray-800">{coupon.coupon_code}</td>
-                  <td className="px-4 py-3 text-gray-600">{coupon.user_name || '-'}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-800">{coupon.reward_name || '-'}</td>
-                  <td className="px-4 py-3 capitalize text-gray-600">{coupon.reward_type?.replaceAll('_', ' ') || '-'}</td>
-                  <td className="px-4 py-3 font-black text-[#EC3F8F]">{formatCouponDiscount(coupon)}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatCurrency(coupon.minimum_order_amount || 0)}</td>
-                  <td className="px-4 py-3 text-gray-500">{coupon.ends_at ? formatDate(coupon.ends_at) : 'No expiry'}</td>
-                  <td className="px-4 py-3"><StatusBadge value={coupon.status} /></td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => copyCoupon(coupon.coupon_code)} className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-pink-50 hover:text-[#EC3F8F]" title="Copy code">
-                      <Copy size={15} />
-                    </button>
-                  </td>
+        <div className="form-card overflow-hidden">
+          <div className="mb-4 flex flex-col gap-3 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+            <div className="relative w-full md:max-w-sm">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input className="input-field pl-9" placeholder="Search code or name..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <button type="button" onClick={() => refetch()} className="btn-secondary h-11">
+              <RotateCw size={16} /> Refresh
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Coupon Code</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Name</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Benefit</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Apply Scope</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Min Order</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Usage</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Valid Until</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {promoCodes.map((promo) => (
+                  <tr key={promo.id} className="data-table-row">
+                    <td className="px-4 py-3">
+                      <button type="button" onClick={() => copyCoupon(promo.code)} className="font-mono text-xs font-black text-gray-800 underline-offset-2 hover:text-[#EC3F8F] hover:underline">
+                        {promo.code}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-800">{promo.name}</td>
+                    <td className="px-4 py-3 font-black text-[#EC3F8F]">{promoValue(promo)}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <p className="font-semibold">{applyScopeLabel(promo)}</p>
+                      {promo.apply_scope === 'categories' && promo.target_category_names?.length > 0 && (
+                        <p className="mt-0.5 max-w-[180px] truncate text-xs text-gray-400">{promo.target_category_names.join(', ')}</p>
+                      )}
+                      {promo.apply_scope === 'products' && promo.target_product_names?.length > 0 && (
+                        <p className="mt-0.5 max-w-[180px] truncate text-xs text-gray-400">{promo.target_product_names.join(', ')}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{formatCurrency(promo.minimum_order_amount || 0)}</td>
+                    <td className="px-4 py-3 text-gray-600">{promo.usage_count || 0} / {promo.usage_limit || 'Unlimited'}</td>
+                    <td className="px-4 py-3 text-gray-500">{promo.ends_at ? formatDate(promo.ends_at) : 'No expiry'}</td>
+                    <td className="px-4 py-3">
+                      <button type="button" onClick={() => toggleMutation.mutate(promo.id)} disabled={toggleMutation.isPending} className="disabled:opacity-60">
+                        <StatusBadge value={promo.is_active ? 'Active' : 'Inactive'} />
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => copyCoupon(promo.code)} className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-pink-50 hover:text-[#EC3F8F]" title="Copy code">
+                          <Copy size={15} />
+                        </button>
+                        <button onClick={() => { setEditingPromo(promo); setShowPromoModal(true) }} className="rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-blue-50 hover:text-blue-600" title="Edit">
+                          <Edit3 size={15} />
+                        </button>
+                        <button onClick={() => requestDelete(promo)} className="rounded-lg bg-red-50 p-2 text-red-500 hover:bg-red-100" title="Delete">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {isLoading && <p className="py-8 text-center text-sm font-semibold text-gray-400">Loading promo codes...</p>}
           {isError && (
             <div className="py-8 text-center">
@@ -2643,15 +3130,15 @@ export function RewardCouponsAdmin() {
               <button onClick={() => refetch()} className="mt-3 btn-secondary">Retry</button>
             </div>
           )}
-          {!isLoading && !isError && issuedCoupons.length === 0 && (
+          {!isLoading && !isError && promoCodes.length === 0 && (
             <div className="py-12 text-center">
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-pink-50 text-[#EC3F8F]">
                 <Ticket size={24} />
               </div>
               <p className="mt-4 text-sm font-black text-gray-800">No promo codes yet</p>
-              <p className="mt-1 text-xs font-semibold text-gray-400">Create a discount reward, then customers can redeem points to generate codes.</p>
-              <button onClick={() => navigate('/admin/rewards/products?new=1&type=discount')} className="btn-primary mx-auto mt-4">
-                <Plus size={16} /> Create Coupon
+              <p className="mt-1 text-xs font-semibold text-gray-400">Create a public cart promo code for product or delivery discounts.</p>
+              <button onClick={() => { setEditingPromo(null); setShowPromoModal(true) }} className="btn-primary mx-auto mt-4">
+                <Plus size={16} /> New Coupon Code
               </button>
             </div>
           )}
@@ -2667,19 +3154,30 @@ export function RewardCouponsAdmin() {
           <div className="mt-7 space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-gray-500">Active</span>
-              <span className="font-black text-emerald-600">{activeCoupons.length}</span>
+              <span className="font-black text-emerald-600">{activePromos.length}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-gray-500">Used</span>
-              <span className="font-black text-[#EC3F8F]">{usedCoupons.length}</span>
+              <span className="font-semibold text-gray-500">Total Uses</span>
+              <span className="font-black text-[#EC3F8F]">{usedCount}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="font-semibold text-gray-500">Total</span>
-              <span className="font-black text-gray-900">{issuedCoupons.length}</span>
+              <span className="font-black text-gray-900">{promoCodes.length}</span>
             </div>
           </div>
         </div>
       </div>
+
+      {showPromoModal && (
+        <PromoCodeModal
+          promo={editingPromo}
+          onClose={() => {
+            setShowPromoModal(false)
+            setEditingPromo(null)
+          }}
+        />
+      )}
+      {ConfirmDialog}
     </div>
   )
 }
@@ -2688,6 +3186,311 @@ function formatCouponDiscount(coupon) {
   if (coupon.reward_type === 'free_delivery') return 'Free delivery'
   const value = Number(coupon.coupon_value || 0)
   return coupon.coupon_discount_type === 'percent' ? `${value}%` : formatCurrency(value)
+}
+
+const emptyPromoCode = {
+  name: '',
+  code: '',
+  discount_type: 'percent',
+  value: '10.00',
+  apply_to: 'products',
+  apply_scope: 'all_products',
+  target_categories: [],
+  target_products: [],
+  minimum_order_amount: '0.00',
+  max_discount_amount: '',
+  usage_limit: '',
+  per_customer_limit: '1',
+  customer_scope: 'all',
+  starts_at: '',
+  ends_at: '',
+  priority: 1,
+  is_active: true,
+}
+
+function promoValue(promo) {
+  if (promo.discount_type === 'free_delivery') return 'Free delivery'
+  const value = Number(promo.value || 0)
+  return promo.discount_type === 'percent' ? `${value}%` : formatCurrency(value)
+}
+
+function promoLabel(promo) {
+  if (promo.discount_type === 'free_delivery') return 'Free Delivery'
+  return promo.discount_type === 'percent' ? 'Percentage' : 'Fixed Amount'
+}
+
+function applyToLabel(value) {
+  if (value === 'delivery') return 'Delivery Fee'
+  if (value === 'order') return 'Products + Delivery'
+  return 'Products Only'
+}
+
+function applyScopeLabel(promoOrScope) {
+  const value = typeof promoOrScope === 'string' ? promoOrScope : promoOrScope?.apply_scope
+  if (value === 'categories') return 'Selected Categories'
+  if (value === 'products') return 'Selected Products'
+  if (value === 'delivery') return 'Delivery Fee'
+  if (value === 'order') return 'Products + Delivery'
+  return 'All Products'
+}
+
+function applyToFromScope(scope) {
+  if (scope === 'delivery') return 'delivery'
+  if (scope === 'order') return 'order'
+  return 'products'
+}
+
+function generatePromoCode() {
+  const part = Math.random().toString(36).slice(2, 8).toUpperCase()
+  return `SHADOW-${part}`
+}
+
+function PromoCodeModal({ promo, onClose }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState(() => ({
+    ...emptyPromoCode,
+    ...(promo || {}),
+    apply_scope: promo?.apply_scope || (promo?.apply_to === 'delivery' ? 'delivery' : promo?.apply_to === 'order' ? 'order' : 'all_products'),
+    target_categories: (promo?.target_categories || []).map(String),
+    target_products: (promo?.target_products || []).map(String),
+    starts_at: toDateInput(promo?.starts_at),
+    ends_at: toDateInput(promo?.ends_at),
+    max_discount_amount: promo?.max_discount_amount || '',
+    usage_limit: promo?.usage_limit || '',
+    per_customer_limit: promo?.per_customer_limit ?? '1',
+  }))
+  const { data: categoriesData } = useQuery({
+    queryKey: ['promo-target-categories'],
+    queryFn: () => productsApi.categories.list({ page_size: 300 }).then((r) => r.data),
+  })
+  const { data: productsData } = useQuery({
+    queryKey: ['promo-target-products'],
+    queryFn: () => productsApi.products.list({ page_size: 300, is_active: true }).then((r) => r.data),
+  })
+  const categories = unwrapList(categoriesData)
+  const products = unwrapList(productsData)
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+  const setApplyScope = (value) => {
+    setForm((current) => ({
+      ...current,
+      apply_scope: value,
+      apply_to: applyToFromScope(value),
+      target_categories: value === 'categories' ? current.target_categories : [],
+      target_products: value === 'products' ? current.target_products : [],
+    }))
+  }
+  const toggleTarget = (key, value) => {
+    const id = String(value)
+    setForm((current) => {
+      const selected = current[key] || []
+      return {
+        ...current,
+        [key]: selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id],
+      }
+    })
+  }
+  const effectiveScope = form.discount_type === 'free_delivery' ? 'delivery' : form.apply_scope
+  const isDeliveryPromo = effectiveScope === 'delivery'
+  const missingTargets = (effectiveScope === 'categories' && form.target_categories.length === 0) || (effectiveScope === 'products' && form.target_products.length === 0)
+  const preview = form.discount_type === 'free_delivery'
+    ? `${form.code || 'CODE'} gives free delivery on orders over ${formatCurrency(form.minimum_order_amount || 0)}.`
+    : `${form.code || 'CODE'} gives ${form.discount_type === 'percent' ? `${Number(form.value || 0)}%` : formatCurrency(form.value || 0)} off ${applyScopeLabel(effectiveScope).toLowerCase()} over ${formatCurrency(form.minimum_order_amount || 0)}.`
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const applyScope = form.discount_type === 'free_delivery' ? 'delivery' : form.apply_scope
+      const payload = {
+        ...form,
+        code: form.code.trim().toUpperCase(),
+        starts_at: toApiDate(form.starts_at),
+        ends_at: toApiDate(form.ends_at),
+        max_discount_amount: form.max_discount_amount === '' ? null : form.max_discount_amount,
+        usage_limit: form.usage_limit === '' ? null : form.usage_limit,
+        per_customer_limit: form.per_customer_limit === '' ? null : form.per_customer_limit,
+        value: form.discount_type === 'free_delivery' ? '0.00' : form.value,
+        apply_scope: applyScope,
+        apply_to: applyToFromScope(applyScope),
+        target_categories: applyScope === 'categories' ? form.target_categories.map(Number) : [],
+        target_products: applyScope === 'products' ? form.target_products.map(Number) : [],
+      }
+      return promo
+        ? ordersApi.adminRewards.promoCodes.update(promo.id, payload)
+        : ordersApi.adminRewards.promoCodes.create(payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-promo-codes'] })
+      toast.success(promo ? 'Promo code updated' : 'Promo code created')
+      onClose()
+    },
+    onError: (error) => toast.error(formatApiError(error.response?.data, 'Could not save promo code')),
+  })
+
+  return (
+    <Modal isOpen onClose={onClose} title={promo ? 'Edit Coupon Code' : 'New Coupon Code'} size="xl">
+      <div className="space-y-5 p-6">
+        <div>
+          <label className="label">Name</label>
+          <input className="input-field" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Summer Sale 10% OFF" />
+          <p className="mt-1 text-xs font-semibold text-gray-400">Internal name for this promotion</p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Discount Type</label>
+            <select
+              className="select-field"
+              value={form.discount_type}
+              onChange={(e) => {
+                set('discount_type', e.target.value)
+                if (e.target.value === 'free_delivery') setApplyScope('delivery')
+              }}
+            >
+              <option value="percent">Percentage %</option>
+              <option value="amount">Fixed Amount</option>
+              <option value="free_delivery">Free Delivery</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">{form.discount_type === 'percent' ? 'Value (%)' : 'Value (USD)'}</label>
+            <input className="input-field" type="number" min="0" max={form.discount_type === 'percent' ? 100 : undefined} step="0.01" disabled={form.discount_type === 'free_delivery'} value={form.discount_type === 'free_delivery' ? '0.00' : form.value} onChange={(e) => set('value', e.target.value)} />
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Coupon Code</label>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <input className="input-field font-mono font-black uppercase" value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="SUMMER10" />
+            <button type="button" onClick={() => set('code', generatePromoCode())} className="btn-secondary h-11">
+              <RotateCw size={16} /> Generate
+            </button>
+          </div>
+          <p className="mt-1 text-xs font-semibold text-gray-400">Must be unique. Use letters, numbers, hyphen, or underscore.</p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Apply Scope</label>
+            <select className="select-field" disabled={form.discount_type === 'free_delivery'} value={effectiveScope} onChange={(e) => setApplyScope(e.target.value)}>
+              <option value="all_products">All Products</option>
+              <option value="categories">Selected Categories</option>
+              <option value="products">Selected Products</option>
+              <option value="delivery">Delivery Fee</option>
+              <option value="order">Products + Delivery</option>
+            </select>
+            <p className="mt-1 text-xs font-semibold text-gray-400">Choose where this coupon can discount.</p>
+          </div>
+          <div>
+            <label className="label">Max Discount Amount (USD)</label>
+            <input className="input-field" type="number" min="0" step="0.01" disabled={isDeliveryPromo} value={isDeliveryPromo ? '' : form.max_discount_amount} onChange={(e) => set('max_discount_amount', e.target.value)} placeholder="Optional" />
+          </div>
+        </div>
+
+        {effectiveScope === 'categories' && (
+          <div>
+            <label className="label">Category Targeting</label>
+            <div className="max-h-52 overflow-y-auto rounded-xl border border-gray-200 bg-white p-2">
+              {categories.map((category) => (
+                <label key={category.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 hover:bg-pink-50">
+                  <input
+                    type="checkbox"
+                    checked={form.target_categories.includes(String(category.id))}
+                    onChange={() => toggleTarget('target_categories', category.id)}
+                    className="h-4 w-4 accent-[#EC3F8F]"
+                  />
+                  <span>{category.name}</span>
+                </label>
+              ))}
+              {categories.length === 0 && <p className="px-3 py-4 text-center text-sm font-semibold text-gray-400">No categories found</p>}
+            </div>
+            <p className="mt-1 text-xs font-semibold text-gray-400">Select one or more categories.</p>
+          </div>
+        )}
+
+        {effectiveScope === 'products' && (
+          <div>
+            <label className="label">Product Targeting</label>
+            <div className="max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white p-2">
+              {products.map((product) => (
+                <label key={product.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 hover:bg-pink-50">
+                  <input
+                    type="checkbox"
+                    checked={form.target_products.includes(String(product.id))}
+                    onChange={() => toggleTarget('target_products', product.id)}
+                    className="h-4 w-4 accent-[#EC3F8F]"
+                  />
+                  <span className="min-w-0 truncate">{product.code} - {product.name}</span>
+                </label>
+              ))}
+              {products.length === 0 && <p className="px-3 py-4 text-center text-sm font-semibold text-gray-400">No products found</p>}
+            </div>
+            <p className="mt-1 text-xs font-semibold text-gray-400">Only selected product lines receive this discount.</p>
+          </div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Min Order Amount (USD)</label>
+            <input className="input-field" type="number" min="0" step="0.01" value={form.minimum_order_amount} onChange={(e) => set('minimum_order_amount', e.target.value)} />
+            <p className="mt-1 text-xs font-semibold text-gray-400">Minimum product subtotal to use this coupon</p>
+          </div>
+          <div>
+            <label className="label">Customer Scope</label>
+            <select className="select-field" value={form.customer_scope} onChange={(e) => set('customer_scope', e.target.value)}>
+              <option value="all">All Customers</option>
+              <option value="new">New Customers Only</option>
+              <option value="staff">Staff Only</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Usage Limit (total)</label>
+            <input className="input-field" type="number" min="0" value={form.usage_limit} onChange={(e) => set('usage_limit', e.target.value)} placeholder="Optional" />
+          </div>
+          <div>
+            <label className="label">Limit per Customer</label>
+            <input className="input-field" type="number" min="0" value={form.per_customer_limit} onChange={(e) => set('per_customer_limit', e.target.value)} placeholder="Optional" />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Start Date</label>
+            <input className="input-field" type="datetime-local" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} />
+          </div>
+          <div>
+            <label className="label">End Date</label>
+            <input className="input-field" type="datetime-local" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label">Priority</label>
+            <input className="input-field" type="number" min="0" value={form.priority} onChange={(e) => set('priority', e.target.value)} />
+          </div>
+          <label className="mt-7 flex items-center gap-3 text-sm font-black text-gray-800">
+            <input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} className="h-5 w-5 accent-[#EC3F8F]" />
+            Active - enforce at checkout
+          </label>
+        </div>
+
+        <div className="rounded-2xl border border-pink-100 bg-pink-50/50 p-4">
+          <p className="text-xs font-black uppercase tracking-wide text-pink-500">Preview</p>
+          <p className="mt-1 text-sm font-bold text-gray-800">{preview}</p>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-gray-100 pt-5">
+          <button type="button" onClick={onClose} className="btn-secondary h-11">Cancel</button>
+          <button type="button" disabled={saveMutation.isPending || !form.name.trim() || !form.code.trim() || missingTargets} onClick={() => saveMutation.mutate()} className="btn-primary h-11 disabled:opacity-60">
+            {saveMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+            {promo ? 'Save Changes' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
 }
 
 export function RewardCampaignsAdmin() {
@@ -2832,7 +3635,6 @@ export function RewardAutomationAdmin() {
 }
 
 export function RewardSettingsAdmin() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [activeSection, setActiveSection] = useState('earning')
   const { data, isLoading } = useQuery({
@@ -2867,74 +3669,155 @@ export function RewardSettingsAdmin() {
     { id: 'redemption', label: 'Redeem & Expiry', shortLabel: 'Redeem', icon: Gift },
     { id: 'tiers', label: 'Tiers & Automation', shortLabel: 'Tiers', icon: Crown },
   ]
+  const earningCards = [
+    {
+      statusKey: 'purchase_points_enabled',
+      valueKey: 'points_per_dollar',
+      title: 'Points earned for every $1 spent',
+      description: 'Points customers earn on every $1 spent',
+      footnote: `Example: Spend $10 -> Earn ${Number(values?.points_per_dollar || 0) * 10} points`,
+      icon: DollarSign,
+      min: 1,
+    },
+    {
+      statusKey: 'signup_bonus_enabled',
+      valueKey: 'signup_bonus',
+      title: 'New customer bonus',
+      description: 'Bonus points when a new customer creates an account',
+      footnote: 'Awarded once when account is created',
+      icon: UserPlus,
+      min: 0,
+    },
+    {
+      statusKey: 'referral_bonus_enabled',
+      valueKey: 'referral_bonus',
+      title: 'Friend referral bonus',
+      description: 'Bonus points when a friend joins and completes their first order',
+      footnote: 'Awarded when referral condition is met',
+      icon: Users,
+      min: 0,
+    },
+    {
+      statusKey: 'birthday_bonus_enabled',
+      valueKey: 'birthday_bonus',
+      title: 'Birthday bonus',
+      description: "Bonus points awarded on customer's birthday",
+      footnote: 'Make sure birthday is set in customer profile',
+      icon: Cake,
+      min: 0,
+    },
+    {
+      statusKey: 'review_bonus_enabled',
+      valueKey: 'review_bonus',
+      title: 'Product review bonus',
+      description: 'Bonus points for submitting an approved product review',
+      footnote: 'Awarded once per purchased product',
+      icon: Star,
+      min: 0,
+    },
+    {
+      statusKey: 'daily_checkin_enabled',
+      valueKey: 'daily_checkin_bonus',
+      title: 'Daily check-in bonus',
+      description: 'Bonus points for daily check-in (once every 24 hours)',
+      footnote: 'Encourage customers to check in daily',
+      icon: CalendarCheck,
+      min: 0,
+    },
+  ]
 
   return (
-    <div>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="hidden lg:block">
-          <h1 className="text-2xl font-bold text-navy-900">Reward Settings</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Configure earning rules, tiers, expiry, and reward automation</p>
-        </div>
-        <button type="button" onClick={() => navigate('/admin/rewards/products?new=1')} className="btn-primary h-11 px-5">
-          <Plus size={16} /> Add Reward
-        </button>
+    <div className="pb-4">
+      <div className="mb-4">
+        <h1 className="text-2xl font-black text-gray-950">Reward Settings</h1>
+        <p className="mt-1 text-sm font-semibold text-gray-500">Configure earning rules, tiers, expiry, and reward automation</p>
       </div>
 
-      <div className="max-w-5xl">
+      <div>
         {isLoading || !values ? (
           <div className="flex justify-center py-16"><Loader2 className="animate-spin text-purple-500" /></div>
         ) : (
         <>
-        <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-lg border border-gray-200 bg-white p-1">
+        <div className="mb-4 grid grid-cols-3 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           {sections.map(({ id, label, shortLabel, icon: Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => setActiveSection(id)}
               className={cn(
-                'flex min-h-11 items-center justify-center gap-2 rounded-md px-2 py-2 text-xs font-bold transition sm:text-sm',
-                activeSection === id ? 'bg-purple-700 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                'relative flex min-h-[54px] items-center justify-center gap-2 px-2 py-2 text-xs font-black transition sm:text-sm',
+                activeSection === id ? 'bg-pink-50/50 text-[#EC3F8F]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
               )}
             >
-              <Icon size={16} className="shrink-0" />
+              <Icon size={18} className="shrink-0" />
               <span className="sm:hidden">{shortLabel}</span>
               <span className="hidden sm:inline">{label}</span>
+              {activeSection === id && <span className="absolute inset-x-0 bottom-0 h-1 bg-[#EC3F8F]" />}
             </button>
           ))}
         </div>
 
         {activeSection === 'earning' && (
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-5">
+        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="mb-4">
           <h2 className="text-base font-black text-gray-950">How customers earn points</h2>
-          <p className="mt-1 text-sm text-gray-500">Set the purchase rate and common bonus amounts.</p>
+          <p className="mt-1 text-xs font-semibold text-gray-500">Set the purchase rate and common bonus amounts.</p>
         </div>
-        <div className="grid gap-5 md:grid-cols-2">
-          <label>
-            <span className="label">Points earned for every $1 spent</span>
-            <input className="input-field" type="number" min="1" value={values.points_per_dollar} onChange={(e) => set('points_per_dollar', Number(e.target.value))} />
-            <span className="mt-1 block text-xs text-gray-400">$10 purchase earns {Number(values.points_per_dollar || 0) * 10} points</span>
-          </label>
-          <label>
-            <span className="label">New customer bonus</span>
-            <input className="input-field" type="number" min="0" value={values.signup_bonus} onChange={(e) => set('signup_bonus', Number(e.target.value))} />
-          </label>
-          <label>
-            <span className="label">Friend referral bonus</span>
-            <input className="input-field" type="number" min="0" value={values.referral_bonus} onChange={(e) => set('referral_bonus', Number(e.target.value))} />
-          </label>
-          <label>
-            <span className="label">Birthday bonus</span>
-            <input className="input-field" type="number" min="0" value={values.birthday_bonus} onChange={(e) => set('birthday_bonus', Number(e.target.value))} />
-          </label>
-          <label>
-            <span className="label">Product review bonus</span>
-            <input className="input-field" type="number" min="0" value={values.review_bonus} onChange={(e) => set('review_bonus', Number(e.target.value))} />
-          </label>
-          <label>
-            <span className="label">Daily check-in bonus</span>
-            <input className="input-field" type="number" min="0" value={values.daily_checkin_bonus} onChange={(e) => set('daily_checkin_bonus', Number(e.target.value))} />
-          </label>
+        <div className="grid gap-3 xl:grid-cols-2">
+          {earningCards.map((item) => {
+            const isOn = values[item.statusKey] !== false
+            const Icon = item.icon
+            return (
+              <div key={item.valueKey} className={cn('rounded-xl border p-3 transition', isOn ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-80')}>
+                <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-start">
+                  <span className={cn(
+                    'flex h-12 w-12 items-center justify-center rounded-xl',
+                    isOn ? 'bg-pink-50 text-[#EC3F8F]' : 'bg-gray-100 text-gray-400'
+                  )}>
+                    <Icon size={22} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <h3 className="truncate text-sm font-black text-gray-950">{item.title}</h3>
+                        <Info size={14} className="shrink-0 text-gray-400" />
+                      </div>
+                      <div className="grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => set(item.statusKey, true)}
+                          className={cn('h-7 rounded-md px-2.5 text-[11px] font-black transition', isOn ? 'bg-[#EC3F8F] text-white shadow-sm' : 'text-gray-500 hover:bg-white')}
+                        >
+                          On
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => set(item.statusKey, false)}
+                          className={cn('h-7 rounded-md px-2.5 text-[11px] font-black transition', !isOn ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-white')}
+                        >
+                          Off
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-1 max-w-md text-xs font-semibold leading-5 text-gray-500">{item.description}</p>
+                  </div>
+                  <div className="grid h-10 min-w-[112px] grid-cols-[1fr_auto] items-center overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <input
+                      className="h-full min-w-0 border-0 bg-transparent px-3 text-sm font-black text-gray-950 outline-none"
+                      type="number"
+                      min={item.min}
+                      value={values[item.valueKey]}
+                      onChange={(e) => set(item.valueKey, Number(e.target.value))}
+                    />
+                    <span className="pr-3 text-xs font-bold text-gray-400">pts</span>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg bg-pink-50/70 px-3 py-2 text-xs font-semibold text-pink-900/60">
+                  {item.footnote}
+                </div>
+              </div>
+            )
+          })}
         </div>
         </section>
         )}
@@ -2987,6 +3870,43 @@ export function RewardSettingsAdmin() {
 
         {activeSection === 'tiers' && (
         <div className="grid gap-5 lg:grid-cols-2">
+          <section className={cn(
+            'rounded-2xl border p-5 shadow-sm lg:col-span-2',
+            values.is_active ? 'border-emerald-100 bg-emerald-50/45' : 'border-gray-200 bg-gray-100'
+          )}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className={cn(
+                  'flex h-12 w-12 items-center justify-center rounded-2xl',
+                  values.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-500'
+                )}>
+                  <Power size={21} />
+                </span>
+                <div>
+                  <p className="text-sm font-black text-gray-950">Reward Program Status</p>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    {values.is_active ? 'Active: customers can earn and redeem points.' : 'Off: earning, daily check-in, and reward exchange are paused.'}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-gray-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => set('is_active', true)}
+                  className={cn('h-10 rounded-lg px-4 text-sm font-black transition', values.is_active ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50')}
+                >
+                  Active
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('is_active', false)}
+                  className={cn('h-10 rounded-lg px-4 text-sm font-black transition', !values.is_active ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50')}
+                >
+                  Off
+                </button>
+              </div>
+            </div>
+          </section>
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <h3 className="font-black text-gray-950">Member tiers</h3>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -3013,17 +3933,22 @@ export function RewardSettingsAdmin() {
         </div>
         )}
 
-        <div className="sticky bottom-20 z-10 mt-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur lg:bottom-4">
-          <span className={cn('text-xs font-bold', hasChanges ? 'text-amber-600' : 'text-gray-400')}>
+        <div className="sticky bottom-20 z-10 mt-4 flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white/95 p-3 shadow-lg backdrop-blur lg:bottom-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-[#EC3F8F]">
+              <ShieldCheck size={18} />
+            </span>
+            <span className={cn('text-xs font-bold', hasChanges ? 'text-amber-600' : 'text-gray-500')}>
             {hasChanges ? 'Unsaved changes' : 'All changes saved'}
-          </span>
+            </span>
+          </div>
           <div className="flex gap-2">
             {hasChanges && (
-              <button type="button" onClick={() => setSettings(null)} disabled={saveMutation.isPending} className="btn-secondary px-4 py-2.5">
+              <button type="button" onClick={() => setSettings(null)} disabled={saveMutation.isPending} className="btn-secondary px-3 py-2 text-sm">
                 Reset
               </button>
             )}
-          <button type="button" onClick={handleSave} disabled={!hasChanges || saveMutation.isPending} className="btn-primary px-5 py-2.5 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={handleSave} disabled={!hasChanges || saveMutation.isPending} className="btn-primary h-10 min-w-[150px] rounded-xl px-4 text-sm disabled:cursor-not-allowed disabled:opacity-40">
             {saveMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save Settings
           </button>
           </div>

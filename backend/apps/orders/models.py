@@ -435,12 +435,120 @@ class RewardRedemption(models.Model):
                 return code
 
 
+class PromoCode(models.Model):
+    DISCOUNT_PERCENT = 'percent'
+    DISCOUNT_AMOUNT = 'amount'
+    DISCOUNT_FREE_DELIVERY = 'free_delivery'
+
+    APPLY_PRODUCTS = 'products'
+    APPLY_DELIVERY = 'delivery'
+    APPLY_ORDER = 'order'
+
+    SCOPE_ALL_PRODUCTS = 'all_products'
+    SCOPE_CATEGORIES = 'categories'
+    SCOPE_PRODUCTS = 'products'
+    SCOPE_DELIVERY = 'delivery'
+    SCOPE_ORDER = 'order'
+
+    CUSTOMER_ALL = 'all'
+    CUSTOMER_NEW = 'new'
+    CUSTOMER_STAFF = 'staff'
+
+    DISCOUNT_TYPE_CHOICES = [
+        (DISCOUNT_PERCENT, 'Percentage'),
+        (DISCOUNT_AMOUNT, 'Fixed Amount'),
+        (DISCOUNT_FREE_DELIVERY, 'Free Delivery'),
+    ]
+    APPLY_TO_CHOICES = [
+        (APPLY_PRODUCTS, 'Products Only'),
+        (APPLY_DELIVERY, 'Delivery Fee'),
+        (APPLY_ORDER, 'Products + Delivery'),
+    ]
+    APPLY_SCOPE_CHOICES = [
+        (SCOPE_ALL_PRODUCTS, 'All Products'),
+        (SCOPE_CATEGORIES, 'Selected Categories'),
+        (SCOPE_PRODUCTS, 'Selected Products'),
+        (SCOPE_DELIVERY, 'Delivery Fee'),
+        (SCOPE_ORDER, 'Products + Delivery'),
+    ]
+    CUSTOMER_SCOPE_CHOICES = [
+        (CUSTOMER_ALL, 'All Customers'),
+        (CUSTOMER_NEW, 'New Customers Only'),
+        (CUSTOMER_STAFF, 'Staff Only'),
+    ]
+
+    name = models.CharField(max_length=150)
+    code = models.CharField(max_length=40, unique=True)
+    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_PERCENT)
+    value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    apply_to = models.CharField(max_length=20, choices=APPLY_TO_CHOICES, default=APPLY_PRODUCTS)
+    apply_scope = models.CharField(max_length=30, choices=APPLY_SCOPE_CHOICES, default=SCOPE_ALL_PRODUCTS)
+    target_categories = models.ManyToManyField('products.Category', blank=True, related_name='promo_codes')
+    target_products = models.ManyToManyField('products.Product', blank=True, related_name='promo_codes')
+    minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    max_discount_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    usage_limit = models.PositiveIntegerField(null=True, blank=True)
+    per_customer_limit = models.PositiveIntegerField(null=True, blank=True, default=1)
+    customer_scope = models.CharField(max_length=20, choices=CUSTOMER_SCOPE_CHOICES, default=CUSTOMER_ALL)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    priority = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_promo_codes',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'promo_codes'
+        ordering = ['-priority', '-created_at']
+
+    def save(self, *args, **kwargs):
+        self.code = (self.code or '').strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+    @property
+    def usage_count(self):
+        return self.usages.count()
+
+
+class PromoCodeUsage(models.Model):
+    promo_code = models.ForeignKey(PromoCode, on_delete=models.PROTECT, related_name='usages')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='promo_code_usages')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='promo_code_usages')
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'promo_code_usages'
+        ordering = ['-created_at']
+        unique_together = ['promo_code', 'order']
+
+    def __str__(self):
+        return f'{self.promo_code.code} -> {self.order.order_number}'
+
+
 class RewardSettings(models.Model):
+    is_active = models.BooleanField(default=True)
+    purchase_points_enabled = models.BooleanField(default=True)
     points_per_dollar = models.PositiveIntegerField(default=1)
+    signup_bonus_enabled = models.BooleanField(default=True)
     signup_bonus = models.PositiveIntegerField(default=0)
+    referral_bonus_enabled = models.BooleanField(default=True)
     referral_bonus = models.PositiveIntegerField(default=0)
+    birthday_bonus_enabled = models.BooleanField(default=True)
     birthday_bonus = models.PositiveIntegerField(default=0)
+    review_bonus_enabled = models.BooleanField(default=True)
     review_bonus = models.PositiveIntegerField(default=0)
+    daily_checkin_enabled = models.BooleanField(default=True)
     daily_checkin_bonus = models.PositiveIntegerField(default=0)
     points_expiry_days = models.PositiveIntegerField(default=365)
     expiry_reminder_days = models.PositiveIntegerField(default=7)

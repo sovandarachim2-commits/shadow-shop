@@ -2,7 +2,6 @@ import { Suspense, useState, useEffect, startTransition } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
-  Grid,
   ShoppingCart,
   ClipboardList,
   User,
@@ -35,14 +34,7 @@ import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
-
-const MOBILE_NAV_ITEMS = [
-  { path: '/', key: 'nav.home', icon: Home, exact: true },
-  { path: '/shop', key: 'nav.shop', icon: Grid },
-  { path: '/profile/rewards', key: 'profile.rewards', icon: Gift, center: true },
-  { path: '/my-orders', key: 'nav.orders', icon: ClipboardList },
-  { path: '/profile', key: 'nav.account', icon: User },
-]
+import BottomNavigation from '@/components/BottomNavigation'
 
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
@@ -236,6 +228,25 @@ export default function CustomerLayout() {
     location.pathname.startsWith('/product-set/') ||
     location.pathname.startsWith('/my-orders/')
   const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/search' || location.pathname === '/wishlist' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname === '/profile/complete' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
+  const mobileActiveTab = location.pathname === '/shop'
+    ? 'products'
+    : location.pathname.startsWith('/profile/rewards')
+      ? 'rewards'
+      : location.pathname.startsWith('/my-orders')
+        ? 'orders'
+        : location.pathname.startsWith('/profile')
+          ? 'account'
+          : 'home'
+  const handleMobileNavChange = (tab) => {
+    const routes = {
+      home: '/',
+      products: '/shop',
+      rewards: '/profile/rewards',
+      orders: '/my-orders',
+      account: '/profile',
+    }
+    startTransition(() => navigate(routes[tab] || '/'))
+  }
   const submitSearch = (e) => {
     e.preventDefault()
     const q = headerSearch.trim()
@@ -245,7 +256,7 @@ export default function CustomerLayout() {
   }
 
   return (
-    <div className={cn('flex min-h-screen flex-col bg-white text-gray-950 md:pb-0', hideMobileBottomNav ? '' : 'pb-[calc(82px+env(safe-area-inset-bottom))]')}>
+    <div className={cn('flex min-h-screen flex-col bg-white text-gray-950 md:pb-0', hideMobileBottomNav ? '' : 'pb-[calc(104px+max(16px,env(safe-area-inset-bottom)))]')}>
       <header className={cn(
         'sticky top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur',
         hideMobileHeader && 'hidden md:block'
@@ -605,48 +616,25 @@ export default function CustomerLayout() {
       )}
 
       {!hideMobileBottomNav && (
-        <nav className="mobile-bottom-nav md:hidden">
-          {MOBILE_NAV_ITEMS.map((item, index) => {
-            const isActive = isItemActive(location, item)
-            const isCenter = item.center
-
-            if (isCenter) {
-              return (
-                <div key={item.key} className="relative flex flex-1 flex-col items-center justify-end pb-2">
-                  <Link
-                    to={item.path}
-                    className={cn(
-                      'absolute bottom-full mb-1 flex h-[50px] w-[50px] items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-[0_4px_20px_rgba(236,72,153,0.45)] ring-[3px] ring-white transition',
-                      isActive && 'scale-105'
-                    )}
-                  >
-                    <item.icon size={22} />
-                  </Link>
-                  <span className={cn('text-[10px] font-semibold', isActive ? 'text-pink-600' : 'text-gray-400')}>
-                    {t(item.key)}
-                  </span>
-                </div>
-              )
-            }
-
-            return (
-              <Link
-                key={item.key}
-                to={item.path}
-                className={cn(
-                  'relative flex flex-1 flex-col items-center gap-0.5 pb-2 pt-1 transition-colors',
-                  isActive ? 'text-pink-600' : 'text-gray-400'
-                )}
-              >
-                <item.icon size={21} />
-                <span className="text-[10px] font-semibold">{t(item.key)}</span>
-                {isActive && (
-                  <span className="absolute bottom-0 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-pink-600" />
-                )}
-              </Link>
-            )
-          })}
-        </nav>
+        <BottomNavigation
+          activeTab={mobileActiveTab}
+          onChange={handleMobileNavChange}
+          onHomeReselect={() => window.location.reload()}
+          labels={{
+            home: t('nav.home'),
+            products: t('nav.shop'),
+            rewards: t('profile.rewards'),
+            orders: t('nav.orders'),
+            account: t('nav.account'),
+          }}
+          ariaLabels={{
+            home: t('nav.home'),
+            products: t('nav.shop'),
+            rewards: t('profile.rewards'),
+            orders: t('nav.orders'),
+            account: t('nav.account'),
+          }}
+        />
       )}
     </div>
   )

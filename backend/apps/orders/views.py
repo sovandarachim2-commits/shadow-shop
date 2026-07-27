@@ -12,16 +12,16 @@ from django.db import transaction
 from django.db.models import Count, OuterRef, Subquery, Sum, Q
 from django.contrib.auth import get_user_model
 from datetime import timedelta
-from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord, RewardItem, RewardRedemption, RewardSettings, PointTransaction
+from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord, RewardItem, RewardRedemption, RewardSettings, PointTransaction, PromoCode
 from .serializers import (
     CustomerSerializer, OrderListSerializer, OrderDetailSerializer,
     OrderCreateSerializer, CustomerCheckoutSerializer, OrderStatusHistorySerializer,
     WishlistSerializer, CartItemSerializer, PrepareRecordSerializer, OutRecordSerializer,
-    OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, RewardSettingsSerializer, PointTransactionSerializer,
+    OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, RewardSettingsSerializer, PointTransactionSerializer, PromoCodeSerializer,
 )
 from .rewards import (
     award_points_for_paid_order, exchange_reward, get_member_level, get_next_tier_points,
-    get_points_balance, get_coupon_discount, sync_paid_order_points,
+    get_points_balance, get_coupon_discount, coupon_response_payload, sync_paid_order_points,
 )
 from utils.permissions import HasModulePermission, IsStaff, IsSeller, IsCashier, user_has_module_permission
 from utils.pagination import StandardPagination
@@ -152,10 +152,20 @@ class CustomerViewSet(viewsets.ModelViewSet):
 class OrderFilter(filters.FilterSet):
     date_from = filters.DateFilter(field_name='created_at', lookup_expr='date__gte')
     date_to = filters.DateFilter(field_name='created_at', lookup_expr='date__lte')
+    delivery_by = filters.CharFilter(method='filter_delivery_by')
+
+    def filter_delivery_by(self, queryset, name, value):
+        clean = str(value or '').strip()
+        if not clean:
+            return queryset
+        return queryset.filter(
+            Q(out_delivery_by__iexact=clean) |
+            Q(out_record_delivery_by__iexact=clean)
+        )
 
     class Meta:
         model = Order
-        fields = ['status', 'payment_status', 'payment_method', 'seller', 'is_draft']
+        fields = ['status', 'payment_status', 'payment_method', 'seller', 'is_draft', 'delivery_by']
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -323,9 +333,20 @@ class OrderViewSet(viewsets.ModelViewSet):
     def mark_paid(self, request, pk=None):
         order = self.get_object()
         payment_method = request.data.get('payment_method', 'cash')
+        old_payment_status = order.payment_status
+        old_payment_method = order.payment_method
         order.payment_status = 'paid'
         order.payment_method = payment_method
         order.save()
+        OrderStatusHistory.objects.create(
+            order=order,
+            status=order.status,
+            changed_by=request.user,
+            note=(
+                f'Payment recorded: status {old_payment_status or "-"} -> paid; '
+                f'method {old_payment_method or "-"} -> {payment_method or "-"}'
+            ),
+        )
         award_points_for_paid_order(order)
 
         from apps.finance.models import Revenue
@@ -669,10 +690,16 @@ class RewardsViewSet(viewsets.ViewSet):
             'redemptions': RewardRedemptionSerializer(redemptions, many=True).data,
             'transactions': PointTransactionSerializer(transactions, many=True).data,
             'earning_rules': {
+                'is_active': reward_settings.is_active,
+                'purchase_points_enabled': reward_settings.purchase_points_enabled,
                 'points_per_dollar': reward_settings.points_per_dollar,
+                'review_bonus_enabled': reward_settings.review_bonus_enabled,
                 'review_bonus': reward_settings.review_bonus,
+                'referral_bonus_enabled': reward_settings.referral_bonus_enabled,
                 'referral_bonus': reward_settings.referral_bonus,
+                'birthday_bonus_enabled': reward_settings.birthday_bonus_enabled,
                 'birthday_bonus': reward_settings.birthday_bonus,
+                'daily_checkin_enabled': reward_settings.daily_checkin_enabled,
                 'daily_checkin_bonus': reward_settings.daily_checkin_bonus,
             },
             'checked_in_today': PointTransaction.objects.filter(
@@ -706,25 +733,18 @@ class RewardsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def validate_coupon(self, request):
         try:
-            redemption, discount = get_coupon_discount(
+            cart_lines = CartItem.objects.filter(user=request.user).select_related('product', 'product__category')
+            coupon_obj, discount = get_coupon_discount(
                 request.user,
                 request.data.get('coupon_code'),
                 request.data.get('subtotal'),
                 request.data.get('delivery_fee'),
+                cart_lines=cart_lines,
             )
         except (ValueError, TypeError) as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        reward = redemption.reward_item
-        return Response({
-            'coupon_code': redemption.coupon_code,
-            'name': reward.name,
-            'reward_type': reward.type,
-            'discount_type': reward.coupon_discount_type,
-            'coupon_value': reward.coupon_value,
-            'minimum_order_amount': reward.minimum_order_amount,
-            'discount': discount,
-        })
+        return Response(coupon_response_payload(coupon_obj, discount))
 
     @action(detail=False, methods=['post'])
     def daily_checkin(self, request):
@@ -732,6 +752,11 @@ class RewardsViewSet(viewsets.ViewSet):
         with transaction.atomic():
             User.objects.select_for_update().get(pk=request.user.pk)
             reward_settings = RewardSettings.get_solo()
+            if not reward_settings.is_active or not reward_settings.daily_checkin_enabled:
+                return Response(
+                    {'detail': 'Daily check-in rewards are currently off.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             bonus = reward_settings.daily_checkin_bonus
             if bonus <= 0:
                 return Response(
@@ -899,6 +924,28 @@ class AdminRewardRedemptionViewSet(viewsets.ModelViewSet):
                         )
 
         return Response(RewardRedemptionSerializer(redemption).data)
+
+
+class AdminPromoCodeViewSet(viewsets.ModelViewSet):
+    queryset = PromoCode.objects.select_related('created_by').prefetch_related(
+        'usages', 'target_categories', 'target_products'
+    ).order_by('-priority', '-created_at')
+    serializer_class = PromoCodeSerializer
+    permission_classes = [IsAuthenticated, IsStaff]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['is_active', 'discount_type', 'apply_to', 'apply_scope', 'customer_scope']
+    search_fields = ['name', 'code']
+    ordering_fields = ['created_at', 'updated_at', 'priority', 'starts_at', 'ends_at']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        promo = self.get_object()
+        promo.is_active = not promo.is_active
+        promo.save(update_fields=['is_active', 'updated_at'])
+        return Response(PromoCodeSerializer(promo, context={'request': request}).data)
 
 
 class AdminRewardPointsViewSet(viewsets.ViewSet):

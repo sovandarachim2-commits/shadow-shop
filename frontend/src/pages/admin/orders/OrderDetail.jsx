@@ -6,10 +6,12 @@ import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { ordersApi } from '@/api/orders'
 import { productsApi } from '@/api/products'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
+import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton } from '@/components/orders/PaymentHistory'
 
 const STATUS_FLOW = [
   { key: 'new', label: 'New', icon: Package },
@@ -20,12 +22,23 @@ const STATUS_FLOW = [
   { key: 'completed', label: 'Completed', icon: Check },
 ]
 
+const ORDER_STATUS_OPTIONS = [
+  { value: 'new', label: 'New' },
+  { value: 'printed', label: 'Printed' },
+  { value: 'preparing', label: 'Preparing' },
+  { value: 'packed', label: 'Packed' },
+  { value: 'shipped', label: 'Shipped' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
 const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: p.label }))
 
 export function EditOrderModal({ order, onClose, onSaved }) {
   const [search, setSearch] = useState('')
   const [customer, setCustomer] = useState({ name: '', phone: '', address: '', province: 'phnom_penh', notes: '' })
   const [orderForm, setOrderForm] = useState({
+    status: 'new',
     payment_status: 'unpaid',
     payment_method: 'cod',
     delivery_fee: 0,
@@ -34,6 +47,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
     is_draft: false,
   })
   const [items, setItems] = useState([])
+  const [confirm, ConfirmDialog] = useConfirm()
 
   useEffect(() => {
     if (!order) return
@@ -45,6 +59,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       notes: order.customer_detail?.notes || '',
     })
     setOrderForm({
+      status: order.status || 'new',
       payment_status: order.payment_status || 'unpaid',
       payment_method: order.payment_method || 'cod',
       delivery_fee: order.delivery_fee || 0,
@@ -123,6 +138,23 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       toast.error(itemError || err?.response?.data?.detail || 'Failed to update order')
     },
   })
+
+  const handleSave = async () => {
+    if (orderForm.status === 'cancelled' && order.status !== 'cancelled') {
+      const ok = await confirm(
+        'Cancel this order?',
+        `Order #${order.order_number} will be marked as cancelled.`,
+        {
+          confirmText: 'Cancel Order',
+          cancelText: 'Keep Order',
+          tone: 'danger',
+          icon: 'warning',
+        },
+      )
+      if (!ok) return
+    }
+    saveMutation.mutate()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-3 backdrop-blur-sm">
@@ -232,6 +264,14 @@ export function EditOrderModal({ order, onClose, onSaved }) {
               <h3 className="section-title mb-4">Order</h3>
               <div className="space-y-3">
                 <div>
+                  <label className="label">Status</label>
+                  <select className="select-field" value={orderForm.status} onChange={(e) => setOrderForm({ ...orderForm, status: e.target.value })}>
+                    {ORDER_STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="label">Payment Status</label>
                   <select className="select-field" value={orderForm.payment_status} onChange={(e) => setOrderForm({ ...orderForm, payment_status: e.target.value })}>
                     <option value="paid">Paid</option>
@@ -278,7 +318,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                 <div className="flex justify-between"><span className="text-gray-500">Discount</span><span className="text-red-500">-{formatCurrency(orderForm.discount || 0)}</span></div>
                 <div className="flex justify-between border-t border-gray-200 pt-3 text-lg font-black"><span>Grand Total</span><span className="text-purple-600">{formatCurrency(grandTotal)}</span></div>
               </div>
-              <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || items.length === 0} className="btn-primary mt-4 w-full justify-center py-3 disabled:opacity-60">
+              <button onClick={handleSave} disabled={saveMutation.isPending || items.length === 0} className="btn-primary mt-4 w-full justify-center py-3 disabled:opacity-60">
                 <Save size={16} />
                 {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
@@ -286,6 +326,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
           </div>
         </div>
       </div>
+      {ConfirmDialog}
     </div>
   )
 }
@@ -296,7 +337,10 @@ export default function OrderDetail() {
   const queryClient = useQueryClient()
   const [showPayModal, setShowPayModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false)
+  const [showOrderHistory, setShowOrderHistory] = useState(false)
   const [payMethod, setPayMethod] = useState('cash')
+  const [confirm, ConfirmDialog] = useConfirm()
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', id],
@@ -320,6 +364,21 @@ export default function OrderDetail() {
       toast.success('Payment recorded!')
     },
   })
+
+  const handleCancelOrder = async () => {
+    const ok = await confirm(
+      'Cancel this order?',
+      `Order #${order.order_number} will be marked as cancelled.`,
+      {
+        confirmText: 'Cancel Order',
+        cancelText: 'Keep Order',
+        tone: 'danger',
+        icon: 'warning',
+      },
+    )
+    if (!ok) return
+    updateStatusMutation.mutate({ status: 'cancelled' })
+  }
 
   if (isLoading) {
     return (
@@ -384,7 +443,7 @@ export default function OrderDetail() {
                 </button>
               )
             ))}
-            <button onClick={() => updateStatusMutation.mutate({ status: 'cancelled' })}
+            <button onClick={handleCancelOrder}
               className="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-all ml-auto">
               Cancel Order
             </button>
@@ -424,7 +483,7 @@ export default function OrderDetail() {
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
-              <div className="flex justify-between text-sm">
+              <div className="flex items-center justify-between gap-3 text-sm [&>span.capitalize]:hidden">
                 <span className="text-gray-500">Subtotal</span>
                 <span>{formatCurrency(order.subtotal)}</span>
               </div>
@@ -485,6 +544,7 @@ export default function OrderDetail() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Method</span>
+                <PaymentMethodButton order={order} onClick={() => setShowPaymentHistory(true)} />
                 <span className="capitalize">{order.payment_method || '—'}</span>
               </div>
             </div>
@@ -499,7 +559,14 @@ export default function OrderDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Created</span>
-                <span className="text-xs">{formatDateTime(order.created_at)}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowOrderHistory(true)}
+                  className="text-right text-xs font-semibold text-gray-600 underline-offset-2 hover:text-purple-700 hover:underline"
+                  title="View order history"
+                >
+                  {formatDateTime(order.created_at)}
+                </button>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Seller</span>
@@ -551,6 +618,16 @@ export default function OrderDetail() {
           </button>
         </div>
       </Modal>
+
+      <PaymentHistoryModal
+        order={showPaymentHistory ? order : null}
+        onClose={() => setShowPaymentHistory(false)}
+      />
+      <OrderHistoryModal
+        order={showOrderHistory ? order : null}
+        onClose={() => setShowOrderHistory(false)}
+      />
+      {ConfirmDialog}
     </div>
   )
 }

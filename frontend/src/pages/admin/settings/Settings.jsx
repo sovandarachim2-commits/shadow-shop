@@ -619,13 +619,14 @@ export default function Settings({ tab = 'general' }) {
   const TELEGRAM_NOTIFICATION_OPTIONS = [
     ['notify_new_order', 'New Orders (customer/admin created)'],
     ['notify_payment', 'Payment Received'],
+    ['notify_contact_sales_copy', 'Contact Sales customer copy message'],
     ['notify_low_stock', 'Low Stock Alert'],
     ['notify_delivery', 'Delivery Updates'],
     ['notify_daily_summary', 'Daily Summary'],
   ]
   const emptyTelegramForm = {
     name: '', bot_username: '', bot_token: '', chat_id: '', topic_id: '', is_active: true,
-    notify_new_order: true, notify_payment: true,
+    notify_new_order: true, notify_payment: true, notify_contact_sales_copy: true,
     notify_low_stock: true, notify_delivery: true,
     notify_daily_summary: true,
     new_order_payment_methods: [],

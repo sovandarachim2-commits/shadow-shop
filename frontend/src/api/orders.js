@@ -92,6 +92,13 @@ export const ordersApi = {
       list: (params) => client.get('/orders/admin/reward-redemptions/', { params }),
       updateStatus: (id, status) => client.post(`/orders/admin/reward-redemptions/${id}/update_status/`, { status }),
     },
+    promoCodes: {
+      list: (params) => client.get('/orders/admin/promo-codes/', { params }),
+      create: (data) => client.post('/orders/admin/promo-codes/', data),
+      update: (id, data) => client.patch(`/orders/admin/promo-codes/${id}/`, data),
+      delete: (id) => client.delete(`/orders/admin/promo-codes/${id}/`),
+      toggleActive: (id) => client.post(`/orders/admin/promo-codes/${id}/toggle_active/`),
+    },
     points: {
       list: (params) => client.get('/orders/admin/reward-points/', { params }),
       adjust: (data) => client.post('/orders/admin/reward-points/adjust/', data),

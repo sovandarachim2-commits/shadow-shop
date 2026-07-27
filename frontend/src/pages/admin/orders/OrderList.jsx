@@ -7,9 +7,11 @@ import SearchFilter from '@/components/shared/SearchFilter'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Badge, OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton, paymentMethodLabel } from '@/components/orders/PaymentHistory'
 import NewOrder from './NewOrder'
 import { EditOrderModal } from './OrderDetail'
 import toast from 'react-hot-toast'
@@ -36,17 +38,6 @@ const STATUS_FLOW = [
   { key: 'completed', label: 'Completed', icon: Check },
 ]
 
-const PAYMENT_METHOD_LABELS = {
-  bakong: 'Bakong KHQR',
-  aba: 'ABA Bank',
-  acleda: 'ACLEDA Bank',
-  wing: 'Wing',
-  cod: 'Cash on Delivery',
-  cash: 'Cash',
-  contact_sales: 'Contact Sales',
-  other: 'Other',
-}
-
 const PAYMENT_METHOD_OPTIONS = [
   'cash',
   'aba',
@@ -58,30 +49,33 @@ const PAYMENT_METHOD_OPTIONS = [
   'other',
 ]
 
-function paymentMethodLabel(method) {
-  return PAYMENT_METHOD_LABELS[method] || method || '-'
-}
-
 export default function OrderList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [paymentStatus, setPaymentStatus] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState('')
+  const [deliveryBy, setDeliveryBy] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(100)
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
   const [payOrder, setPayOrder] = useState(null)
+  const [paymentHistoryOrder, setPaymentHistoryOrder] = useState(null)
+  const [orderHistoryOrder, setOrderHistoryOrder] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash')
+  const [confirm, ConfirmDialog] = useConfirm()
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['orders', search, status, paymentStatus, page, pageSize],
+    queryKey: ['orders', search, status, paymentStatus, paymentMethod, deliveryBy, page, pageSize],
     queryFn: () => ordersApi.orders.list({
       search,
       status: status || undefined,
       payment_status: paymentStatus || undefined,
+      payment_method: paymentMethod || undefined,
+      delivery_by: deliveryBy || undefined,
       page,
       page_size: pageSize,
     }).then((r) => r.data),
@@ -91,6 +85,18 @@ export default function OrderList() {
     queryKey: ['order', viewOrder?.id || editOrder?.id],
     queryFn: () => ordersApi.orders.get(viewOrder?.id || editOrder?.id).then((r) => r.data),
     enabled: !!(viewOrder?.id || editOrder?.id),
+  })
+
+  const { data: paymentHistoryDetail } = useQuery({
+    queryKey: ['order', paymentHistoryOrder?.id, 'payment-history'],
+    queryFn: () => ordersApi.orders.get(paymentHistoryOrder.id).then((r) => r.data),
+    enabled: !!paymentHistoryOrder?.id,
+  })
+
+  const { data: orderHistoryDetail } = useQuery({
+    queryKey: ['order', orderHistoryOrder?.id, 'order-history'],
+    queryFn: () => ordersApi.orders.get(orderHistoryOrder.id).then((r) => r.data),
+    enabled: !!orderHistoryOrder?.id,
   })
 
   const { data: siteSettings } = useQuery({
@@ -103,6 +109,12 @@ export default function OrderList() {
   const popupOrder = detailOrder || viewOrder
   const popupStatusIndex = popupOrder ? STATUS_FLOW.findIndex((s) => s.key === popupOrder.status) : -1
   const paymentLogoUrls = siteSettings?.payment_methods?.logo_urls || {}
+  const deliveryByOptions = Array.from(new Set(
+    [
+      deliveryBy,
+      ...orders.map((order) => order.delivery_by || order.out_delivery_by || ''),
+    ].filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b))
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }) => ordersApi.orders.updateStatus(id, { status }),
@@ -126,6 +138,21 @@ export default function OrderList() {
     },
     onError: (err) => toast.error(err?.response?.data?.detail || 'Failed to mark order as paid'),
   })
+
+  const handleCancelOrder = async (order) => {
+    const ok = await confirm(
+      'Cancel this order?',
+      `Order #${order.order_number} will be marked as cancelled.`,
+      {
+        confirmText: 'Cancel Order',
+        cancelText: 'Keep Order',
+        tone: 'danger',
+        icon: 'warning',
+      },
+    )
+    if (!ok) return
+    updateStatusMutation.mutate({ id: order.id, status: 'cancelled' })
+  }
 
   return (
     <div className="animate-fade-in">
@@ -159,6 +186,18 @@ export default function OrderList() {
               <option value="paid">Paid</option>
               <option value="unpaid">Unpaid</option>
             </select>
+            <select className="select-field w-44" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); setPage(1) }}>
+              <option value="">All Methods</option>
+              {PAYMENT_METHOD_OPTIONS.map((method) => (
+                <option key={method} value={method}>{paymentMethodLabel(method)}</option>
+              ))}
+            </select>
+            <select className="select-field w-44" value={deliveryBy} onChange={(e) => { setDeliveryBy(e.target.value); setPage(1) }}>
+              <option value="">All Delivery By</option>
+              {deliveryByOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
             <button onClick={() => refetch()} className="btn-secondary py-2">
               <RefreshCw size={15} />
             </button>
@@ -186,7 +225,7 @@ export default function OrderList() {
           <Tbody>
             {isLoading && <LoadingRows cols={13} />}
             {!isLoading && orders.map((order, index) => (
-              <Tr key={order.id} onClick={() => navigate(`/admin/orders/${order.id}`)}>
+              <Tr key={order.id} onClick={() => setViewOrder(order)}>
                 <Td><span className="text-sm font-semibold text-gray-500">{(page - 1) * pageSize + index + 1}</span></Td>
                 <Td>
                   <span className="font-mono font-semibold text-purple-700 text-sm">#{order.order_number}</span>
@@ -206,21 +245,32 @@ export default function OrderList() {
                 </Td>
                 <Td><span className="font-semibold">{formatCurrency(order.grand_total)}</span></Td>
                 <Td>
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
-                    {paymentLogoUrls[order.payment_method] && (
-                      <img
-                        src={paymentLogoUrls[order.payment_method]}
-                        alt=""
-                        className="h-4 w-4 rounded-full object-contain"
-                      />
-                    )}
-                    {paymentMethodLabel(order.payment_method)}
-                  </span>
+                  <PaymentMethodButton
+                    order={order}
+                    logoUrls={paymentLogoUrls}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPaymentHistoryOrder(order)
+                    }}
+                    compact
+                  />
                 </Td>
                 <Td><PaymentStatusBadge status={order.payment_status} /></Td>
                 <Td><OrderStatusBadge status={order.status} /></Td>
                 <Td><span className="text-sm text-gray-600">{order.delivery_by || order.out_delivery_by || '-'}</span></Td>
-                <Td><span className="text-xs text-gray-500">{formatDateTime(order.created_at)}</span></Td>
+                <Td>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOrderHistoryOrder(order)
+                    }}
+                    className="text-left text-xs font-semibold text-gray-500 underline-offset-2 transition hover:text-purple-700 hover:underline"
+                    title="View order history"
+                  >
+                    {formatDateTime(order.created_at)}
+                  </button>
+                </Td>
                 <Td>
                   <div className="flex items-center gap-1.5">
                     {order.payment_status !== 'paid' && (
@@ -362,7 +412,7 @@ export default function OrderList() {
                       ))}
                       <button
                         type="button"
-                        onClick={() => updateStatusMutation.mutate({ id: popupOrder.id, status: 'cancelled' })}
+                        onClick={() => handleCancelOrder(popupOrder)}
                         disabled={updateStatusMutation.isPending}
                         className="ml-auto rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60"
                       >
@@ -452,7 +502,14 @@ export default function OrderList() {
                       <h3 className="section-title mb-3">Payment</h3>
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm"><span className="text-gray-500">Status</span><PaymentStatusBadge status={popupOrder.payment_status} /></div>
-                        <div className="flex justify-between text-sm"><span className="text-gray-500">Method</span><span className="capitalize">{popupOrder.payment_method || '-'}</span></div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-500">Method</span>
+                          <PaymentMethodButton
+                            order={popupOrder}
+                            logoUrls={paymentLogoUrls}
+                            onClick={() => setPaymentHistoryOrder(popupOrder)}
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -583,6 +640,16 @@ export default function OrderList() {
           </div>
         )}
       </Modal>
+
+      <PaymentHistoryModal
+        order={paymentHistoryOrder ? (paymentHistoryDetail || paymentHistoryOrder) : null}
+        onClose={() => setPaymentHistoryOrder(null)}
+      />
+      <OrderHistoryModal
+        order={orderHistoryOrder ? (orderHistoryDetail || orderHistoryOrder) : null}
+        onClose={() => setOrderHistoryOrder(null)}
+      />
+      {ConfirmDialog}
     </div>
   )
 }

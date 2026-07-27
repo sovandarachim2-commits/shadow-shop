@@ -13,7 +13,7 @@ import {
   UserCircle, Bell, Shield, Sliders, MessageCircle,
   MapPin, CreditCard, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
-  Flame, Gift, Ticket, SlidersHorizontal,
+  Flame, Gift, Ticket, Percent, SlidersHorizontal,
 } from 'lucide-react'
 
 // `module` maps to the Permission.module value — used to check `view` access
@@ -85,7 +85,7 @@ const navItems = [
     icon: Gift,
     children: [
       { label: 'Overview', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
-      { label: 'Rewards', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
+      { label: 'Reward Products', path: '/admin/rewards/products', icon: Gift, module: 'rewards' },
       { label: 'Promo Codes', path: '/admin/rewards/coupons', icon: Percent, module: 'rewards' },
       { label: 'Redeem Requests', path: '/admin/rewards/exchanges', icon: Ticket, module: 'rewards' },
       { label: 'Earning & Tiers', path: '/admin/rewards/settings', icon: Sliders, module: 'rewards' },

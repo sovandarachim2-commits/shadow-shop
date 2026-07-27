@@ -557,7 +557,7 @@ class TelegramService:
                 getattr(order, 'order_number', order.pk),
             )
 
-        if group_chat_id:
+        if group_chat_id and getattr(self.config, 'notify_contact_sales_copy', True):
             # Post only the customer message so sales can copy/forward it cleanly.
             self.send_message(
                 message,

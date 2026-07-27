@@ -9,6 +9,17 @@ import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 
 function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, disabled, completed = false }) {
+  const { t } = useTranslation()
+  const comingSoonLabel = t('rewardsPage.comingSoon')
+  const isComingSoon = disabled && (reward === comingSoonLabel || actionLabel === comingSoonLabel)
+  const handleClick = () => {
+    if (isComingSoon) {
+      toast(t('rewardsPage.comingSoon'))
+      return
+    }
+    action?.()
+  }
+
   return (
     <div className="flex min-h-[82px] items-center gap-3 border-b border-gray-100 px-3 py-3 last:border-b-0">
       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-pink-50 text-pink-600">
@@ -22,8 +33,8 @@ function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, 
       {actionLabel ? (
         <button
           type="button"
-          onClick={action}
-          disabled={disabled}
+          onClick={handleClick}
+          disabled={disabled && !isComingSoon}
           className={`min-w-[76px] rounded-lg border px-3 py-2 text-xs font-black transition ${
             completed
               ? 'border-gray-200 bg-gray-100 text-gray-500'
@@ -33,7 +44,7 @@ function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, 
           {actionLabel}
         </button>
       ) : (
-        <button type="button" onClick={action} className="flex h-9 w-9 items-center justify-center rounded-full text-pink-600">
+        <button type="button" onClick={handleClick} className="flex h-9 w-9 items-center justify-center rounded-full text-pink-600">
           <ChevronRight size={20} />
         </button>
       )}
@@ -83,7 +94,11 @@ export default function EarnPoints() {
   const pointsToNext = data?.points_to_next_level || 0
   const progress = Math.min(100, data?.progress_pct || 0)
   const rules = data?.earning_rules || {}
-  const dailyEnabled = Number(rules.daily_checkin_bonus || 0) > 0
+  const purchaseEnabled = rules.is_active !== false && rules.purchase_points_enabled !== false
+  const reviewEnabled = rules.is_active !== false && rules.review_bonus_enabled !== false
+  const referralEnabled = rules.is_active !== false && rules.referral_bonus_enabled !== false
+  const birthdayEnabled = rules.is_active !== false && rules.birthday_bonus_enabled !== false
+  const dailyEnabled = rules.is_active !== false && rules.daily_checkin_enabled !== false && Number(rules.daily_checkin_bonus || 0) > 0
   const pointsPerDollar = Number(rules.points_per_dollar || 1)
   const pointUnit = pointsPerDollar === 1 ? t('rewardsPage.pointSingular') : t('rewardsPage.pointsPlural')
 
@@ -123,22 +138,25 @@ export default function EarnPoints() {
             icon={ShoppingBag}
             title={t('rewardsPage.earn.placeOrder')}
             description={t('rewardsPage.earn.placeOrderDesc')}
-            reward={t('rewardsPage.earn.pointsPerDollar', { count: pointsPerDollar, unit: pointUnit })}
+            reward={purchaseEnabled ? t('rewardsPage.earn.pointsPerDollar', { count: pointsPerDollar, unit: pointUnit }) : t('rewardsPage.comingSoon')}
             action={() => navigate('/shop')}
+            disabled={!purchaseEnabled}
           />
           <EarnRow
             icon={Edit3}
             title={t('rewardsPage.earn.writeReview')}
             description={t('rewardsPage.earn.writeReviewDesc')}
-            reward={rules.review_bonus ? t('rewardsPage.pointsReward', { count: rules.review_bonus }) : t('rewardsPage.comingSoon')}
+            reward={reviewEnabled && rules.review_bonus ? t('rewardsPage.pointsReward', { count: rules.review_bonus }) : t('rewardsPage.comingSoon')}
             action={() => navigate('/my-orders')}
+            disabled={!reviewEnabled || !rules.review_bonus}
           />
           <EarnRow
             icon={UserPlus}
             title={t('rewardsPage.earn.referFriend')}
             description={t('rewardsPage.earn.referFriendDesc')}
-            reward={rules.referral_bonus ? t('rewardsPage.pointsReward', { count: rules.referral_bonus }) : t('rewardsPage.comingSoon')}
+            reward={referralEnabled && rules.referral_bonus ? t('rewardsPage.pointsReward', { count: rules.referral_bonus }) : t('rewardsPage.comingSoon')}
             action={shareStore}
+            disabled={!referralEnabled || !rules.referral_bonus}
           />
           <EarnRow
             icon={CalendarCheck}
@@ -154,8 +172,9 @@ export default function EarnPoints() {
             icon={Cake}
             title={t('rewardsPage.earn.birthdayBonus')}
             description={t('rewardsPage.earn.birthdayDesc')}
-            reward={rules.birthday_bonus ? t('rewardsPage.pointsReward', { count: rules.birthday_bonus }) : t('rewardsPage.comingSoon')}
+            reward={birthdayEnabled && rules.birthday_bonus ? t('rewardsPage.pointsReward', { count: rules.birthday_bonus }) : t('rewardsPage.comingSoon')}
             action={() => navigate('/profile')}
+            disabled={!birthdayEnabled || !rules.birthday_bonus}
           />
           <EarnRow
             icon={Share2}

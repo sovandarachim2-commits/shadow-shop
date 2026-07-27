@@ -70,7 +70,7 @@ function RelatedProductCard({ product, priority = false }) {
           -{discountPct}%
         </span>
       )}
-      <div className="relative h-44 overflow-hidden bg-white">
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
           <>
             {!imageLoaded && <CosmeticArt tone={product.tone} className="min-h-full" />}
@@ -86,39 +86,38 @@ function RelatedProductCard({ product, priority = false }) {
             />
           </>
         ) : (
-          <CosmeticArt tone={product.tone} className="min-h-full" />
+          <CosmeticArt tone={product.tone} className="min-h-full bg-gray-50" />
         )}
       </div>
-      <div className="p-3">
+      <div className="flex min-h-[166px] flex-col p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
-          <span className="shrink-0 text-gray-300">/</span>
-          <span className="truncate">{product.category_name || t('product.cosmetics')}</span>
         </div>
         <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{product.name}</h3>
         <div className="mt-2 flex items-center gap-1">
           <Star size={13} className="fill-yellow-400 text-yellow-400" />
           <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
+          <span className="text-xs text-gray-300">(126)</span>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(price)}</span>
-            {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-          </div>
+        <div className="mt-3 min-w-0">
+          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(price)}</span>
+          {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+        </div>
+        <div className="mt-auto pt-3">
           {!available ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
+            <span className="flex h-10 w-full items-center justify-center rounded-xl bg-gray-100 text-xs font-black text-gray-400">{t('common.soldOut')}</span>
           ) : qty === 0 ? (
-            <button onClick={handleAdd} className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95">
-              {t('common.add')}
+            <button onClick={handleAdd} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-pink-600 px-3 text-xs font-black text-white shadow-sm shadow-pink-100 transition active:scale-95">
+              <ShoppingCart size={14} /> {t('common.addToCart')}
             </button>
           ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
-              <button onClick={() => updateQuantity(product.id, qty - 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
+            <div onClick={(e) => e.stopPropagation()} className="grid h-10 grid-cols-[40px_1fr_40px] overflow-hidden rounded-xl bg-pink-600">
+              <button onClick={() => updateQuantity(product.id, qty - 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
+                {qty === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
               </button>
-              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
-              <button onClick={() => addItem(saleProduct, 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                <Plus size={12} />
+              <span className="flex items-center justify-center text-sm font-black text-white">{qty}</span>
+              <button onClick={() => addItem(saleProduct, 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
+                <Plus size={14} />
               </button>
             </div>
           )}
@@ -131,7 +130,7 @@ function RelatedProductCard({ product, priority = false }) {
 function RelatedProductSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
-      <div className="h-44 animate-pulse bg-gray-100" />
+      <div className="aspect-square animate-pulse bg-gray-100" />
       <div className="space-y-2 p-3">
         <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
@@ -614,10 +613,10 @@ export default function ProductDetail() {
           <div className="mb-4 flex items-end justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-pink-600">
-                {showingSameCategory ? (product.category_name || 'Related Products') : 'Recommended Products'}
+                {showingSameCategory ? (product.category_name || t('product.relatedProducts')) : t('product.recommendedProducts')}
               </p>
               <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
-                {showingSameCategory ? 'More From This Category' : 'You May Also Like'}
+                {showingSameCategory ? t('product.moreFromThisCategory') : t('product.youMayAlsoLike')}
               </h2>
             </div>
             {showingSameCategory && product.category && (
@@ -626,7 +625,7 @@ export default function ProductDetail() {
                 onClick={() => navigate(`/shop?category=${product.category}`)}
                 className="hidden rounded-full border border-pink-100 bg-white px-4 py-2 text-sm font-black text-pink-600 shadow-sm transition hover:bg-pink-50 md:inline-flex"
               >
-                View all
+                {t('common.viewAll')}
               </button>
             )}
           </div>
@@ -645,7 +644,7 @@ export default function ProductDetail() {
               onClick={() => navigate(`/shop?category=${product.category}`)}
               className="mt-4 flex w-full items-center justify-center rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3 text-sm font-black text-pink-600 md:hidden"
             >
-              View all {product.category_name || 'products'}
+              {t('common.viewAll')} {product.category_name || t('common.products')}
             </button>
           )}
         </section>

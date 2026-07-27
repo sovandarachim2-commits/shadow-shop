@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.inventory.models import Stock
 from apps.notifications.models import TelegramConfig
@@ -253,6 +254,75 @@ class CustomerOrderFlowTests(TestCase):
         self.assertIn(f'#{order.order_number}', share['text'])
         self.assertNotIn('Copy &amp; send to customer', share['text'])
         self.assertNotIn('Customer has no linked Telegram', share['text'])
+
+    @patch('apps.notifications.services.requests.post')
+    def test_contact_sales_copy_message_can_be_disabled_per_telegram_destination(self, requests_post):
+        response = Mock(status_code=200, content=b'{}')
+        response.json.return_value = {'ok': True}
+        requests_post.return_value = response
+        TelegramConfig.objects.create(
+            name='Sales',
+            bot_token='test-token',
+            chat_id='test-chat',
+            notify_new_order=True,
+            notify_contact_sales_copy=False,
+        )
+        order = self.create_customer_order('contact_sales')
+
+        sent = TelegramService().notify_contact_sales_customer(order, 'confirm', group_chat_id='test-chat')
+
+        self.assertFalse(sent)
+        self.assertEqual(requests_post.call_count, 0)
+
+    @patch('apps.notifications.services.TelegramService.notify_payment_received')
+    def test_admin_mark_paid_records_payment_history(self, notify_payment_received):
+        User = get_user_model()
+        admin = User.objects.create_user(
+            username='payment-admin',
+            password='pass12345',
+            role='admin',
+            is_staff=True,
+        )
+        order = self.create_customer_order('cod')
+        client = APIClient()
+        client.force_authenticate(user=admin)
+
+        response = client.post(f'/api/orders/list/{order.id}/mark_paid/', {'payment_method': 'cash'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, 'paid')
+        self.assertEqual(order.payment_method, 'cash')
+        self.assertTrue(OrderStatusHistory.objects.filter(
+            order=order,
+            changed_by=admin,
+            note='Payment recorded: status unpaid -> paid; method cod -> cash',
+        ).exists())
+        notify_payment_received.assert_called_once()
+
+    def test_admin_order_list_can_filter_by_delivery_by(self):
+        User = get_user_model()
+        admin = User.objects.create_user(
+            username='delivery-filter-admin',
+            password='pass12345',
+            role='admin',
+            is_staff=True,
+        )
+        matched = self.create_customer_order('cod')
+        matched.out_delivery_by = 'Wing Delivery'
+        matched.save(update_fields=['out_delivery_by'])
+        other = self.create_customer_order('cash')
+        other.out_delivery_by = 'Other Delivery'
+        other.save(update_fields=['out_delivery_by'])
+        client = APIClient()
+        client.force_authenticate(user=admin)
+
+        response = client.get('/api/orders/list/', {'delivery_by': 'Wing Delivery'})
+
+        self.assertEqual(response.status_code, 200, response.data)
+        order_numbers = [row['order_number'] for row in response.data['results']]
+        self.assertIn(matched.order_number, order_numbers)
+        self.assertNotIn(other.order_number, order_numbers)
 
     @patch('apps.payments.checkout_flow.TelegramService')
     def test_pay_now_checkout_prepares_pending_checkout_without_creating_order(self, telegram_service):

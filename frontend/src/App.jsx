@@ -51,6 +51,7 @@ function lazyNamedWithReload(importer, exportName) {
 const AdminLayout = lazyWithReload(() => import('@/components/layout/AdminLayout'))
 const CustomerLayout = lazyWithReload(() => import('@/components/layout/CustomerLayout'))
 const Home = lazyWithReload(() => import('@/pages/customer/Home'))
+const DemoBottomNavigation = lazyWithReload(() => import('@/pages/DemoBottomNavigation'))
 
 function getAppErrorMessage(error) {
   if (typeof error === 'string' && error.trim()) return error
@@ -449,6 +450,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
           <Route path="/forgot-password" element={<LazyPage><ForgotPassword /></LazyPage>} />
+          <Route path="/demo" element={<LazyPage><DemoBottomNavigation /></LazyPage>} />
 
           {/* Customer App */}
           <Route path="/" element={
@@ -655,6 +657,7 @@ export default function App() {
               padding: '0 0.75rem',
             }}
             toastOptions={{
+              duration: 1800,
               className: '',
               style: {
                 borderRadius: '12px',
@@ -664,10 +667,12 @@ export default function App() {
                 maxWidth: 'min(92vw, 420px)',
               },
               success: {
+                duration: 1600,
                 style: { background: '#059669', color: '#fff' },
                 iconTheme: { primary: '#fff', secondary: '#059669' },
               },
               error: {
+                duration: 2000,
                 style: { background: '#dc2626', color: '#fff' },
                 iconTheme: { primary: '#fff', secondary: '#dc2626' },
               },

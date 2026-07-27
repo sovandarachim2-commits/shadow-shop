@@ -1,10 +1,11 @@
 from rest_framework import serializers
 from django.db import transaction
+import string
 from .models import (
     Customer, Order, OrderItem, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord,
-    RewardItem, RewardRedemption, RewardSettings, PointTransaction,
+    RewardItem, RewardRedemption, RewardSettings, PointTransaction, PromoCode, PromoCodeUsage,
 )
-from apps.products.models import Product, ProductSet
+from apps.products.models import Category, Product, ProductSet
 from utils.image_optimization import card_variant_url
 from utils.phone import validate_cambodia_phone
 from utils.payment_methods import is_payment_method_allowed
@@ -217,7 +218,9 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_changed_by_name(self, obj):
-        return obj.changed_by.get_full_name() if obj.changed_by else 'System'
+        if not obj.changed_by:
+            return 'System'
+        return obj.changed_by.get_full_name() or obj.changed_by.username
 
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -446,6 +449,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
 class OrderAdminUpdateSerializer(serializers.Serializer):
     customer_info = serializers.DictField(required=False)
+    status = serializers.ChoiceField(choices=[c[0] for c in Order.STATUS_CHOICES], required=False)
     payment_method = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_METHOD_CHOICES], required=False, allow_blank=True)
     payment_status = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_STATUS_CHOICES], required=False)
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
@@ -518,6 +522,10 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         customer_info = validated_data.pop('customer_info', None)
 
         with transaction.atomic():
+            old_status = order.status
+            old_payment_status = order.payment_status
+            old_payment_method = order.payment_method
+
             if customer_info:
                 if 'phone' in customer_info and customer_info['phone'] not in (None, ''):
                     customer_info['phone'] = validate_cambodia_phone(customer_info['phone'])
@@ -570,6 +578,25 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                 changed_by=request.user,
                 note='Order edited',
             )
+            if old_status != order.status:
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    status=order.status,
+                    changed_by=request.user,
+                    note=f'Status updated: {old_status or "-"} -> {order.status or "-"}',
+                )
+            payment_changes = []
+            if old_payment_status != order.payment_status:
+                payment_changes.append(f'status {old_payment_status or "-"} -> {order.payment_status or "-"}')
+            if old_payment_method != order.payment_method:
+                payment_changes.append(f'method {old_payment_method or "-"} -> {order.payment_method or "-"}')
+            if payment_changes:
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    status=order.status,
+                    changed_by=request.user,
+                    note=f'Payment updated: {"; ".join(payment_changes)}',
+                )
 
             from apps.notifications.services import TelegramService
             transaction.on_commit(lambda: TelegramService.notify_order_edited_async(order.id))
@@ -658,20 +685,20 @@ class CustomerCheckoutSerializer(serializers.Serializer):
             subtotal += item.total_price
 
         if coupon_code:
-            from .rewards import get_coupon_discount
+            from .rewards import get_coupon_discount, mark_coupon_used
             try:
-                redemption, discount = get_coupon_discount(
+                coupon_obj, discount = get_coupon_discount(
                     user,
                     coupon_code,
                     subtotal,
                     order.delivery_fee,
                     lock=True,
+                    cart_lines=order.items.select_related('product', 'product__category'),
                 )
             except ValueError as exc:
                 raise serializers.ValidationError({'coupon_code': str(exc)}) from exc
             order.discount = discount
-            redemption.status = RewardRedemption.STATUS_USED
-            redemption.save(update_fields=['status'])
+            mark_coupon_used(coupon_obj, order, user, discount)
 
         order.subtotal = subtotal
         order.grand_total = subtotal + order.delivery_fee - order.discount
@@ -882,6 +909,92 @@ class RewardRedemptionSerializer(serializers.ModelSerializer):
         return None
 
 
+class PromoCodeSerializer(serializers.ModelSerializer):
+    usage_count = serializers.IntegerField(read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    target_category_names = serializers.SerializerMethodField()
+    target_product_names = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PromoCode
+        fields = [
+            'id', 'name', 'code', 'discount_type', 'value', 'apply_to',
+            'apply_scope', 'target_categories', 'target_products',
+            'target_category_names', 'target_product_names',
+            'minimum_order_amount', 'max_discount_amount', 'usage_limit',
+            'per_customer_limit', 'customer_scope', 'starts_at', 'ends_at',
+            'priority', 'is_active', 'usage_count', 'created_by',
+            'created_by_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'target_categories': {'required': False, 'queryset': Category.objects.all()},
+            'target_products': {'required': False, 'queryset': Product.objects.all()},
+        }
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return 'System'
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    def get_target_category_names(self, obj):
+        return list(obj.target_categories.values_list('name', flat=True))
+
+    def get_target_product_names(self, obj):
+        return list(obj.target_products.values_list('name', flat=True))
+
+    def validate_code(self, value):
+        code = (value or '').strip().upper()
+        if not code:
+            raise serializers.ValidationError('Coupon code is required.')
+        allowed = set(string.ascii_uppercase + string.digits + '-_')
+        if any(char not in allowed for char in code):
+            raise serializers.ValidationError('Use letters, numbers, hyphen, or underscore only.')
+        return code
+
+    def validate(self, attrs):
+        discount_type = attrs.get('discount_type', getattr(self.instance, 'discount_type', PromoCode.DISCOUNT_PERCENT))
+        value = attrs.get('value', getattr(self.instance, 'value', 0))
+        apply_to = attrs.get('apply_to', getattr(self.instance, 'apply_to', PromoCode.APPLY_PRODUCTS))
+        apply_scope = attrs.get('apply_scope', getattr(self.instance, 'apply_scope', PromoCode.SCOPE_ALL_PRODUCTS))
+        if discount_type == PromoCode.DISCOUNT_PERCENT and value > 100:
+            raise serializers.ValidationError({'value': 'Percentage cannot be greater than 100.'})
+        if discount_type == PromoCode.DISCOUNT_FREE_DELIVERY:
+            attrs['value'] = 0
+            attrs['apply_to'] = PromoCode.APPLY_DELIVERY
+            attrs['apply_scope'] = PromoCode.SCOPE_DELIVERY
+        elif apply_scope == PromoCode.SCOPE_DELIVERY:
+            attrs['apply_to'] = PromoCode.APPLY_DELIVERY
+        elif apply_scope == PromoCode.SCOPE_ORDER:
+            attrs['apply_to'] = PromoCode.APPLY_ORDER
+        elif apply_to == PromoCode.APPLY_DELIVERY and discount_type == PromoCode.DISCOUNT_PERCENT:
+            attrs['apply_to'] = PromoCode.APPLY_DELIVERY
+            attrs['apply_scope'] = PromoCode.SCOPE_DELIVERY
+        else:
+            attrs['apply_to'] = PromoCode.APPLY_PRODUCTS
+        target_categories = attrs.get('target_categories')
+        target_products = attrs.get('target_products')
+        existing_categories = self.instance.target_categories.exists() if self.instance else False
+        existing_products = self.instance.target_products.exists() if self.instance else False
+        if apply_scope == PromoCode.SCOPE_CATEGORIES and not (target_categories or (target_categories is None and existing_categories)):
+            raise serializers.ValidationError({'target_categories': 'Select at least one category.'})
+        if apply_scope == PromoCode.SCOPE_PRODUCTS and not (target_products or (target_products is None and existing_products)):
+            raise serializers.ValidationError({'target_products': 'Select at least one product.'})
+        return attrs
+
+
+class PromoCodeUsageSerializer(serializers.ModelSerializer):
+    order_number = serializers.CharField(source='order.order_number', read_only=True)
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PromoCodeUsage
+        fields = ['id', 'promo_code', 'user', 'user_name', 'order', 'order_number', 'discount_amount', 'created_at']
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
 class PointTransactionSerializer(serializers.ModelSerializer):
     order_number = serializers.CharField(source='order.order_number', read_only=True)
     user_name = serializers.SerializerMethodField()
@@ -898,8 +1011,14 @@ class RewardSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = RewardSettings
         fields = [
-            'points_per_dollar', 'signup_bonus', 'referral_bonus', 'birthday_bonus',
-            'review_bonus', 'daily_checkin_bonus', 'points_expiry_days', 'expiry_reminder_days',
+            'is_active',
+            'purchase_points_enabled', 'points_per_dollar',
+            'signup_bonus_enabled', 'signup_bonus',
+            'referral_bonus_enabled', 'referral_bonus',
+            'birthday_bonus_enabled', 'birthday_bonus',
+            'review_bonus_enabled', 'review_bonus',
+            'daily_checkin_enabled', 'daily_checkin_bonus',
+            'points_expiry_days', 'expiry_reminder_days',
             'expiration_enabled',
             'minimum_redeem_points', 'maximum_points_per_order', 'updated_at',
             'silver_min_points', 'gold_min_points', 'platinum_min_points',

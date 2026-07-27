@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronDown, ChevronRight, Home, MapPin,
-  MoreHorizontal, Pencil, Plus, Search, Star,
+  Pencil, Plus, Search, Star,
   Trash2, User, X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -637,7 +637,7 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="mb-1.5 flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-pink-50 px-2.5 py-0.5 text-xs font-black uppercase text-pink-600">{label}</span>
                 {addr.is_default && (
@@ -654,29 +654,24 @@ function DesktopAddressCard({ addr, onEdit, onDelete, onDefault, defaultPending 
                 <span>{addr.phone}</span>
               </div>
             </div>
-            <button className="text-gray-400 hover:text-pink-600">
-              <MoreHorizontal size={18} />
-            </button>
-          </div>
-
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button onClick={() => onEdit(addr)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-pink-500 px-4 py-2 text-sm font-black text-pink-600">
-                <Pencil size={14} /> {t('addressBook.edit')}
-              </button>
-              <button onClick={() => onDelete(addr)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-black text-gray-600">
-                <Trash2 size={14} /> {t('addressBook.delete')}
-              </button>
-            </div>
             {!addr.is_default && (
               <button
                 onClick={() => onDefault(addr.id)}
                 disabled={defaultPending}
-                className="shrink-0 inline-flex items-center justify-center gap-2 rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-black text-pink-600 hover:border-pink-300 hover:bg-pink-100 disabled:opacity-60"
+                className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-sm font-black text-pink-600 transition hover:border-pink-300 hover:bg-pink-100 disabled:opacity-60"
               >
                 <Star size={14} /> {t('addressBook.setAsDefault')}
               </button>
             )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <button onClick={() => onEdit(addr)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-pink-500 px-4 py-2 text-sm font-black text-pink-600">
+              <Pencil size={14} /> {t('addressBook.edit')}
+            </button>
+            <button onClick={() => onDelete(addr)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-black text-gray-600">
+              <Trash2 size={14} /> {t('addressBook.delete')}
+            </button>
           </div>
         </div>
       </div>

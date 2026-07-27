@@ -955,12 +955,12 @@ export default function Profile() {
       {/* ═══════════════════════════════════════════
           DESKTOP LAYOUT
       ═══════════════════════════════════════════ */}
-      <div className="hidden lg:flex lg:mx-auto lg:w-full lg:max-w-[1680px]">
+      <div className="hidden lg:flex lg:mx-auto lg:w-full lg:max-w-[1500px]">
 
         {/* ── Sidebar ──────────────────────────────── */}
         {/* ── Main Content ────────────────────────── */}
-        <div className="flex-1 overflow-auto bg-slate-50 p-8">
-          <div className="mx-auto max-w-[1600px] space-y-7">
+        <div className="flex-1 overflow-auto bg-slate-50 px-6 py-8">
+          <div className="mx-auto max-w-[1440px] space-y-7">
 
           {/* ══ ACCOUNT OVERVIEW ══ */}
           {activeView === 'profile' && (
@@ -1558,7 +1558,7 @@ function DesktopProfileOverview({
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-slate-950">{t('profile.title')}</h1>
-          <p className="mt-1 text-base font-semibold text-slate-500">Manage your personal information and account settings</p>
+          <p className="mt-1 text-base font-semibold text-slate-500">{t('profile.desktopSubtitle')}</p>
         </div>
         <button
           onClick={() => setActiveModal('edit-profile')}
@@ -1628,7 +1628,7 @@ function DesktopProfileOverview({
       <div className="grid grid-cols-3 gap-7">
         <DesktopProfileCard title={t('profile.personalInfo')} icon={User}>
           <DesktopInfoRow icon={User} label={t('profile.fullName')} value={displayName} />
-          <DesktopInfoRow icon={IdCard} label="Username" value={usernameDisplay} />
+          <DesktopInfoRow icon={IdCard} label={t('auth.username')} value={usernameDisplay} />
           <DesktopInfoRow icon={Mail} label={t('profile.emailAddress')} value={email} />
           <DesktopInfoRow icon={Phone} label={t('profile.phoneNumber')} value={phone} />
           <DesktopInfoRow icon={Languages} label={t('profile.chooseLanguage')} value={currentLanguage.label} />
@@ -1636,24 +1636,24 @@ function DesktopProfileOverview({
         </DesktopProfileCard>
 
         <DesktopProfileCard title={t('profile.accountInfo')} icon={IdCard}>
-          <DesktopInfoRow icon={Shield} label="Role" value={user.role || 'Customer'} badge />
+          <DesktopInfoRow icon={Shield} label={t('profile.role')} value={user.role || t('orders.customer')} badge />
           <DesktopInfoRow icon={CheckCircle2} label={t('profile.verificationStatus')} value={t('profile.verified')} success />
           <DesktopInfoRow icon={ShoppingBag} label={t('profile.myOrders')} value={orderTotal.toLocaleString()} />
           <DesktopInfoRow icon={Gift} label={t('profile.myPoints')} value={`${rewardPoints.toLocaleString()} / ${nextTierPoints.toLocaleString()}`} />
-          <DesktopInfoRow icon={Star} label="Member Level" value={membershipLevel} />
-          <DesktopInfoRow icon={Percent} label="Progress" value={`${progressPct}%`} success />
+          <DesktopInfoRow icon={Star} label={t('profile.memberLevelLabel')} value={membershipLevel} />
+          <DesktopInfoRow icon={Percent} label={t('profile.progress')} value={`${progressPct}%`} success />
         </DesktopProfileCard>
 
-        <DesktopProfileCard title="Primary Address" icon={MapPin}>
+        <DesktopProfileCard title={t('profile.primaryAddress')} icon={MapPin}>
           <div className="space-y-4">
             <div>
               <p className="text-base font-black text-slate-900">{defaultAddress?.label || t('profile.defaultAddress')}</p>
               <p className="mt-2 min-h-[72px] text-base font-semibold leading-7 text-slate-500">{fullAddress}</p>
             </div>
             <div className="grid grid-cols-[72px_1fr] gap-y-2 text-base">
-              <span className="font-black text-slate-700">Email:</span>
+              <span className="font-black text-slate-700">{t('profile.email')}:</span>
               <span className="font-semibold text-slate-500">{email}</span>
-              <span className="font-black text-slate-700">Phone:</span>
+              <span className="font-black text-slate-700">{t('profile.phone')}:</span>
               <span className="font-semibold text-slate-500">{phone}</span>
             </div>
             <div className="relative h-[112px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100">
@@ -1663,14 +1663,14 @@ function DesktopProfileOverview({
           </div>
         </DesktopProfileCard>
 
-        <DesktopProfileCard title="Notification Preferences" icon={Bell}>
-          <DesktopToggleRow icon={Mail} title="Email Notifications" text="Receive email updates about orders and activities" enabled />
-          <DesktopToggleRow icon={Phone} title="SMS Notifications" text="Receive SMS alerts for important updates" />
-          <DesktopToggleRow icon={Bell} title="Push Notifications" text="Receive push notifications in browser" enabled />
-          <DesktopToggleRow icon={Gift} title="Marketing Updates" text="Receive updates about new features and promotions" />
+        <DesktopProfileCard title={t('profile.notificationPreferences')} icon={Bell}>
+          <DesktopToggleRow icon={Mail} title={t('profile.emailNotifications')} text={t('profile.emailNotificationsDesc')} enabled />
+          <DesktopToggleRow icon={Phone} title={t('profile.smsNotifications')} text={t('profile.smsNotificationsDesc')} />
+          <DesktopToggleRow icon={Bell} title={t('profile.pushNotifications')} text={t('profile.pushNotificationsDesc')} enabled />
+          <DesktopToggleRow icon={Gift} title={t('profile.marketingUpdates')} text={t('profile.marketingUpdatesDesc')} />
         </DesktopProfileCard>
 
-        <DesktopProfileCard title="Recent Activity" icon={Clock}>
+        <DesktopProfileCard title={t('profile.recentActivity')} icon={Clock}>
           <div className="space-y-1">
             {activityItems.map((item) => (
               <button key={`${item.title}-${item.date}`} onClick={item.action} className="group grid w-full grid-cols-[28px_1fr] gap-3 rounded-xl py-2 text-left transition hover:bg-slate-50">
@@ -1690,11 +1690,11 @@ function DesktopProfileOverview({
           </button>
         </DesktopProfileCard>
 
-        <DesktopProfileCard title="Security" icon={Shield}>
-          <DesktopActionRow icon={Lock} title={t('profile.password')} text="Keep your password updated" action="Change" onClick={() => setActiveModal('password')} />
-          <DesktopActionRow icon={Shield} title="Two-Factor Authentication" text="Add extra security to your account" action="Manage" onClick={() => setActiveModal('password')} />
-          <DesktopActionRow icon={IdCard} title="Active Sessions" text="Current browser session" action="View" onClick={() => setActiveView('profile')} />
-          <DesktopActionRow icon={LogOut} title={t('profile.logout')} text="Sign out from this device" action={t('profile.logout')} onClick={handleLogout} danger />
+        <DesktopProfileCard title={t('profile.security')} icon={Shield}>
+          <DesktopActionRow icon={Lock} title={t('profile.password')} text={t('profile.passwordUpdatedHint')} action={t('common.edit')} onClick={() => setActiveModal('password')} />
+          <DesktopActionRow icon={Shield} title={t('profile.twoFactorAuth')} text={t('profile.twoFactorAuthDesc')} action={t('profile.manage')} onClick={() => setActiveModal('password')} />
+          <DesktopActionRow icon={IdCard} title={t('profile.activeSessions')} text={t('profile.activeSessionsDesc')} action={t('profile.viewAll')} onClick={() => setActiveView('profile')} />
+          <DesktopActionRow icon={LogOut} title={t('profile.logout')} text={t('profile.logoutCurrentDevice')} action={t('profile.logout')} onClick={handleLogout} danger />
         </DesktopProfileCard>
       </div>
     </div>
