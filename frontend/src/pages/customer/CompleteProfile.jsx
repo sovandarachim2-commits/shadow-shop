@@ -248,6 +248,7 @@ export default function CompleteProfile() {
               isPending={saveMutation.isPending}
               needsPassword={needsPassword}
               username={user?.username}
+              emailLocked={Boolean(user?.email)}
               t={t}
             />
           )}
@@ -351,7 +352,7 @@ function StepProgress({ step, progress }) {
   )
 }
 
-function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, needsPassword, username, t }) {
+function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, needsPassword, username, emailLocked, t }) {
   return (
     <div className="mt-6 flex flex-1 flex-col">
       <div className="flex items-center justify-center gap-4 rounded-3xl bg-[#FFF8FB] px-4 py-4">
@@ -417,7 +418,7 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           onChange={(value) => set('email', value)}
           error={errors.email}
           autoComplete="email"
-          disabled={Boolean(user?.email)}
+          disabled={emailLocked}
         />
       </div>
 
