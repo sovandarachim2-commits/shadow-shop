@@ -467,7 +467,11 @@ export default function Login() {
   const googleClientId = googleConfig?.client_id || ''
   const googleLoginEnabled = Boolean(googleConfig?.configured && googleClientId)
   const isKhmer = i18n.language?.startsWith('km')
-  const authFontFamily = isKhmer ? '"Khmer OS Battambang", "Khmer OS", "Noto Sans Khmer", sans-serif' : undefined
+  const authFontFamily = isKhmer ? '"Noto Sans Khmer", "Khmer OS Battambang", "Khmer OS", sans-serif' : undefined
+  const authTitleClass = cn(
+    'text-[2.15rem] font-bold text-[#1A1A1A]',
+    isKhmer ? 'leading-[1.55] tracking-normal' : 'leading-tight tracking-tight'
+  )
 
   const handleGoogleCredential = useCallback(async (response) => {
     const credential = typeof response === 'string' ? response : response?.credential
@@ -766,7 +770,7 @@ export default function Login() {
                   </div>
 
                   <div className="mb-7 text-center lg:text-left">
-                    <h2 className="text-[2.15rem] font-bold leading-tight tracking-tight text-[#1A1A1A]">{t('auth.welcome')}</h2>
+                    <h2 className={authTitleClass}>{t('auth.welcome')}</h2>
                     <p className="mt-2 text-base font-normal text-[#6B7280]">{t('auth.loginSubtitle')}</p>
                   </div>
 
@@ -841,7 +845,7 @@ export default function Login() {
               ) : (
                 <form onSubmit={handleRegister} noValidate>
                   <div className="mb-6 text-center lg:text-left">
-                    <h2 className="text-[2.15rem] font-bold leading-tight tracking-tight text-[#1A1A1A]">{t('auth.createAccount')}</h2>
+                    <h2 className={authTitleClass}>{t('auth.createAccount')}</h2>
                     <p className="mt-2 text-base font-normal text-[#6B7280]">{t('auth.createAccountSubtitle')}</p>
                   </div>
 

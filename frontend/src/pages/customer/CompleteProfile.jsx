@@ -48,10 +48,12 @@ function buildInitialForm(user) {
 }
 
 export default function CompleteProfile() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const { user, updateUser } = useAuthStore()
+  const isKhmer = i18n.language?.startsWith('km')
+  const profileFontFamily = isKhmer ? '"Noto Sans Khmer", "Khmer OS Battambang", "Khmer OS", sans-serif' : undefined
   const fileInputRef = useRef(null)
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(
@@ -191,7 +193,7 @@ export default function CompleteProfile() {
   if (!user) return null
 
   return (
-    <div className="relative min-h-screen bg-white font-sans text-[#1A1A1A] lg:flex lg:items-center lg:justify-center lg:bg-[#F8FAFC] lg:px-8 lg:py-10">
+    <div className="relative min-h-screen bg-white font-sans text-[#1A1A1A] lg:flex lg:items-center lg:justify-center lg:bg-[#F8FAFC] lg:px-8 lg:py-10" style={{ fontFamily: profileFontFamily }}>
       <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col bg-white lg:min-h-0 lg:rounded-[28px] lg:border lg:border-gray-200 lg:shadow-[0_24px_70px_rgba(17,24,39,0.08)]">
         <form
           onSubmit={isPasswordStep ? handlePasswordSubmit : handleSubmit}
@@ -211,7 +213,7 @@ export default function CompleteProfile() {
           </div>
 
           <div className="mt-6 text-center">
-            <h1 className="text-2xl font-black tracking-tight text-[#1A1A1A] sm:text-3xl">
+            <h1 className={cn('text-2xl font-black text-[#1A1A1A] sm:text-3xl', isKhmer ? 'leading-[1.55] tracking-normal' : 'tracking-tight')}>
               {isPasswordStep ? t('completeProfile.createPasswordTitle') : t('completeProfile.title')}
             </h1>
           </div>

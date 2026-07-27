@@ -43,6 +43,17 @@ def generate_customer_username():
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        identifier = str(attrs.get(self.username_field, '') or '').strip()
+        if '@' in identifier:
+            user = User.objects.filter(email__iexact=identifier, is_active=True).only('username').first()
+            if user:
+                attrs[self.username_field] = user.username
+
+        data = super().validate(attrs)
+        data['user'] = UserSerializer(self.user).data
+        return data
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -50,11 +61,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['full_name'] = user.get_full_name()
         return token
-
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        data['user'] = UserSerializer(self.user).data
-        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
