@@ -48,8 +48,14 @@ function isAvailableForSale(product) {
 function getApiErrorMessage(error, fallback) {
   const data = error?.response?.data
   if (!data) return fallback
-  if (typeof data.detail === 'string') return data.detail
-  if (typeof data === 'string') return data
+  if (typeof data.detail === 'string') {
+    if (/<!doctype|<html/i.test(data.detail)) return fallback
+    return data.detail
+  }
+  if (typeof data === 'string') {
+    if (/<!doctype|<html/i.test(data)) return fallback
+    return data
+  }
   const firstKey = Object.keys(data)[0]
   if (!firstKey) return fallback
   const value = data[firstKey]

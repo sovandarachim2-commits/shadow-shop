@@ -5,6 +5,26 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 
+def assign_unique_slug(instance, source, *, fallback='item', slug_field='slug'):
+    """Set a unique ASCII slug when missing. Handles duplicate names and non-Latin text."""
+    current = getattr(instance, slug_field, '') or ''
+    if current:
+        return
+
+    field = instance._meta.get_field(slug_field)
+    max_length = getattr(field, 'max_length', None) or 50
+    base = slugify(source) or fallback
+    base = base[:max_length]
+    model = instance.__class__
+    slug = base
+    n = 2
+    while model.objects.filter(**{slug_field: slug}).exclude(pk=instance.pk).exists():
+        suffix = f'-{n}'
+        slug = f'{base[: max_length - len(suffix)]}{suffix}'
+        n += 1
+    setattr(instance, slug_field, slug)
+
+
 class Category(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True, blank=True)
@@ -24,8 +44,7 @@ class Category(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        assign_unique_slug(self, self.name, fallback='category')
         super().save(*args, **kwargs)
 
 
@@ -69,8 +88,7 @@ class Brand(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        assign_unique_slug(self, self.name, fallback='brand')
         super().save(*args, **kwargs)
 
 
@@ -140,8 +158,7 @@ class Product(models.Model):
         return f"[{self.code}] {self.name}"
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        assign_unique_slug(self, self.name, fallback='product')
         super().save(*args, **kwargs)
 
     @property
@@ -256,8 +273,7 @@ class ProductSet(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
+        assign_unique_slug(self, self.name, fallback='product-set')
         super().save(*args, **kwargs)
 
     @property

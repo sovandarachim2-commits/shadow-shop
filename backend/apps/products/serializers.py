@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import IntegrityError
 from django.db.models import Sum
 from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
 from utils.image_optimization import card_variant_url
@@ -247,15 +248,29 @@ class ProductWriteSerializer(serializers.ModelSerializer):
                 return code
             next_number += 1
 
+    def _raise_integrity_error(self, exc):
+        msg = str(exc).lower()
+        if 'code' in msg:
+            raise serializers.ValidationError({'code': 'Product code already exists.'})
+        if 'slug' in msg:
+            raise serializers.ValidationError({'name': 'A product with a similar name already exists.'})
+        raise serializers.ValidationError({'detail': 'Could not save product due to a conflict.'})
+
     def create(self, validated_data):
         if not validated_data.get('code'):
             validated_data['code'] = self._generate_product_code()
-        return super().create(validated_data)
+        try:
+            return super().create(validated_data)
+        except IntegrityError as exc:
+            self._raise_integrity_error(exc)
 
     def update(self, instance, validated_data):
         if 'code' in validated_data and not validated_data.get('code'):
             validated_data.pop('code')
-        return super().update(instance, validated_data)
+        try:
+            return super().update(instance, validated_data)
+        except IntegrityError as exc:
+            self._raise_integrity_error(exc)
 
 
 class ProductSetItemSerializer(serializers.ModelSerializer):
