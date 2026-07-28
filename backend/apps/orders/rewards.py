@@ -75,7 +75,7 @@ def get_coupon_discount(user, coupon_code, subtotal, delivery_fee=0, lock=False,
             RewardItem.TYPE_FREE_DELIVERY,
         }:
             raise ValueError('This reward cannot be used as a promo code.')
-        if not reward.is_active or (reward.starts_at and reward.starts_at > now) or (reward.ends_at and reward.ends_at < now):
+        if not reward.is_active or (reward.expires_at and reward.expires_at < now):
             raise ValueError('This promo code is not currently available.')
         if subtotal < reward.minimum_order_amount:
             raise ValueError(f'Minimum order amount is ${reward.minimum_order_amount:.2f}.')
@@ -295,6 +295,8 @@ def exchange_reward(user, reward_item_id):
         raise ValueError('This reward is not available yet.')
     if reward.ends_at and reward.ends_at < now:
         raise ValueError('This reward has ended.')
+    if reward.expires_at and reward.expires_at < now:
+        raise ValueError('This reward has expired.')
     if reward.stock is not None and reward.stock <= 0:
         raise ValueError('This reward is out of stock.')
     if reward.per_customer_limit:

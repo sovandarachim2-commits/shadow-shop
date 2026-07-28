@@ -69,64 +69,6 @@ const LANGUAGE_OPTIONS = [
   { code: 'km', label: 'Khmer', short: 'KM', flag: '🇰🇭' },
 ]
 
-function LanguageFlag({ code, className = '' }) {
-  if (code === 'km') {
-    return (
-      <span className={cn('inline-flex h-7 w-7 overflow-hidden rounded-full shadow-sm ring-1 ring-black/10', className)} aria-hidden="true">
-        <svg viewBox="0 0 64 64" className="h-full w-full">
-          <clipPath id="khmer-flag-circle-header">
-            <circle cx="32" cy="32" r="32" />
-          </clipPath>
-          <g clipPath="url(#khmer-flag-circle-header)">
-            <path fill="#2F46A3" d="M0 0h64v64H0z" />
-            <path fill="#E81F2A" d="M0 18h64v28H0z" />
-            <g fill="#fff" stroke="#111827" strokeWidth="0.9" strokeLinejoin="round" strokeLinecap="round">
-              <path d="M10 47h44v3H10z" />
-              <path d="M13 43h38v4H13z" />
-              <path d="M17 39h30v4H17z" />
-              <path d="M20 35h24v4H20z" />
-              <path d="M23 30h5v9h-5zM36 30h5v9h-5zM29 24h6v15h-6z" />
-              <path d="M28 24l4-12 4 12zM21.5 30l4-10 4 10zM34.5 30l4-10 4 10z" />
-              <path d="M31 12h2M30.5 15h3M30 18h4M29.5 21h5" />
-              <path d="M24 22h3M23.5 25h4M37 22h3M36.5 25h4" />
-              <path d="M15 43h34M18 39h28M21 35h22M24 47v-7M30 47V30M34 47V30M40 47v-7" fill="none" />
-              <path d="M19 47v-4M45 47v-4M27 39v-9M37 39v-9" fill="none" />
-            </g>
-          </g>
-        </svg>
-      </span>
-    )
-  }
-
-  return (
-    <span className={cn('inline-flex h-7 w-7 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-black/10', className)} aria-hidden="true">
-      <svg viewBox="0 0 64 64" className="h-full w-full">
-        <clipPath id="english-flag-circle-header">
-          <circle cx="32" cy="32" r="32" />
-        </clipPath>
-        <g clipPath="url(#english-flag-circle-header)">
-          <path fill="#fff" d="M0 0h64v64H0z" />
-          {[0, 2, 4, 6, 8, 10, 12].map((row) => (
-            <path key={row} fill="#B22234" d={`M0 ${row * 4.92}h64v4.92H0z`} />
-          ))}
-          <path fill="#3C3B6E" d="M0 0h34.5v34.5H0z" />
-          {Array.from({ length: 9 }).map((_, row) =>
-            Array.from({ length: row % 2 === 0 ? 6 : 5 }).map((__, col) => (
-              <circle
-                key={`${row}-${col}`}
-                cx={4 + col * 5.4 + (row % 2 ? 2.7 : 0)}
-                cy={3.8 + row * 3.2}
-                r="0.9"
-                fill="#fff"
-              />
-            ))
-          )}
-        </g>
-      </svg>
-    </span>
-  )
-}
-
 const DEFAULT_FOOTER_MENUS = {
   customerService: {
     titleKey: 'footer.customerService',
@@ -459,7 +401,7 @@ export default function CustomerLayout() {
                   aria-haspopup="menu"
                   aria-expanded={isLanguageMenuOpen}
                 >
-                  <LanguageFlag code={currentLanguage.code} />
+                  <span className="text-lg leading-none">{currentLanguage.flag}</span>
                   <span className="hidden xl:inline">{currentLanguage.label}</span>
                   <span className="xl:hidden">{currentLanguage.short}</span>
                   <ChevronDown size={15} className={cn('text-gray-500 transition-transform', isLanguageMenuOpen && 'rotate-180')} />
@@ -481,7 +423,7 @@ export default function CustomerLayout() {
                           )}
                           role="menuitem"
                         >
-                          <LanguageFlag code={language.code} />
+                          <span className="text-xl leading-none">{language.flag}</span>
                           <span className="flex-1">{language.label}</span>
                           <span className="text-sm font-black">{language.short}</span>
                         </button>

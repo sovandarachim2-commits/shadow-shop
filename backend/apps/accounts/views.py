@@ -1215,16 +1215,31 @@ class SiteSettingsManifestView(generics.GenericAPIView):
     def get(self, request):
         from utils.storefront_cache import safe_cache_get, safe_cache_set
 
-        cache_key = 'auth:site_manifest:v1'
+        site_settings = SiteSettings.get_solo()
+        source = site_settings.logo or site_settings.favicon
+        icon_version = 'default'
+        if source:
+            icon_parts = [source.name]
+            try:
+                icon_parts.append(str(source.size))
+            except Exception:
+                pass
+            try:
+                modified = source.storage.get_modified_time(source.name)
+                icon_parts.append(str(int(modified.timestamp())))
+            except Exception:
+                pass
+            icon_version = hashlib.sha1('|'.join(icon_parts).encode('utf-8')).hexdigest()[:12]
+        cache_key = f'auth:site_manifest:v2:{icon_version}'
         cached = safe_cache_get(cache_key)
         if cached is not None:
             return JsonResponse(cached, content_type='application/manifest+json')
 
-        site_settings = SiteSettings.get_solo()
         store_name = site_settings.store_name or 'Shadow Shop'
+        version_query = f'?v={icon_version}'
 
-        icon_src_192 = '/api/auth/site-settings/app-icon-192.png'
-        icon_src_512 = '/api/auth/site-settings/app-icon-512.png'
+        icon_src_192 = f'/api/auth/site-settings/app-icon-192.png{version_query}'
+        icon_src_512 = f'/api/auth/site-settings/app-icon-512.png{version_query}'
 
         payload = {
             'name': store_name,
@@ -1270,13 +1285,25 @@ class SiteSettingsAppIconView(generics.GenericAPIView):
         from utils.storefront_cache import safe_cache_get, safe_cache_set
 
         size = min(max(int(size or 512), 120), 1024)
-        cache_key = f'auth:site_app_icon_png:v3:{size}'
+        site_settings = SiteSettings.get_solo()
+        source = site_settings.logo or site_settings.favicon
+        icon_version = 'default'
+        if source:
+            icon_parts = [source.name]
+            try:
+                icon_parts.append(str(source.size))
+            except Exception:
+                pass
+            try:
+                modified = source.storage.get_modified_time(source.name)
+                icon_parts.append(str(int(modified.timestamp())))
+            except Exception:
+                pass
+            icon_version = hashlib.sha1('|'.join(icon_parts).encode('utf-8')).hexdigest()[:12]
+        cache_key = f'auth:site_app_icon_png:v4:{size}:{icon_version}'
         cached = safe_cache_get(cache_key)
         if cached:
             return HttpResponse(cached, content_type='image/png')
-
-        site_settings = SiteSettings.get_solo()
-        source = site_settings.logo or site_settings.favicon
 
         try:
             if source:

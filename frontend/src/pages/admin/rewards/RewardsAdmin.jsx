@@ -212,6 +212,7 @@ const emptyReward = {
   member_tier_requirement: 'all',
   starts_at: '',
   ends_at: '',
+  expires_at: '',
   is_active: true,
 }
 
@@ -1141,6 +1142,7 @@ function RewardFormModal({ reward, onClose }) {
     per_customer_limit: reward?.per_customer_limit ?? '',
     starts_at: toDateInput(reward?.starts_at),
     ends_at: toDateInput(reward?.ends_at),
+    expires_at: toDateInput(reward?.expires_at),
   }))
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(reward?.reward_image_url || null)
@@ -1233,8 +1235,10 @@ function RewardFormModal({ reward, onClose }) {
     if (form.per_customer_limit !== '') payload.append('per_customer_limit', Number(form.per_customer_limit))
     const startsAt = toApiDate(form.starts_at)
     const endsAt = toApiDate(form.ends_at)
-    if (startsAt) payload.append('starts_at', startsAt)
-    if (endsAt) payload.append('ends_at', endsAt)
+    const expiresAt = toApiDate(form.expires_at)
+    payload.append('starts_at', startsAt || '')
+    payload.append('ends_at', endsAt || '')
+    payload.append('expires_at', expiresAt || '')
     if (imageFile) {
       payload.append('reward_image', imageFile)
     }
@@ -1504,12 +1508,19 @@ function RewardFormModal({ reward, onClose }) {
               </select>
             </label>
             <label className="block">
-              <span className="label">Start date</span>
+              <span className="label">Exchange start date</span>
               <input className="input-field h-11 bg-white" type="datetime-local" value={form.starts_at} onChange={(e) => set('starts_at', e.target.value)} />
+              <span className="mt-1 block text-xs font-semibold text-gray-400">Customers can start exchanging this reward with points.</span>
             </label>
             <label className="block">
-              <span className="label">Expire date</span>
+              <span className="label">Exchange end date</span>
               <input className="input-field h-11 bg-white" type="datetime-local" value={form.ends_at} onChange={(e) => set('ends_at', e.target.value)} />
+              <span className="mt-1 block text-xs font-semibold text-gray-400">After this date, customers cannot exchange this reward.</span>
+            </label>
+            <label className="block">
+              <span className="label">Reward expire date</span>
+              <input className="input-field h-11 bg-white" type="datetime-local" value={form.expires_at} onChange={(e) => set('expires_at', e.target.value)} />
+              <span className="mt-1 block text-xs font-semibold text-gray-400">After this date, the redeemed reward or coupon cannot be used.</span>
             </label>
           </div>
         </section>

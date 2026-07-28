@@ -65,11 +65,11 @@ const PAGE_GROUPS = [
     key: 'rewards',
     label: 'Rewards',
     children: [
+      { module: 'rewards_settings', label: 'Earning & Tiers' },
       { module: 'rewards', label: 'Overview' },
       { module: 'rewards_products', label: 'Reward Products' },
       { module: 'rewards_coupons', label: 'Promo Codes' },
       { module: 'rewards_exchanges', label: 'Redeem Requests' },
-      { module: 'rewards_settings', label: 'Earning & Tiers' },
       { module: 'rewards_transactions', label: 'Point Transactions' },
       { module: 'rewards_points', label: 'Customer Points' },
     ],

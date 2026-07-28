@@ -759,6 +759,13 @@ class CartItemSerializer(serializers.ModelSerializer):
         return float(obj.product.retail_price * obj.quantity)
 
 
+class BlankableDateTimeField(serializers.DateTimeField):
+    def to_internal_value(self, value):
+        if value == '':
+            return None
+        return super().to_internal_value(value)
+
+
 class RewardItemSerializer(serializers.ModelSerializer):
     can_exchange = serializers.SerializerMethodField()
     type_label = serializers.CharField(source='get_type_display', read_only=True)
@@ -769,6 +776,9 @@ class RewardItemSerializer(serializers.ModelSerializer):
     reward_image_url = serializers.SerializerMethodField()
     gift_product_image = serializers.SerializerMethodField()
     redeemed_count = serializers.IntegerField(read_only=True)
+    starts_at = BlankableDateTimeField(required=False, allow_null=True)
+    ends_at = BlankableDateTimeField(required=False, allow_null=True)
+    expires_at = BlankableDateTimeField(required=False, allow_null=True)
 
     class Meta:
         model = RewardItem
@@ -779,7 +789,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
             'minimum_order_amount', 'gift_product', 'gift_product_name',
             'gift_product_code', 'gift_product_image', 'stock', 'per_customer_limit',
             'member_tier_requirement', 'redeemed_count',
-            'starts_at', 'ends_at', 'is_active', 'can_exchange', 'created_at', 'updated_at',
+            'starts_at', 'ends_at', 'expires_at', 'is_active', 'can_exchange', 'created_at', 'updated_at',
         ]
         extra_kwargs = {'reward_image': {'write_only': True, 'required': False}}
 
@@ -834,6 +844,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         now = timezone.now()
         in_window = (not obj.starts_at or obj.starts_at <= now) and (not obj.ends_at or obj.ends_at >= now)
+        not_expired = not obj.expires_at or obj.expires_at >= now
         gift_product_available = self._gift_product_has_inventory(obj)
         user = self.context.get('user')
         under_customer_limit = True
@@ -846,6 +857,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
             obj.is_active
             and has_stock
             and in_window
+            and not_expired
             and gift_product_available
             and under_customer_limit
             and current_points >= obj.points_required
@@ -858,7 +870,8 @@ class RewardRedemptionSerializer(serializers.ModelSerializer):
     coupon_discount_type = serializers.CharField(source='reward_item.coupon_discount_type', read_only=True)
     coupon_value = serializers.DecimalField(source='reward_item.coupon_value', max_digits=10, decimal_places=2, read_only=True)
     minimum_order_amount = serializers.DecimalField(source='reward_item.minimum_order_amount', max_digits=10, decimal_places=2, read_only=True)
-    ends_at = serializers.DateTimeField(source='reward_item.ends_at', read_only=True)
+    ends_at = serializers.DateTimeField(source='reward_item.expires_at', read_only=True)
+    expires_at = serializers.DateTimeField(source='reward_item.expires_at', read_only=True)
     user_name = serializers.SerializerMethodField()
     user_phone = serializers.CharField(source='user.phone', read_only=True)
     user_email = serializers.EmailField(source='user.email', read_only=True)
@@ -871,7 +884,7 @@ class RewardRedemptionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'reward_item', 'reward_name', 'reward_type', 'points_spent',
             'coupon_code', 'coupon_discount_type', 'coupon_value',
-            'minimum_order_amount', 'ends_at', 'status', 'created_at',
+            'minimum_order_amount', 'ends_at', 'expires_at', 'status', 'created_at',
             'user', 'user_name', 'user_phone', 'user_email',
             'gift_product_name', 'reward_image_url', 'gift_product_image',
         ]
