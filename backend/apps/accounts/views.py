@@ -7,7 +7,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
-from django.core.mail import send_mail
 from django.core.mail import BadHeaderError
 from django.core.files.storage import default_storage
 from django.utils.text import get_valid_filename
@@ -55,8 +54,21 @@ def _absolute_media_url(file_field):
     return f"{base}{url if url.startswith('/') else f'/{url}'}"
 
 
+def _smtp_from_email(store_name='Shadow Shop'):
+    """Use the authenticated SMTP mailbox as From so providers accept the message."""
+    from email.utils import formataddr, parseaddr
+
+    default_from = (getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip()
+    host_user = (getattr(settings, 'EMAIL_HOST_USER', '') or '').strip()
+    _, default_addr = parseaddr(default_from)
+    smtp_addr = default_addr or host_user
+    if not smtp_addr:
+        return default_from or 'no-reply@localhost'
+    return formataddr((store_name, smtp_addr))
+
+
 def _send_email_verification(email, code, purpose='account'):
-    from email.utils import formataddr
+    from django.core.mail import EmailMultiAlternatives
     from django.utils.html import escape
 
     site = SiteSettings.get_solo()
@@ -72,11 +84,8 @@ def _send_email_verification(email, code, purpose='account'):
         f"Your {store_name} verification code is {code}.\n\n"
         f"This code expires in 10 minutes. {ignore_text}"
     )
+    from_email = _smtp_from_email(store_name)
     store_email = (site.store_email or '').strip()
-    if store_email:
-        from_email = formataddr((store_name, store_email))
-    else:
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@localhost'
 
     logo_url = _absolute_media_url(site.login_logo) or _absolute_media_url(site.logo)
     safe_name = escape(store_name)
@@ -107,14 +116,16 @@ def _send_email_verification(email, code, purpose='account'):
     </div>
     '''
 
-    send_mail(
-        subject,
-        message,
-        from_email,
-        [email],
-        fail_silently=False,
-        html_message=html_message,
+    mail = EmailMultiAlternatives(
+        subject=subject,
+        body=message,
+        from_email=from_email,
+        to=[email],
     )
+    if store_email and store_email.lower() not in from_email.lower():
+        mail.reply_to = [store_email]
+    mail.attach_alternative(html_message, 'text/html')
+    mail.send(fail_silently=False)
 
 
 def _create_email_verification(user, request=None):
@@ -214,7 +225,13 @@ class RegisterView(generics.CreateAPIView):
                     'verified_at': None,
                 },
             )
+        try:
             _send_email_verification(email, code)
+        except (BadHeaderError, smtplib.SMTPException, OSError):
+            return Response(
+                {'detail': 'Could not send verification email. Please check email settings and try again.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response({
             'detail': 'Verification code sent.',
             'email': email,
@@ -243,7 +260,13 @@ class EmailVerificationResendView(generics.GenericAPIView):
         pending.attempts = 0
         pending.expires_at = timezone.now() + timedelta(minutes=10)
         pending.save(update_fields=['code', 'attempts', 'expires_at', 'updated_at'])
-        _send_email_verification(email, pending.code)
+        try:
+            _send_email_verification(email, pending.code)
+        except (BadHeaderError, smtplib.SMTPException, OSError):
+            return Response(
+                {'detail': 'Could not send verification email. Please check email settings and try again.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response({'detail': 'Verification code sent.', 'email': email})
 
 
