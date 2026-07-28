@@ -49,6 +49,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             user = User.objects.filter(email__iexact=identifier, is_active=True).only('username').first()
             if user:
                 attrs[self.username_field] = user.username
+        elif re.fullmatch(r'[\d\s()+-]+', identifier):
+            try:
+                phone = validate_cambodia_phone(identifier, allow_blank=True)
+            except serializers.ValidationError:
+                phone = ''
+            if phone:
+                user = User.objects.filter(phone=phone, is_active=True).only('username').first()
+                if user:
+                    attrs[self.username_field] = user.username
 
         data = super().validate(attrs)
         data['user'] = UserSerializer(self.user).data

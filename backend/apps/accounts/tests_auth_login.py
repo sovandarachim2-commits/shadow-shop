@@ -9,6 +9,7 @@ class CustomTokenObtainPairSerializerTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username='customer001',
             email='customer@example.com',
+            phone='012345678',
             password='secret-pass-123',
             role='customer',
         )
@@ -25,6 +26,24 @@ class CustomTokenObtainPairSerializerTests(TestCase):
     def test_login_accepts_email(self):
         serializer = CustomTokenObtainPairSerializer(data={
             'username': 'CUSTOMER@example.com',
+            'password': 'secret-pass-123',
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['user']['username'], 'customer001')
+
+    def test_login_accepts_phone(self):
+        serializer = CustomTokenObtainPairSerializer(data={
+            'username': '012345678',
+            'password': 'secret-pass-123',
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data['user']['username'], 'customer001')
+
+    def test_login_accepts_international_phone(self):
+        serializer = CustomTokenObtainPairSerializer(data={
+            'username': '+855 12 345 678',
             'password': 'secret-pass-123',
         })
 

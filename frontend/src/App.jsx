@@ -463,7 +463,7 @@ export default function App() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthBootstrap />
           <AppIconSync />
           <ScrollToTop />
@@ -498,9 +498,21 @@ export default function App() {
               </RequireAuth>
             } />
             <Route path="order-success" element={<LazyPage><OrderSuccess /></LazyPage>} />
-            <Route path="my-orders" element={<LazyPage><MyOrders /></LazyPage>} />
-            <Route path="my-orders/:id/receipt" element={<LazyPage><OrderReceipt /></LazyPage>} />
-            <Route path="my-orders/:id" element={<LazyPage><OrderTracking /></LazyPage>} />
+            <Route path="my-orders" element={
+              <RequireAuth>
+                <LazyPage><MyOrders /></LazyPage>
+              </RequireAuth>
+            } />
+            <Route path="my-orders/:id/receipt" element={
+              <RequireAuth>
+                <LazyPage><OrderReceipt /></LazyPage>
+              </RequireAuth>
+            } />
+            <Route path="my-orders/:id" element={
+              <RequireAuth>
+                <LazyPage><OrderTracking /></LazyPage>
+              </RequireAuth>
+            } />
             <Route path="wishlist" element={<LazyPage><Wishlist /></LazyPage>} />
             <Route path="profile" element={<LazyPage><Profile /></LazyPage>} />
             <Route path="profile/edit" element={

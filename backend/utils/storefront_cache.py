@@ -54,6 +54,12 @@ def bump_storefront_cache():
         'auth:telegram_login_config:v1',
         'auth:site_manifest:v1',
         'auth:site_favicon_url:v1',
+        'auth:site_app_icon_png:v2:180',
+        'auth:site_app_icon_png:v2:192',
+        'auth:site_app_icon_png:v2:512',
+        'auth:site_app_icon_png:v3:180',
+        'auth:site_app_icon_png:v3:192',
+        'auth:site_app_icon_png:v3:512',
     ])
     # Product list cache keys vary by query string; clear via version bump when available.
     try:

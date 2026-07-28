@@ -33,7 +33,6 @@ const GENDER_OPTIONS = [
   { value: '', labelKey: 'completeProfile.selectGender' },
   { value: 'male', labelKey: 'completeProfile.genderMale' },
   { value: 'female', labelKey: 'completeProfile.genderFemale' },
-  { value: 'other', labelKey: 'completeProfile.genderOther' },
   { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
 ]
 

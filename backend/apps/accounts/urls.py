@@ -35,6 +35,7 @@ urlpatterns = [
     path('set-initial-password/', views.SetInitialPasswordView.as_view(), name='set-initial-password'),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
     path('site-settings/', views.SiteSettingsView.as_view(), name='site-settings'),
+    path('site-settings/app-icon-<int:size>.png', views.SiteSettingsAppIconView.as_view(), name='site-settings-app-icon'),
     path('site-settings/favicon/', views.SiteSettingsFaviconView.as_view(), name='site-settings-favicon'),
     path('site-settings/manifest/', views.SiteSettingsManifestView.as_view(), name='site-settings-manifest'),
     path('', include(router.urls)),

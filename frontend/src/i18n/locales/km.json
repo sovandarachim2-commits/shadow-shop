@@ -195,8 +195,8 @@
     "loginSubtitle": "ចូលទៅក្នុងគណនីរបស់អ្នក",
     "email": "អ៊ីមែល",
     "emailPlaceholder": "បញ្ចូលអ៊ីមែលរបស់អ្នក",
-    "emailOrUsername": "អ៊ីមែល ឬឈ្មោះអ្នកប្រើ",
-    "emailOrUsernamePlaceholder": "បញ្ចូលអ៊ីមែល ឬឈ្មោះអ្នកប្រើ",
+    "emailOrUsername": "លេខទូរស័ព្ទ អ៊ីមែល ឬឈ្មោះអ្នកប្រើ",
+    "emailOrUsernamePlaceholder": "បញ្ចូលលេខទូរស័ព្ទ អ៊ីមែល ឬឈ្មោះអ្នកប្រើ",
     "passwordPlaceholder": "បញ្ជូលពាក្យសម្ងាត់របស់អ្នក",
     "forgotPassword": "ភ្លេចពាក្យសម្ងាត់?",
     "loginWithTelegram": "ចូលជាមួយ Telegram",
@@ -971,6 +971,13 @@
     "title": "បញ្ជីចូលចិត្ត",
     "empty": "បញ្ជីចូលចិត្តរបស់អ្នកទទេ",
     "emptyText": "រក្សាទុកផលិតផលដែលអ្នកចូលចិត្ត"
+  },
+  "installApp": {
+    "title": "ដំឡើង Shadow Shop",
+    "text": "បន្ថែមហាងទៅទូរស័ព្ទរបស់អ្នក ដើម្បីចូលប្រើបានលឿនជាងមុន។",
+    "button": "Install App",
+    "dismiss": "លាក់ផ្ទាំងដំឡើងកម្មវិធី",
+    "browserHelp": "សូមប្រើមឺនុយ Browser រួចជ្រើស Install app ឬ Add to home screen។"
   },
   "footer": {
     "tagline": "សម្រស់របស់អ្នក គឺជាចំណង់ចំណូលចិត្តរបស់យើង។ គ្រឿងសំអាងពិសេសក្នុងតម្លៃ Wholesale ល្អបំផុត។",

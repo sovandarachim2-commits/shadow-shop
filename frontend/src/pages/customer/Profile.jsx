@@ -77,9 +77,66 @@ const GENDER_OPTIONS = [
   { value: '', labelKey: 'completeProfile.selectGender' },
   { value: 'male', labelKey: 'completeProfile.genderMale' },
   { value: 'female', labelKey: 'completeProfile.genderFemale' },
-  { value: 'other', labelKey: 'completeProfile.genderOther' },
   { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
 ]
+
+function LanguageFlag({ code, className = '' }) {
+  if (code === 'km') {
+    return (
+      <span className={cn('inline-flex h-7 w-7 overflow-hidden rounded-full shadow-sm ring-1 ring-black/10', className)} aria-hidden="true">
+        <svg viewBox="0 0 64 64" className="h-full w-full">
+          <clipPath id="khmer-flag-circle-profile">
+            <circle cx="32" cy="32" r="32" />
+          </clipPath>
+          <g clipPath="url(#khmer-flag-circle-profile)">
+            <path fill="#2F46A3" d="M0 0h64v64H0z" />
+            <path fill="#E81F2A" d="M0 18h64v28H0z" />
+            <g fill="#fff" stroke="#111827" strokeWidth="0.9" strokeLinejoin="round" strokeLinecap="round">
+              <path d="M10 47h44v3H10z" />
+              <path d="M13 43h38v4H13z" />
+              <path d="M17 39h30v4H17z" />
+              <path d="M20 35h24v4H20z" />
+              <path d="M23 30h5v9h-5zM36 30h5v9h-5zM29 24h6v15h-6z" />
+              <path d="M28 24l4-12 4 12zM21.5 30l4-10 4 10zM34.5 30l4-10 4 10z" />
+              <path d="M31 12h2M30.5 15h3M30 18h4M29.5 21h5" />
+              <path d="M24 22h3M23.5 25h4M37 22h3M36.5 25h4" />
+              <path d="M15 43h34M18 39h28M21 35h22M24 47v-7M30 47V30M34 47V30M40 47v-7" fill="none" />
+              <path d="M19 47v-4M45 47v-4M27 39v-9M37 39v-9" fill="none" />
+            </g>
+          </g>
+        </svg>
+      </span>
+    )
+  }
+
+  return (
+    <span className={cn('inline-flex h-7 w-7 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-black/10', className)} aria-hidden="true">
+      <svg viewBox="0 0 64 64" className="h-full w-full">
+        <clipPath id="english-flag-circle-profile">
+          <circle cx="32" cy="32" r="32" />
+        </clipPath>
+        <g clipPath="url(#english-flag-circle-profile)">
+          <path fill="#fff" d="M0 0h64v64H0z" />
+          {[0, 2, 4, 6, 8, 10, 12].map((row) => (
+            <path key={row} fill="#B22234" d={`M0 ${row * 4.92}h64v4.92H0z`} />
+          ))}
+          <path fill="#3C3B6E" d="M0 0h34.5v34.5H0z" />
+          {Array.from({ length: 9 }).map((_, row) =>
+            Array.from({ length: row % 2 === 0 ? 6 : 5 }).map((__, col) => (
+              <circle
+                key={`${row}-${col}`}
+                cx={4 + col * 5.4 + (row % 2 ? 2.7 : 0)}
+                cy={3.8 + row * 3.2}
+                r="0.9"
+                fill="#fff"
+              />
+            ))
+          )}
+        </g>
+      </svg>
+    </span>
+  )
+}
 
 function actionForOrder(order) {
   if (order.status === 'completed') return { label: 'Buy Again', icon: ShoppingBag, outline: true }
@@ -837,7 +894,7 @@ export default function Profile() {
                 aria-label={t('profile.chooseLanguage')}
               >
                 <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-50 text-base">
-                  {currentLanguage.flag}
+                  <LanguageFlag code={currentLanguage.code} />
                 </span>
                 <ChevronDown
                   size={14}
@@ -861,7 +918,7 @@ export default function Profile() {
                           isActive ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50'
                         )}
                       >
-                        <span className="text-lg leading-none">{language.flag}</span>
+                        <LanguageFlag code={language.code} />
                         <span className="flex-1">{language.label}</span>
                         <span className="text-xs font-black">{language.code.toUpperCase()}</span>
                       </button>
@@ -1600,10 +1657,6 @@ function DesktopProfileOverview({
                   {t('profile.verified')}
                 </span>
               </div>
-              <p className="mt-4 text-sm font-semibold text-slate-400">{t('profile.memberSince')} {memberSince}</p>
-              <p className="mt-4 max-w-md text-base font-semibold leading-7 text-slate-600">
-                {user.email || memberCode}
-              </p>
             </div>
           </div>
 
@@ -1650,12 +1703,6 @@ function DesktopProfileOverview({
               <p className="text-base font-black text-slate-900">{defaultAddress?.label || t('profile.defaultAddress')}</p>
               <p className="mt-2 min-h-[72px] text-base font-semibold leading-7 text-slate-500">{fullAddress}</p>
             </div>
-            <div className="grid grid-cols-[72px_1fr] gap-y-2 text-base">
-              <span className="font-black text-slate-700">{t('profile.email')}:</span>
-              <span className="font-semibold text-slate-500">{email}</span>
-              <span className="font-black text-slate-700">{t('profile.phone')}:</span>
-              <span className="font-semibold text-slate-500">{phone}</span>
-            </div>
             <div className="relative h-[112px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100">
               <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(45deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(315deg,rgba(255,255,255,.78)_25%,#eef2f7_25%)] bg-[length:38px_38px] bg-[position:19px_0,19px_0,0_0,0_0]" />
               <MapPin className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[58%] text-pink-600 drop-shadow" size={42} fill="currentColor" strokeWidth={1.5} />
@@ -1663,39 +1710,6 @@ function DesktopProfileOverview({
           </div>
         </DesktopProfileCard>
 
-        <DesktopProfileCard title={t('profile.notificationPreferences')} icon={Bell}>
-          <DesktopToggleRow icon={Mail} title={t('profile.emailNotifications')} text={t('profile.emailNotificationsDesc')} enabled />
-          <DesktopToggleRow icon={Phone} title={t('profile.smsNotifications')} text={t('profile.smsNotificationsDesc')} />
-          <DesktopToggleRow icon={Bell} title={t('profile.pushNotifications')} text={t('profile.pushNotificationsDesc')} enabled />
-          <DesktopToggleRow icon={Gift} title={t('profile.marketingUpdates')} text={t('profile.marketingUpdatesDesc')} />
-        </DesktopProfileCard>
-
-        <DesktopProfileCard title={t('profile.recentActivity')} icon={Clock}>
-          <div className="space-y-1">
-            {activityItems.map((item) => (
-              <button key={`${item.title}-${item.date}`} onClick={item.action} className="group grid w-full grid-cols-[28px_1fr] gap-3 rounded-xl py-2 text-left transition hover:bg-slate-50">
-                <span className="relative flex justify-center pt-1.5">
-                  <span className={cn('h-3 w-3 rounded-full ring-4 ring-white', item.color)} />
-                </span>
-                <span>
-                  <span className="block text-base font-black text-slate-800 group-hover:text-pink-600">{item.title}</span>
-                  <span className="block text-sm font-semibold text-slate-500">{item.text}</span>
-                  <span className="block text-sm font-semibold text-slate-400">{item.date}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          <button onClick={() => navigate('/my-orders')} className="mt-4 inline-flex items-center gap-2 text-base font-black text-pink-600 hover:text-pink-700">
-            {t('profile.viewAll')} <ChevronRight size={17} />
-          </button>
-        </DesktopProfileCard>
-
-        <DesktopProfileCard title={t('profile.security')} icon={Shield}>
-          <DesktopActionRow icon={Lock} title={t('profile.password')} text={t('profile.passwordUpdatedHint')} action={t('common.edit')} onClick={() => setActiveModal('password')} />
-          <DesktopActionRow icon={Shield} title={t('profile.twoFactorAuth')} text={t('profile.twoFactorAuthDesc')} action={t('profile.manage')} onClick={() => setActiveModal('password')} />
-          <DesktopActionRow icon={IdCard} title={t('profile.activeSessions')} text={t('profile.activeSessionsDesc')} action={t('profile.viewAll')} onClick={() => setActiveView('profile')} />
-          <DesktopActionRow icon={LogOut} title={t('profile.logout')} text={t('profile.logoutCurrentDevice')} action={t('profile.logout')} onClick={handleLogout} danger />
-        </DesktopProfileCard>
       </div>
     </div>
   )

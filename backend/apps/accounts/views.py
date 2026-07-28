@@ -14,17 +14,18 @@ from django.db import transaction
 from django.contrib.auth.hashers import make_password
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from io import BytesIO
 import hashlib
 import hmac
 import secrets
 import random
 import string
-import mimetypes
 import requests
 import smtplib
+from PIL import Image, ImageOps
 from datetime import datetime, timedelta
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, EmailVerification, PendingRegistration, Address, SiteSettings
 from .serializers import (
     CustomTokenObtainPairSerializer, UserSerializer, UserCreateSerializer,
@@ -1222,28 +1223,12 @@ class SiteSettingsManifestView(generics.GenericAPIView):
         site_settings = SiteSettings.get_solo()
         store_name = site_settings.store_name or 'Shadow Shop'
 
-        icon_src = request.build_absolute_uri('/app-icon-512.png')
-        if site_settings.favicon:
-            icon_src = site_settings.favicon.url
-            if icon_src.startswith('/'):
-                icon_src = request.build_absolute_uri(icon_src)
-        elif site_settings.logo:
-            icon_src = site_settings.logo.url
-            if icon_src.startswith('/'):
-                icon_src = request.build_absolute_uri(icon_src)
-
-        source_name = ''
-        if site_settings.favicon:
-            source_name = site_settings.favicon.name
-        elif site_settings.logo:
-            source_name = site_settings.logo.name
-
-        icon_type = mimetypes.guess_type(source_name)[0] or 'image/png'
-        icon_sizes = 'any' if icon_type == 'image/svg+xml' else '512x512'
+        icon_src_192 = '/api/auth/site-settings/app-icon-192.png'
+        icon_src_512 = '/api/auth/site-settings/app-icon-512.png'
 
         payload = {
             'name': store_name,
-            'short_name': store_name[:12] or 'Shadow',
+            'short_name': store_name[:12] or store_name or 'Shadow Shop',
             'description': 'Beauty and lifestyle shopping app.',
             'start_url': '/',
             'scope': '/',
@@ -1255,21 +1240,68 @@ class SiteSettingsManifestView(generics.GenericAPIView):
             'categories': ['shopping', 'lifestyle', 'beauty'],
             'icons': [
                 {
-                    'src': icon_src,
-                    'sizes': icon_sizes,
-                    'type': icon_type,
+                    'src': icon_src_192,
+                    'sizes': '192x192',
+                    'type': 'image/png',
                     'purpose': 'any',
                 },
                 {
-                    'src': icon_src,
-                    'sizes': icon_sizes,
-                    'type': icon_type,
+                    'src': icon_src_512,
+                    'sizes': '512x512',
+                    'type': 'image/png',
+                    'purpose': 'any',
+                },
+                {
+                    'src': icon_src_512,
+                    'sizes': '512x512',
+                    'type': 'image/png',
                     'purpose': 'any maskable',
                 },
             ],
         }
         safe_cache_set(cache_key, payload, 300)
         return JsonResponse(payload, content_type='application/manifest+json')
+
+
+class SiteSettingsAppIconView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, size=512):
+        from utils.storefront_cache import safe_cache_get, safe_cache_set
+
+        size = min(max(int(size or 512), 120), 1024)
+        cache_key = f'auth:site_app_icon_png:v3:{size}'
+        cached = safe_cache_get(cache_key)
+        if cached:
+            return HttpResponse(cached, content_type='image/png')
+
+        site_settings = SiteSettings.get_solo()
+        source = site_settings.logo or site_settings.favicon
+
+        try:
+            if source:
+                image = Image.open(source).convert('RGBA')
+            else:
+                image = Image.open(settings.BASE_DIR / 'frontend' / 'public' / 'app-icon-512.png').convert('RGBA')
+        except Exception:
+            image = Image.new('RGBA', (size, size), (233, 30, 99, 255))
+
+        image = ImageOps.exif_transpose(image)
+        image.thumbnail((int(size * 0.82), int(size * 0.82)), Image.Resampling.LANCZOS)
+
+        canvas = Image.new('RGBA', (size, size), (255, 255, 255, 255))
+        x = (size - image.width) // 2
+        y = (size - image.height) // 2
+        canvas.alpha_composite(image, (x, y))
+
+        output = BytesIO()
+        canvas.save(output, format='PNG', optimize=True)
+        content = output.getvalue()
+        safe_cache_set(cache_key, content, 300)
+
+        response = HttpResponse(content, content_type='image/png')
+        response['Cache-Control'] = 'public, max-age=300'
+        return response
 
 
 class SiteSettingsFaviconView(generics.GenericAPIView):

@@ -259,7 +259,7 @@ function ProductCard({ product, badge, nowMs, priority = false }) {
               onError={() => setImageFailed(true)}
               className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
               loading={priority ? 'eager' : 'lazy'}
-              fetchPriority={priority ? 'high' : 'auto'}
+              fetchpriority={priority ? 'high' : 'auto'}
               decoding="async"
             />
           </>
@@ -732,7 +732,7 @@ export default function Home() {
                         className="h-full w-full object-cover"
                         loading={idx === 0 ? 'eager' : 'lazy'}
                         decoding="async"
-                        fetchPriority={idx === 0 ? 'high' : 'auto'}
+                        fetchpriority={idx === 0 ? 'high' : 'auto'}
                       />
                     ) : (
                       <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600">

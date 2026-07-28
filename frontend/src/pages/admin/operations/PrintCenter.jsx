@@ -148,7 +148,7 @@ function PrintLogo({ printLogoUrl, size = 64 }) {
   )
 }
 
-function PrintPreview({ order, type, printLogoUrl, printLogoSize, printQrSize }) {
+export function PrintPreview({ order, type, printLogoUrl, printLogoSize, printQrSize }) {
   if (!order) return null
   if (type === 'receipt') return <ReceiptSlip order={order} printLogoUrl={printLogoUrl} printLogoSize={printLogoSize} printQrSize={printQrSize} />
   if (type === 'delivery_note') return <DeliverySlip order={order} printLogoUrl={printLogoUrl} printLogoSize={printLogoSize} printQrSize={printQrSize} />

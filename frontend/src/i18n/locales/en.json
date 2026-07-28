@@ -195,8 +195,8 @@
     "loginSubtitle": "Sign in to your account",
     "email": "Email",
     "emailPlaceholder": "Enter your email",
-    "emailOrUsername": "Email or Username",
-    "emailOrUsernamePlaceholder": "Enter email or username",
+    "emailOrUsername": "Phone, Email or Username",
+    "emailOrUsernamePlaceholder": "Enter phone, email or username",
     "passwordPlaceholder": "Enter your password",
     "forgotPassword": "Forgot Password?",
     "loginWithTelegram": "Log in with Telegram",
@@ -971,6 +971,13 @@
     "title": "My Wishlist",
     "empty": "Your wishlist is empty",
     "emptyText": "Save your favourite products here"
+  },
+  "installApp": {
+    "title": "Install Shadow Shop",
+    "text": "Add the shop to your phone for faster access.",
+    "button": "Install App",
+    "dismiss": "Hide install banner",
+    "browserHelp": "Use your browser menu and choose Install app or Add to home screen."
   },
   "footer": {
     "tagline": "Your beauty, our passion. Premium cosmetics at the best wholesale price.",
