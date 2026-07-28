@@ -790,6 +790,7 @@ export default function Settings({ tab = 'general' }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['telegram-configs'] })
+      queryClient.invalidateQueries({ queryKey: ['telegram-login-config'] })
       setTelegramModal(null)
       toast.success('Telegram settings saved!')
     },
@@ -1078,7 +1079,7 @@ export default function Settings({ tab = 'general' }) {
                         className="input-field font-mono"
                         value={telegramForm.bot_username || ''}
                         onChange={(e) => setTelegramForm((f) => ({ ...f, bot_username: e.target.value.replace('@', '') }))}
-                        placeholder="shadow_shop_bot"
+                        placeholder="shadow_shop_fast_bot"
                       />
                     </div>
                     <div className="sm:col-span-2">

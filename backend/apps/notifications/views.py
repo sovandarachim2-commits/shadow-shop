@@ -25,6 +25,25 @@ class TelegramConfigViewSet(viewsets.ModelViewSet):
     serializer_class = TelegramConfigSerializer
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
 
+    def _clear_telegram_login_cache(self):
+        from django.core.cache import cache
+        try:
+            cache.delete('auth:telegram_login_config:v1')
+        except Exception:
+            pass
+
+    def perform_create(self, serializer):
+        serializer.save()
+        self._clear_telegram_login_cache()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._clear_telegram_login_cache()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        self._clear_telegram_login_cache()
+
     @action(detail=True, methods=['post'])
     def test(self, request, pk=None):
         config = self.get_object()
