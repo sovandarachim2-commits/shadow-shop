@@ -346,7 +346,6 @@ export default function ProductList() {
   const [categoryId, setCategoryId] = useState(categoryParam)
   const [brand, setBrand] = useState(brandParam)
   const [sortBy, setSortBy] = useState('-created_at')
-  const [page, setPage] = useState(1)
   const [showSearch, setShowSearch] = useState(Boolean(searchParams.get('search')))
   const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
 
@@ -355,7 +354,6 @@ export default function ProductList() {
     setCategoryId(categoryParam)
     setBrand(brandParam)
     setShowSearch(Boolean(searchParam))
-    setPage(1)
   }, [activeFilter, brandParam, categoryParam, searchParam])
 
   const { data: categoryData } = useQuery({
@@ -371,7 +369,7 @@ export default function ProductList() {
   })
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['products-list', search, categoryId, brand, sortBy, page, activeFilter],
+    queryKey: ['products-list', search, categoryId, brand, sortBy, activeFilter],
     queryFn: () => productsApi.products.list({
       search: search || undefined,
       category: categoryId || undefined,
@@ -380,8 +378,8 @@ export default function ProductList() {
       is_new_arrival: activeFilter === 'new_arrival' ? true : undefined,
       is_best_seller: activeFilter === 'best_seller' ? true : undefined,
       ordering: sortBy,
-      page,
-      page_size: 12,
+      page: 1,
+      page_size: 1000,
       is_active: true,
     }).then((r) => r.data),
     staleTime: 2 * 60 * 1000,
@@ -405,7 +403,7 @@ export default function ProductList() {
       page_size: 100,
       is_active: true,
     }).then((r) => r.data.results ?? r.data ?? []),
-    enabled: !categoryId && !brand && page === 1 && (!activeFilter || activeFilter === 'flash_sale'),
+    enabled: !categoryId && !brand && (!activeFilter || activeFilter === 'flash_sale'),
     staleTime: 2 * 60 * 1000,
     placeholderData: keepPreviousData,
   })
@@ -423,7 +421,7 @@ export default function ProductList() {
   const shopBrands = useMemo(() => brandData || [], [brandData])
 
   const products = data?.results || []
-  const productSets = (!categoryId && !brand && page === 1 && (!activeFilter || activeFilter === 'flash_sale')) ? setData.filter((set) => set.is_active !== false) : []
+  const productSets = (!categoryId && !brand && (!activeFilter || activeFilter === 'flash_sale')) ? setData.filter((set) => set.is_active !== false) : []
   const hasVisibleFlashSaleTimers = products.some(hasFlashSaleTimer) || productSets.some(hasFlashSaleTimer)
   const isGridLoading = (isLoading && !data) || (isGridFetching && showGridRefetchLoader && products.length === 0 && productSets.length === 0)
   const total = (data?.count || 0) + productSets.length
@@ -523,7 +521,7 @@ export default function ProductList() {
                   <input
                     type="search"
                     value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                    onChange={(e) => { setSearch(e.target.value) }}
                     placeholder={t('header.searchPlaceholder')}
                     autoFocus
                     className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-10 text-sm outline-none focus:border-pink-300 focus:ring-4 focus:ring-pink-100"
@@ -531,7 +529,7 @@ export default function ProductList() {
                   {search && (
                     <button
                       type="button"
-                      onClick={() => { setSearch(''); setPage(1) }}
+                      onClick={() => { setSearch('') }}
                       className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-gray-400 hover:bg-white hover:text-pink-600"
                     >
                       <X size={15} />
@@ -549,7 +547,7 @@ export default function ProductList() {
               )}
               <FilterSelect
                 value={categoryId}
-                onChange={(e) => { setCategoryId(e.target.value); setPage(1) }}
+                onChange={(e) => { setCategoryId(e.target.value) }}
               >
                 <option value="">{t('shop.allCategories')}</option>
                 {categories.map((cat) => (
@@ -559,7 +557,7 @@ export default function ProductList() {
               {!isSearchResult && (
                 <FilterSelect
                 value={brand}
-                onChange={(e) => { setBrand(e.target.value); setPage(1) }}
+                onChange={(e) => { setBrand(e.target.value) }}
                 >
                   <option value="">{t('shop.allBrands')}</option>
                   {shopBrands.map((b) => (
@@ -602,26 +600,6 @@ export default function ProductList() {
             <div className="rounded-2xl border border-gray-100 py-20 text-center">
               <ShoppingBag size={48} className="mx-auto mb-3 text-gray-200" />
               <p className="font-bold text-gray-500">{t('shop.noProductsFound')}</p>
-            </div>
-          )}
-
-          {total > 12 && (
-            <div className="mt-8 flex justify-center gap-3">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-bold disabled:opacity-50"
-              >
-                {t('common.prev')}
-              </button>
-              <span className="px-4 py-2 text-sm font-semibold text-gray-500">{t('common.page')} {page}</span>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={products.length < 12}
-                className="rounded-xl border border-gray-200 bg-white px-5 py-2 text-sm font-bold disabled:opacity-50"
-              >
-                {t('common.next')}
-              </button>
             </div>
           )}
         </section>

@@ -593,7 +593,7 @@
     "subtitle": "Add your details to personalize your account and get your orders delivered smoothly.",
     "createPasswordTitle": "Create Your Password",
     "passwordSubtitle": "Secure your account so you can sign in easily next time.",
-    "stepProgress": "Step {{step}} of 3",
+    "stepProgress": "Step {{step}} of {{total}}",
     "profilePhoto": "Profile Photo",
     "uploadProfilePhoto": "Upload profile photo",
     "fullNamePlaceholder": "Ex. Tha Seyha",
@@ -625,7 +625,18 @@
     "passwordMin": "Password is required.",
     "passwordMismatch": "Passwords do not match.",
     "showField": "Show {{label}}",
-    "hideField": "Hide {{label}}"
+    "hideField": "Hide {{label}}",
+    "addressTitle": "Add Delivery Address",
+    "addressSubtitle": "Add your address so we can deliver your orders.",
+    "province": "Province / City",
+    "streetAddress": "Street / House No.",
+    "streetPlaceholder": "Ex. House 12, Street 271",
+    "addressDetail": "Landmark / Note",
+    "addressDetailPlaceholder": "Near school, building name...",
+    "selectProvince": "Please select province.",
+    "enterStreet": "Please enter your street address.",
+    "addressSaved": "Delivery address saved.",
+    "addressFailed": "Could not save address."
   },
   "checkout": {
     "title": "Checkout",

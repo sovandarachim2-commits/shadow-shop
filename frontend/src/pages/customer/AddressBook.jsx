@@ -439,7 +439,7 @@ function LocationPicker({ onSelect, onClose }) {
 }
 
 // ─── AddressForm ─────────────────────────────────────────────────────────────
-function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose, isSaving }) {
+export function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose, isSaving, forceDefault = false }) {
   const { t } = useTranslation()
   const [form, setForm] = useState(() =>
     address
@@ -459,7 +459,7 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
           ...emptyForm,
           full_name: defaultContact?.full_name || '',
           phone: normalizeCambodiaPhone(defaultContact?.phone),
-          is_default: isFirstAddress,
+          is_default: forceDefault || isFirstAddress,
         }
   )
   const [showPicker, setShowPicker] = useState(false)
@@ -599,10 +599,12 @@ function AddressForm({ address, defaultContact, isFirstAddress, onSave, onClose,
 
             {/* Sticky bottom */}
             <div className="border-t border-gray-100 bg-white px-5 pb-8 pt-4 md:px-6 md:pb-5">
-              <div className="mb-4 flex items-center justify-between">
-                <span className="text-sm text-gray-800">{t('addressBook.setDefault')}</span>
-                <Toggle checked={form.is_default} onChange={(v) => set('is_default', v)} />
-              </div>
+              {!forceDefault && (
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-sm text-gray-800">{t('addressBook.setDefault')}</span>
+                  <Toggle checked={form.is_default} onChange={(v) => set('is_default', v)} />
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={isSaving}

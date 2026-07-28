@@ -472,6 +472,11 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
           <Route path="/forgot-password" element={<LazyPage><ForgotPassword /></LazyPage>} />
+          <Route path="/profile/complete" element={
+            <RequireAuth>
+              <LazyPage><CompleteProfile /></LazyPage>
+            </RequireAuth>
+          } />
           <Route path="/demo" element={<LazyPage><DemoBottomNavigation /></LazyPage>} />
 
           {/* Customer App */}
@@ -501,11 +506,6 @@ export default function App() {
             <Route path="profile/edit" element={
               <RequireAuth>
                 <EditProfilePage />
-              </RequireAuth>
-            } />
-            <Route path="profile/complete" element={
-              <RequireAuth>
-                <CompleteProfile />
               </RequireAuth>
             } />
             <Route path="profile/rewards" element={

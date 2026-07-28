@@ -27,6 +27,7 @@ import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
 import { cn } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
+import { AddressForm } from '@/pages/customer/AddressBook'
 
 const GENDER_OPTIONS = [
   { value: '', labelKey: 'completeProfile.selectGender' },
@@ -35,6 +36,14 @@ const GENDER_OPTIONS = [
   { value: 'other', labelKey: 'completeProfile.genderOther' },
   { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
 ]
+
+function hasProfileBasics(user, form) {
+  const cleanName = String(form?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.full_name || '').trim()
+  const cleanPhone = normalizeCambodiaPhone(form?.phone || user?.phone)
+  const gender = String(form?.gender || user?.gender || '').trim()
+  const hasRealName = Boolean(cleanName && !['google', 'telegram'].includes(cleanName.toLowerCase()))
+  return Boolean(hasRealName && cleanPhone && isValidCambodiaPhone(cleanPhone) && gender)
+}
 
 function buildInitialForm(user) {
   return {
@@ -45,6 +54,11 @@ function buildInitialForm(user) {
     password: '',
     confirm_password: '',
   }
+}
+
+function getInitialStep(user) {
+  if (user?.has_address !== true && hasProfileBasics(user)) return 'address'
+  return 'profile'
 }
 
 export default function CompleteProfile() {
@@ -60,7 +74,8 @@ export default function CompleteProfile() {
     user?.avatar_url || user?.google_picture_url || user?.telegram_photo_url || ''
   )
   const needsPassword = user?.has_usable_password === false
-  const [step, setStep] = useState('profile')
+  const needsAddress = user?.has_address !== true
+  const [step, setStep] = useState(() => getInitialStep(user))
   const [form, setForm] = useState(() => buildInitialForm(user))
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
@@ -75,12 +90,23 @@ export default function CompleteProfile() {
     ? location.state.from
     : '/'
   const isPasswordStep = step === 'password'
-  const stepNumber = isPasswordStep ? 3 : 2
-  const progress = isPasswordStep ? 100 : 66
+  const isAddressStep = step === 'address'
+  const totalSteps = needsPassword ? 3 : 2
+  const stepNumber = isPasswordStep ? 3 : isAddressStep ? 2 : 1
+  const progress = Math.round((stepNumber / totalSteps) * 100)
 
   const set = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }))
     setErrors((current) => ({ ...current, [key]: undefined }))
+  }
+
+  const finishOrAskPassword = () => {
+    if (needsPassword) {
+      setStep('password')
+      return
+    }
+    toast.success(t('completeProfile.profileCompleted'))
+    navigate(nextPath, { replace: true })
   }
 
   const handleAvatarChange = (event) => {
@@ -102,13 +128,12 @@ export default function CompleteProfile() {
     mutationFn: (data) => authApi.updateMe(data),
     onSuccess: ({ data }) => {
       updateUser(data)
-      if (needsPassword) {
-        setStep('password')
-        toast.success(t('completeProfile.profileSaved'))
+      toast.success(t('completeProfile.profileSaved'))
+      if (needsAddress) {
+        setStep('address')
         return
       }
-      toast.success(t('completeProfile.profileCompleted'))
-      navigate(nextPath, { replace: true })
+      finishOrAskPassword()
     },
     onError: (error) => {
       const body = error.response?.data
@@ -117,10 +142,24 @@ export default function CompleteProfile() {
     },
   })
 
+  const addressMutation = useMutation({
+    mutationFn: (data) => authApi.addresses.create(data),
+    onSuccess: () => {
+      updateUser({ has_address: true })
+      toast.success(t('completeProfile.addressSaved'))
+      finishOrAskPassword()
+    },
+    onError: (error) => {
+      const body = error.response?.data
+      const message = body?.phone?.[0] || body?.city?.[0] || body?.address_line1?.[0] || body?.detail || t('completeProfile.addressFailed')
+      toast.error(message)
+    },
+  })
+
   const passwordMutation = useMutation({
     mutationFn: (data) => authApi.setInitialPassword(data),
     onSuccess: ({ data }) => {
-      updateUser(data)
+      updateUser({ ...data, has_address: true })
       toast.success(t('completeProfile.passwordCreated'))
       navigate(nextPath, { replace: true })
     },
@@ -190,31 +229,66 @@ export default function CompleteProfile() {
     })
   }
 
+  const onFormSubmit = isPasswordStep ? handlePasswordSubmit : handleSubmit
+
+  const onBack = () => {
+    if (isPasswordStep) {
+      setStep(needsAddress ? 'address' : 'profile')
+      return
+    }
+    if (isAddressStep) {
+      setStep('profile')
+      return
+    }
+    navigate('/')
+  }
+
   if (!user) return null
+
+  if (isAddressStep) {
+    return (
+      <div className="relative min-h-screen bg-white font-sans text-[#1A1A1A]" style={{ fontFamily: profileFontFamily }}>
+        <AddressForm
+          address={null}
+          defaultContact={{
+            full_name: form.full_name || [user.first_name, user.last_name].filter(Boolean).join(' '),
+            phone: form.phone || user.phone,
+          }}
+          isFirstAddress
+          forceDefault
+          isSaving={addressMutation.isPending}
+          onSave={(payload) => addressMutation.mutate({ ...payload, is_default: true, label: payload.label || 'home' })}
+          onClose={() => setStep('profile')}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="relative min-h-screen bg-white font-sans text-[#1A1A1A] lg:flex lg:items-center lg:justify-center lg:bg-[#F8FAFC] lg:px-8 lg:py-10" style={{ fontFamily: profileFontFamily }}>
       <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col bg-white lg:min-h-0 lg:rounded-[28px] lg:border lg:border-gray-200 lg:shadow-[0_24px_70px_rgba(17,24,39,0.08)]">
         <form
-          onSubmit={isPasswordStep ? handlePasswordSubmit : handleSubmit}
+          onSubmit={onFormSubmit}
           className="relative mx-auto flex w-full flex-1 flex-col bg-white px-5 pb-0 pt-[max(1.25rem,calc(env(safe-area-inset-top)+0.75rem))] sm:px-8 lg:px-10 lg:py-10"
         >
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              onClick={() => isPasswordStep ? setStep('profile') : navigate('/')}
+              onClick={onBack}
               className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[#F2DCE7] bg-white text-[#1A1A1A] shadow-sm transition hover:-translate-y-0.5 hover:border-[#EC4D97]/35 hover:text-[#EC4D97] active:scale-95 focus:outline-none focus:ring-4 focus:ring-[rgba(236,77,151,.10)]"
               aria-label={t('common.back')}
             >
               <ArrowLeft size={20} strokeWidth={2.4} />
             </button>
 
-            <StepProgress step={stepNumber} progress={progress} />
+            <StepProgress step={stepNumber} totalSteps={totalSteps} progress={progress} />
           </div>
 
           <div className="mt-6 text-center">
             <h1 className={cn('text-2xl font-black text-[#1A1A1A] sm:text-3xl', isKhmer ? 'leading-[1.55] tracking-normal' : 'tracking-tight')}>
-              {isPasswordStep ? t('completeProfile.createPasswordTitle') : t('completeProfile.title')}
+              {isPasswordStep
+                ? t('completeProfile.createPasswordTitle')
+                : t('completeProfile.title')}
             </h1>
           </div>
 
@@ -248,7 +322,6 @@ export default function CompleteProfile() {
               fileInputRef={fileInputRef}
               onAvatarChange={handleAvatarChange}
               isPending={saveMutation.isPending}
-              needsPassword={needsPassword}
               username={user?.username}
               emailLocked={Boolean(user?.email)}
               t={t}
@@ -339,11 +412,11 @@ function ProfileVisualPanel() {
   )
 }
 
-function StepProgress({ step, progress }) {
+function StepProgress({ step, totalSteps = 3, progress }) {
   const { t } = useTranslation()
   return (
     <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
-      <span className="shrink-0 text-xs font-black text-[#EC4D97]">{t('completeProfile.stepProgress', { step })}</span>
+      <span className="shrink-0 text-xs font-black text-[#EC4D97]">{t('completeProfile.stepProgress', { step, total: totalSteps })}</span>
       <div className="h-2 w-24 overflow-hidden rounded-full bg-[#FFE4F0] sm:w-36">
         <div
           className="h-full rounded-full bg-[#EC4D97]"
@@ -354,7 +427,7 @@ function StepProgress({ step, progress }) {
   )
 }
 
-function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, needsPassword, username, emailLocked, t }) {
+function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, username, emailLocked, t }) {
   return (
     <div className="mt-6 flex flex-1 flex-col">
       <div className="flex items-center justify-center gap-4 rounded-3xl bg-[#FFF8FB] px-4 py-4">
@@ -424,9 +497,7 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
         />
       </div>
 
-      <BottomAction isPending={isPending}>
-        {needsPassword ? t('common.next') : t('completeProfile.completeButton')}
-      </BottomAction>
+      <BottomAction isPending={isPending}>{t('common.next')}</BottomAction>
     </div>
   )
 }

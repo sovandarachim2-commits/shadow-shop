@@ -593,7 +593,7 @@
     "subtitle": "បន្ថែមព័ត៌មានរបស់អ្នក ដើម្បីធ្វើឱ្យគណនីផ្ទាល់ខ្លួន និងដឹកជញ្ជូនការបញ្ជាទិញបានរលូន។",
     "createPasswordTitle": "បង្កើតពាក្យសម្ងាត់",
     "passwordSubtitle": "ការពារគណនីរបស់អ្នក ដើម្បីអាចចូលប្រើបានងាយស្រួលនៅពេលក្រោយ។",
-    "stepProgress": "ជំហាន {{step}} នៃ 3",
+    "stepProgress": "ជំហាន {{step}} នៃ {{total}}",
     "profilePhoto": "រូបថតប្រវត្តិរូប",
     "uploadProfilePhoto": "បង្ហោះរូបថតប្រវត្តិរូប",
     "fullNamePlaceholder": "ឧ. Tha Seyha",
@@ -625,7 +625,18 @@
     "passwordMin": "ត្រូវបញ្ចូលពាក្យសម្ងាត់។",
     "passwordMismatch": "ពាក្យសម្ងាត់មិនដូចគ្នា។",
     "showField": "បង្ហាញ {{label}}",
-    "hideField": "លាក់ {{label}}"
+    "hideField": "លាក់ {{label}}",
+    "addressTitle": "បន្ថែមអាសយដ្ឋានដឹកជញ្ជូន",
+    "addressSubtitle": "បញ្ចូលអាសយដ្ឋានរបស់អ្នក ដើម្បីឱ្យយើងអាចដឹកជញ្ជូនការបញ្ជាទិញ។",
+    "province": "ខេត្ត / រាជធានី",
+    "streetAddress": "ផ្លូវ / ផ្ទះលេខ",
+    "streetPlaceholder": "ឧ. ផ្ទះលេខ 12 ផ្លូវ 271",
+    "addressDetail": "សម្គាល់ / កំណត់ចំណាំ",
+    "addressDetailPlaceholder": "ជិតសាលា ឈ្មោះអាគារ...",
+    "selectProvince": "សូមជ្រើសរើសខេត្ត។",
+    "enterStreet": "សូមបញ្ចូលអាសយដ្ឋានផ្លូវ។",
+    "addressSaved": "បានរក្សាទុកអាសយដ្ឋានដឹកជញ្ជូន។",
+    "addressFailed": "មិនអាចរក្សាទុកអាសយដ្ឋានបានទេ។"
   },
   "checkout": {
     "title": "បំពេញការទិញ",

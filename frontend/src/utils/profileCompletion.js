@@ -8,6 +8,13 @@ export function isSocialProfileIncomplete(user) {
   const fullName = String(user.full_name || '').trim()
   const hasRealName = Boolean(firstName && !['google', 'telegram'].includes(firstName.toLowerCase()))
     || Boolean(fullName && !['google', 'telegram'].includes(fullName.toLowerCase()))
+  const hasAddress = user.has_address === true
 
-  return !phone || !gender || !hasRealName || (isSocialUser && user.has_usable_password === false)
+  return (
+    !phone
+    || !gender
+    || !hasRealName
+    || !hasAddress
+    || (isSocialUser && user.has_usable_password === false)
+  )
 }

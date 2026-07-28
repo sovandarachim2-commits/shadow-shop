@@ -77,6 +77,7 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     avatar_url = serializers.SerializerMethodField()
     has_usable_password = serializers.SerializerMethodField()
+    has_address = serializers.SerializerMethodField()
     role = serializers.CharField(required=False)
 
     class Meta:
@@ -87,7 +88,7 @@ class UserSerializer(serializers.ModelSerializer):
             'telegram_id', 'telegram_username', 'telegram_photo_url',
             'google_id', 'google_picture_url',
             'avatar', 'avatar_url',
-            'has_usable_password', 'is_active', 'created_at',
+            'has_usable_password', 'has_address', 'is_active', 'created_at',
         ]
         read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'google_id', 'google_picture_url', 'created_at']
 
@@ -103,6 +104,12 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_has_usable_password(self, obj):
         return obj.has_usable_password()
+
+    def get_has_address(self, obj):
+        annotated = getattr(obj, 'annotated_has_address', None)
+        if annotated is not None:
+            return bool(annotated)
+        return obj.addresses.exists()
 
     def validate_username(self, value):
         username = str(value or '').strip().lstrip('@').lower()
