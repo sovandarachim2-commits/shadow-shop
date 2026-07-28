@@ -311,6 +311,8 @@
   "orders": {
     "title": "My Orders",
     "subtitle": "Track your orders and checkout history.",
+    "loginRequiredTitle": "Login to View Orders",
+    "loginRequiredText": "Login or register to view your orders, receipts, and delivery status.",
     "details": "Order Details",
     "trackOrder": "Track Order",
     "buyAgain": "Buy Again",

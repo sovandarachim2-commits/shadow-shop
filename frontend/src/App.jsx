@@ -3,6 +3,8 @@ import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
+import { ClipboardList } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
@@ -295,6 +297,52 @@ function RequireRewardsAuth({ children }) {
   return children
 }
 
+function RequireOrdersAuth({ children }) {
+  const { isAuthenticated, user } = useAuthStore()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { t } = useTranslation()
+  const from = location.pathname
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-[48vh] items-start justify-center bg-white px-5 pb-8 pt-10">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC3F8F]">
+            <ClipboardList size={28} strokeWidth={2.4} />
+          </div>
+          <h1 className="mt-5 text-[22px] font-black leading-tight text-gray-950">{t('orders.loginRequiredTitle')}</h1>
+          <p className="mx-auto mt-2 max-w-[280px] text-sm font-semibold leading-6 text-gray-500">
+            {t('orders.loginRequiredText')}
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { from } })}
+              className="shop-btn-primary h-12 rounded-2xl px-4 py-0 text-sm"
+            >
+              {t('auth.login')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/login', { state: { mode: 'register', from } })}
+              className="shop-btn-outline h-12 rounded-2xl px-4 py-0 text-sm"
+            >
+              {t('auth.register')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isSocialProfileIncomplete(user)) {
+    return <Navigate to="/profile/complete" replace state={{ from }} />
+  }
+
+  return children
+}
+
 // Guards customer routes: staff users must have storefront.view permission
 function RequireStorefront({ children }) {
   const { isAuthenticated, user } = useAuthStore()
@@ -499,19 +547,19 @@ export default function App() {
             } />
             <Route path="order-success" element={<LazyPage><OrderSuccess /></LazyPage>} />
             <Route path="my-orders" element={
-              <RequireAuth>
+              <RequireOrdersAuth>
                 <LazyPage><MyOrders /></LazyPage>
-              </RequireAuth>
+              </RequireOrdersAuth>
             } />
             <Route path="my-orders/:id/receipt" element={
-              <RequireAuth>
+              <RequireOrdersAuth>
                 <LazyPage><OrderReceipt /></LazyPage>
-              </RequireAuth>
+              </RequireOrdersAuth>
             } />
             <Route path="my-orders/:id" element={
-              <RequireAuth>
+              <RequireOrdersAuth>
                 <LazyPage><OrderTracking /></LazyPage>
-              </RequireAuth>
+              </RequireOrdersAuth>
             } />
             <Route path="wishlist" element={<LazyPage><Wishlist /></LazyPage>} />
             <Route path="profile" element={<LazyPage><Profile /></LazyPage>} />

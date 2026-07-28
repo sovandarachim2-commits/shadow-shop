@@ -265,8 +265,10 @@ export default function CustomerLayout() {
   const isHome = location.pathname === '/'
   const hasCheckoutItems = cartItems.some((item) => selectedProductIds.includes(item.product.id))
   const isMyOrdersPage = location.pathname === '/my-orders'
+  const isGuestOrdersPage = isMyOrdersPage && !isAuthenticated
   const myOrdersTab = new URLSearchParams(location.search).get('tab') === 'completed' ? 'completed' : 'ongoing'
   const hideMobileHeader =
+    isGuestOrdersPage ||
     location.pathname === '/shop' ||
     location.pathname === '/search' ||
     location.pathname === '/wishlist' ||
