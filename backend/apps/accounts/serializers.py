@@ -43,15 +43,13 @@ def generate_customer_username():
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        token['role'] = user.role
-        token['username'] = user.username
-        token['full_name'] = user.get_full_name()
-        return token
-
     def validate(self, attrs):
+        identifier = str(attrs.get(self.username_field, '') or '').strip()
+        if '@' in identifier:
+            user = User.objects.filter(email__iexact=identifier, is_active=True).only('username').first()
+            if user:
+                attrs[self.username_field] = user.username
+
         data = super().validate(attrs)
         data['user'] = UserSerializer(self.user).data
         from .activity import log_activity
@@ -65,6 +63,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             object_type='User',
         )
         return data
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token['role'] = user.role
+        token['username'] = user.username
+        token['full_name'] = user.get_full_name()
+        return token
 
 
 class UserSerializer(serializers.ModelSerializer):
