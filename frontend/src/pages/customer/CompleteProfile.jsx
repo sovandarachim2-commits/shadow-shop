@@ -27,7 +27,7 @@ import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
 import { cn } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
-import { AddressForm } from '@/pages/customer/AddressBook'
+import { AddressForm } from '@/components/address/AddressFormModal'
 
 const GENDER_OPTIONS = [
   { value: '', labelKey: 'completeProfile.selectGender' },

@@ -38,7 +38,7 @@ const useAuthStore = create(
           refreshToken: data.refresh,
           isAuthenticated: true,
         })
-        return data.user
+        return data
       },
 
       googleLogin: async (payload) => {

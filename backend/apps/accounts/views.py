@@ -141,7 +141,7 @@ def _create_email_verification(user, request=None):
     return verification
 
 
-def _issue_auth_tokens(user, request, login_method='password'):
+def _issue_auth_tokens(user, request, login_method='password', extra_data=None):
     refresh = RefreshToken.for_user(user)
     from .activity import log_activity
     method_label = {
@@ -161,11 +161,14 @@ def _issue_auth_tokens(user, request, login_method='password'):
         object_type='User',
         extra_data={'method': login_method},
     )
-    return Response({
+    payload = {
         'refresh': str(refresh),
         'access': str(refresh.access_token),
         'user': UserSerializer(user, context={'request': request}).data,
-    })
+    }
+    if extra_data:
+        payload.update(extra_data)
+    return Response(payload)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -324,11 +327,32 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
                 password=pending.password_hash,
             )
             user.save()
+            signup_bonus_points = 0
+            try:
+                from apps.orders.models import PointTransaction, RewardSettings
+
+                reward_settings = RewardSettings.get_solo()
+                if reward_settings.is_active and reward_settings.signup_bonus_enabled and reward_settings.signup_bonus > 0:
+                    signup_bonus_points = reward_settings.signup_bonus
+                    PointTransaction.objects.get_or_create(
+                        user=user,
+                        order=None,
+                        type=PointTransaction.TYPE_EARN,
+                        note='Signup bonus',
+                        defaults={'points': signup_bonus_points},
+                    )
+            except Exception:
+                signup_bonus_points = 0
             pending.is_verified = True
             pending.verified_at = timezone.now()
             pending.save(update_fields=['is_verified', 'verified_at', 'updated_at'])
 
-        return _issue_auth_tokens(user, request, login_method='email_verify')
+        return _issue_auth_tokens(
+            user,
+            request,
+            login_method='email_verify',
+            extra_data={'signup_bonus_points': signup_bonus_points},
+        )
 
 
 def _latest_password_reset_verification(email):
