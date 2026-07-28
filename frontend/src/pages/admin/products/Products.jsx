@@ -45,6 +45,19 @@ function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
 
+function getApiErrorMessage(error, fallback) {
+  const data = error?.response?.data
+  if (!data) return fallback
+  if (typeof data.detail === 'string') return data.detail
+  if (typeof data === 'string') return data
+  const firstKey = Object.keys(data)[0]
+  if (!firstKey) return fallback
+  const value = data[firstKey]
+  if (Array.isArray(value) && value[0]) return `${firstKey}: ${value[0]}`
+  if (typeof value === 'string') return `${firstKey}: ${value}`
+  return fallback
+}
+
 function loadImage(file) {
   return new Promise((resolve, reject) => {
     const img = new window.Image()
@@ -91,7 +104,7 @@ async function optimizeImage(file) {
   }
 }
 
-function ProductForm({ product, categories, brands, onSave, onClose, isSaving }) {
+function ProductForm({ product, categories, brands, onSave, onClose, isSaving, isLoading }) {
   const fileInputRef = useRef(null)
   const [selectedFiles, setSelectedFiles] = useState([])
   const [previews, setPreviews] = useState([])
@@ -144,6 +157,14 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving })
     if (Object.keys(nextErrors).length > 0) return
 
     onSave(form, selectedFiles)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-pink-500" />
+      </div>
+    )
   }
 
   return (
@@ -537,17 +558,29 @@ function ImageManagerModal({ product, onClose }) {
 export default function Products() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState(null)
+  const [editLoading, setEditLoading] = useState(false)
   const [imageProduct, setImageProduct] = useState(null)
   const [page, setPage] = useState(1)
   const [confirm, ConfirmDialog] = useConfirm()
+  const editRequestId = useRef(0)
   const pageSize = 20
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, categoryFilter])
+
   const { data, isLoading } = useQuery({
-    queryKey: ['products', search, categoryFilter, page],
-    queryFn: () => productsApi.products.list({ search, category: categoryFilter || undefined, page, page_size: pageSize }).then((r) => r.data),
+    queryKey: ['products', debouncedSearch, categoryFilter, page],
+    queryFn: () => productsApi.products.list({ search: debouncedSearch, category: categoryFilter || undefined, page, page_size: pageSize }).then((r) => r.data),
   })
 
   const { data: categories } = useQuery({
@@ -562,12 +595,12 @@ export default function Products() {
 
   const createMutation = useMutation({
     mutationFn: productsApi.products.create,
-    onError: () => toast.error('Failed to create product'),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to create product')),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => productsApi.products.update(id, data),
-    onError: () => toast.error('Failed to update product'),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update product')),
   })
 
   const statusMutation = useMutation({
@@ -576,16 +609,35 @@ export default function Products() {
       queryClient.invalidateQueries(['products'])
       toast.success('Product status updated')
     },
-    onError: () => toast.error('Failed to update product status'),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update product status')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: productsApi.products.delete,
     onSuccess: () => { queryClient.invalidateQueries(['products']); toast.success('Product deleted') },
-    onError: () => toast.error('Failed to delete product'),
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to delete product')),
   })
 
-  const uploadImages = async (productId, files) => {
+  const openEdit = async (product) => {
+    const requestId = ++editRequestId.current
+    setEditProduct(product)
+    setShowModal(true)
+    setEditLoading(true)
+    try {
+      const { data: detail } = await productsApi.products.get(product.id)
+      if (editRequestId.current !== requestId) return
+      setEditProduct(detail)
+    } catch (error) {
+      if (editRequestId.current !== requestId) return
+      toast.error(getApiErrorMessage(error, 'Failed to load product details'))
+      setShowModal(false)
+      setEditProduct(null)
+    } finally {
+      if (editRequestId.current === requestId) setEditLoading(false)
+    }
+  }
+
+  const uploadImages = async (productId, files, { setAsPrimary = false } = {}) => {
     if (!files?.length) return false
     if (!productId) {
       toast.error('Product saved but image upload could not find the new product ID')
@@ -595,24 +647,24 @@ export default function Products() {
     const optimizedFiles = await Promise.all(files.map(optimizeImage))
     const fd = new FormData()
     optimizedFiles.forEach((f) => fd.append('images', f))
-    fd.append('is_primary', 'true')
+    if (setAsPrimary) fd.append('is_primary', 'true')
     try {
       await productsApi.products.uploadImages(productId, fd)
       return true
     } catch (error) {
       const message = error.code === 'ECONNABORTED'
         ? 'image upload timed out. Please try a smaller image or check R2 connection'
-        : error.response?.data?.detail || 'Image upload failed'
+        : getApiErrorMessage(error, 'Image upload failed')
       toast.error(`Product saved but ${message.toLowerCase()}`)
       return false
     }
   }
 
-  const uploadImagesInBackground = (productId, files) => {
+  const uploadImagesInBackground = (productId, files, options) => {
     if (!files?.length) return
 
     toast.loading('Uploading product image...', { id: `product-image-${productId}` })
-    uploadImages(productId, files).then((uploaded) => {
+    uploadImages(productId, files, options).then((uploaded) => {
       queryClient.invalidateQueries(['products'])
       if (uploaded) {
         toast.success('Product image uploaded', { id: `product-image-${productId}` })
@@ -640,12 +692,13 @@ export default function Products() {
     const payload = buildProductPayload(form)
 
     if (editProduct) {
+      const hasImages = Array.isArray(editProduct.images) && editProduct.images.length > 0
       updateMutation.mutate({ id: editProduct.id, data: payload }, {
         onSuccess: (res) => {
           queryClient.invalidateQueries(['products'])
           setShowModal(false)
           toast.success('Product updated!')
-          uploadImagesInBackground(res.data.id, files)
+          uploadImagesInBackground(res.data.id, files, { setAsPrimary: !hasImages })
         },
       })
     } else {
@@ -654,7 +707,7 @@ export default function Products() {
           queryClient.invalidateQueries(['products'])
           setShowModal(false)
           toast.success('Product created!')
-          uploadImagesInBackground(res.data.id, files)
+          uploadImagesInBackground(res.data.id, files, { setAsPrimary: true })
         },
       })
     }
@@ -670,7 +723,12 @@ export default function Products() {
         subtitle={`${data?.count || 0} products`}
         breadcrumbs={[{ label: 'Products' }]}
         actions={
-          <button onClick={() => { setEditProduct(null); setShowModal(true) }} className="btn-primary">
+          <button onClick={() => {
+            editRequestId.current += 1
+            setEditLoading(false)
+            setEditProduct(null)
+            setShowModal(true)
+          }} className="btn-primary">
             <Plus size={16} /> Add New
           </button>
         }
@@ -771,7 +829,7 @@ export default function Products() {
                       className="p-1.5 hover:bg-purple-50 rounded-lg text-purple-500 transition-colors">
                       <Images size={14} />
                     </button>
-                    <button onClick={() => { setEditProduct(p); setShowModal(true) }}
+                    <button onClick={() => openEdit(p)}
                       className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500 transition-colors">
                       <Edit size={14} />
                     </button>
@@ -800,14 +858,16 @@ export default function Products() {
         )}
       </div>
 
-      <Modal isOpen={showModal} onClose={() => !isSaving && setShowModal(false)} title={editProduct ? 'Edit Product' : 'Add New Product'} size="xl">
+      <Modal isOpen={showModal} onClose={() => !isSaving && !editLoading && setShowModal(false)} title={editProduct ? 'Edit Product' : 'Add New Product'} size="xl">
         <ProductForm
-          product={editProduct}
+          key={editProduct ? `edit-${editProduct.id}-${editLoading ? 'loading' : 'ready'}` : 'new'}
+          product={editLoading ? null : editProduct}
           categories={categories}
           brands={brands}
           onSave={handleSave}
           onClose={() => setShowModal(false)}
           isSaving={isSaving}
+          isLoading={editLoading}
         />
       </Modal>
 

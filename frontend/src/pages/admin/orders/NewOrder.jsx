@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Search, Plus, Minus, Trash2, Save, Send, Package, Check, X } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, Save, Send, Package, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { productsApi } from '@/api/products'
@@ -22,7 +22,6 @@ export default function NewOrder({ embedded = false, onCreated }) {
   const [discount, setDiscount] = useState(0)
   const [payment_status, setPaymentStatus] = useState('unpaid')
   const [payment_method, setPaymentMethod] = useState('cod')
-  const [stockAlert, setStockAlert] = useState(null)
 
   const { data: products, isLoading: loadingProducts } = useQuery({
     queryKey: ['products-search', searchQuery],
@@ -112,15 +111,6 @@ export default function NewOrder({ embedded = false, onCreated }) {
       toast.error('Add at least one product')
       return
     }
-    const overStockItem = cartItems.find((i) => Number(i.quantity || 0) > Number(i.product.current_stock || 0))
-    if (overStockItem) {
-      setStockAlert({
-        name: overStockItem.product.name,
-        available: Number(overStockItem.product.current_stock || 0),
-        requested: Number(overStockItem.quantity || 0),
-      })
-      return
-    }
 
     const customerPayload = { ...customerInfo, phone }
 
@@ -153,29 +143,6 @@ export default function NewOrder({ embedded = false, onCreated }) {
 
   return (
     <div className={embedded ? '' : 'animate-fade-in'}>
-      {stockAlert && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 backdrop-blur-[1px]">
-          <div className="relative w-full max-w-xl rounded-xl bg-white px-6 py-9 text-center shadow-2xl sm:px-10">
-            <button
-              type="button"
-              onClick={() => setStockAlert(null)}
-              className="absolute right-4 top-4 text-gray-300 transition-colors hover:text-gray-500"
-              aria-label="Close stock alert"
-            >
-              <X size={28} />
-            </button>
-
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-[6px] border-orange-200 text-5xl font-black text-orange-300">
-              !!
-            </div>
-            <h2 className="mt-8 text-3xl font-bold text-gray-600">Stock Alert <span className="text-2xl">⚠️</span></h2>
-            <p className="mx-auto mt-6 max-w-md text-lg leading-relaxed text-gray-600">
-              {stockAlert.name} has only {stockAlert.available} in stock. Requested quantity is {stockAlert.requested}.
-            </p>
-          </div>
-        </div>
-      )}
-
       {!embedded && (
         <PageHeader
           title="Create New Order"
@@ -281,9 +248,8 @@ export default function NewOrder({ embedded = false, onCreated }) {
                           <button
                             key={product.id}
                             type="button"
-                            disabled={isOutOfStock}
                             onClick={() => selectProductFromSearch(product)}
-                            className="flex w-full items-center gap-4 rounded-xl bg-white px-4 py-4 text-left transition-colors hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-70"
+                            className="flex w-full items-center gap-4 rounded-xl bg-white px-4 py-4 text-left transition-colors hover:bg-purple-50"
                           >
                             <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-purple-100 bg-gray-100">
                               {product.primary_image ? (
@@ -322,13 +288,12 @@ export default function NewOrder({ embedded = false, onCreated }) {
                     <button
                       key={product.id}
                       type="button"
-                      onClick={() => !isOutOfStock && addToCart(product)}
-                      disabled={isOutOfStock}
+                      onClick={() => addToCart(product)}
                       className={`group flex w-full items-center gap-3 rounded-2xl border bg-white p-2 text-left shadow-sm transition-all ${
                         selectedQty
                           ? 'border-purple-300 ring-2 ring-purple-100'
                           : 'border-gray-200 hover:border-purple-300 hover:shadow-md'
-                      } ${isOutOfStock ? 'cursor-not-allowed opacity-60' : 'active:scale-[0.99]'}`}
+                      } ${isOutOfStock ? 'opacity-80' : 'active:scale-[0.99]'}`}
                     >
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100 sm:h-20 sm:w-20">
                         {product.primary_image ? (

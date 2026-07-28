@@ -66,6 +66,7 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'detail': 'quantity is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from .services import add_stock
+        from apps.accounts.activity import log_activity
         diff = int(new_qty) - stock.quantity
         add_stock(
             product=stock.product,
@@ -75,6 +76,15 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
             user=request.user,
         )
         stock.refresh_from_db()
+        log_activity(
+            user=request.user,
+            action='update',
+            module='inventory',
+            description=f'Adjusted stock for {stock.product.name} to {stock.quantity}',
+            request=request,
+            object_id=stock.product_id,
+            object_type='Stock',
+        )
         return Response(StockSerializer(stock, context={'request': request}).data)
 
 

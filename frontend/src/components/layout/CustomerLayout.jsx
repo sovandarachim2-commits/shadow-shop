@@ -71,24 +71,50 @@ const LANGUAGE_OPTIONS = [
 const DEFAULT_FOOTER_MENUS = {
   customerService: {
     titleKey: 'footer.customerService',
+    title: 'Customer Service',
+    title_km: 'សេវាកម្មអតិថិជន',
     items: [
-      { labelKey: 'footer.contactUs', url: '', enabled: true },
-      { labelKey: 'footer.faqs', url: '', enabled: true },
-      { labelKey: 'footer.shippingPolicy', url: '', enabled: true },
-      { labelKey: 'footer.returnRefund', url: '', enabled: true },
-      { labelKey: 'footer.terms', url: '', enabled: true },
+      { label: 'Contact Us', label_km: 'ទំនាក់ទំនងយើង', labelKey: 'footer.contactUs', url: 'mailto:hello@shadowshop.com', enabled: true },
+      { label: 'FAQs', label_km: 'សំណួរញឹកញាប់', labelKey: 'footer.faqs', url: '/profile?view=help', enabled: true },
+      { label: 'Shipping Policy', label_km: 'គោលការណ៍ដឹកជញ្ជូន', labelKey: 'footer.shippingPolicy', url: 'https://shadowshop.com/shipping-policy', enabled: true },
+      { label: 'Return & Refund', label_km: 'ការត្រឡប់ & សំណង', labelKey: 'footer.returnRefund', url: 'https://shadowshop.com/return-refund', enabled: true },
+      { label: 'Terms & Conditions', label_km: 'លក្ខខណ្ឌ', labelKey: 'footer.terms', url: 'https://shadowshop.com/terms', enabled: true },
     ],
   },
   information: {
     titleKey: 'footer.information',
+    title: 'Information',
+    title_km: 'ព័ត៌មាន',
     items: [
-      { labelKey: 'footer.aboutUs', url: '', enabled: true },
-      { labelKey: 'footer.privacyPolicy', url: '', enabled: true },
-      { labelKey: 'footer.careers', url: '', enabled: true },
-      { labelKey: 'footer.blog', url: '', enabled: true },
-      { labelKey: 'footer.sitemap', url: '', enabled: true },
+      { label: 'About Us', label_km: 'អំពីយើង', labelKey: 'footer.aboutUs', url: 'https://shadowshop.com/about', enabled: true },
+      { label: 'Privacy Policy', label_km: 'គោលការណ៍ឯកជនភាព', labelKey: 'footer.privacyPolicy', url: 'https://shadowshop.com/privacy', enabled: true },
+      { label: 'Careers', label_km: 'ការងារ', labelKey: 'footer.careers', url: 'https://shadowshop.com/careers', enabled: true },
+      { label: 'Blog', label_km: 'ប្លក់', labelKey: 'footer.blog', url: 'https://shadowshop.com/blog', enabled: true },
+      { label: 'Shop All Products', label_km: 'ទិញផលិតផលទាំងអស់', labelKey: 'footer.sitemap', url: '/shop', enabled: true },
     ],
   },
+}
+
+const DEFAULT_SOCIAL_LINKS = [
+  { platform: 'facebook', label: 'Facebook', url: 'https://facebook.com/shadowshop', enabled: true },
+  { platform: 'tiktok', label: 'TikTok', url: 'https://tiktok.com/@shadowshop', enabled: true },
+  { platform: 'instagram', label: 'Instagram', url: 'https://instagram.com/shadowshop', enabled: true },
+  { platform: 'youtube', label: 'YouTube', url: 'https://youtube.com/@shadowshop', enabled: true },
+]
+
+function TikTokIcon({ size = 17, className = '' }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .56.04.83.1v-3.5a6.37 6.37 0 0 0-.83-.05A6.34 6.34 0 0 0 3.15 15.3a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.73a8.2 8.2 0 0 0 4.76 1.52V6.8a4.84 4.84 0 0 1-1-.11z" />
+    </svg>
+  )
+}
+
+const SOCIAL_ICON_MAP = {
+  facebook: Facebook,
+  tiktok: TikTokIcon,
+  instagram: Instagram,
+  youtube: Youtube,
 }
 
 function normalizeFooterMenus(value = {}) {
@@ -99,17 +125,39 @@ function normalizeFooterMenus(value = {}) {
       const items = savedItems.length > 0 ? savedItems : section.items
 
       return [sectionKey, {
-        title: savedSection.title || '',
+        title: savedSection.title || section.title || '',
+        title_km: savedSection.title_km || section.title_km || '',
         titleKey: section.titleKey,
         items: items.map((item, index) => ({
           label: item.label || '',
+          label_km: item.label_km || section.items[index]?.label_km || '',
           labelKey: item.labelKey || section.items[index]?.labelKey || '',
-          url: item.url || '',
+          url: item.url || section.items[index]?.url || '',
           enabled: item.enabled !== false,
         })),
       }]
     })
   )
+}
+
+function normalizeSocialLinks(value = {}) {
+  const saved = Array.isArray(value?.social_links) ? value.social_links : []
+  const source = saved.length > 0 ? saved : DEFAULT_SOCIAL_LINKS
+  return source.map((item, index) => {
+    const defaults = DEFAULT_SOCIAL_LINKS.find((entry) => entry.platform === item.platform) || {}
+    return {
+      platform: item.platform || defaults.platform || `custom_${index + 1}`,
+      label: item.label || defaults.label || 'Social',
+      url: item.url || defaults.url || '',
+      icon_url: item.icon_url || '',
+      enabled: item.enabled !== false,
+    }
+  }).filter((item) => item.enabled !== false && item.url)
+}
+
+function resolveFooterText({ km, en, fallbackKey }, isKhmer, t) {
+  if (isKhmer) return km || en || (fallbackKey ? t(fallbackKey) : '')
+  return en || km || (fallbackKey ? t(fallbackKey) : '')
 }
 
 function FooterMenuItem({ item, children }) {
@@ -193,6 +241,7 @@ export default function CustomerLayout() {
   const storePhone = siteSettings?.store_phone || ''
   const storeEmail = siteSettings?.store_email || ''
   const footerMenus = normalizeFooterMenus(siteSettings?.footer_menus)
+  const socialLinks = normalizeSocialLinks(siteSettings?.footer_menus)
 
   useEffect(() => {
     if (siteSettings?.favicon_url) {
@@ -569,20 +618,44 @@ export default function CustomerLayout() {
               </div>
             )}
             <div className="mt-5 flex gap-3">
-              {[Facebook, Instagram, Youtube].map((Icon, index) => (
-                <a key={index} href="#" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 transition hover:bg-white/10">
-                  <Icon size={17} />
-                </a>
-              ))}
+              {socialLinks.map((item) => {
+                const Icon = SOCIAL_ICON_MAP[item.platform] || Facebook
+                return (
+                  <a
+                    key={item.platform}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={item.label}
+                    className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 transition hover:bg-white/10"
+                  >
+                    {item.icon_url ? (
+                      <img src={item.icon_url} alt={item.label} className="h-6 w-6 object-contain" />
+                    ) : (
+                      <Icon size={18} />
+                    )}
+                  </a>
+                )
+              })}
             </div>
           </div>
           {Object.entries(footerMenus).map(([sectionKey, section]) => (
             <div key={sectionKey}>
-              <h4 className="font-bold">{section.title || t(section.titleKey)}</h4>
+              <h4 className="font-bold">
+                {resolveFooterText(
+                  { km: section.title_km, en: section.title, fallbackKey: section.titleKey },
+                  isKhmer,
+                  t,
+                )}
+              </h4>
               <div className="mt-4 space-y-2 text-sm text-slate-300">
                 {section.items.filter((item) => item.enabled !== false).map((item, index) => (
                   <FooterMenuItem key={`${sectionKey}-${index}`} item={item}>
-                    {item.label || t(item.labelKey)}
+                    {resolveFooterText(
+                      { km: item.label_km, en: item.label, fallbackKey: item.labelKey },
+                      isKhmer,
+                      t,
+                    )}
                   </FooterMenuItem>
                 ))}
               </div>

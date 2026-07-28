@@ -23,5 +23,8 @@ export const inventoryApi = {
   },
   warehouses: {
     list: (params) => client.get('/inventory/warehouses/', { params }),
+    create: (data) => client.post('/inventory/warehouses/', data),
+    update: (id, data) => client.patch(`/inventory/warehouses/${id}/`, data),
+    delete: (id) => client.delete(`/inventory/warehouses/${id}/`),
   },
 }

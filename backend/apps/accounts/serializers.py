@@ -54,6 +54,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         data['user'] = UserSerializer(self.user).data
+        from .activity import log_activity
+        log_activity(
+            user=self.user,
+            action='login',
+            module='users',
+            description=f'{self.user.get_full_name() or self.user.username} logged in',
+            request=self.context.get('request'),
+            object_id=self.user.pk,
+            object_type='User',
+        )
         return data
 
 
@@ -270,7 +280,9 @@ class ActivityLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_user_name(self, obj):
-        return obj.user.get_full_name() if obj.user else 'System'
+        if not obj.user:
+            return 'System'
+        return obj.user.get_full_name() or obj.user.username
 
 
 class AddressSerializer(serializers.ModelSerializer):
@@ -380,3 +392,16 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
 
         cleaned['allowed_zones'] = allowed_zones
         return cleaned
+
+    def validate_footer_menus(self, value):
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError('Footer menus must be valid JSON.')
+            if not isinstance(parsed, dict):
+                raise serializers.ValidationError('Footer menus must be an object.')
+            value = parsed
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Footer menus must be an object.')
+        return value

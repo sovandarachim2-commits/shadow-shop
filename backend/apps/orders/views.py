@@ -57,9 +57,6 @@ def get_order_print_stock_issues(order):
 
     issues = []
     for product, required_qty in requirements.items():
-        if product.availability_status == Product.AVAILABILITY_AVAILABLE:
-            continue
-
         try:
             current_qty = int(product.stock.quantity or 0)
         except Exception:
@@ -111,8 +108,6 @@ def get_batch_print_stock_issues(orders):
 
     issues = []
     for product, required_qty in requirements.items():
-        if product.availability_status == Product.AVAILABILITY_AVAILABLE:
-            continue
         try:
             available_qty = int(product.stock.quantity or 0)
         except Exception:
@@ -305,10 +300,20 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         if new_status == 'printed':
             from apps.inventory.services import deduct_stock_for_order
+            from apps.accounts.activity import log_activity
             deduct_stock_for_order(order, request.user)
             order.printed_at = timezone.now()
             order.printed_by = request.user
             order.save()
+            log_activity(
+                user=request.user,
+                action='print',
+                module='print',
+                description=f'Printed order {order.order_number}',
+                request=request,
+                object_id=order.pk,
+                object_type='Order',
+            )
         if new_status == Order.STATUS_COMPLETED and order.payment_status == 'paid':
             award_points_for_paid_order(order)
 
@@ -447,6 +452,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 )
 
             printed_at = timezone.now()
+            from apps.accounts.activity import log_activity
             for order in orders:
                 deduct_stock_for_order(order, request.user)
                 if order.status != Order.STATUS_PRINTED or not order.printed_at:
@@ -460,6 +466,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                         changed_by=request.user,
                         note='Printed from Print Center',
                     )
+                log_activity(
+                    user=request.user,
+                    action='print',
+                    module='print',
+                    description=f'Printed order {order.order_number}',
+                    request=request,
+                    object_id=order.pk,
+                    object_type='Order',
+                )
 
         return Response({
             'ok': True,

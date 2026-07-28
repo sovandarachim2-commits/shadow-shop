@@ -412,9 +412,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
-        errors = validate_order_target_stock(attrs.get('items', []))
-        if errors:
-            raise serializers.ValidationError({'items': errors})
+        # Admin create is allowed without stock checks so staff can sell/print quickly.
+        # Stock is still deducted when the order is printed.
         return attrs
 
     def create(self, validated_data):
@@ -442,6 +441,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         from django.db import transaction
         from apps.notifications.services import TelegramService
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=request.user,
+            action='create',
+            module='orders',
+            description=f'Created order {order.order_number}',
+            request=request,
+            object_id=order.pk,
+            object_type='Order',
+        )
         transaction.on_commit(lambda: TelegramService.notify_new_order_async(order.id))
 
         return order
@@ -462,26 +471,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         return aggregate_order_targets(items)
 
     def validate(self, attrs):
-        order = self.instance
-        items = attrs.get('items')
-        if items is None:
-            return attrs
-
-        old_product_totals = {}
-        old_set_totals = {}
-        from apps.inventory.services import has_stock_deduction_for_order
-        stock_already_deducted = has_stock_deduction_for_order(order)
-
-        if stock_already_deducted:
-            for item in order.items.select_related('product', 'product_set').all():
-                if item.product:
-                    old_product_totals[item.product] = old_product_totals.get(item.product, 0) + item.quantity
-                elif item.product_set:
-                    old_set_totals[item.product_set] = old_set_totals.get(item.product_set, 0) + item.quantity
-
-        errors = validate_order_target_stock(items, old_product_totals, old_set_totals)
-        if errors:
-            raise serializers.ValidationError({'items': errors})
+        # Admin order edit skips stock blocking for faster fulfillment.
         return attrs
 
     def _adjust_stock(self, order, old_totals, new_totals, user):
@@ -489,8 +479,6 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
 
         products = set(old_totals.keys()) | set(new_totals.keys())
         for product in products:
-            if product.availability_status == Product.AVAILABILITY_AVAILABLE:
-                continue
             delta = new_totals.get(product, 0) - old_totals.get(product, 0)
             if delta == 0:
                 continue

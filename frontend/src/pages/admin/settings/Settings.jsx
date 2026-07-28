@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power, ChevronDown, Search } from 'lucide-react'
+import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power, ChevronDown, Search, Facebook, Instagram, Youtube } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useState, useRef, useEffect } from 'react'
 import client from '@/api/client'
@@ -19,24 +19,48 @@ const SECTION_TITLES = {
 const DEFAULT_FOOTER_MENUS = {
   customerService: {
     title: 'Customer Service',
+    title_km: 'សេវាកម្មអតិថិជន',
     items: [
-      { label: 'Contact Us', url: '', enabled: true },
-      { label: 'FAQs', url: '', enabled: true },
-      { label: 'Shipping Policy', url: '', enabled: true },
-      { label: 'Return & Refund', url: '', enabled: true },
-      { label: 'Terms & Conditions', url: '', enabled: true },
+      { label: 'Contact Us', label_km: 'ទំនាក់ទំនងយើង', url: 'mailto:hello@shadowshop.com', enabled: true },
+      { label: 'FAQs', label_km: 'សំណួរញឹកញាប់', url: '/profile?view=help', enabled: true },
+      { label: 'Shipping Policy', label_km: 'គោលការណ៍ដឹកជញ្ជូន', url: 'https://shadowshop.com/shipping-policy', enabled: true },
+      { label: 'Return & Refund', label_km: 'ការត្រឡប់ & សំណង', url: 'https://shadowshop.com/return-refund', enabled: true },
+      { label: 'Terms & Conditions', label_km: 'លក្ខខណ្ឌ', url: 'https://shadowshop.com/terms', enabled: true },
     ],
   },
   information: {
     title: 'Information',
+    title_km: 'ព័ត៌មាន',
     items: [
-      { label: 'About Us', url: '', enabled: true },
-      { label: 'Privacy Policy', url: '', enabled: true },
-      { label: 'Careers', url: '', enabled: true },
-      { label: 'Blog', url: '', enabled: true },
-      { label: 'Sitemap', url: '', enabled: true },
+      { label: 'About Us', label_km: 'អំពីយើង', url: 'https://shadowshop.com/about', enabled: true },
+      { label: 'Privacy Policy', label_km: 'គោលការណ៍ឯកជនភាព', url: 'https://shadowshop.com/privacy', enabled: true },
+      { label: 'Careers', label_km: 'ការងារ', url: 'https://shadowshop.com/careers', enabled: true },
+      { label: 'Blog', label_km: 'ប្លក់', url: 'https://shadowshop.com/blog', enabled: true },
+      { label: 'Shop All Products', label_km: 'ទិញផលិតផលទាំងអស់', url: '/shop', enabled: true },
     ],
   },
+}
+
+const DEFAULT_SOCIAL_LINKS = [
+  { platform: 'facebook', label: 'Facebook', url: 'https://facebook.com/shadowshop', enabled: true },
+  { platform: 'tiktok', label: 'TikTok', url: 'https://tiktok.com/@shadowshop', enabled: true },
+  { platform: 'instagram', label: 'Instagram', url: 'https://instagram.com/shadowshop', enabled: true },
+  { platform: 'youtube', label: 'YouTube', url: 'https://youtube.com/@shadowshop', enabled: true },
+]
+
+function TikTokIcon({ size = 18, className = '' }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .56.04.83.1v-3.5a6.37 6.37 0 0 0-.83-.05A6.34 6.34 0 0 0 3.15 15.3a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.73a8.2 8.2 0 0 0 4.76 1.52V6.8a4.84 4.84 0 0 1-1-.11z" />
+    </svg>
+  )
+}
+
+const SOCIAL_ICON_MAP = {
+  facebook: Facebook,
+  tiktok: TikTokIcon,
+  instagram: Instagram,
+  youtube: Youtube,
 }
 
 function normalizeFooterMenus(value = {}) {
@@ -48,14 +72,31 @@ function normalizeFooterMenus(value = {}) {
 
       return [sectionKey, {
         title: savedSection.title || section.title,
-        items: items.map((item) => ({
-          label: item.label || '',
-          url: item.url || '',
+        title_km: savedSection.title_km || section.title_km || '',
+        items: items.map((item, index) => ({
+          label: item.label || section.items[index]?.label || '',
+          label_km: item.label_km || section.items[index]?.label_km || '',
+          url: item.url || section.items[index]?.url || '',
           enabled: item.enabled !== false,
         })),
       }]
     })
   )
+}
+
+function normalizeSocialLinks(value = {}) {
+  const saved = Array.isArray(value?.social_links) ? value.social_links : []
+  const source = saved.length > 0 ? saved : DEFAULT_SOCIAL_LINKS
+  return source.map((item, index) => {
+    const defaults = DEFAULT_SOCIAL_LINKS.find((entry) => entry.platform === item.platform) || {}
+    return {
+      platform: item.platform || defaults.platform || `custom_${index + 1}`,
+      label: item.label || defaults.label || 'Social',
+      url: item.url || defaults.url || '',
+      icon_url: item.icon_url || '',
+      enabled: item.enabled !== false,
+    }
+  })
 }
 
 function normalizeTelegramUrl(value = '') {
@@ -293,6 +334,9 @@ export default function Settings({ tab = 'general' }) {
       }))
     }
     setFooterMenus(normalizeFooterMenus(siteSettings.footer_menus))
+    setFooterSocialLinks(normalizeSocialLinks(siteSettings.footer_menus))
+    setSocialIconFiles({})
+    setSocialIconPreviews({})
     setPrintLogoSize(siteSettings.print_logo_size || 64)
     setPrintQrSize(siteSettings.print_qr_size || 68)
   }, [siteSettings])
@@ -377,6 +421,9 @@ export default function Settings({ tab = 'general' }) {
   const [paymentLogoFiles, setPaymentLogoFiles] = useState({})
   const [paymentLogoPreviews, setPaymentLogoPreviews] = useState({})
   const [footerMenus, setFooterMenus] = useState(normalizeFooterMenus())
+  const [footerSocialLinks, setFooterSocialLinks] = useState(normalizeSocialLinks())
+  const [socialIconFiles, setSocialIconFiles] = useState({})
+  const [socialIconPreviews, setSocialIconPreviews] = useState({})
 
   const savePaymentMutation = useMutation({
     mutationFn: () => {
@@ -444,7 +491,7 @@ export default function Settings({ tab = 'general' }) {
       ...current,
       [sectionKey]: {
         ...current[sectionKey],
-        items: [...current[sectionKey].items, { label: '', url: '', enabled: true }],
+        items: [...current[sectionKey].items, { label: '', label_km: '', url: '', enabled: true }],
       },
     }))
   }
@@ -459,26 +506,90 @@ export default function Settings({ tab = 'general' }) {
     }))
   }
 
+  const updateSocialLink = (index, field, value) => {
+    setFooterSocialLinks((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    )))
+  }
+
+  const addSocialLink = () => {
+    const platform = `custom_${Date.now()}`
+    setFooterSocialLinks((current) => [
+      ...current,
+      { platform, label: 'New Social', url: '', icon_url: '', enabled: true },
+    ])
+  }
+
+  const deleteSocialLink = (index) => {
+    const target = footerSocialLinks[index]
+    setFooterSocialLinks((current) => current.filter((_, itemIndex) => itemIndex !== index))
+    if (target?.platform) {
+      setSocialIconFiles((prev) => {
+        const next = { ...prev }
+        delete next[target.platform]
+        return next
+      })
+      setSocialIconPreviews((prev) => {
+        const next = { ...prev }
+        delete next[target.platform]
+        return next
+      })
+    }
+  }
+
+  const pickSocialIcon = (platform) => (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSocialIconFiles((prev) => ({ ...prev, [platform]: file }))
+    const reader = new FileReader()
+    reader.onload = (ev) => setSocialIconPreviews((prev) => ({ ...prev, [platform]: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
+
   const saveFooterMutation = useMutation({
-    mutationFn: () => authApi.siteSettings.update({
-      footer_menus: Object.fromEntries(
-        Object.entries(footerMenus).map(([sectionKey, section]) => [
-          sectionKey,
-          {
-            title: section.title.trim(),
-            items: section.items
-              .map((item) => ({
-                label: item.label.trim(),
-                url: item.url.trim(),
-                enabled: item.enabled !== false,
-              }))
-              .filter((item) => item.label),
-          },
-        ])
-      ),
-    }),
+    mutationFn: () => {
+      const footerPayload = {
+        ...Object.fromEntries(
+          Object.entries(footerMenus).map(([sectionKey, section]) => [
+            sectionKey,
+            {
+              title: section.title.trim(),
+              title_km: (section.title_km || '').trim(),
+              items: section.items
+                .map((item) => ({
+                  label: item.label.trim(),
+                  label_km: (item.label_km || '').trim(),
+                  url: item.url.trim(),
+                  enabled: item.enabled !== false,
+                }))
+                .filter((item) => item.label || item.label_km),
+            },
+          ])
+        ),
+        social_links: footerSocialLinks.map((item) => ({
+          platform: item.platform,
+          label: item.label.trim() || item.platform,
+          url: item.url.trim(),
+          icon_url: item.icon_url || '',
+          enabled: item.enabled !== false,
+        })),
+      }
+
+      if (Object.keys(socialIconFiles).length === 0) {
+        return authApi.siteSettings.update({ footer_menus: footerPayload })
+      }
+
+      const fd = new FormData()
+      fd.append('footer_menus', JSON.stringify(footerPayload))
+      Object.entries(socialIconFiles).forEach(([platform, file]) => {
+        if (file) fd.append(`social_icon_${platform}`, file)
+      })
+      return authApi.siteSettings.update(fd)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      setSocialIconFiles({})
+      setSocialIconPreviews({})
       toast.success('Customer footer saved!')
     },
     onError: () => toast.error('Failed to save customer footer'),
@@ -712,7 +823,7 @@ export default function Settings({ tab = 'general' }) {
         </div>
       </div>
 
-      <div className={`form-card mt-6 ${['telegram', 'customerFooter'].includes(tab) ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className={`form-card mt-6 ${tab === 'customerFooter' ? 'max-w-7xl' : ['telegram'].includes(tab) ? 'max-w-5xl' : 'max-w-2xl'}`}>
         {tab === 'general' && (
           <div className="space-y-5">
             {/* Logo */}
@@ -1504,62 +1615,166 @@ export default function Settings({ tab = 'general' }) {
         )}
 
         {tab === 'customerFooter' && (
-          <div className="space-y-5">
-            <div className="rounded-xl bg-pink-50 p-4 text-sm text-pink-800">
-              Manage the menu labels and links shown in the desktop customer footer.
+          <div className="space-y-8">
+            <div className="rounded-2xl bg-pink-50 p-5 text-base leading-relaxed text-pink-800">
+              Sample English + Khmer footer menus and social icons are pre-filled. Edit labels/URLs, then click Save Customer Footer.
+              Storefront shows Khmer when language is KM.
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 md:p-6">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black text-gray-950">Social Icons</h3>
+                  <p className="mt-1 text-sm text-gray-500">Upload a logo for each icon, set the URL, or add a custom social icon.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addSocialLink}
+                  className="btn-secondary flex h-11 items-center gap-2 px-4 text-sm"
+                >
+                  <Plus size={15} /> Add Social Icon
+                </button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {footerSocialLinks.map((item, index) => {
+                  const Icon = SOCIAL_ICON_MAP[item.platform] || Facebook
+                  const preview = socialIconPreviews[item.platform] || item.icon_url
+                  return (
+                    <div key={item.platform} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <div className="mb-4 flex items-center gap-3">
+                        <label className="relative flex h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-pink-200 bg-pink-50 text-pink-600 transition hover:bg-pink-100">
+                          {preview ? (
+                            <img src={preview} alt={item.label} className="h-full w-full object-contain p-2" />
+                          ) : (
+                            <Icon size={22} />
+                          )}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                            className="hidden"
+                            onChange={pickSocialIcon(item.platform)}
+                          />
+                          <span className="absolute bottom-1 right-1 rounded-md bg-white/90 px-1.5 py-0.5 text-[9px] font-black text-pink-600 shadow">
+                            Logo
+                          </span>
+                        </label>
+                        <div className="min-w-0 flex-1">
+                          <label className="label text-sm">Name</label>
+                          <input
+                            className="input-field h-11 text-base"
+                            value={item.label}
+                            onChange={(e) => updateSocialLink(index, 'label', e.target.value)}
+                            placeholder="Facebook / TikTok / Telegram"
+                          />
+                        </div>
+                        <label className="flex h-11 items-center gap-2 rounded-xl border border-gray-100 px-3 text-sm font-bold text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={item.enabled !== false}
+                            onChange={(e) => updateSocialLink(index, 'enabled', e.target.checked)}
+                            className="h-4 w-4 accent-purple-600"
+                          />
+                          Show
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => deleteSocialLink(index)}
+                          className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-100 text-red-500 hover:bg-red-50"
+                          title="Delete social icon"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                      <label className="label text-sm">URL</label>
+                      <input
+                        className="input-field h-12 text-base"
+                        value={item.url}
+                        onChange={(e) => updateSocialLink(index, 'url', e.target.value)}
+                        placeholder="https://..."
+                      />
+                      <p className="mt-2 text-xs text-gray-400">Click the logo box to upload PNG/JPG/SVG. Leave empty to use the default icon.</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
               {Object.entries(footerMenus).map(([sectionKey, section]) => (
-                <div key={sectionKey} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  <div className="mb-4">
-                    <label className="label">Column Title</label>
-                    <input
-                      className="input-field bg-white"
-                      value={section.title}
-                      onChange={(e) => updateFooterSection(sectionKey, 'title', e.target.value)}
-                    />
+                <div key={sectionKey} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 md:p-6">
+                  <div className="mb-5 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="label text-sm">Column Title (EN)</label>
+                      <input
+                        className="input-field h-12 bg-white text-base"
+                        value={section.title}
+                        onChange={(e) => updateFooterSection(sectionKey, 'title', e.target.value)}
+                        placeholder="e.g. Customer Service"
+                      />
+                    </div>
+                    <div>
+                      <label className="label text-sm">Column Title (KM)</label>
+                      <input
+                        className="input-field h-12 bg-white text-base"
+                        value={section.title_km || ''}
+                        onChange={(e) => updateFooterSection(sectionKey, 'title_km', e.target.value)}
+                        placeholder="ឧ. សេវាកម្មអតិថិជន"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {section.items.map((item, itemIndex) => (
-                      <div key={`${sectionKey}-${itemIndex}`} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                        <div className="grid gap-3 md:grid-cols-[1fr_1.3fr_auto_auto] md:items-end">
-                          <div>
-                            <label className="label">Label</label>
-                            <input
-                              className="input-field"
-                              value={item.label}
-                              onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'label', e.target.value)}
-                              placeholder="Menu label"
-                            />
+                      <div key={`${sectionKey}-${itemIndex}`} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <div className="grid gap-4">
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="label text-sm">Label (EN)</label>
+                              <input
+                                className="input-field h-12 text-base"
+                                value={item.label}
+                                onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'label', e.target.value)}
+                                placeholder="Menu label"
+                              />
+                            </div>
+                            <div>
+                              <label className="label text-sm">Label (KM)</label>
+                              <input
+                                className="input-field h-12 text-base"
+                                value={item.label_km || ''}
+                                onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'label_km', e.target.value)}
+                                placeholder="ឈ្មោះម៉ឺនុយ"
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="label">URL</label>
-                            <input
-                              className="input-field"
-                              value={item.url}
-                              onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'url', e.target.value)}
-                              placeholder="/contact or https://..."
-                            />
+                          <div className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+                            <div>
+                              <label className="label text-sm">URL</label>
+                              <input
+                                className="input-field h-12 text-base"
+                                value={item.url}
+                                onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'url', e.target.value)}
+                                placeholder="/shop or https://... or mailto:..."
+                              />
+                            </div>
+                            <label className="flex h-12 items-center gap-2 rounded-xl border border-gray-100 px-4 text-sm font-bold text-gray-700">
+                              <input
+                                type="checkbox"
+                                checked={item.enabled !== false}
+                                onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'enabled', e.target.checked)}
+                                className="h-4 w-4 accent-purple-600"
+                              />
+                              Show
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => deleteFooterItem(sectionKey, itemIndex)}
+                              className="flex h-12 w-12 items-center justify-center rounded-xl border border-red-100 text-red-500 hover:bg-red-50"
+                              title="Delete menu item"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
-                          <label className="flex h-11 items-center gap-2 rounded-xl border border-gray-100 px-3 text-sm font-bold text-gray-700">
-                            <input
-                              type="checkbox"
-                              checked={item.enabled !== false}
-                              onChange={(e) => updateFooterItem(sectionKey, itemIndex, 'enabled', e.target.checked)}
-                              className="h-4 w-4 accent-purple-600"
-                            />
-                            Show
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => deleteFooterItem(sectionKey, itemIndex)}
-                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-100 text-red-500 hover:bg-red-50"
-                            title="Delete menu item"
-                          >
-                            <Trash2 size={15} />
-                          </button>
                         </div>
                       </div>
                     ))}
@@ -1568,9 +1783,9 @@ export default function Settings({ tab = 'general' }) {
                   <button
                     type="button"
                     onClick={() => addFooterItem(sectionKey)}
-                    className="btn-secondary mt-4 flex items-center gap-2 px-4 py-2 text-sm"
+                    className="btn-secondary mt-5 flex h-12 items-center gap-2 px-5 text-sm"
                   >
-                    <Plus size={15} /> Add Menu
+                    <Plus size={16} /> Add Menu
                   </button>
                 </div>
               ))}
@@ -1579,9 +1794,9 @@ export default function Settings({ tab = 'general' }) {
             <button
               onClick={() => saveFooterMutation.mutate()}
               disabled={saveFooterMutation.isPending}
-              className="btn-primary flex items-center gap-2 disabled:opacity-60"
+              className="btn-primary flex h-12 items-center gap-2 px-6 text-base disabled:opacity-60"
             >
-              <Save size={15} /> {saveFooterMutation.isPending ? 'Saving...' : 'Save Customer Footer'}
+              <Save size={16} /> {saveFooterMutation.isPending ? 'Saving...' : 'Save Customer Footer'}
             </button>
           </div>
         )}

@@ -32,7 +32,7 @@ export const productsApi = {
     delete: (id) => client.delete(`/products/items/${id}/`),
     uploadImages: (id, data) => client.post(`/products/items/${id}/upload_images/`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 20000,
+      timeout: 90000,
     }),
     setPrimaryImage: (id, imageId) => client.post(`/products/items/${id}/set_primary_image/`, { image_id: imageId }),
     deleteImage: (id, imageId) => client.delete(`/products/items/${id}/delete_image/${imageId}/`),
@@ -57,7 +57,7 @@ export const productsApi = {
     setItems: (id, data) => client.post(`/products/sets/${id}/set_items/`, data),
     uploadImages: (id, data) => client.post(`/products/sets/${id}/upload_images/`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 20000,
+      timeout: 90000,
     }),
     setPrimaryImage: (id, imageId) => client.post(`/products/sets/${id}/set_primary_image/`, { image_id: imageId }),
     deleteImage: (id, imageId) => client.delete(`/products/sets/${id}/delete_image/${imageId}/`),

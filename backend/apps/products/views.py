@@ -161,6 +161,47 @@ class ProductViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [IsAuthenticated(), IsAdminOrSuperAdmin()]
 
+    def perform_create(self, serializer):
+        product = serializer.save()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='create',
+            module='products',
+            description=f'Created product {product.name}',
+            request=self.request,
+            object_id=product.pk,
+            object_type='Product',
+        )
+
+    def perform_update(self, serializer):
+        product = serializer.save()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='update',
+            module='products',
+            description=f'Updated product {product.name}',
+            request=self.request,
+            object_id=product.pk,
+            object_type='Product',
+        )
+
+    def perform_destroy(self, instance):
+        name = instance.name
+        product_id = instance.pk
+        super().perform_destroy(instance)
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='delete',
+            module='products',
+            description=f'Deleted product {name}',
+            request=self.request,
+            object_id=product_id,
+            object_type='Product',
+        )
+
     def list(self, request, *args, **kwargs):
         cacheable = request.method == 'GET' and not request.user.is_authenticated
         cache_key = None
@@ -197,16 +238,19 @@ class ProductViewSet(viewsets.ModelViewSet):
         if not images:
             return Response({'detail': 'No images were uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        is_primary = request.data.get('is_primary', False)
+        is_primary = str(request.data.get('is_primary', False)).lower() in ('1', 'true', 'yes')
         created = []
+        next_order = product.images.count()
+        if is_primary:
+            product.images.update(is_primary=False)
         for i, image in enumerate(images):
             img = ProductImage.objects.create(
                 product=product,
                 image=optimize_uploaded_image(image),
                 is_primary=(is_primary and i == 0),
-                order=product.images.count() + i,
+                order=next_order + i,
             )
-            ensure_card_variant(img.image)
+            ensure_card_variant(img.image, force=True)
             created.append(ProductImageSerializer(img, context={'request': request}).data)
         return Response(created, status=status.HTTP_201_CREATED)
 
@@ -312,16 +356,19 @@ class ProductSetViewSet(viewsets.ModelViewSet):
         if not images:
             return Response({'detail': 'No images were uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        is_primary = request.data.get('is_primary', False)
+        is_primary = str(request.data.get('is_primary', False)).lower() in ('1', 'true', 'yes')
         created = []
+        next_order = product_set.images.count()
+        if is_primary:
+            product_set.images.update(is_primary=False)
         for i, image in enumerate(images):
             img = ProductSetImage.objects.create(
                 product_set=product_set,
                 image=optimize_uploaded_image(image),
                 is_primary=(is_primary and i == 0),
-                order=product_set.images.count() + i,
+                order=next_order + i,
             )
-            ensure_card_variant(img.image)
+            ensure_card_variant(img.image, force=True)
             created.append(ProductSetImageSerializer(img, context={'request': request}).data)
         return Response(created, status=status.HTTP_201_CREATED)
 

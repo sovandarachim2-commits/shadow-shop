@@ -58,7 +58,18 @@ class StockMovementCreateSerializer(serializers.ModelSerializer):
             notes=validated_data.get('notes', ''),
             user=user,
         )
-        return stock.product.stock_movements.latest('created_at')
+        movement = stock.product.stock_movements.latest('created_at')
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=user,
+            action='create',
+            module='inventory',
+            description=f'{movement_type.replace("_", " ").title()} for {product.name} ({actual_qty:+d})',
+            request=self.context.get('request'),
+            object_id=product.pk,
+            object_type='Stock',
+        )
+        return movement
 
 
 class WarehouseSerializer(serializers.ModelSerializer):
@@ -78,6 +89,8 @@ class StockTransferItemSerializer(serializers.ModelSerializer):
 class StockTransferSerializer(serializers.ModelSerializer):
     items = StockTransferItemSerializer(many=True, read_only=True)
     created_by_name = serializers.SerializerMethodField()
+    from_warehouse_name = serializers.CharField(source='from_warehouse.name', read_only=True)
+    to_warehouse_name = serializers.CharField(source='to_warehouse.name', read_only=True)
 
     class Meta:
         model = StockTransfer

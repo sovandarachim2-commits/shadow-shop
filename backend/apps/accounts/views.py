@@ -32,7 +32,7 @@ from .serializers import (
     ChangePasswordSerializer, SetInitialPasswordSerializer, CustomerRegisterSerializer, PermissionSerializer, RoleSerializer,
     RolePermissionSerializer, ActivityLogSerializer, AddressSerializer, SiteSettingsSerializer, generate_customer_username,
 )
-from utils.permissions import IsAdminOrSuperAdmin, IsSuperAdmin
+from utils.permissions import IsAdminOrSuperAdmin, IsSuperAdmin, HasModulePermission
 
 User = get_user_model()
 
@@ -129,6 +129,33 @@ def _create_email_verification(user, request=None):
     return verification
 
 
+def _issue_auth_tokens(user, request, login_method='password'):
+    refresh = RefreshToken.for_user(user)
+    from .activity import log_activity
+    method_label = {
+        'password': 'logged in',
+        'google': 'logged in with Google',
+        'telegram': 'logged in with Telegram',
+        'telegram_otp': 'logged in with Telegram OTP',
+        'email_verify': 'verified email and logged in',
+    }.get(login_method, 'logged in')
+    log_activity(
+        user=user,
+        action='login',
+        module='users',
+        description=f'{user.get_full_name() or user.username} {method_label}',
+        request=request,
+        object_id=user.pk,
+        object_type='User',
+        extra_data={'method': login_method},
+    )
+    return Response({
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+        'user': UserSerializer(user, context={'request': request}).data,
+    })
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
@@ -141,6 +168,16 @@ class LogoutView(generics.GenericAPIView):
             refresh_token = request.data.get('refresh')
             token = RefreshToken(refresh_token)
             token.blacklist()
+            from .activity import log_activity
+            log_activity(
+                user=request.user,
+                action='logout',
+                module='users',
+                description=f'{request.user.get_full_name() or request.user.username} logged out',
+                request=request,
+                object_id=request.user.pk,
+                object_type='User',
+            )
             return Response({'detail': 'Successfully logged out.'})
         except Exception:
             return Response({'detail': 'Invalid token.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -267,12 +304,7 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
             pending.verified_at = timezone.now()
             pending.save(update_fields=['is_verified', 'verified_at', 'updated_at'])
 
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': UserSerializer(user, context={'request': request}).data,
-        })
+        return _issue_auth_tokens(user, request, login_method='email_verify')
 
 
 def _latest_password_reset_verification(email):
@@ -444,12 +476,7 @@ class TelegramLoginView(generics.GenericAPIView):
             user.last_name = last_name
         user.save()
 
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': UserSerializer(user, context={'request': request}).data,
-        })
+        return _issue_auth_tokens(user, request, login_method='telegram')
 
     def _verify_telegram_hash(self, auth_data, bot_token, telegram_hash):
         pairs = []
@@ -609,12 +636,7 @@ class GoogleLoginView(generics.GenericAPIView):
             user.last_name = last_name
         user.save()
 
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': UserSerializer(user, context={'request': request}).data,
-        })
+        return _issue_auth_tokens(user, request, login_method='google')
 
 
 class TelegramVerificationStartView(generics.GenericAPIView):
@@ -828,11 +850,47 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserCreateSerializer
         return UserSerializer
 
+    def perform_create(self, serializer):
+        user = serializer.save()
+        from .activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='create',
+            module='users',
+            description=f'Created user {user.get_full_name() or user.username}',
+            request=self.request,
+            object_id=user.pk,
+            object_type='User',
+        )
+
+    def perform_update(self, serializer):
+        user = serializer.save()
+        from .activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='update',
+            module='users',
+            description=f'Updated user {user.get_full_name() or user.username}',
+            request=self.request,
+            object_id=user.pk,
+            object_type='User',
+        )
+
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
         user = self.get_object()
         user.is_active = not user.is_active
         user.save()
+        from .activity import log_activity
+        log_activity(
+            user=request.user,
+            action='update',
+            module='users',
+            description=f'{"Activated" if user.is_active else "Deactivated"} user {user.get_full_name() or user.username}',
+            request=request,
+            object_id=user.pk,
+            object_type='User',
+        )
         return Response({'is_active': user.is_active})
 
     @action(detail=True, methods=['post'])
@@ -843,14 +901,36 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.save()
+        from .activity import log_activity
+        log_activity(
+            user=request.user,
+            action='update',
+            module='users',
+            description=f'Reset password for {user.get_full_name() or user.username}',
+            request=request,
+            object_id=user.pk,
+            object_type='User',
+        )
         return Response({'detail': 'Password reset successfully.'})
 
     def destroy(self, request, *args, **kwargs):
         user = self.get_object()
         email = str(user.email or '').strip().lower()
+        name = user.get_full_name() or user.username
+        user_id = user.pk
         response = super().destroy(request, *args, **kwargs)
         if email:
             PendingRegistration.objects.filter(email__iexact=email).delete()
+        from .activity import log_activity
+        log_activity(
+            user=request.user,
+            action='delete',
+            module='users',
+            description=f'Deleted user {name}',
+            request=request,
+            object_id=user_id,
+            object_type='User',
+        )
         return response
 
 
@@ -950,11 +1030,13 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
 class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ActivityLog.objects.all().select_related('user')
     serializer_class = ActivityLogSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_module = 'users_activity'
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['action', 'module', 'user']
-    search_fields = ['description', 'user__username']
+    search_fields = ['description', 'user__username', 'user__first_name', 'user__last_name', 'user__email']
     ordering_fields = ['created_at']
+    ordering = ['-created_at']
 
 
 class TelegramOTPLoginView(generics.GenericAPIView):
@@ -982,12 +1064,7 @@ class TelegramOTPLoginView(generics.GenericAPIView):
         verification.verified_at = timezone.now()
         verification.save(update_fields=['is_verified', 'verified_at'])
 
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': UserSerializer(user, context={'request': request}).data,
-        })
+        return _issue_auth_tokens(user, request, login_method='telegram_otp')
 
 
 class AddressViewSet(viewsets.ModelViewSet):
@@ -1082,6 +1159,28 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
             payment_methods['logo_urls'] = logo_urls
             instance.payment_methods = payment_methods
             instance.save(update_fields=['payment_methods'])
+
+        footer_menus = dict(instance.footer_menus or {})
+        social_links = list(footer_menus.get('social_links') or [])
+        social_updated = False
+        for index, item in enumerate(social_links):
+            platform = str((item or {}).get('platform') or '').strip()
+            if not platform:
+                continue
+            upload = self.request.FILES.get(f'social_icon_{platform}')
+            if not upload:
+                continue
+            filename = get_valid_filename(upload.name or f'{platform}.png')
+            path = default_storage.save(f'site/social_icons/{platform}/{filename}', upload)
+            url = default_storage.url(path)
+            absolute = self.request.build_absolute_uri(url) if url.startswith('/') else url
+            social_links[index] = {**(item or {}), 'icon_url': absolute}
+            social_updated = True
+
+        if social_updated:
+            footer_menus['social_links'] = social_links
+            instance.footer_menus = footer_menus
+            instance.save(update_fields=['footer_menus'])
 
         bump_storefront_cache()
 
