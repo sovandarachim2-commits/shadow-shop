@@ -9,7 +9,7 @@ export const ordersApi = {
   },
   orders: {
     list: (params) => client.get('/orders/list/', { params }),
-    get: (id) => client.get(`/orders/list/${id}/`),
+    get: (id, params) => client.get(`/orders/list/${id}/`, { params }),
     create: (data) => client.post('/orders/list/', data),
     update: (id, data) => client.patch(`/orders/list/${id}/`, data),
     adminUpdate: (id, data) => client.post(`/orders/list/${id}/admin_update/`, data),
@@ -29,6 +29,7 @@ export const ordersApi = {
         },
       )
     },
+    confirmContactSales: (id) => client.post(`/orders/list/${id}/confirm_contact_sales/`),
     markPaid: (id, data) => client.post(`/orders/list/${id}/mark_paid/`, data),
     validatePrintStock: (orderIds) => client.post('/orders/list/validate_print_stock/', { order_ids: orderIds }),
     markPrinted: (orderIds) => client.post('/orders/list/mark_printed/', { order_ids: orderIds }),

@@ -42,6 +42,7 @@ const paymentStatuses = [
 
 const orderStatuses = [
   { value: 'new', label: 'New' },
+  { value: 'confirmed', label: 'Confirmed' },
   { value: 'printed', label: 'Printed' },
   { value: 'preparing', label: 'Preparing' },
   { value: 'packed', label: 'Packed' },

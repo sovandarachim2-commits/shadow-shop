@@ -11,6 +11,7 @@ from django.core.mail import BadHeaderError
 from django.core.files.storage import default_storage
 from django.utils.text import get_valid_filename
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.contrib.auth.hashers import make_password
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -893,6 +894,11 @@ class UserViewSet(viewsets.ModelViewSet):
     search_fields = ['username', 'first_name', 'last_name', 'email', 'phone']
     ordering_fields = ['created_at', 'username']
 
+    def get_queryset(self):
+        return User.objects.annotate(
+            annotated_has_address=Exists(Address.objects.filter(user_id=OuterRef('pk')))
+        ).order_by('-created_at')
+
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
@@ -1153,7 +1159,7 @@ class DashboardStatsView(generics.GenericAPIView):
 
         return Response({
             'today_orders': today_orders.count(),
-            'pending_orders': Order.objects.filter(status='new').count(),
+            'pending_orders': Order.objects.filter(status__in=['new', 'confirmed']).count(),
             'packing_orders': Order.objects.filter(status='preparing').count(),
             'ready_to_ship': Order.objects.filter(status='packed').count(),
             'today_sales': float(today_sales),

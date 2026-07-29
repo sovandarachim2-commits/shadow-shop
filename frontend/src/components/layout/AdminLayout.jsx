@@ -21,15 +21,15 @@ function AdminBottomNav({ onMoreClick }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
 
   const { data: myPerms = [] } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
-    enabled: !!user?.role,
+    enabled: !!user?.role && !isFullAccess,
     staleTime: 2 * 60 * 1000,
   })
 
-  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
   const viewable = new Set(
     myPerms.filter((rp) => rp.permission_detail?.action === 'view').map((rp) => rp.permission_detail?.module)
   )

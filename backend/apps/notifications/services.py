@@ -245,16 +245,16 @@ class TelegramService:
         customer_phone = escape(order.customer.phone or 'N/A')
 
         if order.payment_method == 'contact_sales':
+            contact_button = {'text': 'Contact Customer'}
+            contact_url = self._customer_telegram_contact_url(order)
+            if contact_url:
+                contact_button['url'] = contact_url
+            else:
+                contact_button['callback_data'] = f'contact_sales:contact:{order.id}'
+
             reply_markup = {
                 'inline_keyboard': [[
-                    {
-                        'text': 'Confirm Order',
-                        'callback_data': f'contact_sales:confirm:{order.id}',
-                    },
-                    {
-                        'text': 'Cancel Order',
-                        'callback_data': f'contact_sales:cancel:{order.id}',
-                    },
+                    contact_button,
                 ]]
             }
             message = (
@@ -519,6 +519,25 @@ class TelegramService:
                 return telegram_id
         return ''
 
+    def _customer_telegram_contact_url(self, order) -> str:
+        """Return a Telegram URL that lets sales open the customer chat."""
+        customer = getattr(order, 'customer', None)
+        user = getattr(customer, 'user', None) if customer else None
+        candidates = [user]
+        seller = getattr(order, 'seller', None)
+        if seller and getattr(seller, 'role', '') == 'customer':
+            candidates.append(seller)
+
+        for candidate in candidates:
+            username = str(getattr(candidate, 'telegram_username', '') or '').strip().lstrip('@')
+            if username:
+                return f'https://t.me/{username}'
+
+        telegram_id = self._get_customer_telegram_id(order)
+        if telegram_id:
+            return f'tg://user?id={telegram_id}'
+        return ''
+
     def notify_contact_sales_customer(self, order, action: str, group_chat_id=None) -> bool:
         """DM customer when possible, and always post a copyable message in the sales group."""
         if action not in {'confirm', 'cancel'}:
@@ -617,6 +636,9 @@ class TelegramService:
             lines.extend(['', f'🔗 មើលការបញ្ជាទិញ: {track_url}'])
         return '\n'.join(lines)
 
+    def contact_sales_customer_receipt_message(self, order) -> str:
+        return self._contact_sales_customer_message(order, 'confirm')
+
     def _clear_callback_buttons(self, callback_query: dict):
         message = callback_query.get('message') or {}
         chat = message.get('chat') or {}
@@ -638,8 +660,8 @@ class TelegramService:
 
         source = 'Customer Checkout' if getattr(order.seller, 'role', '') == 'customer' else 'Admin/Staff Order'
         if action == 'confirm':
-            status_line = f"✅ <b>Confirmed</b> by {escape(actor)}"
-            payment_line = 'ការបង់ប្រាក់: បានបង់ប្រាក់'
+            status_line = f"✅ <b>Contact Customer</b> by {escape(actor)}"
+            payment_line = 'ការបង់ប្រាក់: មិនទាន់បង់ប្រាក់'
             status_km = 'ស្ថានភាព: បានបញ្ជាក់'
         else:
             status_line = f"❌ <b>Cancelled</b> by {escape(actor)}"
@@ -721,7 +743,7 @@ class TelegramService:
         data = callback_query.get('data') or ''
         parts = data.split(':')
         callback_query_id = callback_query.get('id') or ''
-        if len(parts) != 3 or parts[0] != 'contact_sales' or parts[1] not in {'confirm', 'cancel'}:
+        if len(parts) != 3 or parts[0] != 'contact_sales' or parts[1] not in {'contact', 'confirm', 'cancel'}:
             return False
 
         action = parts[1]
@@ -744,6 +766,20 @@ class TelegramService:
 
         actor = self._callback_actor(callback_query)
         group_chat_id = ((callback_query.get('message') or {}).get('chat') or {}).get('id')
+
+        if action == 'contact':
+            phone = getattr(order.customer, 'phone', '') or 'N/A'
+            OrderStatusHistory.objects.create(
+                order=order,
+                status=order.status,
+                note=f'Contact sales customer contact opened by {actor}; payment remains unpaid',
+            )
+            self._answer_callback_query(
+                callback_query_id,
+                f'Contact customer: {phone}. Confirm order later in admin after discussion.',
+                alert=True,
+            )
+            return True
 
         if action == 'cancel':
             if order.status == Order.STATUS_CANCELLED:
@@ -779,44 +815,27 @@ class TelegramService:
             self._finalize_contact_sales_message(callback_query, order, 'cancel', actor)
             return True
 
-        from apps.finance.models import Revenue
-        from apps.orders.rewards import award_points_for_paid_order
-
         with transaction.atomic():
             order = Order.objects.select_for_update().select_related(
                 'customer', 'customer__user', 'seller',
             ).prefetch_related('items').get(pk=order.pk)
             if order.status == Order.STATUS_NEW:
-                order.status = Order.STATUS_PRINTED
-            order.payment_status = 'paid'
-            order.save(update_fields=['status', 'payment_status', 'updated_at'])
-
-            Revenue.objects.get_or_create(
-                order=order,
-                defaults={
-                    'amount': order.grand_total,
-                    'payment_method': 'contact_sales',
-                    'reference': f'CONTACT-SALES-{order.order_number}',
-                    'received_at': timezone.now(),
-                    'received_by': None,
-                    'notes': f'Confirmed by {actor} from Telegram sales button.',
-                },
-            )
-            award_points_for_paid_order(order)
+                order.status = Order.STATUS_CONFIRMED
+            order.save(update_fields=['status', 'updated_at'])
 
             already_confirmed = OrderStatusHistory.objects.filter(
                 order=order,
-                note__startswith='Contact sales order confirmed',
+                note__startswith='Contact sales customer contact',
             ).exists()
             if not already_confirmed:
                 OrderStatusHistory.objects.create(
                     order=order,
                     status=order.status,
-                    note=f'Contact sales order confirmed and marked paid by {actor}',
+                    note=f'Contact sales customer contact started by {actor}; payment remains unpaid',
                 )
 
-        # Answer immediately so the Confirm button stops spinning.
-        self._answer_callback_query(callback_query_id, f'Order #{order.order_number} confirmed.')
+        # Answer immediately so the Contact Customer button stops spinning.
+        self._answer_callback_query(callback_query_id, f'Order #{order.order_number}: contact customer now.')
 
         def _after_confirm():
             from apps.orders.models import Order
@@ -826,7 +845,6 @@ class TelegramService:
                 'customer', 'customer__user', 'seller',
             ).prefetch_related('items').get(pk=order.pk)
             service._finalize_contact_sales_message(callback_query, fresh_order, 'confirm', actor)
-            service.notify_payment_received(fresh_order)
             service.notify_contact_sales_customer(fresh_order, 'confirm', group_chat_id=group_chat_id)
 
         self._run_async(_after_confirm)

@@ -9,12 +9,15 @@ import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { ordersApi } from '@/api/orders'
 import { productsApi } from '@/api/products'
+import useAuthStore from '@/store/authStore'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
 import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton } from '@/components/orders/PaymentHistory'
+import ContactSalesReceiptModal from '@/components/orders/ContactSalesReceiptModal'
 
 const STATUS_FLOW = [
   { key: 'new', label: 'New', icon: Package },
+  { key: 'confirmed', label: 'Confirmed', icon: Check },
   { key: 'printed', label: 'Printed', icon: Printer },
   { key: 'preparing', label: 'Preparing', icon: Clock },
   { key: 'packed', label: 'Packed', icon: Check },
@@ -24,6 +27,7 @@ const STATUS_FLOW = [
 
 const ORDER_STATUS_OPTIONS = [
   { value: 'new', label: 'New' },
+  { value: 'confirmed', label: 'Confirmed' },
   { value: 'printed', label: 'Printed' },
   { value: 'preparing', label: 'Preparing' },
   { value: 'packed', label: 'Packed' },
@@ -32,9 +36,33 @@ const ORDER_STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
+const SELLER_STATUS_KEYS = ['new', 'confirmed']
+const SELLER_STATUS_FLOW = STATUS_FLOW.filter((status) => SELLER_STATUS_KEYS.includes(status.key))
+const SELLER_ORDER_STATUS_OPTIONS = ORDER_STATUS_OPTIONS.filter((status) => SELLER_STATUS_KEYS.includes(status.value))
+
+const isPrintedOrder = (order) => Boolean(order?.printed_at || order?.status === 'printed')
+
 const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: p.label }))
 
+function readableApiError(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map(readableApiError).filter(Boolean).join(', ')
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .map(([key, message]) => {
+        const detail = readableApiError(message)
+        return detail ? `${key}: ${detail}` : key
+      })
+      .join(', ')
+  }
+  return String(value)
+}
+
 export function EditOrderModal({ order, onClose, onSaved }) {
+  const currentUser = useAuthStore((state) => state.user)
+  const isSeller = currentUser?.role === 'seller'
+  const statusOptions = isSeller ? SELLER_ORDER_STATUS_OPTIONS : ORDER_STATUS_OPTIONS
   const [search, setSearch] = useState('')
   const [customer, setCustomer] = useState({ name: '', phone: '', address: '', province: 'phnom_penh', notes: '' })
   const [orderForm, setOrderForm] = useState({
@@ -67,9 +95,11 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       notes: order.notes || '',
       is_draft: !!order.is_draft,
     })
-    setItems((order.items || []).map((item) => ({
+    setItems((order.items || []).map((item, index) => ({
+      lineKey: item.id ? `item-${item.id}` : `${item.product || item.product_set || 'line'}-${index}`,
       product: {
         id: item.product,
+        product_set: item.product_set,
         name: item.product_name,
         code: item.product_code,
         primary_image: item.product_image,
@@ -83,8 +113,8 @@ export function EditOrderModal({ order, onClose, onSaved }) {
 
   const { data: products = [], isLoading: searching } = useQuery({
     queryKey: ['edit-order-products', search],
-    queryFn: () => productsApi.products.list({ search, page_size: 8, is_active: true }).then((r) => r.data.results),
-    enabled: search.trim().length > 0,
+    queryFn: () => productsApi.products.list({ search, page_size: 20, is_active: true }).then((r) => r.data.results ?? r.data ?? []),
+    enabled: true,
   })
 
   const subtotal = items.reduce((sum, item) => sum + (Number(item.unit_price || 0) * Number(item.quantity || 0)) - Number(item.discount || 0), 0)
@@ -92,11 +122,12 @@ export function EditOrderModal({ order, onClose, onSaved }) {
 
   const addProduct = (product) => {
     setItems((prev) => {
-      const exists = prev.find((item) => item.product.id === product.id)
+      const exists = prev.find((item) => item.product.id === product.id && !item.product.product_set)
       if (exists) {
-        return prev.map((item) => item.product.id === product.id ? { ...item, quantity: Number(item.quantity || 0) + 1 } : item)
+        return prev.map((item) => item.product.id === product.id && !item.product.product_set ? { ...item, quantity: Number(item.quantity || 0) + 1 } : item)
       }
       return [...prev, {
+        lineKey: `product-${product.id}`,
         product,
         quantity: 1,
         unit_price: product.wholesale_price,
@@ -107,12 +138,12 @@ export function EditOrderModal({ order, onClose, onSaved }) {
     setSearch('')
   }
 
-  const updateItem = (productId, patch) => {
-    setItems((prev) => prev.map((item) => item.product.id === productId ? { ...item, ...patch } : item))
+  const updateItem = (lineKey, patch) => {
+    setItems((prev) => prev.map((item) => item.lineKey === lineKey ? { ...item, ...patch } : item))
   }
 
-  const removeItem = (productId) => {
-    setItems((prev) => prev.filter((item) => item.product.id !== productId))
+  const removeItem = (lineKey) => {
+    setItems((prev) => prev.filter((item) => item.lineKey !== lineKey))
   }
 
   const saveMutation = useMutation({
@@ -121,13 +152,20 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       ...orderForm,
       delivery_fee: Number(orderForm.delivery_fee || 0),
       discount: Number(orderForm.discount || 0),
-      items: items.map((item) => ({
-        product: item.product.id,
-        quantity: Number(item.quantity || 1),
-        unit_price: Number(item.unit_price || 0),
-        cost_price: Number(item.cost_price || 0),
-        discount: Number(item.discount || 0),
-      })),
+      items: items.map((item) => {
+        const payload = {
+          quantity: Number(item.quantity || 1),
+          unit_price: Number(item.unit_price || 0),
+          cost_price: Number(item.cost_price || 0),
+          discount: Number(item.discount || 0),
+        }
+        if (item.product.product_set) {
+          payload.product_set = item.product.product_set
+        } else {
+          payload.product = item.product.id
+        }
+        return payload
+      }),
     }),
     onSuccess: (res) => {
       toast.success('Order updated')
@@ -135,7 +173,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
     },
     onError: (err) => {
       const itemError = err?.response?.data?.items?.[0]
-      toast.error(itemError || err?.response?.data?.detail || 'Failed to update order')
+      toast.error(readableApiError(itemError || err?.response?.data?.detail || err?.response?.data) || 'Failed to update order')
     },
   })
 
@@ -201,35 +239,71 @@ export function EditOrderModal({ order, onClose, onSaved }) {
 
             <div className="rounded-2xl border border-gray-100 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="section-title">Products</h3>
+                <div>
+                  <h3 className="section-title">Add Products</h3>
+                  <p className="mt-1 text-xs font-medium text-gray-400">Search and click a product to add it to the order.</p>
+                </div>
                 <div className="relative w-full sm:w-80">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input className="input-field pl-9" placeholder="Search product to add..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                  {search.trim() && (
-                    <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-xl border border-gray-100 bg-white p-1 shadow-xl">
-                      {searching && <p className="p-3 text-center text-sm text-gray-400">Searching...</p>}
-                      {!searching && products.map((product) => (
-                        <button key={product.id} type="button" onClick={() => addProduct(product)}
-                          className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-purple-50">
-                          <div className="h-10 w-10 overflow-hidden rounded-lg bg-gray-100">
-                            {product.primary_image ? <img src={product.primary_image} alt={product.name} className="h-full w-full object-cover" /> : <Package size={16} className="m-3 text-gray-300" />}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold">{product.name}</p>
-                            <p className="text-xs text-gray-400">{product.code}</p>
-                          </div>
-                          <span className="text-sm font-bold text-purple-600">{formatCurrency(product.wholesale_price)}</span>
-                        </button>
-                      ))}
-                      {!searching && products.length === 0 && <p className="p-3 text-center text-sm text-gray-400">No products found</p>}
-                    </div>
-                  )}
                 </div>
               </div>
 
               <div className="space-y-3">
+                <div className="max-h-80 overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50/70 p-2">
+                  {searching && <p className="p-6 text-center text-sm text-gray-400">Searching products...</p>}
+                  {!searching && products.length === 0 && (
+                    <p className="p-6 text-center text-sm text-gray-400">No products found</p>
+                  )}
+                  {!searching && products.map((product) => {
+                    const selectedQty = items.find((item) => item.product.id === product.id && !item.product.product_set)?.quantity || 0
+                    const stock = Number(product.current_stock || 0)
+                    const isOutOfStock = product.availability_status === 'out_of_stock' || (!product.is_available_for_sale && stock <= 0)
+
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => addProduct(product)}
+                        className={`mb-2 flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left transition-all last:mb-0 ${
+                          selectedQty
+                            ? 'border-purple-300 ring-2 ring-purple-100'
+                            : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                        }`}
+                      >
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                          {product.primary_image ? (
+                            <img src={product.primary_image} alt={product.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <Package size={18} className="m-3.5 text-gray-300" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-950">{product.name}</p>
+                          <p className="text-xs text-gray-400">{product.code}</p>
+                          <p className={`mt-0.5 text-xs font-semibold ${isOutOfStock ? 'text-red-500' : 'text-gray-400'}`}>
+                            {isOutOfStock ? 'Out of stock' : `Stock ${stock}`}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-purple-600">{formatCurrency(product.wholesale_price)}</p>
+                          <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${
+                            selectedQty ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700'
+                          }`}>
+                            <Plus size={12} />
+                            {selectedQty ? selectedQty : 'Add'}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center justify-between pt-2">
+                  <h3 className="section-title">Order Items</h3>
+                  <span className="text-xs font-black uppercase tracking-wide text-gray-400">{items.length} items</span>
+                </div>
                 {items.map((item) => (
-                  <div key={item.product.id} className="rounded-xl bg-gray-50 p-3">
+                  <div key={item.lineKey} className="rounded-xl bg-gray-50 p-3">
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-12 overflow-hidden rounded-lg bg-white">
                         {item.product.primary_image ? <img src={item.product.primary_image} alt={item.product.name} className="h-full w-full object-cover" /> : <Package size={16} className="m-4 text-gray-300" />}
@@ -238,18 +312,18 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                         <p className="truncate text-sm font-semibold text-gray-900">{item.product.name}</p>
                         <p className="text-xs text-gray-400">{item.product.code}</p>
                       </div>
-                      <button onClick={() => removeItem(item.product.id)} className="p-1 text-red-400 hover:text-red-600">
+                      <button onClick={() => removeItem(item.lineKey)} className="p-1 text-red-400 hover:text-red-600">
                         <Trash2 size={15} />
                       </button>
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr_1fr_1fr] sm:items-end">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => updateItem(item.product.id, { quantity: Math.max(1, Number(item.quantity || 1) - 1) })} className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white"><Minus size={12} /></button>
-                        <input className="w-14 rounded-lg border border-gray-200 bg-white py-1.5 text-center text-sm font-semibold" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(item.product.id, { quantity: Number(e.target.value || 1) })} />
-                        <button onClick={() => updateItem(item.product.id, { quantity: Number(item.quantity || 1) + 1 })} className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white"><Plus size={12} /></button>
+                        <button onClick={() => updateItem(item.lineKey, { quantity: Math.max(1, Number(item.quantity || 1) - 1) })} className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white"><Minus size={12} /></button>
+                        <input className="w-14 rounded-lg border border-gray-200 bg-white py-1.5 text-center text-sm font-semibold" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(item.lineKey, { quantity: Number(e.target.value || 1) })} />
+                        <button onClick={() => updateItem(item.lineKey, { quantity: Number(item.quantity || 1) + 1 })} className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white"><Plus size={12} /></button>
                       </div>
-                      <input className="input-field py-1.5 text-sm" type="number" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.product.id, { unit_price: e.target.value })} />
-                      <input className="input-field py-1.5 text-sm" type="number" step="0.01" value={item.discount} onChange={(e) => updateItem(item.product.id, { discount: e.target.value })} />
+                      <input className="input-field py-1.5 text-sm" type="number" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.lineKey, { unit_price: e.target.value })} />
+                      <input className="input-field py-1.5 text-sm" type="number" step="0.01" value={item.discount} onChange={(e) => updateItem(item.lineKey, { discount: e.target.value })} />
                       <p className="text-right text-sm font-bold text-gray-900">{formatCurrency((Number(item.unit_price || 0) * Number(item.quantity || 0)) - Number(item.discount || 0))}</p>
                     </div>
                   </div>
@@ -266,7 +340,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                 <div>
                   <label className="label">Status</label>
                   <select className="select-field" value={orderForm.status} onChange={(e) => setOrderForm({ ...orderForm, status: e.target.value })}>
-                    {ORDER_STATUS_OPTIONS.map((option) => (
+                    {statusOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
@@ -289,6 +363,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                     <option value="wing">Wing</option>
                     <option value="cod">Cash on Delivery</option>
                     <option value="cash">Cash</option>
+                    <option value="contact_sales">Contact Sales</option>
                     <option value="other">Other</option>
                   </select>
                 </div>
@@ -335,10 +410,13 @@ export default function OrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((state) => state.user)
+  const isSeller = currentUser?.role === 'seller'
   const [showPayModal, setShowPayModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPaymentHistory, setShowPaymentHistory] = useState(false)
   const [showOrderHistory, setShowOrderHistory] = useState(false)
+  const [contactSalesReceipt, setContactSalesReceipt] = useState(null)
   const [payMethod, setPayMethod] = useState('cash')
   const [confirm, ConfirmDialog] = useConfirm()
 
@@ -390,8 +468,9 @@ export default function OrderDetail() {
 
   if (!order) return <div className="text-center text-gray-400 py-20">Order not found</div>
 
-  const statusIndex = STATUS_FLOW.findIndex((s) => s.key === order.status)
-
+  const visibleStatusFlow = isSeller ? SELLER_STATUS_FLOW : STATUS_FLOW
+  const statusIndex = visibleStatusFlow.findIndex((s) => s.key === order.status)
+  const sellerReadOnlyPrinted = isSeller && isPrintedOrder(order)
   return (
     <div className="animate-fade-in">
       <PageHeader
@@ -399,13 +478,17 @@ export default function OrderDetail() {
         breadcrumbs={[{ label: 'Orders', path: '/admin/orders' }, { label: `#${order.order_number}` }]}
         actions={
           <div className="flex gap-2">
-            <button onClick={() => setShowEditModal(true)} className="btn-secondary">
-              <Pencil size={15} /> Edit
-            </button>
-            <button onClick={() => navigate('/admin/print')} className="btn-secondary">
-              <Printer size={15} /> Print
-            </button>
-            {order.payment_status !== 'paid' && (
+            {!sellerReadOnlyPrinted && (
+              <button onClick={() => setShowEditModal(true)} className="btn-secondary">
+                <Pencil size={15} /> Edit
+              </button>
+            )}
+            {!isSeller && (
+              <button onClick={() => navigate('/admin/print')} className="btn-secondary">
+                <Printer size={15} /> Print
+              </button>
+            )}
+            {!isSeller && order.payment_status !== 'paid' && (
               <button onClick={() => setShowPayModal(true)} className="btn-primary bg-green-600 hover:bg-green-700">
                 <DollarSign size={15} /> Mark Paid
               </button>
@@ -417,7 +500,7 @@ export default function OrderDetail() {
       {/* Status Timeline */}
       <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 mb-4">
         <div className="flex items-center justify-between">
-          {STATUS_FLOW.map((step, idx) => (
+          {visibleStatusFlow.map((step, idx) => (
             <div key={step.key} className="flex items-center">
               <div className="flex flex-col items-center">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
@@ -427,15 +510,15 @@ export default function OrderDetail() {
                 </div>
                 <span className="text-xs mt-1 font-medium text-gray-600">{step.label}</span>
               </div>
-              {idx < STATUS_FLOW.length - 1 && (
+              {idx < visibleStatusFlow.length - 1 && (
                 <div className={`flex-1 h-0.5 mx-2 ${idx < statusIndex ? 'bg-purple-600' : 'bg-gray-200'}`} />
               )}
             </div>
           ))}
         </div>
-        {order.status !== 'completed' && order.status !== 'cancelled' && (
+        {order.status !== 'completed' && order.status !== 'cancelled' && !sellerReadOnlyPrinted && (
           <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-            {STATUS_FLOW.map((s) => (
+            {visibleStatusFlow.map((s) => (
               s.key !== order.status && (
                 <button key={s.key} onClick={() => updateStatusMutation.mutate({ status: s.key })}
                   className="text-xs px-3 py-1.5 bg-gray-50 hover:bg-purple-50 hover:text-purple-700 border border-gray-200 hover:border-purple-300 rounded-lg transition-all">
@@ -443,10 +526,12 @@ export default function OrderDetail() {
                 </button>
               )
             ))}
-            <button onClick={handleCancelOrder}
-              className="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-all ml-auto">
-              Cancel Order
-            </button>
+            {!isSeller && (
+              <button onClick={handleCancelOrder}
+                className="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-all ml-auto">
+                Cancel Order
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -587,7 +672,18 @@ export default function OrderDetail() {
         <EditOrderModal
           order={order}
           onClose={() => setShowEditModal(false)}
-          onSaved={() => {
+          onSaved={(savedOrder) => {
+            if (savedOrder?.id) {
+              queryClient.setQueryData(['order', String(savedOrder.id)], savedOrder)
+              queryClient.setQueryData(['order', savedOrder.id], savedOrder)
+            }
+            if (savedOrder?.contact_sales_receipt_message) {
+              setContactSalesReceipt({
+                order: savedOrder,
+                message: savedOrder.contact_sales_receipt_message,
+                queued: !!savedOrder.contact_sales_customer_message_queued,
+              })
+            }
             setShowEditModal(false)
             queryClient.invalidateQueries(['order', id])
             queryClient.invalidateQueries(['orders'])
@@ -626,6 +722,12 @@ export default function OrderDetail() {
       <OrderHistoryModal
         order={showOrderHistory ? order : null}
         onClose={() => setShowOrderHistory(false)}
+      />
+      <ContactSalesReceiptModal
+        order={contactSalesReceipt?.order}
+        message={contactSalesReceipt?.message}
+        queued={contactSalesReceipt?.queued}
+        onClose={() => setContactSalesReceipt(null)}
       />
       {ConfirmDialog}
     </div>

@@ -204,6 +204,7 @@ function NavItem({ item, collapsed, onNavigate }) {
 export default function Sidebar({ collapsed, onToggle, onNavigate, className }) {
   const { user, logout } = useAuthStore()
   const [confirm, ConfirmDialog] = useConfirm()
+  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
 
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
@@ -215,7 +216,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
   const { data: myPerms = [], isLoading: permsLoading, isError: permsError } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
-    enabled: !!user?.role,
+    enabled: !!user?.role && !isFullAccess,
     staleTime: 2 * 60 * 1000,
   })
 
@@ -223,8 +224,6 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
   const storeName = siteSettings?.store_name || 'Shadow Shop'
 
   // admin + super_admin always see everything
-  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
-
   // Build set of modules the user can view
   const viewableModules = new Set(
     myPerms

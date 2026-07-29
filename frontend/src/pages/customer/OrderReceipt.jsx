@@ -34,7 +34,7 @@ export default function OrderReceipt() {
 
   const { data: order, isLoading, isError } = useQuery({
     queryKey: ['order-receipt', id],
-    queryFn: () => ordersApi.orders.get(id).then((r) => r.data),
+    queryFn: () => ordersApi.orders.get(id, { my_orders: 1 }).then((r) => r.data),
     enabled: !!id,
   })
 

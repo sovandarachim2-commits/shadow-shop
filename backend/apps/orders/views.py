@@ -27,6 +27,7 @@ from utils.permissions import HasModulePermission, IsStaff, IsSeller, IsCashier,
 from utils.pagination import StandardPagination
 
 DAILY_CHECKIN_NOTE = 'Daily check-in bonus'
+SELLER_ALLOWED_ORDER_STATUSES = {Order.STATUS_NEW, Order.STATUS_CONFIRMED}
 
 
 class OrderPagination(StandardPagination):
@@ -145,9 +146,20 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
 
 class OrderFilter(filters.FilterSet):
+    status = filters.CharFilter(method='filter_status')
     date_from = filters.DateFilter(field_name='created_at', lookup_expr='date__gte')
     date_to = filters.DateFilter(field_name='created_at', lookup_expr='date__lte')
     delivery_by = filters.CharFilter(method='filter_delivery_by')
+
+    def filter_status(self, queryset, name, value):
+        statuses = [item.strip() for item in str(value or '').split(',') if item.strip()]
+        if not statuses:
+            return queryset
+        valid_statuses = {choice[0] for choice in Order.STATUS_CHOICES}
+        statuses = [item for item in statuses if item in valid_statuses]
+        if not statuses:
+            return queryset.none()
+        return queryset.filter(status__in=statuses)
 
     def filter_delivery_by(self, queryset, name, value):
         clean = str(value or '').strip()
@@ -199,8 +211,19 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
+        if str(self.request.query_params.get('my_orders', '')).lower() in ('1', 'true', 'yes'):
+            try:
+                return qs.filter(customer__user=user)
+            except Exception:
+                return qs.none()
         if user.role == 'seller':
-            qs = qs.filter(seller=user)
+            qs = qs.filter(
+                Q(seller=user) |
+                Q(
+                    payment_method='contact_sales',
+                    status=Order.STATUS_NEW,
+                ) & (Q(seller__isnull=True) | Q(seller__role='customer'))
+            )
         elif user.role == 'customer':
             try:
                 qs = qs.filter(customer__user=user)
@@ -231,6 +254,16 @@ class OrderViewSet(viewsets.ModelViewSet):
         valid_statuses = [s[0] for s in Order.STATUS_CHOICES]
         if new_status not in valid_statuses:
             return Response({'detail': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.user.role == 'seller' and (order.printed_at or order.status == Order.STATUS_PRINTED):
+            return Response(
+                {'detail': 'Sellers cannot update printed orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if request.user.role == 'seller' and new_status not in SELLER_ALLOWED_ORDER_STATUSES:
+            return Response(
+                {'detail': 'Sellers can only set orders to New or Confirmed.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         old_status = order.status
         if new_status in [Order.STATUS_PREPARING, Order.STATUS_SHIPPED]:
@@ -332,11 +365,81 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = OrderAdminUpdateSerializer(order, data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
-        return Response(OrderDetailSerializer(order, context={'request': request}).data)
+        data = OrderDetailSerializer(order, context={'request': request}).data
+        is_confirmed_contact_sales = (
+            order.payment_method == 'contact_sales' and
+            order.status == Order.STATUS_CONFIRMED
+        )
+        if is_confirmed_contact_sales:
+            from apps.notifications.services import TelegramService
+            telegram_service = TelegramService()
+            data['contact_sales_receipt_message'] = telegram_service.contact_sales_customer_receipt_message(order)
+            data['contact_sales_customer_message_queued'] = bool(getattr(order, '_contact_sales_auto_confirmed', False))
+            if data['contact_sales_customer_message_queued']:
+                transaction.on_commit(lambda: TelegramService().notify_contact_sales_customer(order, 'confirm'))
+        return Response(data)
+
+    @action(detail=True, methods=['post'])
+    def confirm_contact_sales(self, request, pk=None):
+        order = self.get_object()
+        if not user_has_module_permission(request.user, 'orders', 'edit'):
+            return Response(
+                {'detail': 'You do not have permission to confirm orders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if order.payment_method != 'contact_sales':
+            return Response(
+                {'detail': 'Only Contact Sales orders can be confirmed here.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if order.status == Order.STATUS_CANCELLED:
+            return Response(
+                {'detail': 'Cannot confirm a cancelled order.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().select_related(
+                'customer', 'customer__user', 'seller',
+            ).prefetch_related('items').get(pk=order.pk)
+            if order.status == Order.STATUS_NEW:
+                order.status = Order.STATUS_CONFIRMED
+                order.save(update_fields=['status', 'updated_at'])
+
+            note_prefix = 'Contact sales order confirmed'
+            already_confirmed = OrderStatusHistory.objects.filter(
+                order=order,
+                note__startswith=note_prefix,
+            ).exists()
+            if not already_confirmed:
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    status=order.status,
+                    changed_by=request.user,
+                    note=(
+                        f'Contact sales order confirmed by '
+                        f'{request.user.get_full_name() or request.user.username}; payment remains unpaid'
+                    ),
+                )
+
+        from apps.notifications.services import TelegramService
+        telegram_service = TelegramService()
+        receipt_message = telegram_service.contact_sales_customer_receipt_message(order)
+        transaction.on_commit(lambda: TelegramService().notify_contact_sales_customer(order, 'confirm'))
+
+        data = OrderDetailSerializer(order, context={'request': request}).data
+        data['contact_sales_receipt_message'] = receipt_message
+        data['contact_sales_customer_message_queued'] = True
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def mark_paid(self, request, pk=None):
         order = self.get_object()
+        if request.user.role == 'seller':
+            return Response(
+                {'detail': 'Sellers cannot mark orders as paid.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         payment_method = request.data.get('payment_method', 'cash')
         old_payment_status = order.payment_status
         old_payment_method = order.payment_method

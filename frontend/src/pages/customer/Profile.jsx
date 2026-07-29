@@ -42,6 +42,7 @@ function orderStatusLabel(t, status) {
   const STATUS_KEY = {
     new: 'pending',
     pending: 'pending',
+    confirmed: 'preparing',
     printed: 'preparing',
     preparing: 'preparing',
     packed: 'packed',
@@ -65,6 +66,7 @@ const SHORTCUTS = [
 const STATUS_STYLES = {
   new: 'bg-yellow-50 text-yellow-700',
   pending: 'bg-yellow-50 text-yellow-700',
+  confirmed: 'bg-orange-50 text-orange-700',
   printed: 'bg-orange-50 text-orange-700',
   preparing: 'bg-blue-50 text-blue-700',
   packed: 'bg-blue-50 text-blue-700',
@@ -718,7 +720,7 @@ export default function Profile() {
 
   const { data: accountOrders = [] } = useQuery({
     queryKey: ['profile-account-orders'],
-    queryFn: () => ordersApi.orders.list({ page_size: 30 }).then((r) => r.data.results ?? r.data ?? []),
+    queryFn: () => ordersApi.orders.list({ page_size: 30, my_orders: 1 }).then((r) => r.data.results ?? r.data ?? []),
     enabled: Boolean(user),
   })
 

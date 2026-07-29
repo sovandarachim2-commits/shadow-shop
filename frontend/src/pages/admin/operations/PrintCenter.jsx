@@ -6,7 +6,7 @@ import { AlertTriangle, Printer, FileText, Truck, X } from 'lucide-react'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
-import { PaymentStatusBadge } from '@/components/ui/Badge'
+import { OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { EmptyState, LoadingRows, Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/Table'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { formatFullAddressKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
@@ -45,8 +45,8 @@ function PaymentMethodCell({ method, logoUrls = {} }) {
   )
 }
 
-function isUnpaidContactSalesOrder(order) {
-  return order?.payment_method === 'contact_sales' && order?.payment_status !== 'paid'
+function isNewContactSalesOrder(order) {
+  return order?.payment_method === 'contact_sales' && order?.status === 'new'
 }
 
 function StockAlertCard({ alert, onClose }) {
@@ -452,7 +452,7 @@ export default function PrintCenter() {
     queryFn: () => ordersApi.orders.list({
       search,
       page_size: 100,
-      status: 'new',
+      status: 'new,confirmed',
       is_draft: false,
     }).then((r) => r.data.results),
   })
@@ -484,11 +484,11 @@ export default function PrintCenter() {
   ))
   const isLoadingPrintDetails = selectedOrderDetails.some((query) => query.isLoading || query.isFetching)
 
-  const printableOrders = (data || []).filter((order) => !isUnpaidContactSalesOrder(order))
+  const printableOrders = (data || []).filter((order) => !isNewContactSalesOrder(order))
 
   const toggleOrder = (order) => {
-    if (isUnpaidContactSalesOrder(order)) {
-      toast.error('Contact Sales order must be paid before printing')
+    if (isNewContactSalesOrder(order)) {
+      toast.error('Contact Sales order must be confirmed before printing')
       return
     }
     setSelectedOrders((prev) =>
@@ -517,10 +517,10 @@ export default function PrintCenter() {
       toast.error('Preparing order details, please try again in a moment')
       return
     }
-    const blockedOrder = selectedOrderRows.find(isUnpaidContactSalesOrder)
+    const blockedOrder = selectedOrderRows.find(isNewContactSalesOrder)
     if (blockedOrder) {
       setSelectedOrders((prev) => prev.filter((id) => id !== blockedOrder.id))
-      toast.error(`Order #${blockedOrder.order_number} must be paid before printing`)
+      toast.error(`Order #${blockedOrder.order_number} must be confirmed before printing`)
       return
     }
     setCheckingStock(true)
@@ -615,6 +615,7 @@ export default function PrintCenter() {
                       <Th>Customer</Th>
                       <Th>Phone</Th>
                       <Th>Seller</Th>
+                      <Th>Order Status</Th>
                       <Th>Payment Method</Th>
                       <Th>Status Payment</Th>
                       <Th>Total</Th>
@@ -622,10 +623,10 @@ export default function PrintCenter() {
                     </tr>
                   </Thead>
                   <Tbody>
-                    {isLoading && <LoadingRows cols={11} rows={5} />}
+                    {isLoading && <LoadingRows cols={12} rows={5} />}
                     {!isLoading && (data || []).map((order, index) => {
                       const selected = selectedOrders.includes(order.id)
-                      const blockedContactSales = isUnpaidContactSalesOrder(order)
+                      const blockedContactSales = isNewContactSalesOrder(order)
 
                       return (
                         <Tr
@@ -658,15 +659,11 @@ export default function PrintCenter() {
                           </Td>
                           <Td><span className="text-sm text-gray-500">{order.customer_phone || '-'}</span></Td>
                           <Td><span className="text-sm text-gray-700">{order.seller_name}</span></Td>
+                          <Td><OrderStatusBadge status={order.status} /></Td>
                           <Td><PaymentMethodCell method={order.payment_method} logoUrls={paymentLogoUrls} /></Td>
                           <Td>
                             <div className="flex flex-col items-start gap-1">
                               <PaymentStatusBadge status={order.payment_status} />
-                              {blockedContactSales && (
-                                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black uppercase text-red-700">
-                                  Cannot print
-                                </span>
-                              )}
                             </div>
                           </Td>
                           <Td><span className="text-sm font-semibold text-gray-900">{formatCurrency(order.grand_total)}</span></Td>
@@ -683,7 +680,7 @@ export default function PrintCenter() {
                       )
                     })}
                     {!isLoading && (!data || data.length === 0) && (
-                      <tr><td colSpan={11}><EmptyState message="No unprinted orders found" /></td></tr>
+                      <tr><td colSpan={12}><EmptyState message="No unprinted orders found" /></td></tr>
                     )}
                   </Tbody>
                 </Table>
@@ -821,12 +818,13 @@ export function PrintHistory() {
                   <Th>Customer</Th>
                   <Th>Seller</Th>
                   <Th>Cashier</Th>
+                  <Th>Order Status</Th>
                   <Th>Payment Method</Th>
                   <Th>Actions</Th>
                 </tr>
               </Thead>
               <Tbody>
-                {isLoading && <LoadingRows cols={8} rows={6} />}
+                {isLoading && <LoadingRows cols={9} rows={6} />}
                 {!isLoading && (data || []).map((order, index) => (
                   <Tr key={order.id}>
                     <Td>
@@ -837,6 +835,7 @@ export function PrintHistory() {
                     <Td><span className="text-sm font-medium text-gray-900">{order.customer_name}</span></Td>
                     <Td><span className="text-sm text-gray-700">{order.seller_name}</span></Td>
                     <Td><span className="text-sm text-gray-700">{order.printed_by_name || '-'}</span></Td>
+                    <Td><OrderStatusBadge status={order.status} /></Td>
                     <Td><PaymentMethodCell method={order.payment_method} logoUrls={paymentLogoUrls} /></Td>
                     <Td>
                       <div className="flex flex-wrap items-center gap-2">
@@ -860,7 +859,7 @@ export function PrintHistory() {
                   </Tr>
                 ))}
                 {!isLoading && (!data || data.length === 0) && (
-                  <tr><td colSpan={8}><EmptyState message="No print history found" /></td></tr>
+                  <tr><td colSpan={9}><EmptyState message="No print history found" /></td></tr>
                 )}
               </Tbody>
             </Table>

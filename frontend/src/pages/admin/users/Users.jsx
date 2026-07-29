@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Shield, Eye, Trash2 } from 'lucide-react'
+import { Plus, Edit, Shield, Eye, Trash2, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
@@ -111,7 +111,7 @@ function UserProfileModal({ user, roleConfig, onClose }) {
   )
 }
 
-function UserForm({ user, roles, onSave, onClose }) {
+function UserForm({ user, roles, onSave, onClose, isSaving }) {
   const [form, setForm] = useState({
     first_name: user?.first_name || '',
     last_name: user?.last_name || '',
@@ -176,10 +176,21 @@ function UserForm({ user, roles, onSave, onClose }) {
         )}
       </div>
       <div className="flex gap-3 pt-2">
-        <button onClick={() => onSave(form)} className="btn-primary flex-1 justify-center">
-          {isEdit ? 'Update User' : 'Create User'}
+        <button
+          onClick={() => onSave(form)}
+          disabled={isSaving}
+          className="btn-primary flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {isSaving && <Loader2 size={16} className="animate-spin" />}
+          {isSaving ? 'Saving...' : isEdit ? 'Update User' : 'Create User'}
         </button>
-        <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
+        <button
+          onClick={onClose}
+          disabled={isSaving}
+          className="btn-secondary flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   )
@@ -358,7 +369,13 @@ export default function Users() {
       />
 
       <Modal isOpen={showModal} onClose={closeUserModal} title={editUser ? 'Edit User' : 'Add User'} size="md">
-        <UserForm user={editUser} roles={rolesData} onSave={handleSave} onClose={closeUserModal} />
+        <UserForm
+          user={editUser}
+          roles={rolesData}
+          onSave={handleSave}
+          onClose={closeUserModal}
+          isSaving={createMutation.isPending || updateMutation.isPending}
+        />
       </Modal>
       {ConfirmDialog}
     </div>

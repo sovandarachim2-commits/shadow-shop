@@ -144,6 +144,8 @@ const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
 
 const QUERY_CACHE_KEY = 'shadow-shop-query-cache'
 const QUERY_CACHE_MAX_AGE_MS = 30 * 60 * 1000
+const QUERY_CACHE_MAX_BYTES = 200 * 1024
+const PERSISTED_QUERY_KEYS = new Set(['site-settings', 'role-perms'])
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -163,10 +165,19 @@ function restoreQueryCache() {
   try {
     const raw = localStorage.getItem(QUERY_CACHE_KEY)
     if (!raw) return
+    if (raw.length > QUERY_CACHE_MAX_BYTES) {
+      localStorage.removeItem(QUERY_CACHE_KEY)
+      return
+    }
     const parsed = JSON.parse(raw)
     if (!parsed?.timestamp || Date.now() - parsed.timestamp > QUERY_CACHE_MAX_AGE_MS) {
       localStorage.removeItem(QUERY_CACHE_KEY)
       return
+    }
+    if (Array.isArray(parsed.clientState?.queries)) {
+      parsed.clientState.queries = parsed.clientState.queries.filter((query) => (
+        PERSISTED_QUERY_KEYS.has(query?.queryKey?.[0])
+      ))
     }
     hydrate(queryClient, parsed.clientState)
   } catch {
@@ -177,7 +188,9 @@ function restoreQueryCache() {
 function persistQueryCache() {
   try {
     const clientState = dehydrate(queryClient, {
-      shouldDehydrateQuery: (query) => query.state.status === 'success',
+      shouldDehydrateQuery: (query) => (
+        query.state.status === 'success' && PERSISTED_QUERY_KEYS.has(query.queryKey?.[0])
+      ),
     })
     localStorage.setItem(
       QUERY_CACHE_KEY,
@@ -347,11 +360,12 @@ function RequireOrdersAuth({ children }) {
 function RequireStorefront({ children }) {
   const { isAuthenticated, user } = useAuthStore()
   const isStaff = isAuthenticated && user?.role !== 'customer'
+  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
 
   const { data: myPerms = [], isLoading } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
-    enabled: !!isStaff,
+    enabled: !!isStaff && !isFullAccess,
     staleTime: 2 * 60 * 1000,
   })
 
@@ -360,7 +374,7 @@ function RequireStorefront({ children }) {
   // Fail-open while loading (avoids flash redirect)
   if (isLoading) return children
   // admin / super_admin always have access
-  if (['super_admin', 'admin'].includes(user?.role)) return children
+  if (isFullAccess) return children
   // Other staff: check storefront.view
   const hasStorefront = myPerms.some(
     (rp) => rp.permission_detail?.module === 'storefront' && rp.permission_detail?.action === 'view'
@@ -486,14 +500,15 @@ const ADMIN_FALLBACK_ROUTES = [
 
 function AdminIndexRedirect() {
   const { user } = useAuthStore()
+  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
   const { data: myPerms = [], isLoading } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
-    enabled: !!user?.role,
+    enabled: !!user?.role && !isFullAccess,
     staleTime: 2 * 60 * 1000,
   })
 
-  if (['super_admin', 'admin'].includes(user?.role)) return <Dashboard />
+  if (isFullAccess) return <Dashboard />
   if (isLoading) return null
 
   const viewable = new Set(

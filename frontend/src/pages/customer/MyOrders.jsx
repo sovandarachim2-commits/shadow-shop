@@ -17,6 +17,7 @@ const USD_TO_KHR_RATE = 4100
 const STATUS_STYLES = {
   new: 'bg-yellow-50 text-yellow-700',
   pending: 'bg-yellow-50 text-yellow-700',
+  confirmed: 'bg-orange-50 text-orange-700',
   printed: 'bg-orange-50 text-orange-700',
   preparing: 'bg-orange-50 text-orange-700',
   packed: 'bg-blue-50 text-blue-700',
@@ -29,6 +30,7 @@ const STATUS_STYLES = {
 const STATUS_LABEL_KEYS = {
   new: 'orders.status.pending',
   pending: 'orders.status.pending',
+  confirmed: 'orders.status.confirmed',
   printed: 'orders.status.confirmed',
   preparing: 'orders.status.preparing',
   packed: 'orders.status.packed',
@@ -393,7 +395,7 @@ export default function MyOrders() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-orders'],
-    queryFn: () => ordersApi.orders.list({ page_size: 100 }).then((r) => r.data.results ?? r.data),
+    queryFn: () => ordersApi.orders.list({ page_size: 100, my_orders: 1 }).then((r) => r.data.results ?? r.data),
   })
 
   const orders = (data || []).filter((order) => (
@@ -404,7 +406,7 @@ export default function MyOrders() {
 
   const { data: receiptOrder, isLoading: receiptLoading } = useQuery({
     queryKey: ['my-order-receipt', receiptOrderId],
-    queryFn: () => ordersApi.orders.get(receiptOrderId).then((r) => r.data),
+    queryFn: () => ordersApi.orders.get(receiptOrderId, { my_orders: 1 }).then((r) => r.data),
     enabled: !!receiptOrderId,
   })
 

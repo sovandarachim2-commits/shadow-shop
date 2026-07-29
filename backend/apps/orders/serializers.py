@@ -10,6 +10,8 @@ from utils.image_optimization import card_variant_url
 from utils.phone import validate_cambodia_phone
 from utils.payment_methods import is_payment_method_allowed
 
+SELLER_ALLOWED_ORDER_STATUSES = {Order.STATUS_NEW, Order.STATUS_CONFIRMED}
+
 
 def resolve_product_image_url(product, request=None):
     if not product:
@@ -471,6 +473,16 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         return aggregate_order_targets(items)
 
     def validate(self, attrs):
+        request = self.context.get('request')
+        if request and getattr(request.user, 'role', None) == 'seller':
+            errors = {}
+            order = self.instance
+            if order and (order.printed_at or order.status == Order.STATUS_PRINTED):
+                raise serializers.ValidationError('Sellers cannot update printed orders.')
+            if attrs.get('status') not in (None, *SELLER_ALLOWED_ORDER_STATUSES):
+                errors['status'] = 'Sellers can only set orders to New or Confirmed.'
+            if errors:
+                raise serializers.ValidationError(errors)
         # Admin order edit skips stock blocking for faster fulfillment.
         return attrs
 
@@ -527,6 +539,25 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
             stock_already_deducted = has_stock_deduction_for_order(order)
             for field, value in validated_data.items():
                 setattr(order, field, value)
+            if (
+                request.user.role == 'seller' and
+                (order.seller_id is None or getattr(order.seller, 'role', None) == 'customer') and
+                order.payment_method == 'contact_sales'
+            ):
+                order.seller = request.user
+
+            contact_sales_auto_confirmed = (
+                old_status == Order.STATUS_NEW and
+                order.status == Order.STATUS_NEW and
+                order.payment_method == 'contact_sales'
+            )
+            if contact_sales_auto_confirmed:
+                order.status = Order.STATUS_CONFIRMED
+            contact_sales_confirmed_on_update = (
+                order.payment_method == 'contact_sales' and
+                old_status != Order.STATUS_CONFIRMED and
+                order.status == Order.STATUS_CONFIRMED
+            )
 
             old_totals = {}
             if stock_already_deducted:
@@ -573,6 +604,16 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                     changed_by=request.user,
                     note=f'Status updated: {old_status or "-"} -> {order.status or "-"}',
                 )
+            if contact_sales_confirmed_on_update:
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    status=order.status,
+                    changed_by=request.user,
+                    note=(
+                        f'Contact sales order confirmed by '
+                        f'{request.user.get_full_name() or request.user.username}; payment remains unpaid'
+                    ),
+                )
             payment_changes = []
             if old_payment_status != order.payment_status:
                 payment_changes.append(f'status {old_payment_status or "-"} -> {order.payment_status or "-"}')
@@ -593,6 +634,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
             order.customer.total_spent = sum(o.grand_total for o in order.customer.orders.all())
             order.customer.save(update_fields=['total_orders', 'total_spent'])
 
+        order._contact_sales_auto_confirmed = contact_sales_confirmed_on_update
         return order
 
 

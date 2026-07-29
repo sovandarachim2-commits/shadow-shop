@@ -80,9 +80,9 @@ class SalesReportView(generics.GenericAPIView):
             status_q = Q()
             for status in order_statuses:
                 if status == 'pending':
-                    status_q |= Q(status='new')
+                    status_q |= Q(status__in=['new', 'confirmed'])
                 elif status == 'processing':
-                    status_q |= Q(status__in=['printed', 'preparing', 'packed'])
+                    status_q |= Q(status__in=['confirmed', 'printed', 'preparing', 'packed'])
                 elif status == 'delivered':
                     status_q |= Q(status='completed')
                 else:

@@ -74,11 +74,12 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [confirm, ConfirmDialog] = useConfirm()
   const { pageHeader } = useAdminPageHeader() || {}
+  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
 
   const { data: myPerms = [] } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
-    enabled: !!user?.role,
+    enabled: !!user?.role && !isFullAccess,
     staleTime: 2 * 60 * 1000,
   })
 
@@ -87,7 +88,6 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
   const currentPageTitle = pageHeader?.title || getAdminRouteTitle(location.pathname)
   const isOrderSearch = location.pathname === '/admin/scanner/orders'
 
-  const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
   const canViewModule = (module) => isFullAccess ||
     myPerms.some((rp) => rp.permission_detail?.module === module && rp.permission_detail?.action === 'view')
   const canVisitStore = canViewModule('storefront')

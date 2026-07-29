@@ -24,6 +24,7 @@ export function Badge({ children, variant = 'default', className, dot }) {
 export function OrderStatusBadge({ status }) {
   const map = {
     new: { variant: 'info', label: 'New' },
+    confirmed: { variant: 'primary', label: 'Confirmed' },
     printed: { variant: 'indigo', label: 'Printed' },
     preparing: { variant: 'warning', label: 'Preparing' },
     packed: { variant: 'primary', label: 'Packed' },

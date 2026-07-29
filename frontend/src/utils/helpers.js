@@ -40,6 +40,7 @@ export function getUserContactDefaults(user) {
 
 export const ORDER_STATUS_COLORS = {
   new: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+  confirmed: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' },
   printed: { bg: 'bg-indigo-50', text: 'text-indigo-700', dot: 'bg-indigo-500' },
   preparing: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
   packed: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' },

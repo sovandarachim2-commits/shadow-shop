@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 const STATUS_STYLES = {
   new: 'bg-yellow-50 text-yellow-700',
   pending: 'bg-yellow-50 text-yellow-700',
+  confirmed: 'bg-orange-50 text-orange-700',
   printed: 'bg-orange-50 text-orange-700',
   preparing: 'bg-orange-50 text-orange-700',
   packed: 'bg-blue-50 text-blue-700',
@@ -36,6 +37,7 @@ const STATUS_STYLES = {
 const STATUS_LABEL_KEYS = {
   new: 'orders.status.pending',
   pending: 'orders.status.pending',
+  confirmed: 'orders.status.confirmed',
   printed: 'orders.status.confirmed',
   preparing: 'orders.status.preparing',
   packed: 'orders.status.packed',
@@ -56,6 +58,7 @@ const TIMELINE_STEPS = [
 const TRACKING_STEP_INDEX = {
   new: 0,
   pending: 0,
+  confirmed: 1,
   printed: 1,
   preparing: 2,
   packed: 2,
@@ -115,7 +118,7 @@ export default function OrderTracking() {
 
   const { data: order, isLoading, isError } = useQuery({
     queryKey: ['order-detail', id],
-    queryFn: () => ordersApi.orders.get(id).then((r) => r.data),
+    queryFn: () => ordersApi.orders.get(id, { my_orders: 1 }).then((r) => r.data),
     enabled: !!id,
   })
 

@@ -92,6 +92,7 @@ class Customer(models.Model):
 
 class Order(models.Model):
     STATUS_NEW = 'new'
+    STATUS_CONFIRMED = 'confirmed'
     STATUS_PRINTED = 'printed'
     STATUS_PREPARING = 'preparing'
     STATUS_PACKED = 'packed'
@@ -101,6 +102,7 @@ class Order(models.Model):
 
     STATUS_CHOICES = [
         (STATUS_NEW, 'New'),
+        (STATUS_CONFIRMED, 'Confirmed'),
         (STATUS_PRINTED, 'Printed'),
         (STATUS_PREPARING, 'Preparing'),
         (STATUS_PACKED, 'Packed'),

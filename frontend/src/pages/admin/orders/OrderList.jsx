@@ -10,8 +10,10 @@ import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
+import useAuthStore from '@/store/authStore'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton, paymentMethodLabel } from '@/components/orders/PaymentHistory'
+import ContactSalesReceiptModal from '@/components/orders/ContactSalesReceiptModal'
 import NewOrder from './NewOrder'
 import { EditOrderModal } from './OrderDetail'
 import toast from 'react-hot-toast'
@@ -19,6 +21,7 @@ import toast from 'react-hot-toast'
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
   { value: 'new', label: 'New' },
+  { value: 'confirmed', label: 'Confirmed' },
   { value: 'printed', label: 'Printed' },
   { value: 'preparing', label: 'Preparing' },
   { value: 'packed', label: 'Packed' },
@@ -31,12 +34,18 @@ const PAGE_SIZE_OPTIONS = [100, 500, 1000]
 
 const STATUS_FLOW = [
   { key: 'new', label: 'New', icon: Package },
+  { key: 'confirmed', label: 'Confirmed', icon: Check },
   { key: 'printed', label: 'Printed', icon: Printer },
   { key: 'preparing', label: 'Preparing', icon: Clock },
   { key: 'packed', label: 'Packed', icon: Check },
   { key: 'shipped', label: 'Shipped', icon: Truck },
   { key: 'completed', label: 'Completed', icon: Check },
 ]
+
+const SELLER_STATUS_KEYS = ['new', 'confirmed']
+const SELLER_STATUS_FLOW = STATUS_FLOW.filter((status) => SELLER_STATUS_KEYS.includes(status.key))
+
+const isPrintedOrder = (order) => Boolean(order?.printed_at || order?.status === 'printed')
 
 const PAYMENT_METHOD_OPTIONS = [
   'cash',
@@ -52,6 +61,8 @@ const PAYMENT_METHOD_OPTIONS = [
 export default function OrderList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((state) => state.user)
+  const isSeller = currentUser?.role === 'seller'
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [paymentStatus, setPaymentStatus] = useState('')
@@ -65,6 +76,7 @@ export default function OrderList() {
   const [payOrder, setPayOrder] = useState(null)
   const [paymentHistoryOrder, setPaymentHistoryOrder] = useState(null)
   const [orderHistoryOrder, setOrderHistoryOrder] = useState(null)
+  const [contactSalesReceipt, setContactSalesReceipt] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash')
   const [confirm, ConfirmDialog] = useConfirm()
 
@@ -107,7 +119,11 @@ export default function OrderList() {
   const orders = data?.results || []
   const total = data?.count || 0
   const popupOrder = detailOrder || viewOrder
-  const popupStatusIndex = popupOrder ? STATUS_FLOW.findIndex((s) => s.key === popupOrder.status) : -1
+  const visibleStatusOptions = isSeller
+    ? STATUS_OPTIONS.filter((option) => !option.value || SELLER_STATUS_KEYS.includes(option.value))
+    : STATUS_OPTIONS
+  const visibleStatusFlow = isSeller ? SELLER_STATUS_FLOW : STATUS_FLOW
+  const popupStatusIndex = popupOrder ? visibleStatusFlow.findIndex((s) => s.key === popupOrder.status) : -1
   const paymentLogoUrls = siteSettings?.payment_methods?.logo_urls || {}
   const deliveryByOptions = Array.from(new Set(
     [
@@ -115,6 +131,10 @@ export default function OrderList() {
       ...orders.map((order) => order.delivery_by || order.out_delivery_by || ''),
     ].filter(Boolean)
   )).sort((a, b) => a.localeCompare(b))
+  const isNewContactSalesOrder = (order) => (
+    order?.payment_method === 'contact_sales' &&
+    order?.status === 'new'
+  )
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }) => ordersApi.orders.updateStatus(id, { status }),
@@ -179,7 +199,7 @@ export default function OrderList() {
             placeholder="Search orders, customers..."
           >
             <select className="select-field w-36" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}>
-              {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {visibleStatusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <select className="select-field w-36" value={paymentStatus} onChange={(e) => { setPaymentStatus(e.target.value); setPage(1) }}>
               <option value="">All Payment</option>
@@ -224,11 +244,18 @@ export default function OrderList() {
           </Thead>
           <Tbody>
             {isLoading && <LoadingRows cols={13} />}
-            {!isLoading && orders.map((order, index) => (
-              <Tr key={order.id} onClick={() => setViewOrder(order)}>
+            {!isLoading && orders.map((order, index) => {
+              const needsSellerConfirm = isNewContactSalesOrder(order)
+              const sellerReadOnlyPrinted = isSeller && isPrintedOrder(order)
+              return (
+              <Tr
+                key={order.id}
+                onClick={() => setViewOrder(order)}
+                className={needsSellerConfirm ? 'border-l-4 border-red-500 bg-red-50 hover:bg-red-100/80' : ''}
+              >
                 <Td><span className="text-sm font-semibold text-gray-500">{(page - 1) * pageSize + index + 1}</span></Td>
                 <Td>
-                  <span className="font-mono font-semibold text-purple-700 text-sm">#{order.order_number}</span>
+                  <span className={`font-mono text-sm font-semibold ${needsSellerConfirm ? 'text-red-700' : 'text-purple-700'}`}>#{order.order_number}</span>
                   {order.is_draft && <span className="ml-2 text-xs text-gray-400">(Draft)</span>}
                 </Td>
                 <Td><span className="text-sm font-medium text-gray-900">{order.customer_name}</span></Td>
@@ -273,47 +300,53 @@ export default function OrderList() {
                 </Td>
                 <Td>
                   <div className="flex items-center gap-1.5">
-                    {order.payment_status !== 'paid' && (
+                    {!isSeller && order.payment_status !== 'paid' && (
                       <button
                         type="button"
                         disabled={markPaidMutation.isPending}
+                        title="Mark Paid"
+                        aria-label="Mark order as paid"
                         onClick={(e) => {
                           e.stopPropagation()
                           setSelectedPaymentMethod(order.payment_method || 'cash')
                           setPayOrder(order)
                         }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1.5 text-xs font-semibold text-green-700 transition-colors hover:border-green-300 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-700 transition-colors hover:border-green-300 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <DollarSign size={14} />
-                        Mark Paid
+                        <DollarSign size={16} />
                       </button>
                     )}
                     <button
                       type="button"
+                      title="View"
+                      aria-label="View order"
                       onClick={(e) => {
                         e.stopPropagation()
                         setViewOrder(order)
                       }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
                     >
-                      <Eye size={14} />
-                      View
+                      <Eye size={16} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditOrder(order)
-                      }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                    >
-                      <Pencil size={14} />
-                      Edit
-                    </button>
+                    {!sellerReadOnlyPrinted && (
+                      <button
+                        type="button"
+                        title="Edit"
+                        aria-label="Edit order"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditOrder(order)
+                        }}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    )}
                   </div>
                 </Td>
               </Tr>
-            ))}
+              )
+            })}
             {!isLoading && orders.length === 0 && (
               <tr><td colSpan={13}><EmptyState message="No orders found" icon={Filter} /></td></tr>
             )}
@@ -352,21 +385,25 @@ export default function OrderList() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-xl font-black text-gray-950">Order #{popupOrder.order_number}</h2>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewOrder(null)
-                    setEditOrder(popupOrder)
-                  }}
-                  className="btn-secondary py-2"
-                >
-                  <Pencil size={15} />
-                  Edit
-                </button>
-                <button type="button" onClick={() => navigate('/admin/print')} className="btn-secondary py-2">
-                  <Printer size={15} />
-                  Print
-                </button>
+                {!(isSeller && isPrintedOrder(popupOrder)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewOrder(null)
+                      setEditOrder(popupOrder)
+                    }}
+                    className="btn-secondary py-2"
+                  >
+                    <Pencil size={15} />
+                    Edit
+                  </button>
+                )}
+                {!isSeller && (
+                  <button type="button" onClick={() => navigate('/admin/print')} className="btn-secondary py-2">
+                    <Printer size={15} />
+                    Print
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setViewOrder(null)}
@@ -386,7 +423,7 @@ export default function OrderList() {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-3 overflow-x-auto pb-2">
-                    {STATUS_FLOW.map((step, idx) => (
+                    {visibleStatusFlow.map((step, idx) => (
                       <div key={step.key} className="flex min-w-[96px] flex-1 flex-col items-center">
                         <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
                           idx <= popupStatusIndex ? 'bg-purple-600 text-white shadow-lg shadow-purple-200' : 'bg-gray-100 text-gray-400'
@@ -397,9 +434,9 @@ export default function OrderList() {
                       </div>
                     ))}
                   </div>
-                  {popupOrder.status !== 'completed' && popupOrder.status !== 'cancelled' && (
+                  {popupOrder.status !== 'completed' && popupOrder.status !== 'cancelled' && !(isSeller && isPrintedOrder(popupOrder)) && (
                     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-                      {STATUS_FLOW.filter((s) => s.key !== popupOrder.status).map((s) => (
+                      {visibleStatusFlow.filter((s) => s.key !== popupOrder.status).map((s) => (
                         <button
                           key={s.key}
                           type="button"
@@ -410,14 +447,16 @@ export default function OrderList() {
                           → {s.label}
                         </button>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => handleCancelOrder(popupOrder)}
-                        disabled={updateStatusMutation.isPending}
-                        className="ml-auto rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60"
-                      >
-                        Cancel Order
-                      </button>
+                      {!isSeller && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelOrder(popupOrder)}
+                          disabled={updateStatusMutation.isPending}
+                          className="ml-auto rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60"
+                        >
+                          Cancel Order
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -549,7 +588,18 @@ export default function OrderList() {
           <EditOrderModal
             order={detailOrder}
             onClose={() => setEditOrder(null)}
-            onSaved={() => {
+            onSaved={(savedOrder) => {
+              if (savedOrder?.id) {
+                queryClient.setQueryData(['order', savedOrder.id], savedOrder)
+                setViewOrder((current) => current?.id === savedOrder.id ? savedOrder : current)
+              }
+              if (savedOrder?.contact_sales_receipt_message) {
+                setContactSalesReceipt({
+                  order: savedOrder,
+                  message: savedOrder.contact_sales_receipt_message,
+                  queued: !!savedOrder.contact_sales_customer_message_queued,
+                })
+              }
               setEditOrder(null)
               refetch()
             }}
@@ -648,6 +698,12 @@ export default function OrderList() {
       <OrderHistoryModal
         order={orderHistoryOrder ? (orderHistoryDetail || orderHistoryOrder) : null}
         onClose={() => setOrderHistoryOrder(null)}
+      />
+      <ContactSalesReceiptModal
+        order={contactSalesReceipt?.order}
+        message={contactSalesReceipt?.message}
+        queued={contactSalesReceipt?.queued}
+        onClose={() => setContactSalesReceipt(null)}
       />
       {ConfirmDialog}
     </div>
