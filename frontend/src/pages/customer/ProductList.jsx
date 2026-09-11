@@ -11,6 +11,8 @@ import { getFlashSaleTimerState, hasFlashSaleTimer } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 
@@ -106,10 +108,11 @@ function FlashSaleTimer({ item, nowMs }) {
   )
 }
 
-function ProductCard({ product, priority = false, nowMs }) {
+function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
   const { toggle, isWishlisted } = useWishlistStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -123,17 +126,29 @@ function ProductCard({ product, priority = false, nowMs }) {
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
     addItem(saleProduct, 1)
     showCartAddedToast(saleProduct, navigate)
   }
 
   const handleIncrease = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
     addItem(saleProduct, 1)
   }
 
   const handleDecrease = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
     updateQuantity(product.id, qty - 1)
   }
 
@@ -223,10 +238,11 @@ function ProductCard({ product, priority = false, nowMs }) {
   )
 }
 
-function ProductSetCard({ productSet, nowMs, priority = false }) {
+function ProductSetCard({ productSet, nowMs, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
@@ -251,6 +267,34 @@ function ProductSetCard({ productSet, nowMs, priority = false }) {
   }
   const cartItem = items.find((item) => item.product?.cart_key === cartProduct.cart_key)
   const qty = cartItem?.quantity || 0
+
+  const handleAdd = (e) => {
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    addItem(cartProduct, 1)
+    showCartAddedToast(cartProduct, navigate)
+  }
+
+  const handleIncrease = (e) => {
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))
+  }
+
+  const handleDecrease = (e) => {
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    updateQuantity(cartProduct.cart_key, qty - 1)
+  }
 
   useEffect(() => {
     setImageLoaded(false)
@@ -308,19 +352,9 @@ function ProductSetCard({ productSet, nowMs, priority = false }) {
           <ProductCardButton
             available={setStock > 0}
             qty={qty}
-            onAdd={(e) => {
-              e.stopPropagation()
-              addItem(cartProduct, 1)
-              showCartAddedToast(cartProduct, navigate)
-            }}
-            onIncrease={(e) => {
-              e.stopPropagation()
-              updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))
-            }}
-            onDecrease={(e) => {
-              e.stopPropagation()
-              updateQuantity(cartProduct.cart_key, qty - 1)
-            }}
+            onAdd={handleAdd}
+            onIncrease={handleIncrease}
+            onDecrease={handleDecrease}
             addLabel={t('common.add')}
             addToCartLabel={t('common.addToCart')}
             soldOutLabel={t('common.soldOut')}
@@ -347,7 +381,12 @@ export default function ProductList() {
   const [brand, setBrand] = useState(brandParam)
   const [sortBy, setSortBy] = useState('-created_at')
   const [showSearch, setShowSearch] = useState(Boolean(searchParams.get('search')))
+  const { openAuthModal } = useUiStore()
   const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
+
+  const onAuthRequired = (type = 'cart') => {
+    openAuthModal(type)
+  }
 
   useEffect(() => {
     setSearch(searchParam)
@@ -590,8 +629,24 @@ export default function ProductList() {
               ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)
               : (
                 <>
-                  {productSets.map((set, i) => <ProductSetCard key={`set-${set.id}`} productSet={set} nowMs={nowMs} priority={i < 4} />)}
-                  {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 6} nowMs={nowMs} />)}
+                  {productSets.map((set, i) => (
+                    <ProductSetCard 
+                      key={`set-${set.id}`} 
+                      productSet={set} 
+                      nowMs={nowMs} 
+                      priority={i < 4} 
+                      onAuthRequired={onAuthRequired}
+                    />
+                  ))}
+                  {products.map((p, i) => (
+                    <ProductCard 
+                      key={p.id} 
+                      product={p} 
+                      priority={i < 6} 
+                      nowMs={nowMs} 
+                      onAuthRequired={onAuthRequired}
+                    />
+                  ))}
                 </>
               )}
           </div>
@@ -604,6 +659,8 @@ export default function ProductList() {
           )}
         </section>
       </div>
+
+
     </div>
   )
 }

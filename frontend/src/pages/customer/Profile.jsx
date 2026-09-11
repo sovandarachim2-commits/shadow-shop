@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
@@ -658,6 +659,7 @@ export function EditProfilePage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { user, fetchMe } = useAuthStore()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
 
   useEffect(() => {
     if (user) fetchMe()
@@ -676,7 +678,7 @@ export function EditProfilePage() {
           <User size={36} />
         </div>
         <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signInEditProfile')}</h2>
-        <button onClick={() => navigate('/login')} className="shop-btn-primary mt-6 px-10">
+        <button onClick={() => openAuthModal('login')} className="shop-btn-primary mt-6 px-10">
           {t('auth.login')}
         </button>
       </div>
@@ -699,6 +701,7 @@ export default function Profile() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, fetchMe } = useAuthStore()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
   const wishlistItems = useWishlistStore((s) => s.items)
   const [confirm, ConfirmDialog] = useConfirm()
   const [activeModal, setActiveModal] = useState(null)
@@ -800,7 +803,7 @@ export default function Profile() {
         </div>
         <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signIn')}</h2>
         <p className="mt-2 text-sm text-gray-500">{t('profile.signInDesc')}</p>
-        <button onClick={() => navigate('/login')} className="shop-btn-primary mt-6 px-10">
+        <button onClick={() => openAuthModal('login')} className="shop-btn-primary mt-6 px-10">
           {t('auth.login')}
         </button>
       </div>

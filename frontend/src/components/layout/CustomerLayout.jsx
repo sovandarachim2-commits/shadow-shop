@@ -33,6 +33,7 @@ import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { productsApi } from '@/api/products'
 import { ordersApi } from '@/api/orders'
@@ -41,6 +42,7 @@ import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import InstallAppBanner from '@/components/customer/InstallAppBanner'
 import BottomNavigation from '@/components/BottomNavigation'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
+import AuthModal from '@/components/customer/AuthModal'
 
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
@@ -207,6 +209,7 @@ export default function CustomerLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [headerSearch, setHeaderSearch] = useState('')
+  const { authModal, openAuthModal, closeAuthModal } = useUiStore()
   const [searchSuggestions, setSearchSuggestions] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -708,7 +711,7 @@ export default function CustomerLayout() {
                         <button
                           onClick={() => {
                             setIsProfileDropdownOpen(false)
-                            navigate('/login')
+                            openAuthModal('login')
                           }}
                           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] py-3.5 text-base font-black text-white shadow-lg shadow-pink-100 transition hover:bg-[#D9166F] active:scale-[0.98]"
                         >
@@ -720,7 +723,7 @@ export default function CustomerLayout() {
                           <button
                             onClick={() => {
                               setIsProfileDropdownOpen(false)
-                              navigate('/login', { state: { mode: 'register' } })
+                              openAuthModal('register')
                             }}
                             className="font-black text-pink-600 hover:underline"
                           >
@@ -986,6 +989,12 @@ export default function CustomerLayout() {
         isOpen={showCheckinSuccess}
         onClose={() => setShowCheckinSuccess(false)}
         points={rewardsSummary?.earning_rules?.daily_checkin_bonus}
+      />
+      
+      <AuthModal
+        isOpen={authModal.isOpen}
+        onClose={closeAuthModal}
+        type={authModal.type}
       />
 
     </div>

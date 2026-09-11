@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Minus, Plus, ShoppingCart, ArrowRight, ChevronLeft, Gift, Loader2, Percent, Ticket, TicketPercent, Truck, X } from 'lucide-react'
 import useCartStore from '@/store/cartStore'
 import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency } from '@/utils/helpers'
@@ -66,6 +67,7 @@ export default function Cart() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
   const {
     items, selectedProductIds, appliedCoupon, updateQuantity, removeItem,
     selectAll, applyCoupon, clearCoupon,
@@ -123,8 +125,7 @@ export default function Cart() {
   const goCheckout = () => {
     if (selectedCount <= 0) return
     if (!isAuthenticated) {
-      toast.error(t('cart.loginBeforeCheckout'))
-      navigate('/login', { state: { from: '/cart' } })
+      openAuthModal('checkout')
       return
     }
     if (addressesLoading) {
@@ -141,8 +142,7 @@ export default function Cart() {
 
   const openMyCoupons = () => {
     if (!isAuthenticated) {
-      toast.error(t('cart.loginForCoupon'))
-      navigate('/login', { state: { from: '/cart' } })
+      openAuthModal('coupon')
       return
     }
     if (selectedCount <= 0) {
@@ -159,8 +159,7 @@ export default function Cart() {
       return
     }
     if (!isAuthenticated) {
-      toast.error(t('cart.loginForCoupon'))
-      navigate('/login', { state: { from: '/cart' } })
+      openAuthModal('coupon')
       return
     }
     if (selectedCount <= 0) {

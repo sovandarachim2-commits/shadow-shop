@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import { ClipboardList } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 
@@ -259,8 +260,44 @@ class AppErrorBoundary extends Component {
 
 function RequireAuth({ children, adminOnly = false }) {
   const { isAuthenticated, user } = useAuthStore()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
   const location = useLocation()
-  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  const { t } = useTranslation()
+
+  if (!isAuthenticated) {
+    if (adminOnly) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-white px-5">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC3F8F]">
+            <Lock size={28} strokeWidth={2.4} />
+          </div>
+          <h1 className="mt-5 text-[22px] font-black leading-tight text-gray-950">{t('auth.loginRequired')}</h1>
+          <p className="mx-auto mt-2 max-w-[280px] text-sm font-semibold leading-6 text-gray-500">
+            {t('auth.loginToAccessPage')}
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => openAuthModal('login')}
+              className="shop-btn-primary h-12 rounded-2xl px-4 py-0 text-sm"
+            >
+              {t('auth.login')}
+            </button>
+            <button
+              type="button"
+              onClick={() => openAuthModal('register')}
+              className="shop-btn-outline h-12 rounded-2xl px-4 py-0 text-sm"
+            >
+              {t('auth.register')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (adminOnly && user?.role === 'customer') return <Navigate to="/" replace />
   if (!adminOnly && isSocialProfileIncomplete(user) && location.pathname !== '/profile/complete') {
     return <Navigate to="/profile/complete" replace state={{ from: location.pathname }} />
@@ -270,7 +307,7 @@ function RequireAuth({ children, adminOnly = false }) {
 
 function RequireRewardsAuth({ children }) {
   const { isAuthenticated, user } = useAuthStore()
-  const navigate = useNavigate()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
 
   if (!isAuthenticated) {
     return (
@@ -286,14 +323,14 @@ function RequireRewardsAuth({ children }) {
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => navigate('/login', { state: { from: '/profile/rewards' } })}
+              onClick={() => openAuthModal('login')}
               className="shop-btn-primary h-11 px-4 py-0"
             >
               Login
             </button>
             <button
               type="button"
-              onClick={() => navigate('/login', { state: { mode: 'register', from: '/profile/rewards' } })}
+              onClick={() => openAuthModal('register')}
               className="shop-btn-outline h-11 px-4 py-0"
             >
               Register
@@ -313,7 +350,7 @@ function RequireRewardsAuth({ children }) {
 
 function RequireOrdersAuth({ children }) {
   const { isAuthenticated, user } = useAuthStore()
-  const navigate = useNavigate()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
   const location = useLocation()
   const { t } = useTranslation()
   const from = location.pathname
@@ -332,14 +369,14 @@ function RequireOrdersAuth({ children }) {
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => navigate('/login', { state: { from } })}
+              onClick={() => openAuthModal('login')}
               className="shop-btn-primary h-12 rounded-2xl px-4 py-0 text-sm"
             >
               {t('auth.login')}
             </button>
             <button
               type="button"
-              onClick={() => navigate('/login', { state: { mode: 'register', from } })}
+              onClick={() => openAuthModal('register')}
               className="shop-btn-outline h-12 rounded-2xl px-4 py-0 text-sm"
             >
               {t('auth.register')}

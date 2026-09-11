@@ -10,6 +10,8 @@ import useCartStore from '@/store/cartStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 
 function toCartProduct(productSet, categoryLabel) {
   const imageUrl = productSet.image_url || productSet.image
@@ -36,10 +38,11 @@ function relatedProductAvailable(item) {
   return item.is_available_for_sale ?? Number(item.current_stock || 0) > 0
 }
 
-function RelatedSetCard({ item, priority = false }) {
+function RelatedSetCard({ item, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const isSet = item.type === 'set'
   const cartProduct = isSet
     ? toCartProduct(item, t('product.productSet'))
@@ -57,8 +60,26 @@ function RelatedSetCard({ item, priority = false }) {
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired?.('cart')
+      return
+    }
     addItem(cartProduct, 1)
     showCartAddedToast(cartProduct, navigate)
+  }
+
+  const handleIncrease = (e) => {
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired?.('cart')
+      return
+    }
+    addItem(cartProduct, 1)
+  }
+
+  const handleDecrease = (e) => {
+    e.stopPropagation()
+    updateQuantity(cartKey, qty - 1)
   }
 
   return (
@@ -104,11 +125,11 @@ function RelatedSetCard({ item, priority = false }) {
             </button>
           ) : (
             <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
-              <button onClick={() => updateQuantity(cartKey, qty - 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+              <button onClick={handleDecrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
                 {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
               </button>
               <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
-              <button onClick={() => addItem(cartProduct, 1)} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
+              <button onClick={handleIncrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
                 <Plus size={12} />
               </button>
             </div>
@@ -138,10 +159,16 @@ export default function ProductSetDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items, clearSelection, toggleSelected } = useCartStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
   const [imageFailed, setImageFailed] = useState(false)
   const [activeImg, setActiveImg] = useState(0)
   const galleryScrollRef = useRef(null)
   const galleryScrollRaf = useRef(0)
+
+  const onAuthRequired = (action = 'cart') => {
+    openAuthModal(action)
+  }
 
   const { data: productSet, isLoading, isError } = useQuery({
     queryKey: ['product-set-detail', id],
@@ -246,12 +273,14 @@ export default function ProductSetDetail() {
 
   const addSetToCart = () => {
     if (!cartProduct || !isInStock) return
+    if (!loggedIn) return onAuthRequired('cart')
     addItem(cartProduct, 1)
     toast.success(t('product.productSetAdded'))
   }
 
   const buyNow = () => {
     if (!cartProduct || !isInStock) return
+    if (!loggedIn) return onAuthRequired('checkout')
     addItem(cartProduct, 1)
     clearSelection()
     toggleSelected(cartProduct.cart_key)
@@ -432,7 +461,14 @@ export default function ProductSetDetail() {
                   {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
                 </button>
                 <span className="min-w-10 text-center text-base font-black text-gray-950">{qty}</span>
-                <button onClick={() => updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))} disabled={qty >= setStock} className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white disabled:opacity-40">
+                <button
+                  onClick={() => {
+                    if (!loggedIn) return onAuthRequired('cart')
+                    updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))
+                  }}
+                  disabled={qty >= setStock}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-600 text-white disabled:opacity-40"
+                >
                   <Plus size={16} />
                 </button>
               </div>
@@ -485,7 +521,7 @@ export default function ProductSetDetail() {
             {relatedLoading
               ? Array.from({ length: 4 }).map((_, index) => <RelatedSetSkeleton key={index} />)
               : relatedItems.map((item, index) => (
-                <RelatedSetCard key={`${item.type}-${item.id}`} item={item} priority={index < 2} />
+                <RelatedSetCard key={`${item.type}-${item.id}`} item={item} priority={index < 2} onAuthRequired={onAuthRequired} />
               ))}
           </div>
         </section>
@@ -511,6 +547,6 @@ export default function ProductSetDetail() {
           </button>
         </div>
       </div>
-    </div>
-  )
-}
+     </div>
+   )
+ }

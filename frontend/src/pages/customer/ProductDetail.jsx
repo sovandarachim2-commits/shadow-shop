@@ -15,6 +15,7 @@ import { CosmeticArt } from '@/components/customer/CustomerUi'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 
 function cleanProductText(value) {
   return typeof value === 'string' ? value.trim() : ''
@@ -24,11 +25,12 @@ function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
 
-function RelatedProductCard({ product, priority = false }) {
+function RelatedProductCard({ product, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
   const { toggle, isWishlisted } = useWishlistStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const wishlisted = isWishlisted(product.id)
@@ -42,8 +44,25 @@ function RelatedProductCard({ product, priority = false }) {
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
     addItem(saleProduct, 1)
     showCartAddedToast(saleProduct, navigate)
+  }
+
+  const handleUpdateQty = (e, newQty) => {
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    if (newQty > qty) {
+      addItem(saleProduct, 1)
+    } else {
+      updateQuantity(product.id, newQty)
+    }
   }
 
   const handleWishlist = (e) => {
@@ -112,11 +131,11 @@ function RelatedProductCard({ product, priority = false }) {
             </button>
           ) : (
             <div onClick={(e) => e.stopPropagation()} className="grid h-10 grid-cols-[40px_1fr_40px] overflow-hidden rounded-xl bg-pink-600">
-              <button onClick={() => updateQuantity(product.id, qty - 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
+              <button onClick={(e) => handleUpdateQty(e, qty - 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
                 {qty === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
               </button>
               <span className="flex items-center justify-center text-sm font-black text-white">{qty}</span>
-              <button onClick={() => addItem(saleProduct, 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
+              <button onClick={(e) => handleUpdateQty(e, qty + 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
                 <Plus size={14} />
               </button>
             </div>
@@ -153,6 +172,7 @@ export default function ProductDetail() {
   const [added, setAdded] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
+  const { openAuthModal } = useUiStore()
   const galleryScrollRef = useRef(null)
   const thumbScrollRef = useRef(null)
   const galleryScrollRaf = useRef(0)
@@ -161,6 +181,10 @@ export default function ProductDetail() {
   const clearSelection = useCartStore((s) => s.clearSelection)
   const toggleSelected = useCartStore((s) => s.toggleSelected)
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
+
+  const onAuthRequired = (type) => {
+    openAuthModal(type)
+  }
 
   const { data: product, isLoading, isError } = useQuery({
     queryKey: ['product', id],
@@ -283,6 +307,10 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!product || !isInStock) return
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
 
     addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
     setAdded(true)
@@ -292,6 +320,10 @@ export default function ProductDetail() {
 
   const handleBuyNow = () => {
     if (!product || !isInStock) return
+    if (!loggedIn) {
+      onAuthRequired('buy_now')
+      return
+    }
 
     addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
     clearSelection()
@@ -302,8 +334,7 @@ export default function ProductDetail() {
   const handleSubmitReview = (e) => {
     e.preventDefault()
     if (!loggedIn) {
-      toast.error(t('product.loginToReview'))
-      navigate('/login', { state: { from: `/product/${id}` } })
+      onAuthRequired('cart')
       return
     }
     reviewMutation.mutate({
@@ -722,7 +753,12 @@ export default function ProductDetail() {
             {productsMoreLoading
               ? Array.from({ length: 4 }).map((_, index) => <RelatedProductSkeleton key={index} />)
               : relatedProducts.map((item, index) => (
-                <RelatedProductCard key={item.id} product={item} priority={index < 2} />
+                <RelatedProductCard 
+                  key={item.id} 
+                  product={item} 
+                  priority={index < 2} 
+                  onAuthRequired={onAuthRequired}
+                />
               ))}
           </div>
 
@@ -772,6 +808,7 @@ export default function ProductDetail() {
           </button>
         </div>
       </div>
+
     </div>
   )
 }

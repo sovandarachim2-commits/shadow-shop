@@ -6,6 +6,9 @@ import useWishlistStore from '@/store/wishlistStore'
 import { cn, formatCurrency } from '@/utils/helpers'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 import { useTranslation } from 'react-i18next'
+import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
+import { useState } from 'react'
 
 function getProductPrice(product) {
   return Number(product?.retail_price || product?.price || 0)
@@ -16,8 +19,14 @@ export default function Wishlist() {
   const navigate = useNavigate()
   const addItem = useCartStore((s) => s.addItem)
   const { items, toggle } = useWishlistStore()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
 
   const handleAddToCart = (product) => {
+    if (!isAuthenticated) {
+      openAuthModal('cart')
+      return
+    }
     addItem(product, 1)
     toast.success(t('product.addedToCart'))
   }

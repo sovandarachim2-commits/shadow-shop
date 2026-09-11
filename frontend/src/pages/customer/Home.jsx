@@ -16,6 +16,7 @@ import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
 import WelcomeBonusModal from '@/components/rewards/WelcomeBonusModal'
 
 // ─── Category config ──────────────────────────────────────────────────────────
@@ -188,10 +189,11 @@ function CosmeticMockup({ tone = 'pink' }) {
 }
 
 // ─── Product card ─────────────────────────────────────────────────────────────
-function ProductCard({ product, badge, nowMs, priority = false }) {
+function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
   const { toggle, isWishlisted } = useWishlistStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -208,11 +210,29 @@ function ProductCard({ product, badge, nowMs, priority = false }) {
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
     addItem(saleProduct, 1)
     showCartAddedToast(saleProduct, navigate)
   }
-  const handleIncrease = (e) => { e.stopPropagation(); addItem(saleProduct, 1) }
-  const handleDecrease = (e) => { e.stopPropagation(); updateQuantity(product.id, qty - 1) }
+  const handleIncrease = (e) => { 
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    addItem(saleProduct, 1) 
+  }
+  const handleDecrease = (e) => { 
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    updateQuantity(product.id, qty - 1) 
+  }
   const handleWishlist = (e) => {
     e.stopPropagation()
     toggle(product)
@@ -303,9 +323,10 @@ function ProductCard({ product, badge, nowMs, priority = false }) {
 }
 
 // ─── Flash sale card ──────────────────────────────────────────────────────────
-function FlashSaleCard({ product, nowMs }) {
+function FlashSaleCard({ product, nowMs, onAuthRequired }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const cartItem = items.find((i) => i.product?.id === product.id)
   const qty = cartItem?.quantity || 0
@@ -316,11 +337,29 @@ function FlashSaleCard({ product, nowMs }) {
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
     addItem(saleProduct, 1)
     showCartAddedToast(saleProduct, navigate)
   }
-  const handleIncrease = (e) => { e.stopPropagation(); addItem(saleProduct, 1) }
-  const handleDecrease = (e) => { e.stopPropagation(); updateQuantity(product.id, qty - 1) }
+  const handleIncrease = (e) => { 
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    addItem(saleProduct, 1) 
+  }
+  const handleDecrease = (e) => { 
+    e.stopPropagation()
+    if (!loggedIn) {
+      onAuthRequired('cart')
+      return
+    }
+    updateQuantity(product.id, qty - 1) 
+  }
 
   return (
     <article
@@ -377,6 +416,7 @@ export default function Home() {
   const navigate = useNavigate()
   const pendingWelcomeBonus = useAuthStore((s) => s.pendingWelcomeBonus)
   const clearPendingWelcomeBonus = useAuthStore((s) => s.clearPendingWelcomeBonus)
+  const { openAuthModal } = useUiStore()
   const [showWelcomeBonus, setShowWelcomeBonus] = useState(false)
   const [bonusPoints, setBonusPoints] = useState(0)
 
@@ -854,7 +894,11 @@ export default function Home() {
                 ))
                 : flashSale.map((p, i) => (
                   <div key={p.id} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
-                    <ProductCard product={p} nowMs={nowMs} priority={i < 4} />
+                    <FlashSaleCard 
+                      product={p} 
+                      nowMs={nowMs} 
+                      onAuthRequired={(type) => openAuthModal(type)}
+                    />
                   </div>
                 ))
               }
@@ -925,7 +969,16 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
               {showBestSkeleton
                 ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"><div className="aspect-square animate-pulse bg-gray-100" /><div className="space-y-2 p-3"><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" /><div className="h-4 w-full animate-pulse rounded bg-gray-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" /><div className="h-5 w-16 animate-pulse rounded bg-gray-100" /><div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" /></div></div>)
-                : bestSellers.slice(0, 12).map((p, i) => <ProductCard key={p.id} product={p} badge={t('home.bestBadge')} nowMs={nowMs} priority={i < 4} />)
+                : bestSellers.slice(0, 12).map((p, i) => (
+                  <ProductCard 
+                    key={p.id} 
+                    product={p} 
+                    badge={t('home.bestBadge')} 
+                    nowMs={nowMs} 
+                    priority={i < 4} 
+                    onAuthRequired={(type) => openAuthModal(type)}
+                  />
+                ))
               }
             </div>
           </div>
@@ -952,7 +1005,16 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
               {showNewSkeleton
                 ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"><div className="aspect-square animate-pulse bg-gray-100" /><div className="space-y-2 p-3"><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" /><div className="h-4 w-full animate-pulse rounded bg-gray-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" /><div className="h-5 w-16 animate-pulse rounded bg-gray-100" /><div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" /></div></div>)
-                : newArrivals.slice(0, 12).map((p, i) => <ProductCard key={p.id} product={p} badge={t('common.new')} nowMs={nowMs} priority={i < 4} />)
+                : newArrivals.slice(0, 12).map((p, i) => (
+                  <ProductCard 
+                    key={p.id} 
+                    product={p} 
+                    badge={t('common.new')} 
+                    nowMs={nowMs} 
+                    priority={i < 4} 
+                    onAuthRequired={(type) => openAuthModal(type)}
+                  />
+                ))
               }
             </div>
           </div>

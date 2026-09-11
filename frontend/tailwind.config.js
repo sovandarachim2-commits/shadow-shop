@@ -93,6 +93,7 @@ export default {
       },
       animation: {
         'slide-in': 'slideIn 0.2s ease-out',
+        'slide-up': 'slideUp 0.3s ease-out',
         'fade-in': 'fadeIn 0.3s ease-out',
         'pulse-soft': 'pulseSoft 2s infinite',
       },
@@ -100,6 +101,10 @@ export default {
         slideIn: {
           from: { transform: 'translateX(-100%)' },
           to: { transform: 'translateX(0)' },
+        },
+        slideUp: {
+          from: { transform: 'translateY(100%)' },
+          to: { transform: 'translateY(0)' },
         },
         fadeIn: {
           from: { opacity: 0, transform: 'translateY(4px)' },
