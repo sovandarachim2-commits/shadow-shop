@@ -5,7 +5,7 @@ import {
   X, UserCircle2, ChevronRight, LogIn, Mail, Lock, Eye, EyeOff, 
   Loader2, User, Send, Sparkles, CheckCircle2, AlertCircle,
   LockKeyhole, MailCheck, ArrowLeft, Camera, UserRound, Phone, UsersRound,
-  Globe, MapPin, ChevronDown
+  MapPin, ChevronDown
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import useAuthStore from '@/store/authStore'
@@ -386,6 +386,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     label: 'home', full_name: '', phone: '', address_line1: '', address_line2: '', 
     city: '', state: '', postal_code: '', country: 'Cambodia', is_default: true 
   })
+  const [addressErrors, setAddressErrors] = useState({})
   const [showLocationPicker, setShowLocationPicker] = useState(false)
 
   const telegramWidgetRef = useRef(null)
@@ -455,11 +456,21 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       
       setNotice(null)
       setRegisterErrors({})
+      setProfileErrors({})
+      setAddressErrors({})
     } else {
       document.body.style.overflow = ''
     }
     return () => { document.body.style.overflow = '' }
   }, [isOpen])
+
+  // Clear notice when switching views to avoid persistent error messages from previous steps
+  useEffect(() => {
+    setNotice(null)
+    setRegisterErrors({})
+    setProfileErrors({})
+    setAddressErrors({})
+  }, [view])
 
   const handleGoogleCredential = useCallback(async (response) => {
     const credential = typeof response === 'string' ? response : response?.credential
@@ -695,9 +706,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
     if (Object.keys(nextErrors).length) {
       setProfileErrors(nextErrors)
+      setNotice({ type: 'error', message: Object.values(nextErrors)[0] || t('auth.pleaseFillAllFields') })
       return
     }
 
+    setNotice(null)
+    setProfileErrors({})
     setLoading(true)
     try {
       const [firstName, ...lastParts] = cleanName.split(/\s+/)
@@ -734,7 +748,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       
       setView('address')
     } catch (error) {
-      toast.error(t('completeProfile.completeFailed'))
+      const message = translateAuthError(error.response?.data, t, 'completeProfile.completeFailed')
+      setNotice({ type: 'error', message })
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -742,15 +758,28 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
   const handleAddressSubmit = async (e) => {
     e.preventDefault()
+    const cleanName = addressForm.full_name.trim()
     const phone = normalizeCambodiaPhone(addressForm.phone)
-    if (!isValidCambodiaPhone(phone)) {
-      toast.error(t('common.invalidPhone'))
+    const street = addressForm.address_line1.trim()
+    const nextErrors = {}
+
+    if (!cleanName) nextErrors.full_name = t('completeProfile.enterName')
+    if (!phone) nextErrors.phone = t('completeProfile.enterPhone')
+    else if (!isValidCambodiaPhone(phone)) nextErrors.phone = t('common.invalidPhone')
+    if (!addressForm.state) nextErrors.location = t('completeProfile.selectProvince')
+    if (!street) nextErrors.address_line1 = t('completeProfile.enterStreet')
+
+    if (Object.keys(nextErrors).length) {
+      setAddressErrors(nextErrors)
+      setNotice({ type: 'error', message: Object.values(nextErrors)[0] || t('auth.pleaseFillAllFields') })
       return
     }
 
+    setNotice(null)
+    setAddressErrors({})
     setLoading(true)
     try {
-      await authApi.addresses.create({ ...addressForm, phone })
+      await authApi.addresses.create({ ...addressForm, full_name: cleanName, phone, address_line1: street })
       updateUser({ has_address: true })
       toast.success(t('completeProfile.addressSaved'))
       onClose()
@@ -758,7 +787,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       const from = location.state?.from || '/'
       if (from !== '/') navigate(from, { replace: true })
     } catch (error) {
-      toast.error(t('completeProfile.addressFailed'))
+      const message = translateAuthError(error.response?.data, t, 'completeProfile.addressFailed')
+      setNotice({ type: 'error', message })
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -806,8 +837,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       
       {/* Modal Card */}
       <div className={cn(
-        "relative w-full sm:max-w-[520px] bg-white shadow-2xl transition-all duration-300",
-        "rounded-t-[32px] sm:rounded-[32px] p-6 sm:p-10",
+        "relative w-full bg-white shadow-2xl transition-all duration-300",
+        view === 'profile' || view === 'address' ? "sm:max-w-[480px]" : "sm:max-w-[520px]",
+        "rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-8",
         "animate-slide-up sm:animate-fade-in",
         "mx-auto overflow-y-auto max-h-[95vh] sm:max-h-[none]"
       )}>
@@ -819,10 +851,31 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
           <X size={22} />
         </button>
 
-        {notice && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-red-600 animate-fade-in">
-            <AlertCircle size={20} className="shrink-0 mt-0.5" />
+        {notice?.type === 'success' && (
+          <div className={cn(
+            "mb-5 flex items-start gap-3 rounded-2xl border p-3.5 animate-fade-in",
+            "border-emerald-100 bg-emerald-50 text-emerald-700"
+          )}>
+            <CheckCircle2 size={19} className="shrink-0 mt-0.5" />
             <p className="text-xs font-bold leading-relaxed">{notice.message}</p>
+          </div>
+        )}
+
+        {notice?.type === 'error' && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-t-[28px] bg-white/75 px-5 backdrop-blur-sm sm:rounded-[28px]">
+            <div className="w-full max-w-[330px] animate-fade-in rounded-3xl border border-red-100 bg-white p-6 text-center shadow-2xl shadow-slate-900/10">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+                <AlertCircle size={30} strokeWidth={1.8} />
+              </div>
+              <p className="text-[15px] font-black leading-7 text-slate-900">{notice.message}</p>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="mt-5 flex h-11 w-full items-center justify-center rounded-2xl bg-[#EC197A] text-[13px] font-black uppercase tracking-wide text-white transition-all hover:bg-[#D9166F] active:scale-[0.98]"
+              >
+                OK
+              </button>
+            </div>
           </div>
         )}
 
@@ -1114,22 +1167,22 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
         {view === 'profile' && (
           <div className="animate-fade-in">
-            <div className="flex flex-col items-center text-center mb-8">
-              <div className="w-20 h-20 rounded-[28px] bg-pink-50 flex items-center justify-center text-[#EC4D97] mb-6 shadow-sm">
-                <Sparkles size={42} strokeWidth={1.8} />
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC4D97]">
+                <Sparkles size={30} strokeWidth={1.8} />
               </div>
-              <h2 className="text-[26px] sm:text-[32px] font-black tracking-tight text-slate-900 mb-2">
+              <h2 className="text-[24px] sm:text-[28px] font-black tracking-tight text-slate-900 mb-2">
                 {t('completeProfile.title')}
               </h2>
-              <p className="text-[15px] font-medium text-slate-500 max-w-[320px]">
+              <p className="text-[14px] font-medium leading-6 text-slate-500 max-w-[320px]">
                 {t('completeProfile.subtitle')}
               </p>
             </div>
 
-            <form onSubmit={handleProfileSubmit} className="space-y-6">
-              <div className="flex items-center justify-center gap-6 rounded-[24px] bg-slate-50/80 p-5">
+            <form onSubmit={handleProfileSubmit} className="space-y-5">
+              <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-full border-2 border-white bg-pink-50 flex items-center justify-center overflow-hidden shadow-sm">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50">
                     {avatarPreview ? (
                       <img src={avatarPreview} className="w-full h-full object-cover" />
                     ) : (
@@ -1141,9 +1194,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <button 
                     type="button" 
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -right-1 -bottom-1 w-8 h-8 rounded-full bg-pink-600 text-white flex items-center justify-center shadow-md border-2 border-white"
+                    className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#EC197A] text-white shadow-md transition-transform hover:scale-105"
                   >
-                    <Camera size={14} fill="currentColor" />
+                    <Camera size={13} fill="currentColor" />
                   </button>
                   <input 
                     ref={fileInputRef} 
@@ -1159,62 +1212,91 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     }}
                   />
                 </div>
-                <div className="text-left">
+                <div className="min-w-0 text-left">
                   <p className="text-[15px] font-black text-slate-800">{t('completeProfile.profilePhoto')}</p>
-                  <p className="text-xs font-medium text-slate-500 mt-0.5">{t('completeProfile.photoHint')}</p>
+                  <p className="mt-1 text-[12px] font-medium leading-5 text-slate-500">
+                    {t('completeProfile.photoHint')}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-600">{t('profile.fullName')} <span className="text-pink-600">*</span></label>
+                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.fullName')} <span className="text-pink-600">*</span></label>
                   <div className={cn(
-                    "flex h-14 items-center gap-3 rounded-[20px] border px-5 transition-all duration-300",
-                    profileErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-slate-50/50 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
+                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
+                    profileErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
                   )}>
-                    <UserRound size={20} className="text-slate-400" />
+                    <UserRound size={18} className="text-slate-400" />
                     <input 
                       value={profileForm.full_name}
-                      onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
-                      placeholder={t('completeProfile.fullNamePlaceholder')}
-                      className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                      onChange={(e) => {
+                        setProfileForm(f => ({ ...f, full_name: e.target.value }))
+                        setProfileErrors(errors => ({ ...errors, full_name: '' }))
+                      }}
+                      placeholder={t('auth.fullNamePlaceholder')}
+                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
                     />
                   </div>
+                  {profileErrors.full_name && <p className="mt-1.5 text-xs font-bold text-red-500">{profileErrors.full_name}</p>}
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-600">{t('profile.phoneNumber')} <span className="text-pink-600">*</span></label>
+                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.phoneNumber')} <span className="text-pink-600">*</span></label>
                   <div className={cn(
-                    "flex h-14 items-center gap-3 rounded-[20px] border px-5 transition-all duration-300",
-                    profileErrors.phone ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-slate-50/50 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
+                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
+                    profileErrors.phone ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
                   )}>
-                    <Phone size={20} className="text-slate-400" />
+                    <Phone size={18} className="text-slate-400" />
                     <input 
                       value={profileForm.phone}
-                      onChange={(e) => setProfileForm(f => ({ ...f, phone: normalizeCambodiaPhone(e.target.value) }))}
+                      onChange={(e) => {
+                        setProfileForm(f => ({ ...f, phone: normalizeCambodiaPhone(e.target.value) }))
+                        setProfileErrors(errors => ({ ...errors, phone: '' }))
+                      }}
                       placeholder={t('common.phonePlaceholder')}
-                      className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
                     />
                   </div>
+                  {profileErrors.phone && <p className="mt-1.5 text-xs font-bold text-red-500">{profileErrors.phone}</p>}
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-600">{t('completeProfile.gender')} <span className="text-pink-600">*</span></label>
-                  <div className={cn(
-                    "relative flex h-14 items-center gap-3 rounded-[20px] border px-5 transition-all duration-300",
-                    profileErrors.gender ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-slate-50/50 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
-                  )}>
-                    <UsersRound size={20} className="text-slate-400" />
-                    <select 
-                      value={profileForm.gender}
-                      onChange={(e) => setProfileForm(f => ({ ...f, gender: e.target.value }))}
-                      className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none appearance-none"
-                    >
-                      {GENDER_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={18} className="text-slate-400 pointer-events-none absolute right-5" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('completeProfile.gender')} <span className="text-pink-600">*</span></label>
+                    <div className={cn(
+                      "relative flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
+                      profileErrors.gender ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
+                    )}>
+                      <UsersRound size={18} className="text-slate-400" />
+                      <select 
+                        value={profileForm.gender}
+                        onChange={(e) => {
+                          setProfileForm(f => ({ ...f, gender: e.target.value }))
+                          setProfileErrors(errors => ({ ...errors, gender: '' }))
+                        }}
+                        className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-[14px] font-bold text-slate-800 outline-none"
+                      >
+                        {GENDER_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} className="pointer-events-none absolute right-4 text-slate-400" />
+                    </div>
+                    {profileErrors.gender && <p className="mt-1.5 text-xs font-bold text-red-500">{profileErrors.gender}</p>}
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('completeProfile.referralCodeOptional')}</label>
+                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition-all duration-300 focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50">
+                      <Sparkles size={18} className="text-slate-400" />
+                      <input 
+                        value={profileForm.friend_referral_code}
+                        onChange={(e) => setProfileForm(f => ({ ...f, friend_referral_code: e.target.value.toUpperCase() }))}
+                        placeholder="CODE"
+                        className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1222,7 +1304,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-16 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[22px] text-[17px] font-black uppercase tracking-wider transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
+                className="mt-1 flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl bg-[#EC197A] text-[15px] font-black uppercase tracking-wide text-white shadow-lg shadow-pink-100 transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_24px_rgba(236,25,122,0.22)] active:scale-[0.98] disabled:opacity-50"
               >
                 {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('common.next')} <ChevronRight size={20} strokeWidth={3} /></>}
               </button>
@@ -1232,86 +1314,112 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
         {view === 'address' && (
           <div className="animate-fade-in">
-            <div className="flex flex-col items-center text-center mb-8">
-              <div className="w-20 h-20 rounded-[28px] bg-pink-50 flex items-center justify-center text-[#EC4D97] mb-6 shadow-sm">
-                <MapPin size={42} strokeWidth={1.8} />
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC4D97]">
+                <MapPin size={30} strokeWidth={1.8} />
               </div>
-              <h2 className="text-[26px] sm:text-[32px] font-black tracking-tight text-slate-900 mb-2">
-                {t('addressBook.addTitle')}
+              <h2 className="text-[24px] sm:text-[28px] font-black tracking-tight text-slate-900 mb-2">
+                {t('completeProfile.addressTitle')}
               </h2>
-              <p className="text-[15px] font-medium text-slate-500 max-w-[320px]">
-                {t('addressBook.formSubtitle')}
+              <p className="text-[14px] font-medium leading-6 text-slate-500 max-w-[320px]">
+                {t('completeProfile.addressSubtitle')}
               </p>
             </div>
 
-            <form onSubmit={handleAddressSubmit} className="space-y-4">
+            <form onSubmit={handleAddressSubmit} className="space-y-5">
               <div className="space-y-4">
-                <div className="flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
-                  <UserRound size={20} className="text-slate-400" />
-                  <input 
-                    value={addressForm.full_name}
-                    onChange={(e) => setAddressForm(f => ({ ...f, full_name: e.target.value }))}
-                    placeholder={t('addressBook.fullNamePlaceholder')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none"
-                  />
-                </div>
-
-                <div className="flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
-                  <Phone size={20} className="text-slate-400" />
-                  <input 
-                    value={addressForm.phone}
-                    onChange={(e) => setAddressForm(f => ({ ...f, phone: normalizeCambodiaPhone(e.target.value) }))}
-                    placeholder={t('addressBook.phonePlaceholder')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none"
-                  />
-                </div>
-
-                <div className="relative flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
-                  <Globe size={20} className="text-slate-400" />
-                  <select 
-                    value={addressForm.country}
-                    onChange={(e) => setAddressForm(f => ({ ...f, country: e.target.value }))}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none appearance-none"
-                  >
-                    <option value="Cambodia">Cambodia</option>
-                    <option value="Thailand">Thailand</option>
-                    <option value="Vietnam">Vietnam</option>
-                  </select>
-                  <ChevronDown size={18} className="text-slate-400 pointer-events-none absolute right-5" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowLocationPicker(true)}
-                  className="flex h-14 w-full items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 text-left transition-all duration-300 hover:bg-slate-50"
-                >
-                  <MapPin size={20} className="text-pink-500" />
-                  <div className="flex-1 truncate">
-                    {addressForm.state ? (
-                      <span className="text-[15px] font-bold text-slate-800">
-                        {addressForm.state} › {addressForm.city} › {addressForm.address_line2}
-                      </span>
-                    ) : (
-                      <span className="text-[15px] font-bold text-slate-400">{t('addressBook.locationPlaceholder')}</span>
-                    )}
+                <div>
+                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.fullName')} <span className="text-pink-600">*</span></label>
+                  <div className={cn(
+                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
+                    addressErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
+                  )}>
+                    <UserRound size={18} className="text-slate-400" />
+                    <input 
+                      value={addressForm.full_name}
+                      onChange={(e) => {
+                        setAddressForm(f => ({ ...f, full_name: e.target.value }))
+                        setAddressErrors(errors => ({ ...errors, full_name: '' }))
+                      }}
+                      placeholder={t('addressBook.fullNamePlaceholder')}
+                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                    />
                   </div>
-                  <ChevronRight size={18} className="text-slate-400" />
-                </button>
+                  {addressErrors.full_name && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.full_name}</p>}
+                </div>
 
-                <div className="flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
-                  <input 
-                    value={addressForm.address_line1}
-                    onChange={(e) => setAddressForm(f => ({ ...f, address_line1: e.target.value }))}
-                    placeholder={t('addressBook.streetPlaceholder')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none"
-                  />
+                <div>
+                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.phoneNumber')} <span className="text-pink-600">*</span></label>
+                  <div className={cn(
+                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
+                    addressErrors.phone ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
+                  )}>
+                    <Phone size={18} className="text-slate-400" />
+                    <input 
+                      value={addressForm.phone}
+                      onChange={(e) => {
+                        setAddressForm(f => ({ ...f, phone: normalizeCambodiaPhone(e.target.value) }))
+                        setAddressErrors(errors => ({ ...errors, phone: '' }))
+                      }}
+                      placeholder={t('addressBook.phonePlaceholder')}
+                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                  {addressErrors.phone && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.phone}</p>}
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('addressBook.locationPlaceholder')} <span className="text-pink-600">*</span></label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddressErrors(errors => ({ ...errors, location: '' }))
+                      setShowLocationPicker(true)
+                    }}
+                    className={cn(
+                      "flex h-12 w-full items-center gap-3 rounded-2xl border px-4 text-left transition-all duration-300 hover:bg-slate-50 focus:border-pink-300 focus:ring-4 focus:ring-pink-50",
+                      addressErrors.location ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white"
+                    )}
+                  >
+                    <MapPin size={18} className="text-[#EC197A]" />
+                    <div className="min-w-0 flex-1 truncate">
+                      {addressForm.state ? (
+                        <span className="text-[14px] font-bold text-slate-800">
+                          {addressForm.state} › {addressForm.city} › {addressForm.address_line2}
+                        </span>
+                      ) : (
+                        <span className="text-[14px] font-bold text-slate-400">{t('addressBook.locationPlaceholder')}</span>
+                      )}
+                    </div>
+                    <ChevronRight size={16} className="text-slate-400" />
+                  </button>
+                  {addressErrors.location && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.location}</p>}
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('completeProfile.streetAddress')} <span className="text-pink-600">*</span></label>
+                  <div className={cn(
+                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
+                    addressErrors.address_line1 ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
+                  )}>
+                    <input 
+                      value={addressForm.address_line1}
+                      onChange={(e) => {
+                        setAddressForm(f => ({ ...f, address_line1: e.target.value }))
+                        setAddressErrors(errors => ({ ...errors, address_line1: '' }))
+                      }}
+                      placeholder={t('completeProfile.streetPlaceholder')}
+                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                  {addressErrors.address_line1 && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.address_line1}</p>}
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading || !addressForm.state}
-                className="w-full h-16 mt-6 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[22px] text-[17px] font-black uppercase tracking-wider transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
+                disabled={loading}
+                className="mt-1 flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl bg-[#EC197A] text-[15px] font-black uppercase tracking-wide text-white shadow-lg shadow-pink-100 transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_24px_rgba(236,25,122,0.22)] active:scale-[0.98] disabled:opacity-50"
               >
                 {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('common.save')} <ChevronRight size={20} strokeWidth={3} /></>}
               </button>
@@ -1357,6 +1465,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         <LocationPicker 
           onSelect={(data) => {
             setAddressForm(f => ({ ...f, ...data }))
+            setAddressErrors(errors => ({ ...errors, location: '' }))
             setShowLocationPicker(false)
           }}
           onClose={() => setShowLocationPicker(false)} 

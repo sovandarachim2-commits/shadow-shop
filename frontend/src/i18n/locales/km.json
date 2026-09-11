@@ -617,6 +617,7 @@
     "stepProgress": "ជំហាន {{step}} នៃ {{total}}",
     "profilePhoto": "រូបថតប្រវត្តិរូប",
     "uploadProfilePhoto": "បង្ហោះរូបថតប្រវត្តិរូប",
+    "photoHint": "ណែនាំ៖ រូបភាពរាងការ៉េ ទំហំអតិបរមា 6MB",
     "fullNamePlaceholder": "ឧ. Tha Seyha",
     "required": "ត្រូវការ",
     "fillThisField": "សូមបំពេញប្រអប់នេះ",

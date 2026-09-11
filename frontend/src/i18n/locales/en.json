@@ -617,6 +617,7 @@
     "stepProgress": "Step {{step}} of {{total}}",
     "profilePhoto": "Profile Photo",
     "uploadProfilePhoto": "Upload profile photo",
+    "photoHint": "Recommended: Square image, max 6MB",
     "fullNamePlaceholder": "Ex. Tha Seyha",
     "required": "Required",
     "fillThisField": "Please fill this field",
