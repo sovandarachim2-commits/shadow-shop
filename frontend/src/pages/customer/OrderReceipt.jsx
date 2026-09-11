@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Loader2, Printer, ReceiptText, ShoppingBag } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
-import { formatFullAddressKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
+import { formatFullAddressKhmer } from '@/utils/addressHelpers'
+import { KHMER_FONT_FAMILY } from '@/utils/constants'
 
 function Row({ label, value, strong = false }) {
   return (

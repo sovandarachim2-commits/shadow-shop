@@ -129,7 +129,6 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -152,8 +151,20 @@ R2_CONFIGURED = all([
     R2_PUBLIC_URL,
 ]) and not R2_ACCESS_KEY_ID.startswith('your-')
 
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 if USE_R2_STORAGE and R2_CONFIGURED:
-    DEFAULT_FILE_STORAGE = 'utils.storage.R2MediaStorage'
+    STORAGES["default"] = {
+        "BACKEND": "utils.storage.R2MediaStorage",
+    }
+    # AWS/R2 settings for boto3
     AWS_ACCESS_KEY_ID = R2_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY = R2_SECRET_ACCESS_KEY
     AWS_STORAGE_BUCKET_NAME = R2_BUCKET_NAME
@@ -165,6 +176,9 @@ if USE_R2_STORAGE and R2_CONFIGURED:
     AWS_DEFAULT_ACL = None
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_FILE_OVERWRITE = False
+    
+    # When using R2, MEDIA_URL should point to the public bucket domain
+    MEDIA_URL = f'https://{R2_PUBLIC_DOMAIN}/'
 
 # DRF Configuration
 REST_FRAMEWORK = {

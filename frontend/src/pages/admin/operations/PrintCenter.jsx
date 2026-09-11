@@ -9,7 +9,8 @@ import { authApi } from '@/api/auth'
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { EmptyState, LoadingRows, Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/Table'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
-import { formatFullAddressKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
+import { formatFullAddressKhmer } from '@/utils/addressHelpers'
+import { KHMER_FONT_FAMILY } from '@/utils/constants'
 import toast from 'react-hot-toast'
 
 const PRINT_TYPES = [

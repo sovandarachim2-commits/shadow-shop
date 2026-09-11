@@ -68,52 +68,70 @@ function RewardCard({ reward, currentPoints, onExchange, isExchanging, onView, t
           if (!reward.preview) onView(reward)
         }
       }}
-      className="rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition active:scale-[0.99] md:p-4"
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
     >
-      <div className="flex items-center gap-4">
-        <div className={cn('flex h-16 w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-xl md:h-[76px] md:w-[92px] md:rounded-2xl', rewardImage ? 'bg-gray-50' : meta.tone)}>
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
+        <div className={cn('flex h-full w-full items-center justify-center', rewardImage ? 'bg-white' : meta.tone)}>
           {rewardImage ? (
-            <img src={rewardImage} alt={reward.gift_product_name || reward.name} className="h-full w-full object-contain p-1" />
+            <img src={rewardImage} alt={reward.gift_product_name || reward.name} className="h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]" />
           ) : (
-            <Icon size={30} strokeWidth={2.2} />
+            <Icon size={42} strokeWidth={2.2} />
           )}
         </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-black text-gray-950 md:text-lg">{reward.name}</h3>
-          <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-gray-500 md:mt-1 md:text-sm">
-            {reward.gift_product_name || reward.description || t('rewardsPage.main.exchangeHint')}
-          </p>
-          <div className="mt-2 flex items-center gap-1.5 text-xs font-black text-gray-950 md:mt-3 md:text-sm">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-white">
-              <Star size={12} fill="currentColor" />
-            </span>
-            <span>
-              {Number(reward.points_required).toLocaleString()} {t('rewardsPage.pts')}
+        {!canExchange && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[2px]">
+            <span className="rounded-full bg-gray-900/80 px-3 py-1.5 text-[10px] font-black text-white ring-2 ring-white/20">
+              {unavailableText}
             </span>
           </div>
-        </div>
-        <button
-          type="button"
-          disabled={!canExchange || isExchanging}
-          onClick={(event) => {
-            event.stopPropagation()
-            if (canExchange) onExchange(reward.id)
-          }}
-          className={cn(
-            'flex h-10 shrink-0 items-center justify-center rounded-xl px-3 text-xs font-black transition md:h-11 md:px-5 md:text-sm',
-            canExchange
-              ? 'bg-pink-600 text-white shadow-lg shadow-pink-100 active:scale-[0.98]'
-              : 'bg-pink-100 text-pink-400'
-          )}
-        >
-          {isExchanging ? <Loader2 size={17} className="animate-spin" /> : t('rewardsPage.redeemBtn')}
-        </button>
+        )}
       </div>
-      {!canExchange && !reward.preview && (
-        <p className="mt-3 text-right text-xs font-black text-gray-400">
-          {unavailableText}
-        </p>
-      )}
+
+      <div className="flex flex-col p-3">
+        <div className="flex items-center gap-1.5">
+          <div className={cn('flex h-5 w-5 items-center justify-center rounded-md', meta.tone)}>
+            <Icon size={12} strokeWidth={2.5} />
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">{meta.label}</span>
+        </div>
+        
+        <h3 className="mt-1.5 line-clamp-2 min-h-[36px] text-sm font-black leading-tight text-gray-950 group-hover:text-pink-600">
+          {reward.name}
+        </h3>
+
+        <div className="mt-2.5 flex items-center gap-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-white shadow-sm">
+            <Star size={12} fill="currentColor" />
+          </span>
+          <span className="text-sm font-black text-gray-950">
+            {Number(reward.points_required).toLocaleString()}
+          </span>
+          <span className="text-[11px] font-bold text-gray-500">{t('rewardsPage.pts')}</span>
+        </div>
+
+        <div className="mt-3.5 pt-1">
+          <button
+            type="button"
+            disabled={!canExchange || isExchanging}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (canExchange) onExchange(reward.id)
+            }}
+            className={cn(
+              'flex w-full items-center justify-center rounded-xl py-2.5 text-xs font-black transition active:scale-95',
+              canExchange
+                ? 'bg-pink-600 text-white shadow-lg shadow-pink-100 hover:bg-pink-700'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            )}
+          >
+            {isExchanging ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              t('rewardsPage.redeem')
+            )}
+          </button>
+        </div>
+      </div>
     </article>
   )
 }
@@ -285,99 +303,102 @@ export default function ExchangeRewards() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 md:bg-white md:pb-6">
+    <div className="min-h-screen bg-gray-50 pb-24 md:pb-6">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
-      <div className="mx-auto flex w-full max-w-[560px] flex-col px-4 pb-6 pt-[max(0.35rem,env(safe-area-inset-top))] md:max-w-[1440px] md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-4 flex min-h-[54px] items-center justify-between gap-3 bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:mb-4 md:min-h-0 md:bg-transparent md:px-0">
-          <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-pink-500 md:hidden">{t('profile.rewards')}</p>
-            <h1 className="text-xl font-black leading-tight text-gray-950 md:text-2xl">{t('rewardsPage.main.title')}</h1>
-            <p className="mt-0.5 text-xs font-bold text-gray-500 md:mt-1">{t('rewardsPage.main.subtitle')}</p>
-          </div>
-          <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm md:h-11 md:w-11">
-            <HelpCircle size={19} />
+      <div className="mx-auto flex w-full flex-col px-5 pb-6 pt-[max(0.35rem,env(safe-area-inset-top))] max-w-[1500px] md:px-6 md:pt-6">
+        <header className="mb-6 flex items-center gap-4">
+          <button 
+            type="button" 
+            onClick={() => navigate('/profile')} 
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition hover:bg-slate-50 active:scale-95"
+          >
+            <ChevronLeft size={22} />
           </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-black text-slate-950 md:text-[28px]">{t('rewardsPage.main.title')}</h1>
+            <p className="text-sm font-semibold text-slate-500">{t('rewardsPage.main.subtitle')}</p>
+          </div>
         </header>
 
-        <section className="relative mt-2 overflow-hidden rounded-[22px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-5 md:rounded-[22px] md:p-6">
+        <section className="relative mt-2 overflow-hidden rounded-[22px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-4 md:rounded-[22px] md:p-5">
           <div className="absolute right-5 top-8 h-28 w-28 rotate-45 rounded-3xl bg-white/10" />
-          <Sparkles className="absolute right-32 top-6 text-white/20" size={28} />
-          <Sparkles className="absolute bottom-20 right-36 text-white/15" size={24} />
+          <Sparkles className="absolute right-32 top-6 text-white/20" size={24} />
+          <Sparkles className="absolute bottom-20 right-36 text-white/15" size={20} />
           <div className="relative z-10 flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm font-bold text-white/90 md:text-lg">{t('rewardsPage.yourPoints')}</p>
+              <p className="text-xs font-bold text-white/90 md:text-sm">{t('rewardsPage.yourPoints')}</p>
               <div className="mt-2 flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white shadow-lg shadow-pink-950/20 ring-[3px] ring-white/30 md:h-12 md:w-12 md:ring-4">
-                  <Star size={22} fill="currentColor" />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white shadow-lg shadow-pink-950/20 ring-[3px] ring-white/30 md:h-11 md:w-11">
+                  <Star size={20} fill="currentColor" />
                 </span>
-                <div className="flex items-end gap-2">
-                  <span className="text-[32px] font-black leading-none tracking-tight md:text-[42px]">{currentPoints.toLocaleString()}</span>
-                  <span className="pb-0.5 text-sm font-black md:pb-1 md:text-lg">{t('rewardsPage.pts')}</span>
+                <div className="flex items-end gap-1.5">
+                  <span className="text-[32px] font-black leading-none tracking-tight md:text-[36px]">{currentPoints.toLocaleString()}</span>
+                  <span className="pb-0.5 text-xs font-black md:pb-1 md:text-sm">{t('rewardsPage.pts')}</span>
                 </div>
               </div>
-              <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-gray-950 shadow-sm backdrop-blur md:mt-5 md:px-4 md:py-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-300 text-white md:h-7 md:w-7">
-                  <Star size={14} fill="currentColor" />
+              <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-gray-950 shadow-sm backdrop-blur md:mt-4 md:px-3.5 md:py-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-white md:h-6 md:w-6">
+                  <Star size={12} fill="currentColor" />
                 </span>
-                <span className="text-sm font-black md:text-base">{t('profile.memberLevel', { level: memberLevel })}</span>
+                <span className="text-xs font-black md:text-sm">{t('profile.memberLevel', { level: memberLevel })}</span>
               </div>
             </div>
-            <div className="absolute right-5 top-8 flex h-20 w-20 shrink-0 items-center justify-center opacity-90 sm:relative sm:right-auto sm:top-auto sm:mt-5 sm:h-28 sm:w-28">
+            <div className="absolute right-5 top-8 flex h-20 w-20 shrink-0 items-center justify-center opacity-90 sm:relative sm:right-auto sm:top-auto sm:mt-2 sm:h-24 sm:w-24">
               <div className="absolute inset-0 rotate-30 rounded-[28px] bg-white/25 shadow-2xl" />
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-[22px] border-[3px] border-white/70 bg-gradient-to-br from-gray-100 to-gray-400 text-white shadow-xl sm:h-24 sm:w-24 sm:rounded-[26px] sm:border-4">
-                <Star size={36} fill="currentColor" />
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-[20px] border-[3px] border-white/70 bg-gradient-to-br from-gray-100 to-gray-400 text-white shadow-xl sm:h-20 sm:w-20 sm:rounded-[24px] sm:border-4">
+                <Star size={30} fill="currentColor" />
               </div>
             </div>
           </div>
-          <div className="relative z-10 mt-5 md:mt-7">
-            <div className="mb-2 flex items-center justify-between gap-3 text-xs font-black md:mb-3 md:text-base">
+          <div className="relative z-10 mt-5 md:mt-6">
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs font-black md:mb-2.5">
               <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextMemberLevel })}</span></span>
               <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/20 md:h-3">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2">
               <div className="h-full rounded-full bg-yellow-300 transition-all" style={{ width: `${progressPct}%` }} />
             </div>
-            <p className="mt-3 text-sm font-black md:mt-4 md:text-lg">{t('rewardsPage.ptsProgress', { current: currentPoints.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>
+            <p className="mt-2.5 text-xs font-black md:mt-3 md:text-sm">{t('rewardsPage.ptsProgress', { current: currentPoints.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>
           </div>
         </section>
 
-        <section className="mt-3 grid grid-cols-2 gap-2.5 md:mt-5 md:grid-cols-4 md:gap-4">
+        <section className="mt-3 grid grid-cols-2 gap-2.5 md:mt-4 md:grid-cols-4 md:gap-3">
           {quickActions.map((item) => {
             const Icon = item.icon
             return (
-              <button type="button" onClick={item.action} key={item.title} className="flex min-h-[92px] flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.05)] active:scale-[0.98] md:min-h-[132px] md:p-4">
-                <Icon size={28} className="text-pink-600 md:h-[42px] md:w-[42px]" fill={item.icon === Star ? 'currentColor' : 'none'} />
-                <span className="mt-2 text-[13px] font-black text-gray-950 md:mt-3 md:text-lg">{item.title}</span>
-                <span className="mt-0.5 text-xs font-semibold text-gray-500 md:mt-1 md:text-sm">{item.text}</span>
+              <button type="button" onClick={item.action} key={item.title} className="flex min-h-[86px] flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.05)] active:scale-[0.98] md:min-h-[104px] md:p-3">
+                <Icon size={24} className="text-pink-600 md:h-7 md:w-7" fill={item.icon === Star ? 'currentColor' : 'none'} />
+                <span className="mt-1.5 text-[12px] font-black text-gray-950 md:mt-2 md:text-sm">{item.title}</span>
+                <span className="mt-0.5 text-[10px] font-semibold text-gray-500 md:text-xs">{item.text}</span>
               </button>
             )
           })}
         </section>
 
-        <section className="mt-3 flex items-center gap-3 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-pink-100 md:mt-6 md:gap-5 md:p-5">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 md:h-24 md:w-24 md:rounded-3xl">
-            <span className="text-3xl font-black md:text-5xl">$</span>
+        <section className="mt-3 flex items-center gap-3 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-pink-100 md:mt-4 md:gap-4 md:p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 md:h-16 md:w-16 md:rounded-2xl">
+            <span className="text-2xl font-black md:text-3xl">$</span>
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-black text-gray-950 md:text-lg">{t('rewardsPage.main.promoTitle')}</h2>
-            <p className="mt-0.5 text-xs font-semibold leading-5 text-gray-700 md:mt-1 md:text-sm md:leading-6">{t('rewardsPage.main.promoDesc')}</p>
-            <button type="button" onClick={() => navigate('/profile/rewards/earn')} className="mt-2 rounded-lg bg-pink-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-pink-100 md:mt-3 md:px-5 md:py-2.5 md:text-sm">{t('rewardsPage.main.earnNow')}</button>
+            <h2 className="text-sm font-black text-gray-950 md:text-base">{t('rewardsPage.main.promoTitle')}</h2>
+            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-gray-700 md:mt-1 md:leading-normal">{t('rewardsPage.main.promoDesc')}</p>
+            <button type="button" onClick={() => navigate('/profile/rewards/earn')} className="mt-2 rounded-lg bg-pink-600 px-3.5 py-1.5 text-[11px] font-black text-white shadow-lg shadow-pink-100 md:mt-2.5 md:px-4 md:py-2 md:text-xs">{t('rewardsPage.main.earnNow')}</button>
           </div>
         </section>
 
-        <section className="mt-5 rounded-2xl bg-white p-3 shadow-sm md:mt-7 md:bg-transparent md:p-0 md:shadow-none">
-          <div className="mb-3 flex items-center justify-between md:mb-4">
-            <h2 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.main.redeemWithPoints')}</h2>
-            <button type="button" onClick={() => navigate('/profile/rewards/redeem')} className="flex items-center gap-1 text-sm font-black text-pink-600">{t('rewardsPage.viewAll')} <ChevronLeft size={16} className="rotate-180" /></button>
+        <section className="mt-4 rounded-2xl bg-white p-3 shadow-sm md:mt-6 md:bg-transparent md:p-0 md:shadow-none">
+          <div className="mb-3 flex items-center justify-between md:mb-3.5">
+            <h2 className="text-base font-black text-gray-950 md:text-lg">{t('rewardsPage.main.redeemWithPoints')}</h2>
+            <button type="button" onClick={() => navigate('/profile/rewards/redeem')} className="flex items-center gap-1 text-xs font-black text-pink-600 md:text-sm">{t('rewardsPage.viewAll')} <ChevronLeft size={14} className="rotate-180" /></button>
           </div>
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 pr-2 [scrollbar-width:none] md:mb-4 [&::-webkit-scrollbar]:hidden">
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 pr-2 [scrollbar-width:none] md:mb-3.5 [&::-webkit-scrollbar]:hidden">
             {CATEGORY_FILTER_KEYS.map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setActiveCategory(key)}
                 className={cn(
-                  'shrink-0 rounded-xl px-4 py-2.5 text-xs font-black transition md:px-5 md:py-3 md:text-sm',
+                  'shrink-0 rounded-xl px-3.5 py-2 text-[11px] font-black transition md:px-4 md:py-2.5 md:text-xs',
                   activeCategory === key ? 'bg-pink-600 text-white shadow-lg shadow-pink-100' : 'bg-gray-100 text-gray-500'
                 )}
               >
@@ -386,7 +407,7 @@ export default function ExchangeRewards() {
             ))}
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
             {filteredRewards.map((reward) => (
               <RewardCard
                 key={reward.id}

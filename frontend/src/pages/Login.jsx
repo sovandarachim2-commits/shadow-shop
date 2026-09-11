@@ -150,8 +150,18 @@ function ShopLogo({ storeName = 'Shadow Shop', scale = 1 }) {
    LANGUAGE PICKER
 ────────────────────────────────────────────────── */
 const LANGS = [
-  { code: 'en', label: 'English', short: 'US', flag: '🇺🇸' },
-  { code: 'km', label: 'ខ្មែរ',   short: 'KH', flag: '🇰🇭' },
+  {
+    code: 'en',
+    label: 'English',
+    short: 'US',
+    flag: 'https://flagcdn.com/us.svg',
+  },
+  {
+    code: 'km',
+    label: 'ខ្មែរ',
+    short: 'KH',
+    flag: 'https://flagcdn.com/kh.svg',
+  },
 ]
 
 function LanguagePicker() {
@@ -172,8 +182,14 @@ function LanguagePicker() {
         onClick={() => setOpen((v) => !v)}
         className="relative z-50 flex h-12 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 text-sm font-bold text-[#1A1A1A] shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100"
       >
-        <span className="text-base leading-none">{cur.flag}</span>
-        <span>{cur.label}</span>
+        <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-100 shadow-sm">
+          <img
+            src={cur.flag}
+            alt={cur.label}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <span className="text-sm font-black">{cur.label}</span>
         <ChevronRight size={13} className={`transition-transform duration-200 ${open ? '-rotate-90' : 'rotate-90'}`} />
       </button>
       {open && (
@@ -184,10 +200,14 @@ function LanguagePicker() {
               onClick={() => select(l.code)}
               className={`flex w-full items-center gap-3 px-4 py-3 text-sm transition hover:bg-gray-50 ${l.code === current ? 'bg-gray-50' : ''}`}
             >
-              <span className="text-base leading-none">{l.flag}</span>
-              <span className="text-xs font-black text-[#6B7280]">{l.short}</span>
-              <span className={`flex-1 text-left font-bold ${l.code === current ? 'text-[#EC4D97]' : 'text-[#1A1A1A]'}`}>{l.label}</span>
-              <span className={`text-xs font-bold ${l.code === current ? 'text-[#EC4D97]' : 'text-[#6B7280]'}`}>{l.short}</span>
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-100 shadow-sm">
+                <img
+                  src={l.flag}
+                  alt={l.label}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <span className={`flex-1 text-left text-sm font-black ${l.code === current ? 'text-[#EC4D97]' : 'text-[#1A1A1A]'}`}>{l.label}</span>
             </button>
           ))}
         </div>
@@ -198,17 +218,17 @@ function LanguagePicker() {
 
 function LoginBrand({ storeName, logoUrl }) {
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-start">
       {logoUrl ? (
-        <img src={logoUrl} alt={storeName} className="h-24 w-24 object-contain drop-shadow-[0_16px_28px_rgba(236,77,151,0.18)]" />
+        <img src={logoUrl} alt={storeName} className="h-16 w-16 object-contain" />
       ) : (
-        <div className="flex h-20 w-20 items-center justify-center rounded-[24px] border border-[#F0D9E6] bg-gradient-to-br from-[#FF6CAB] to-[#EC4D97] text-4xl font-black text-white shadow-[0_18px_36px_rgba(236,77,151,0.22)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#FF6CAB] to-[#EC4D97] text-2xl font-black text-white shadow-lg">
           S
         </div>
       )}
-      <div className="mt-2 text-center">
-        <p className="text-2xl font-black uppercase tracking-[0.12em] text-[#1A1A1A]">{(storeName || 'Shadow Shop').split(' ')[0]}</p>
-        <p className="text-xs font-black uppercase tracking-[0.42em] text-[#EC4D97]">{(storeName || 'Shadow Shop').split(' ').slice(1).join(' ') || 'SHOP'}</p>
+      <div className="mt-4 text-left">
+        <p className="text-[18px] font-black uppercase tracking-[0.2em] text-[#1A1A1A]">{(storeName || 'Shadow Shop').split(' ')[0]}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-[#EC4D97]">{(storeName || 'Shadow Shop').split(' ').slice(1).join(' ') || 'SHOP'}</p>
       </div>
     </div>
   )
@@ -217,112 +237,46 @@ function LoginBrand({ storeName, logoUrl }) {
 /* ──────────────────────────────────────────────────
    MAIN
 ────────────────────────────────────────────────── */
-function BusinessShowpiece() {
-  return (
-    <div className="pointer-events-none absolute right-6 top-[300px] hidden h-[250px] w-[390px] xl:block">
-      <div className="absolute bottom-2 right-4 h-20 w-[330px] rounded-[50%] bg-[#F8A9D0]/28 shadow-[0_30px_70px_rgba(236,77,151,0.12)]" />
-
-      <div className="absolute right-4 top-0 h-32 w-60 rounded-[28px] border border-white/90 bg-white/82 p-5 shadow-[0_22px_48px_rgba(236,77,151,0.12)] backdrop-blur">
-        <div className="flex items-center justify-between">
-          <div className="h-2 w-24 rounded-full bg-[#FFD6E8]" />
-          <div className="flex gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#F8A9D0]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#7ED7FF]" />
-          </div>
-        </div>
-        <svg className="mt-4 h-16 w-full" viewBox="0 0 190 70" fill="none" aria-hidden="true">
-          <path d="M6 56 C28 28 48 50 68 31 C91 10 106 38 129 19 C149 3 164 15 184 5" stroke="#EC4D97" strokeWidth="5" strokeLinecap="round" />
-          <path d="M10 61 H184" stroke="#F0D9E6" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="151" cy="29" r="15" fill="#7ED7FF" opacity=".45" />
-        </svg>
-      </div>
-
-      <div className="absolute bottom-12 right-10 h-32 w-52 rounded-[28px] border border-white/90 bg-white/78 p-5 shadow-[0_24px_48px_rgba(236,77,151,0.13)] backdrop-blur">
-        <div className="flex items-end gap-3">
-          <span className="h-9 w-5 rounded-full bg-[#FFD6E8]" />
-          <span className="h-16 w-5 rounded-full bg-[#EC4D97]" />
-          <span className="h-12 w-5 rounded-full bg-[#F8A9D0]" />
-          <span className="h-20 w-5 rounded-full bg-[#7ED7FF]" />
-        </div>
-        <div className="mt-5 h-2 w-32 rounded-full bg-[#FFD6E8]" />
-        <div className="mt-3 h-2 w-24 rounded-full bg-[#F0D9E6]" />
-      </div>
-
-      <div className="absolute bottom-[92px] left-14 grid h-14 w-14 place-items-center rounded-2xl border border-white/90 bg-white text-[#EC4D97] shadow-[0_18px_36px_rgba(236,77,151,0.13)]">
-        <ShoppingBag size={26} strokeWidth={1.8} />
-      </div>
-      <div className="absolute bottom-9 left-28 grid h-14 w-14 place-items-center rounded-2xl border border-white/90 bg-white text-[#7ED7FF] shadow-[0_18px_36px_rgba(126,215,255,0.16)]">
-        <Box size={26} strokeWidth={1.8} />
-      </div>
-      <div className="absolute left-20 top-16 h-8 w-12 rotate-[24deg] rounded-[80%_20%_80%_20%] bg-[#F8A9D0]/45" />
-      <div className="absolute bottom-24 right-0 h-7 w-11 rotate-[-18deg] rounded-[80%_20%_80%_20%] bg-[#FFD6E8]/75" />
-    </div>
-  )
-}
-
 function AuthVisualPanel({ storeName, logoUrl, t }) {
   const featureCards = [
     { icon: ClipboardList, title: t('auth.featureOrders'), text: t('auth.featureOrdersText') },
     { icon: BarChart3, title: t('auth.featureReports'), text: t('auth.featureReportsText') },
     { icon: PackageCheck, title: t('auth.featureInventory'), text: t('auth.featureInventoryText') },
   ]
-  const trustItems = [
-    { icon: ShieldCheck, label: t('auth.trustSecure'), sub: t('auth.trustSecureText') },
-    { icon: Zap, label: t('auth.trustFast'), sub: t('auth.trustFastText') },
-    { icon: Globe, label: t('auth.trustAccess'), sub: t('auth.trustAccessText') },
-  ]
 
   return (
-    <aside className="relative hidden overflow-hidden bg-[linear-gradient(180deg,#FFF5FA_0%,#FFE6F2_54%,#FFD8EA_100%)] p-10 text-[#1A1A1A] lg:flex lg:min-h-[760px] lg:flex-col lg:justify-between xl:min-h-[820px] xl:p-12">
-      <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[#FFD6E8]/80 blur-2xl" />
-      <div className="absolute right-10 top-24 h-44 w-44 rounded-full bg-white/65 blur-2xl" />
-      <div className="absolute bottom-28 left-1/2 h-72 w-72 rounded-full bg-[#FFF4F8]/80 blur-2xl" />
-      <div className="absolute left-20 top-20 grid grid-cols-6 gap-2 opacity-50">
-        {Array.from({ length: 36 }).map((_, index) => (
-          <span key={index} className="h-1.5 w-1.5 rounded-full bg-white" />
-        ))}
-      </div>
-      <div className="absolute left-[52%] top-32 h-6 w-10 rotate-[-18deg] rounded-[80%_20%_80%_20%] bg-[#F8A9D0]/65" />
-      <div className="absolute left-[47%] top-52 h-8 w-12 rotate-[28deg] rounded-[80%_20%_80%_20%] bg-[#F8A9D0]/55" />
-      <div className="absolute left-[39%] top-[46%] h-5 w-8 rotate-[18deg] rounded-[80%_20%_80%_20%] bg-[#EC4D97]/20" />
-      <BusinessShowpiece />
-
-      <div className="relative z-10 flex justify-center">
+    <aside className="relative hidden overflow-hidden bg-[#FFF5FA] p-10 text-[#1A1A1A] lg:flex lg:min-h-[760px] lg:flex-col lg:justify-between xl:min-h-[820px] xl:p-14">
+      {/* Decorative backgrounds */}
+      <div className="absolute -left-20 -top-20 h-96 w-96 rounded-full bg-white blur-3xl" />
+      <div className="absolute bottom-[-10%] right-[-10%] h-[600px] w-[600px] rounded-full bg-[#FFE6F2] blur-[100px]" />
+      
+      <div className="relative z-10 flex justify-start">
         <LoginBrand storeName={storeName} logoUrl={logoUrl} />
       </div>
 
-      <div className="relative z-10 max-w-[470px]">
-        <p className="inline-flex rounded-full border border-white/80 bg-white/75 px-5 py-2 text-sm font-black uppercase text-[#EC4D97] shadow-[0_12px_28px_rgba(236,77,151,0.10)] backdrop-blur">
-          <Sparkles size={15} className="mr-2" />
+      <div className="relative z-10 max-w-[480px] mt-10">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.15em] text-[#EC4D97] shadow-sm border border-[#F0D9E6]/50">
+          <Sparkles size={12} />
           {t('auth.welcomeTo', { storeName })}
-        </p>
-        <h1 className="mt-7 text-5xl font-black leading-[1.08] tracking-tight text-[#1A1A1A] xl:text-[3.35rem]">
-          {t('auth.heroTitleBefore')} <span className="text-[#EC4D97]">{t('auth.heroTitleHighlight')}</span> {t('auth.heroTitleAfter')}
+        </div>
+        <h1 className="mt-8 text-[3.5rem] font-black leading-[1.05] tracking-tight text-[#1A1A1A]">
+          {t('auth.heroTitleBefore')} <span className="relative z-20 text-[#EC4D97]">{t('auth.heroTitleHighlight')}</span> {t('auth.heroTitleAfter')}
         </h1>
-        <p className="mt-6 max-w-sm text-base font-semibold leading-8 text-[#6B7280]">
+        <p className="mt-8 max-w-[360px] text-[18px] font-medium leading-relaxed text-[#64748B]">
           {t('auth.heroDescription')}
         </p>
       </div>
 
-      <div className="relative z-10 space-y-5">
-        <div className="grid grid-cols-3 gap-3">
+      <div className="relative z-10 space-y-4">
+        <div className="grid grid-cols-1 gap-4 max-w-[440px]">
           {featureCards.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="rounded-[24px] border border-white/75 bg-white/78 p-5 shadow-[0_20px_40px_rgba(236,77,151,0.10)] backdrop-blur transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(236,77,151,0.12)]">
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#FFF4F8] text-[#EC4D97] shadow-[inset_0_0_0_1px_rgba(236,77,151,0.08)]">
-                <Icon size={27} />
+            <div key={title} className="group flex items-center gap-5 rounded-[28px] border border-white/80 bg-white/60 p-5 shadow-[0_10px_40px_rgba(236,77,151,0.04)] backdrop-blur-md transition-all duration-300 hover:bg-white hover:shadow-[0_20px_50px_rgba(236,77,151,0.08)]">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-[20px] bg-[#FFF4F8] text-[#EC4D97] shadow-sm transition-transform group-hover:scale-110">
+                <Icon size={24} strokeWidth={2} />
               </div>
-              <p className="mt-4 text-lg font-black text-[#1A1A1A]">{title}</p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-[#6B7280]">{text}</p>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-3 gap-5 rounded-[24px] border border-white/70 bg-white/55 px-6 py-5 backdrop-blur">
-          {trustItems.map(({ icon: Icon, label, sub }) => (
-            <div key={label} className="flex items-center gap-4">
-              <Icon size={27} className="shrink-0 text-[#EC4D97]" />
               <div>
-                <p className="text-sm font-black text-[#1A1A1A]">{label}</p>
-                <p className="mt-1 text-xs font-semibold text-[#6B7280]">{sub}</p>
+                <p className="text-[16px] font-black text-[#1A1A1A]">{title}</p>
+                <p className="mt-1 text-[13px] font-medium leading-relaxed text-[#94A3B8]">{text}</p>
               </div>
             </div>
           ))}
@@ -339,6 +293,7 @@ function validateRegisterForm(form, t) {
   if (!email) errors.email = t('auth.validationEmailRequired')
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = t('auth.validationEmailInvalid')
   if (!form.password) errors.password = t('auth.validationPasswordRequired')
+  else if (form.password.length < 8) errors.password = t('auth.validationPasswordLength')
   if (!form.confirm_password) errors.confirm_password = t('auth.validationConfirmRequired')
   else if (form.password !== form.confirm_password) errors.confirm_password = t('auth.validationPasswordMismatch')
   if (!form.terms) errors.terms = t('auth.validationTermsRequired')
@@ -358,11 +313,22 @@ function translateAuthError(message, t, fallbackKey = 'auth.errorMessage') {
   const normalized = raw.toLowerCase()
 
   if (!raw) return t(fallbackKey)
-  if (normalized.includes('no active account found')) return t('auth.noActiveAccount')
-  if (normalized.includes('unable to log in with provided credentials')) return t('auth.noActiveAccount')
-  if (normalized.includes('invalid credentials')) return t('auth.invalidCredentials')
-  if (normalized.includes('email') && (normalized.includes('already') || normalized.includes('exists'))) return t('auth.emailAlreadyExists')
-  if (normalized.includes('username') && (normalized.includes('already') || normalized.includes('exists'))) return t('auth.accountAlreadyExists')
+  
+  // Login failures
+  if (normalized.includes('no active account found') || 
+      normalized.includes('unable to log in') || 
+      normalized.includes('invalid credentials')) {
+    return t('auth.noActiveAccount')
+  }
+
+  // Registration specific errors
+  if (normalized.includes('email') && (normalized.includes('already') || normalized.includes('exists') || normalized.includes('taken'))) {
+    return t('auth.emailAlreadyExists')
+  }
+  if (normalized.includes('username') && (normalized.includes('already') || normalized.includes('exists') || normalized.includes('taken'))) {
+    return t('auth.accountAlreadyExists')
+  }
+
   if (normalized.includes('password') && normalized.includes('too common')) return t('auth.passwordTooCommon')
   if (normalized.includes('password') && normalized.includes('too similar')) return t('auth.passwordTooSimilar')
   if (normalized.includes('password') && normalized.includes('entirely numeric')) return t('auth.passwordEntirelyNumeric')
@@ -374,38 +340,47 @@ function translateAuthError(message, t, fallbackKey = 'auth.errorMessage') {
 function NoticePopup({ notice, t, onClose }) {
   const isError = notice.type === 'error'
   const Icon = isError ? AlertCircle : CheckCircle2
+  const messages = Array.isArray(notice.message) ? notice.message : [notice.message]
 
   return (
-    <div className="absolute left-5 right-5 top-20 z-30 lg:left-12 lg:right-12" role="alert" aria-live="assertive">
+    <div className="absolute left-6 right-6 top-24 z-30 lg:left-14 lg:right-14" role="alert" aria-live="assertive">
       <div
         className={cn(
-          'flex items-start gap-3 rounded-2xl border bg-white p-4 shadow-[0_20px_42px_rgba(17,24,39,0.12)]',
-          isError ? 'border-red-100' : 'border-emerald-100'
+          'flex items-start gap-3 rounded-[20px] border bg-white p-4 shadow-[0_15px_40px_rgba(0,0,0,0.06)]',
+          isError ? 'border-red-50' : 'border-emerald-50'
         )}
       >
-        <span
+        <div
           className={cn(
-            'mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-white',
-            isError ? 'bg-[#EF4444]' : 'bg-[#22C55E]'
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full mt-0.5',
+            isError ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'
           )}
         >
-          <Icon size={21} strokeWidth={2.6} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className={cn('text-sm font-bold', isError ? 'text-[#EF4444]' : 'text-[#22C55E]')}>
-            {notice.title}
-          </p>
-          <p className="mt-1 text-sm font-normal leading-5 text-[#6B7280]">
-            {notice.message}
-          </p>
+          <Icon size={20} strokeWidth={2.5} />
+        </div>
+        <div className="min-w-0 flex-1 pt-1.5">
+          {messages.length === 1 ? (
+            <p className="text-[13px] font-bold text-[#1A1A1A]">
+              {messages[0]}
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {messages.map((m, i) => (
+                <li key={i} className="text-[13px] font-bold text-[#1A1A1A] flex items-start gap-2">
+                  <span className={cn("mt-1.5 h-1 w-1 shrink-0 rounded-full", isError ? "bg-red-400" : "bg-emerald-400")} />
+                  {m}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#6B7280] transition hover:bg-gray-50 hover:text-[#EC4D97] focus:outline-none focus:ring-4 focus:ring-gray-100"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#94A3B8] transition hover:bg-gray-50 hover:text-[#EC4D97]"
           aria-label={t('verifyEmail.closeMessage')}
         >
-          <X size={18} />
+          <X size={16} />
         </button>
       </div>
     </div>
@@ -417,7 +392,11 @@ export default function Login() {
   const location = useLocation()
   const { login, register, googleLogin, telegramLogin, isAuthenticated, user } = useAuthStore()
   const { t, i18n } = useTranslation()
-  const [mode, setMode] = useState(location.state?.mode === 'register' ? 'register' : 'login')
+  const [mode, setMode] = useState(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('mode') === 'register') return 'register'
+    return location.state?.mode === 'register' ? 'register' : 'login'
+  })
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -425,7 +404,15 @@ export default function Login() {
   const [telegramLoading, setTelegramLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
-  const [rf, setRf] = useState({ full_name: '', phone: '', email: '', password: '', confirm_password: '', terms: true })
+  const [rf, setRf] = useState({ 
+    full_name: '', 
+    phone: '', 
+    email: '', 
+    password: '', 
+    confirm_password: '', 
+    terms: true,
+    referral_code: new URLSearchParams(location.search).get('ref') || ''
+  })
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
   const telegramWidgetRef = useRef(null)
@@ -483,7 +470,10 @@ export default function Login() {
 
     setGoogleLoading(true)
     try {
-      const loggedInUser = await googleLogin({ credential })
+      const loggedInUser = await googleLogin({ 
+        credential,
+        referral_code: rf.referral_code 
+      })
       if (!loggedInUser) {
         showError(t('auth.googleLoginFailed'))
         return
@@ -556,6 +546,17 @@ export default function Login() {
   }, [googleLoginEnabled, googleClientId, initializeGoogleIdentity])
 
   useEffect(() => {
+    setNotice(null)
+    setRegisterErrors({})
+  }, [mode])
+
+  useEffect(() => {
+    if (location.state?.mode) {
+      setMode(location.state.mode)
+    }
+  }, [location.state?.mode])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('signout') === '1') {
       toast.success(t('auth.signedOut'))
@@ -579,7 +580,10 @@ export default function Login() {
     window[callbackName] = async (telegramUser) => {
       setTelegramLoading(true)
       try {
-        const loggedInUser = await telegramLogin(telegramUser)
+        const loggedInUser = await telegramLogin({
+          ...telegramUser,
+          referral_code: rf.referral_code
+        })
         toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
         setTelegramOpen(false)
       } catch (err) {
@@ -607,6 +611,7 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
+    setNotice(null)
     if (!lf.username || !lf.password) return showError(t('auth.pleaseFillAllFields'))
     setLoading(true)
     try {
@@ -619,18 +624,27 @@ export default function Login() {
 
   const handleRegister = async (e) => {
     e.preventDefault()
+    setNotice(null)
     const { full_name, email, password, confirm_password, terms } = rf
     const cleanEmail = email.trim().toLowerCase()
     const errors = validateRegisterForm(rf, t)
     setRegisterErrors(errors)
     if (Object.keys(errors).length) {
-      showError(Object.values(errors)[0])
+      showError(Object.values(errors))
       return
     }
     const [firstName, ...rest] = full_name.trim().split(/\s+/)
     setLoading(true)
     try {
-      await register({ email: cleanEmail, phone: '', first_name: firstName || '', last_name: rest.join(' '), password, confirm_password })
+      await register({ 
+        email: cleanEmail, 
+        phone: '', 
+        first_name: firstName || '', 
+        last_name: rest.join(' '), 
+        password, 
+        confirm_password,
+        referral_code: rf.referral_code 
+      })
       toast.success(t('auth.verificationCodeSent'))
       navigate('/verify-email', { state: { email: cleanEmail, from: location.state?.from || '/' } })
     } catch (err) {
@@ -640,6 +654,7 @@ export default function Login() {
   }
 
   const openGoogleLogin = async () => {
+    setNotice(null)
     if (googleConfigLoading) {
       showError(t('checkout.pleaseWait'))
       return
@@ -702,6 +717,7 @@ export default function Login() {
   }
 
   const openTelegramLogin = () => {
+    setNotice(null)
     if (!telegramLoginEnabled) {
       showError(t('auth.telegramNotConfigured'))
       return
@@ -710,7 +726,7 @@ export default function Login() {
   }
 
   const EyeToggle = ({ show, toggle }) => (
-    <button type="button" onClick={toggle} className="shrink-0 text-gray-300 hover:text-gray-500 transition">
+    <button type="button" onClick={toggle} className="shrink-0 text-[#94A3B8] hover:text-[#EC4D97] transition">
       {show ? <Eye size={17} /> : <EyeOff size={17} />}
     </button>
   )
@@ -761,12 +777,18 @@ export default function Login() {
             <div className="bg-white px-0 py-5 shadow-none lg:border-0 lg:px-0 lg:py-0 lg:shadow-none">
               {mode === 'login' ? (
                 <form onSubmit={handleLogin}>
-                  <div className="mb-5 flex flex-col items-center lg:hidden">
+                  <div className="mb-6 flex flex-col items-center lg:hidden">
                     {loginLogoUrl ? (
-                      <img src={loginLogoUrl} alt={storeName} className="h-20 w-20 object-contain sm:h-24 sm:w-24" />
+                      <img src={loginLogoUrl} alt={storeName} className="h-14 w-14 object-contain" />
                     ) : (
-                      <ShopLogo storeName={storeName} scale={0.9} />
+                      <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-gradient-to-br from-[#FF6CAB] to-[#EC4D97] text-2xl font-black text-white shadow-md">
+                        S
+                      </div>
                     )}
+                    <div className="mt-3 text-center">
+                      <p className="text-[16px] font-black uppercase tracking-[0.2em] text-[#1A1A1A]">{(storeName || 'Shadow Shop').split(' ')[0]}</p>
+                      <p className="text-[9px] font-black uppercase tracking-[0.5em] text-[#EC4D97]">{(storeName || 'Shadow Shop').split(' ').slice(1).join(' ') || 'SHOP'}</p>
+                    </div>
                   </div>
 
                   <div className="mb-7 text-center lg:text-left">
@@ -774,43 +796,43 @@ export default function Login() {
                     <p className="mt-2 text-base font-normal text-[#6B7280]">{t('auth.loginSubtitle')}</p>
                   </div>
 
-                  <div className="space-y-4">
+                    <div className="space-y-5">
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.emailOrUsername')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
-                        <Mail size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
+                      <label className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.emailOrUsername')}</label>
+                      <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                        <Mail size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
                         <input type="text" value={lf.username} onChange={(e) => sl('username', e.target.value)}
                           placeholder={t('auth.emailOrUsernamePlaceholder')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
+                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
                       </div>
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.password')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
-                        <Lock size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.password')}</label>
+                        <button type="button" onClick={() => navigate('/forgot-password')} className="text-xs font-bold text-[#EC4D97] transition hover:text-[#E53888]">
+                          {t('auth.forgotPassword')}
+                        </button>
+                      </div>
+                      <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                        <Lock size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
                         <input type={showPass ? 'text' : 'password'} value={lf.password}
                           onChange={(e) => sl('password', e.target.value)}
                           placeholder={t('auth.passwordPlaceholder')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
+                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
                         <EyeToggle show={showPass} toggle={() => setShowPass((s) => !s)} />
-                      </div>
-                      <div className="flex justify-end mt-2">
-                        <button type="button" onClick={() => navigate('/forgot-password')} className="text-xs font-bold text-[#EC4D97] transition hover:text-[#E53888] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10">
-                          {t('auth.forgotPassword')}
-                        </button>
                       </div>
                     </div>
 
                     <button type="submit" disabled={loading}
-                      className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] text-base font-bold text-white shadow-[0_15px_35px_rgba(236,25,122,0.28)] transition hover:scale-[1.02] hover:bg-[#D9166F] focus:outline-none focus:ring-4 focus:ring-[#EC197A]/20 active:scale-[0.99] disabled:scale-100 disabled:opacity-60">
-                      {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.login')} <ChevronRight size={17} strokeWidth={2.5} /></>}
+                      className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-[20px] bg-[#EC197A] text-[15px] font-black uppercase tracking-wide text-white shadow-[0_12px_30px_rgba(236,25,122,0.25)] transition-all duration-300 hover:scale-[1.01] hover:bg-[#D9166F] hover:shadow-[0_15px_35px_rgba(236,25,122,0.3)] active:scale-[0.98] disabled:scale-100 disabled:opacity-60">
+                      {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.login')} <ChevronRight size={17} strokeWidth={3} /></>}
                     </button>
 
-                    <div className="flex items-center gap-3 py-0.5">
-                      <div className="h-px flex-1 bg-[#E2E7F0]" />
-                      <span className="text-sm font-black uppercase text-[#B2BAC9]">{t('common.or')}</span>
-                      <div className="h-px flex-1 bg-[#E2E7F0]" />
+                    <div className="flex items-center gap-4 py-1">
+                      <div className="h-px flex-1 bg-gray-100" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#CBD5E1]">{t('common.or')}</span>
+                      <div className="h-px flex-1 bg-gray-100" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -818,7 +840,7 @@ export default function Login() {
                         type="button"
                         onClick={openGoogleLogin}
                         disabled={googleLoading || googleConfigLoading || (Boolean(googleConfig) && !googleLoginEnabled)}
-                        className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
+                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-100 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-gray-50 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
                       >
                         {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
                         {t('auth.google')}
@@ -827,17 +849,17 @@ export default function Login() {
                       <button type="button"
                         onClick={openTelegramLogin}
                         disabled={telegramLoading}
-                        className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-[#7ED7FF] hover:bg-sky-50/40 focus:outline-none focus:ring-4 focus:ring-[#7ED7FF]/20 disabled:opacity-60">
-                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} color="#2AABEE" fill="#2AABEE" />}
+                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-100 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-sky-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:opacity-60">
+                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
                         {t('auth.telegram')}
                       </button>
                     </div>
 
-                    <p className="pt-2 text-center text-sm font-normal text-[#6B7280]">
+                    <p className="pt-2 text-center text-sm font-medium text-[#94A3B8]">
                       {t('auth.noAccount')}{' '}
                       <button type="button" onClick={() => { setNotice(null); setMode('register') }}
-                        className="font-bold text-[#EC4D97] transition hover:text-[#E53888] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10">
-                        {t('auth.signUp')}
+                        className="font-black text-[#EC4D97] transition-all hover:text-[#E53888] hover:underline underline-offset-4">
+                        {t('auth.register')}
                       </button>
                     </p>
                   </div>
@@ -852,87 +874,61 @@ export default function Login() {
                   <div className="space-y-4">
                     {/* Full Name */}
                     <div>
-                      <label htmlFor="register-name" className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.fullName')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
-                        <User size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
+                      <label htmlFor="register-name" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.fullName')}</label>
+                      <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                        <User size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
                         <input id="register-name" type="text" value={rf.full_name} onChange={(e) => sr('full_name', e.target.value)}
                           autoComplete="name"
                           aria-invalid={Boolean(registerErrors.full_name)}
                           aria-describedby={registerErrors.full_name ? 'register-name-error' : undefined}
                           placeholder={t('auth.fullNamePlaceholder')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
+                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
                       </div>
                       {registerErrors.full_name && <p id="register-name-error" className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.full_name}</p>}
                     </div>
 
-                    {/* Phone */}
-                    <div className="hidden">
-                      <label className="block text-sm font-semibold text-gray-800 mb-1.5">{t('auth.phoneNumber')}</label>
-                      <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden transition focus-within:border-[#E91E63]/50 focus-within:ring-2 focus-within:ring-[#E91E63]/10"
-                        style={{ height: 52 }}>
-                        <div className="flex items-center gap-3 flex-1 px-4">
-                          <Phone size={16} color="#E91E63" strokeWidth={1.8} className="shrink-0" />
-                          <input
-                            type="tel"
-                            inputMode="numeric"
-                            value={rf.phone}
-                            onChange={(e) => sr('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            placeholder={t('common.phonePlaceholder')}
-                            className="flex-1 bg-transparent text-[15px] text-gray-800 outline-none placeholder:text-gray-300"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Email */}
                     <div>
-                      <label htmlFor="register-email" className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.email')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
-                        <Mail size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
+                      <label htmlFor="register-email" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.email')}</label>
+                      <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                        <Mail size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
                         <input id="register-email" type="email" value={rf.email} onChange={(e) => sr('email', e.target.value)}
                           autoComplete="email"
                           aria-invalid={Boolean(registerErrors.email)}
                           aria-describedby={registerErrors.email ? 'register-email-error' : undefined}
                           placeholder={t('auth.emailExample')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
+                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
                       </div>
                       {registerErrors.email && <p id="register-email-error" className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.email}</p>}
                     </div>
 
-                    {/* Password */}
-                    <div>
-                      <label htmlFor="register-password" className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.password')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
-                        <Lock size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
-                        <input id="register-password" type={showPass ? 'text' : 'password'} value={rf.password}
-                          autoComplete="new-password"
-                          aria-invalid={Boolean(registerErrors.password)}
-                          aria-describedby={registerErrors.password ? 'register-password-error' : 'register-password-help'}
-                          onChange={(e) => sr('password', e.target.value)} placeholder={t('auth.passwordPlaceholder')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
-                        <EyeToggle show={showPass} toggle={() => setShowPass((s) => !s)} />
+                    {/* Password Fields */}
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="register-password" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.password')}</label>
+                        <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                          <Lock size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
+                          <input id="register-password" type={showPass ? 'text' : 'password'} value={rf.password}
+                            autoComplete="new-password"
+                            onChange={(e) => sr('password', e.target.value)} placeholder={t('auth.passwordPlaceholder')}
+                            className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
+                          <EyeToggle show={showPass} toggle={() => setShowPass((s) => !s)} />
+                        </div>
+                        {registerErrors.password && <p className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.password}</p>}
                       </div>
-                      {registerErrors.password ? (
-                        <p id="register-password-error" className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.password}</p>
-                      ) : (
-                        <p id="register-password-help" className="mt-1.5 text-xs font-medium text-[#6B7280]">{t('auth.passwordHelp')}</p>
-                      )}
-                    </div>
 
-                    {/* Confirm Password */}
-                    <div>
-                      <label htmlFor="register-confirm-password" className="mb-2 block text-sm font-bold text-[#1A1A1A]">{t('auth.confirmPassword')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-2xl border border-[#F2DCE7] bg-white px-4 transition focus-within:border-[#EC4D97] focus-within:ring-4 focus-within:ring-[#EC4D97]/10">
-                        <Lock size={18} color="#EC4D97" strokeWidth={1.9} className="shrink-0" />
-                        <input id="register-confirm-password" type={showConfirm ? 'text' : 'password'} value={rf.confirm_password}
-                          autoComplete="new-password"
-                          aria-invalid={Boolean(registerErrors.confirm_password)}
-                          aria-describedby={registerErrors.confirm_password ? 'register-confirm-password-error' : undefined}
-                          onChange={(e) => sr('confirm_password', e.target.value)} placeholder={t('auth.confirmPassword')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[#1A1A1A] outline-none placeholder:text-[#A7B0C2]" />
-                        <EyeToggle show={showConfirm} toggle={() => setShowConfirm((s) => !s)} />
+                      <div>
+                        <label htmlFor="register-confirm-password" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.confirmPassword')}</label>
+                        <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                          <Lock size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
+                          <input id="register-confirm-password" type={showConfirm ? 'text' : 'password'} value={rf.confirm_password}
+                            autoComplete="new-password"
+                            onChange={(e) => sr('confirm_password', e.target.value)} placeholder={t('auth.confirmPassword')}
+                            className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
+                          <EyeToggle show={showConfirm} toggle={() => setShowConfirm((s) => !s)} />
+                        </div>
+                        {registerErrors.confirm_password && <p className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.confirm_password}</p>}
                       </div>
-                      {registerErrors.confirm_password && <p id="register-confirm-password-error" className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.confirm_password}</p>}
                     </div>
 
                     <label className="flex items-center gap-3 cursor-pointer pt-1">
@@ -940,23 +936,22 @@ export default function Login() {
                         type="checkbox"
                         checked={rf.terms}
                         onChange={(e) => sr('terms', e.target.checked)}
-                        className="h-5 w-5 rounded accent-[#E91E63] shrink-0 cursor-pointer"
+                        className="h-5 w-5 rounded-[6px] accent-[#EC197A] shrink-0 cursor-pointer border-gray-300"
                       />
-                      <span className="text-sm font-normal leading-relaxed text-[#6B7280]">
-                        {t('auth.agreeWith')} <span className="font-bold text-[#1A1A1A] underline decoration-[#EC4D97]/35 underline-offset-2">{t('auth.termsCondition')}</span>
+                      <span className="text-[13px] font-medium leading-relaxed text-[#64748B]">
+                        {t('auth.agreeWith')} <span className="font-bold text-[#1A1A1A] underline decoration-[#EC4D97]/30 underline-offset-4">{t('auth.termsCondition')}</span>
                       </span>
                     </label>
-                    {registerErrors.terms && <p className="-mt-2 text-xs font-bold text-red-500">{registerErrors.terms}</p>}
 
                     <button type="submit" disabled={loading}
-                      className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] text-base font-bold text-white shadow-[0_15px_35px_rgba(236,25,122,0.28)] transition hover:scale-[1.02] hover:bg-[#D9166F] focus:outline-none focus:ring-4 focus:ring-[#EC197A]/20 active:scale-[0.99] disabled:cursor-wait disabled:scale-100 disabled:opacity-75">
-                      {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.createAccount')} <ChevronRight size={17} strokeWidth={2.5} /></>}
+                      className="flex h-14 w-full items-center justify-center gap-2 rounded-[20px] bg-[#EC197A] text-[15px] font-black uppercase tracking-wide text-white shadow-[0_12px_30px_rgba(236,25,122,0.25)] transition-all duration-300 hover:scale-[1.01] hover:bg-[#D9166F] hover:shadow-[0_15px_35px_rgba(236,25,122,0.3)] active:scale-[0.98] disabled:scale-100 disabled:opacity-60">
+                      {loading ? <Loader2 size={18} className="animate-spin" /> : <>{t('auth.createAccount')} <ChevronRight size={17} strokeWidth={3} /></>}
                     </button>
 
-                    <div className="flex items-center gap-3">
-                      <div className="h-px flex-1 bg-[#E2E7F0]" />
-                      <span className="text-sm font-black uppercase text-[#B2BAC9]">{t('common.or')}</span>
-                      <div className="h-px flex-1 bg-[#E2E7F0]" />
+                    <div className="flex items-center gap-4 py-1">
+                      <div className="h-px flex-1 bg-gray-200" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#94A3B8]">{t('common.or')}</span>
+                      <div className="h-px flex-1 bg-gray-200" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -964,7 +959,7 @@ export default function Login() {
                         type="button"
                         onClick={openGoogleLogin}
                         disabled={googleLoading || googleConfigLoading || (Boolean(googleConfig) && !googleLoginEnabled)}
-                        className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
+                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-200 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-gray-50 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
                       >
                         {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
                         {t('auth.google')}
@@ -973,16 +968,16 @@ export default function Login() {
                       <button type="button"
                         onClick={openTelegramLogin}
                         disabled={telegramLoading}
-                        className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-[#F2DCE7] bg-white text-sm font-bold text-[#1A1A1A] transition hover:-translate-y-0.5 hover:border-[#7ED7FF] hover:bg-sky-50/40 focus:outline-none focus:ring-4 focus:ring-[#7ED7FF]/20 disabled:opacity-60">
-                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} color="#2AABEE" fill="#2AABEE" />}
+                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-200 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-sky-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:opacity-60">
+                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
                         {t('auth.telegram')}
                       </button>
                     </div>
 
-                    <p className="pt-2 text-center text-sm font-normal text-[#6B7280]">
+                    <p className="pt-2 text-center text-sm font-medium text-[#64748B]">
                       {t('auth.haveAccount')}{' '}
                       <button type="button" onClick={() => { setNotice(null); setMode('login') }}
-                        className="font-bold text-[#EC4D97] transition hover:text-[#E53888] focus:outline-none focus:ring-4 focus:ring-[#EC4D97]/10">{t('auth.logIn')}</button>
+                        className="font-black text-[#EC4D97] transition-all hover:text-[#E53888] hover:underline underline-offset-4">{t('auth.logIn')}</button>
                     </p>
                   </div>
                 </form>

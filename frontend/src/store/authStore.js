@@ -9,6 +9,7 @@ const useAuthStore = create(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      pendingWelcomeBonus: null,
 
       login: async (credentials) => {
         const { data } = await authApi.login(credentials)
@@ -48,6 +49,12 @@ const useAuthStore = create(
         }
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
+        
+        const bonus = Number(data.signup_bonus_points || 0)
+        if (bonus > 0) {
+          set({ pendingWelcomeBonus: bonus })
+        }
+
         set({
           user: data.user,
           accessToken: data.access,
@@ -61,6 +68,12 @@ const useAuthStore = create(
         const { data } = await authApi.telegramLogin(payload)
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
+        
+        const bonus = Number(data.signup_bonus_points || 0)
+        if (bonus > 0) {
+          set({ pendingWelcomeBonus: bonus })
+        }
+
         set({
           user: data.user,
           accessToken: data.access,
@@ -105,6 +118,9 @@ const useAuthStore = create(
       },
 
       updateUser: (userData) => set({ user: { ...get().user, ...userData } }),
+
+      setPendingWelcomeBonus: (points) => set({ pendingWelcomeBonus: points }),
+      clearPendingWelcomeBonus: () => set({ pendingWelcomeBonus: null }),
 
       fetchMe: async () => {
         try {

@@ -137,6 +137,7 @@ const ExchangeRewards = lazyWithReload(() => import('@/pages/customer/ExchangeRe
 const EarnPoints = lazyWithReload(() => import('@/pages/customer/EarnPoints'))
 const PointsHistory = lazyWithReload(() => import('@/pages/customer/PointsHistory'))
 const RedeemRewards = lazyWithReload(() => import('@/pages/customer/RedeemRewards'))
+const Referral = lazyWithReload(() => import('@/pages/customer/Referral'))
 const MyCoupons = lazyWithReload(() => import('@/pages/customer/MyCoupons'))
 const RewardDetail = lazyWithReload(() => import('@/pages/customer/RewardDetail'))
 const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
@@ -596,6 +597,11 @@ export default function App() {
             <Route path="profile/rewards/earn" element={
               <RequireRewardsAuth>
                 <EarnPoints />
+              </RequireRewardsAuth>
+            } />
+            <Route path="profile/rewards/referral" element={
+              <RequireRewardsAuth>
+                <Referral />
               </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/history" element={

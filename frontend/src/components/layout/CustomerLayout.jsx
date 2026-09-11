@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, startTransition } from 'react'
+import { Suspense, useState, useEffect, startTransition, useRef } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
@@ -15,6 +15,7 @@ import {
   Bell,
   HelpCircle,
   LogOut,
+  LogIn,
   Search,
   X,
   ShoppingBag,
@@ -23,19 +24,23 @@ import {
   Instagram,
   Youtube,
   LayoutDashboard,
-  Menu,
+  Loader2,
+  CalendarCheck,
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
+import { productsApi } from '@/api/products'
+import { ordersApi } from '@/api/orders'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import InstallAppBanner from '@/components/customer/InstallAppBanner'
 import BottomNavigation from '@/components/BottomNavigation'
+import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
@@ -45,28 +50,19 @@ const DESKTOP_NAV_KEYS = [
   { path: '/shop?filter=new_arrival', key: 'nav.newArrivals' },
 ]
 
-const ACCOUNT_MENU_SECTIONS = [
-  [
-    { path: '/profile', key: 'profile.accountOverview', icon: Home },
-    { path: '/my-orders', key: 'nav.orders', icon: ClipboardList },
-    { path: '/address-book', key: 'profile.addresses', icon: MapPin },
-    { path: '/wishlist', key: 'wishlist.title', icon: Heart },
-    { path: '/profile/rewards', key: 'profile.rewards', icon: Gift },
-    { path: '/profile?view=coupons', key: 'profile.coupons', icon: Percent },
-    { path: '/profile?view=reviews', key: 'profile.reviews', icon: Star },
-  ],
-  [
-    { path: '/profile/edit', key: 'profile.editProfile', icon: User },
-    { path: '/profile?view=password', key: 'profile.passwordSecurity', icon: Lock },
-    { path: '/profile?view=payment', key: 'profile.paymentMethods', icon: CreditCard },
-    { path: '/profile?view=notifications', key: 'profile.notifications', icon: Bell },
-    { path: '/profile?view=help', key: 'profile.helpCenter', icon: HelpCircle },
-  ],
-]
-
 const LANGUAGE_OPTIONS = [
-  { code: 'en', label: 'English', short: 'EN', flag: '🇺🇸' },
-  { code: 'km', label: 'Khmer', short: 'KM', flag: '🇰🇭' },
+  {
+    code: 'en',
+    label: 'English',
+    short: 'EN',
+    flag: 'https://flagcdn.com/us.svg',
+  },
+  {
+    code: 'km',
+    label: 'Khmer',
+    short: 'KM',
+    flag: 'https://flagcdn.com/kh.svg',
+  },
 ]
 
 const DEFAULT_FOOTER_MENUS = {
@@ -211,10 +207,69 @@ export default function CustomerLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const [headerSearch, setHeaderSearch] = useState('')
+  const [searchSuggestions, setSearchSuggestions] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchRef = useRef(null)
   const [showMobileSearch, setShowMobileSearch] = useState(false)
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    const q = headerSearch.trim()
+    if (!q || q.length < 2) {
+      setSearchSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const { data } = await productsApi.products.list({ search: q, limit: 8 })
+        setSearchSuggestions(data.results || [])
+        setShowSuggestions(true)
+      } catch (err) {
+        console.error('Search failed', err)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [headerSearch])
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
   const { t, i18n } = useTranslation()
   const { user, isAuthenticated, logout } = useAuthStore()
+  const queryClient = useQueryClient()
+  const [showCheckinSuccess, setShowCheckinSuccess] = useState(false)
+
+  const { data: rewardsSummary } = useQuery({
+    queryKey: ['customer-rewards-summary'],
+    queryFn: () => ordersApi.rewards.summary().then((r) => r.data),
+    enabled: isAuthenticated,
+  })
+
+  const checkinMutation = useMutation({
+    mutationFn: () => ordersApi.rewards.dailyCheckin().then((r) => r.data),
+    onSuccess: (nextData) => {
+      queryClient.setQueryData(['customer-rewards-summary'], nextData)
+      setShowCheckinSuccess(true)
+    },
+    onError: (error) => {
+      const msg = error.response?.data?.detail || t('rewardsPage.toast.checkinFailed')
+      toast.error(msg)
+    },
+  })
+
   const isStaff = isAuthenticated && user?.role && user.role !== 'customer'
   const cartItems = useCartStore((s) => s.items)
   const selectedProductIds = useCartStore((s) => s.selectedProductIds)
@@ -227,7 +282,7 @@ export default function CustomerLayout() {
     setIsLanguageMenuOpen(false)
   }
   const handleLogout = async () => {
-    setIsAccountMenuOpen(false)
+    setIsProfileDropdownOpen(false)
     await logout()
     navigate('/login')
   }
@@ -257,7 +312,7 @@ export default function CustomerLayout() {
   }, [siteSettings?.favicon_url])
 
   useEffect(() => {
-    setIsAccountMenuOpen(false)
+    setIsProfileDropdownOpen(false)
   }, [location.pathname, location.search])
 
   const totalItems = cartItems.reduce((sum, i) => sum + i.quantity, 0)
@@ -315,84 +370,116 @@ export default function CustomerLayout() {
       )}>
         <div className="hidden md:block">
           <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-5 py-3 xl:gap-4 xl:px-6">
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsAccountMenuOpen((open) => !open)}
-                className={cn(
-                  'flex h-11 w-11 items-center justify-center rounded-2xl border text-gray-600 shadow-sm transition hover:border-pink-200 hover:text-pink-600',
-                  isAccountMenuOpen ? 'border-pink-100 bg-pink-50 text-pink-600' : 'border-gray-200 bg-white'
-                )}
-                aria-label={isAccountMenuOpen ? 'Close account menu' : 'Open account menu'}
-                aria-expanded={isAccountMenuOpen}
-                title={isAccountMenuOpen ? 'Close account menu' : 'Open account menu'}
+            <div className="w-[174px] shrink-0 xl:w-[205px]">
+              <Logo logoUrl={logoUrl} storeName={storeName} />
+            </div>
+            <div className="relative mx-auto flex-1 xl:max-w-xl" ref={searchRef}>
+              <form
+                onSubmit={submitSearch}
+                className="flex h-11 w-full items-center rounded-xl border border-gray-200 bg-white shadow-sm transition focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-100"
               >
-                <Menu size={21} strokeWidth={2.5} />
-              </button>
+                <Search size={17} className="ml-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={headerSearch}
+                  onChange={(e) => setHeaderSearch(e.target.value)}
+                  onFocus={() => headerSearch.trim().length >= 2 && setShowSuggestions(true)}
+                  placeholder={t('header.searchPlaceholder')}
+                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-gray-400"
+                />
+                {headerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHeaderSearch('')
+                      setSearchSuggestions([])
+                      setShowSuggestions(false)
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+                <button type="submit" className="shop-btn-primary mx-1.5 h-8 w-10 px-0 py-0">
+                  {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                </button>
+              </form>
 
-              {isAccountMenuOpen && (
-                <div className="absolute left-0 top-full z-50 mt-3 w-[330px] overflow-hidden rounded-[24px] border border-gray-100 bg-white py-3 shadow-[0_18px_45px_rgba(15,23,42,0.16)]">
-                  {ACCOUNT_MENU_SECTIONS.map((section, sectionIndex) => (
-                    <div key={sectionIndex} className={cn('px-3', sectionIndex > 0 && 'mt-3 border-t border-gray-100 pt-3')}>
-                      {sectionIndex > 0 && (
-                        <p className="px-3 pb-2 text-[11px] font-black uppercase tracking-wider text-gray-400">
-                          {t('profile.accountMenu')}
-                        </p>
-                      )}
-                      {section.map((item) => {
-                        const Icon = item.icon
-                        const active = location.pathname + location.search === item.path
-
-                        return (
-                          <Link
-                            key={item.key}
-                            to={item.path}
-                            className={cn(
-                              'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold transition',
-                              active ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50 hover:text-pink-600'
-                            )}
+              {/* Search Suggestions Dropdown */}
+              {showSuggestions && (searchSuggestions.length > 0 || isSearching) && (
+                <div className="absolute left-0 top-full z-[60] mt-2 w-full overflow-hidden rounded-[24px] border border-gray-100 bg-white py-4 shadow-[0_20px_50px_rgba(15,23,42,0.2)] md:left-1/2 md:w-[680px] md:-translate-x-1/2 lg:w-[820px]">
+                  {isSearching && searchSuggestions.length === 0 ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 size={32} className="animate-spin text-pink-500" />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-3 flex items-center justify-between px-6">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-gray-400">
+                          {t('common.products')}
+                        </div>
+                        {searchSuggestions.length > 0 && (
+                          <button
+                            onClick={submitSearch}
+                            className="text-[11px] font-black text-pink-600 hover:underline"
                           >
-                            <Icon size={20} />
-                            <span className="flex-1">{t(item.key)}</span>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  ))}
-                  {isAuthenticated && (
-                    <div className="mt-3 border-t border-gray-100 px-3 pt-3">
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-bold text-red-500 transition hover:bg-red-50"
-                      >
-                        <LogOut size={20} />
-                        <span>{t('auth.logout')}</span>
-                      </button>
-                    </div>
+                            {t('common.viewAll')} ({searchSuggestions.length}+)
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="max-h-[520px] overflow-y-auto px-4 pb-2">
+                        {searchSuggestions.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                            {searchSuggestions.map((product) => (
+                              <Link
+                                key={product.id}
+                                to={`/product/${product.id}`}
+                                onClick={() => setShowSuggestions(false)}
+                                className="group flex flex-col overflow-hidden rounded-2xl border border-gray-50 bg-white p-2 transition hover:border-pink-100 hover:shadow-soft"
+                              >
+                                <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-50">
+                                  {product.primary_image ? (
+                                    <img 
+                                      src={product.primary_image} 
+                                      alt={product.name} 
+                                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105" 
+                                      onError={(e) => {
+                                        e.target.src = 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=cosmetic+product+placeholder&image_size=square'
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-gray-300">
+                                      <ShoppingBag size={24} />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-2 flex flex-1 flex-col">
+                                  <p className="line-clamp-2 text-[11px] font-bold leading-tight text-gray-950 group-hover:text-pink-600">{product.name}</p>
+                                  <div className="mt-auto pt-1.5 flex items-center justify-between">
+                                    <span className="text-xs font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
+                                    {product.brand_name && (
+                                      <span className="text-[9px] font-bold text-gray-400 truncate max-w-[50px]">
+                                        {product.brand_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <ShoppingBag size={40} className="mb-3 text-gray-100" />
+                            <p className="text-sm font-bold text-gray-400">{t('common.noResults')}</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
             </div>
-            <div className="w-[174px] shrink-0 xl:w-[205px]">
-              <Logo logoUrl={logoUrl} storeName={storeName} />
-            </div>
-            <form
-              onSubmit={submitSearch}
-              className="mx-auto flex h-11 min-w-[240px] flex-1 items-center rounded-xl border border-gray-200 bg-white shadow-sm transition focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-100 xl:max-w-xl"
-            >
-              <Search size={17} className="ml-4 text-gray-400" />
-              <input
-                type="search"
-                value={headerSearch}
-                onChange={(e) => setHeaderSearch(e.target.value)}
-                placeholder={t('header.searchPlaceholder')}
-                className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-gray-400"
-              />
-              <button type="submit" className="shop-btn-primary mr-1.5 h-8 w-10 px-0 py-0">
-                <Search size={16} />
-              </button>
-            </form>
             <div className="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-700 xl:gap-2.5">
               <div className="relative">
                 <button
@@ -403,7 +490,13 @@ export default function CustomerLayout() {
                   aria-haspopup="menu"
                   aria-expanded={isLanguageMenuOpen}
                 >
-                  <span className="text-lg leading-none">{currentLanguage.flag}</span>
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-100 shadow-sm">
+                    <img
+                      src={currentLanguage.flag}
+                      alt={currentLanguage.label}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
                   <span className="hidden xl:inline">{currentLanguage.label}</span>
                   <span className="xl:hidden">{currentLanguage.short}</span>
                   <ChevronDown size={15} className={cn('text-gray-500 transition-transform', isLanguageMenuOpen && 'rotate-180')} />
@@ -425,9 +518,14 @@ export default function CustomerLayout() {
                           )}
                           role="menuitem"
                         >
-                          <span className="text-xl leading-none">{language.flag}</span>
-                          <span className="flex-1">{language.label}</span>
-                          <span className="text-sm font-black">{language.short}</span>
+                          <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-100 shadow-sm">
+                            <img
+                              src={language.flag}
+                              alt={language.label}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <span className="flex-1 text-left">{language.label}</span>
                         </button>
                       )
                     })}
@@ -457,14 +555,183 @@ export default function CustomerLayout() {
                 <ClipboardList size={17} />
                 <span className="hidden whitespace-nowrap 2xl:inline">{t('nav.orders')}</span>
               </Link>
-              <Link
-                to="/profile"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-gray-700 transition hover:border-pink-100 hover:bg-pink-50 hover:text-pink-600 2xl:w-auto 2xl:px-3"
-                title={t('nav.account')}
-              >
-                <User size={17} />
-                <span className="hidden whitespace-nowrap 2xl:inline">{t('nav.account')}</span>
-              </Link>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                  className={cn(
+                    "flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border px-3 shadow-sm transition hover:border-pink-200 hover:text-pink-600",
+                    isProfileDropdownOpen ? "border-pink-200 bg-pink-50 text-pink-600" : "border-gray-200 bg-white text-gray-700"
+                  )}
+                  title={t('profile.title')}
+                >
+                  {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.full_name || user.username} className="h-6 w-6 rounded-full object-cover" />
+                  ) : (
+                    <User size={17} />
+                  )}
+                  <span className="hidden whitespace-nowrap 2xl:inline">{t('profile.title')}</span>
+                  <ChevronDown size={14} className={cn('text-gray-400 transition-transform', isProfileDropdownOpen && 'rotate-180')} />
+                </button>
+
+                {isProfileDropdownOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-[280px] overflow-hidden rounded-[24px] border border-gray-100 bg-white py-2 shadow-[0_18px_45px_rgba(15,23,42,0.16)]">
+                    {/* User Summary Section */}
+                    <div className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-pink-100 ring-2 ring-pink-50">
+                          {user?.avatar_url ? (
+                            <img src={user.avatar_url} alt={user.username} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-lg font-black text-pink-600">
+                              {(user?.full_name || user?.username || '?')[0].toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-black text-gray-950">{user?.full_name || user?.username || t('auth.guest')}</p>
+                          <p className="truncate text-xs font-semibold text-gray-400">{user?.email || t('profile.newMember')}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="my-1 h-px bg-gray-50" />
+
+                    {isAuthenticated && rewardsSummary?.earning_rules?.daily_checkin_enabled && !rewardsSummary?.checked_in_today && (
+                      <div className="px-2 py-2">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            checkinMutation.mutate()
+                          }}
+                          disabled={checkinMutation.isPending}
+                          className="flex w-full items-center gap-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-3 text-sm font-black text-white shadow-lg shadow-pink-100 transition hover:from-pink-600 hover:to-rose-600 active:scale-[0.98] disabled:opacity-70"
+                        >
+                          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20">
+                            {checkinMutation.isPending ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <CalendarCheck size={16} />
+                            )}
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className="leading-tight">{t('rewardsPage.earn.dailyCheckin')}</p>
+                            <p className="text-[10px] font-bold text-pink-100">
+                              {t('rewardsPage.pointsReward', { count: rewardsSummary.earning_rules.daily_checkin_bonus })}
+                            </p>
+                          </div>
+                          <span className="rounded-lg bg-white/20 px-2 py-1 text-[10px] font-black uppercase">
+                            {t('rewardsPage.earn.checkIn')}
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
+                    {isAuthenticated ? (
+                      <>
+                        {/* Quick Links */}
+                        <div className="px-2">
+                          <Link
+                            to="/profile"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <User size={18} />
+                            <span>{t('profile.accountOverview')}</span>
+                          </Link>
+                          <Link
+                            to="/my-orders"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <ClipboardList size={18} />
+                            <span>{t('nav.orders')}</span>
+                          </Link>
+                          <Link
+                            to="/address-book"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <MapPin size={18} />
+                            <span>{t('profile.addresses')}</span>
+                          </Link>
+                          <Link
+                            to="/wishlist"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <Heart size={18} />
+                            <span>{t('wishlist.title')}</span>
+                          </Link>
+                          <Link
+                            to="/profile/rewards"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <Gift size={18} />
+                            <span>{t('profile.rewards')}</span>
+                          </Link>
+                          <Link
+                            to="/profile?view=coupons"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <Percent size={18} />
+                            <span>{t('profile.coupons')}</span>
+                          </Link>
+                          <Link
+                            to="/profile?view=reviews"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <Star size={18} />
+                            <span>{t('profile.reviews')}</span>
+                          </Link>
+                        </div>
+
+                        <div className="my-1 h-px bg-gray-50" />
+
+                        {/* Footer Actions */}
+                        <div className="px-2">
+                          <button
+                            onClick={handleLogout}
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-red-500 transition hover:bg-red-50"
+                          >
+                            <LogOut size={18} />
+                            <span>{t('auth.logout')}</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="px-4 py-3">
+                        <button
+                          onClick={() => {
+                            setIsProfileDropdownOpen(false)
+                            navigate('/login')
+                          }}
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] py-3.5 text-base font-black text-white shadow-lg shadow-pink-100 transition hover:bg-[#D9166F] active:scale-[0.98]"
+                        >
+                          <LogIn size={20} strokeWidth={2.5} />
+                          {t('auth.login')}
+                        </button>
+                        <p className="mt-4 text-center text-xs font-semibold text-gray-500">
+                          {t('auth.noAccount')}{' '}
+                          <button
+                            onClick={() => {
+                              setIsProfileDropdownOpen(false)
+                              navigate('/login', { state: { mode: 'register' } })
+                            }}
+                            className="font-black text-pink-600 hover:underline"
+                          >
+                            {t('auth.register')}
+                          </button>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <Link
                 to="/cart"
                 className="relative flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 shadow-sm transition hover:border-pink-200 hover:text-pink-600"
@@ -581,7 +848,7 @@ export default function CustomerLayout() {
               <form onSubmit={submitSearch} className="mt-2 flex items-center gap-2 rounded-2xl bg-gray-100 px-3 py-2.5 shadow-inner">
                 <Search size={16} className="shrink-0 text-gray-400" />
                 <input
-                  type="search"
+                  type="text"
                   value={headerSearch}
                   onChange={(e) => setHeaderSearch(e.target.value)}
                   placeholder={t('header.searchPlaceholder')}
@@ -597,7 +864,7 @@ export default function CustomerLayout() {
         )}
       </header>
 
-      <main className={cn('flex-1', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1 mx-auto w-full max-w-[1500px]', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'px-5 py-4 md:px-6 md:py-6')}>
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>
@@ -714,6 +981,13 @@ export default function CustomerLayout() {
       )}
 
       <InstallAppBanner bottomOffset={!hideMobileBottomNav} />
+
+      <CheckinSuccessModal
+        isOpen={showCheckinSuccess}
+        onClose={() => setShowCheckinSuccess(false)}
+        points={rewardsSummary?.earning_rules?.daily_checkin_bonus}
+      />
+
     </div>
   )
 }

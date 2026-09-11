@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from .models import Permission, Role, RolePermission, ActivityLog, Address, SiteSettings
 from utils.phone import validate_cambodia_phone
 import random
+import string
 import re
 import json
 
@@ -87,7 +88,10 @@ class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
     has_usable_password = serializers.SerializerMethodField()
     has_address = serializers.SerializerMethodField()
+    referrals_count = serializers.SerializerMethodField()
+    successful_referrals_count = serializers.SerializerMethodField()
     role = serializers.CharField(required=False)
+    friend_referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -96,10 +100,23 @@ class UserSerializer(serializers.ModelSerializer):
             'full_name', 'role', 'phone', 'gender',
             'telegram_id', 'telegram_username', 'telegram_photo_url',
             'google_id', 'google_picture_url',
-            'avatar', 'avatar_url',
-            'has_usable_password', 'has_address', 'is_active', 'created_at',
+            'referral_code', 'referrals_count', 'successful_referrals_count',
+            'avatar', 'avatar_url', 'is_active', 'created_at',
+            'has_usable_password', 'has_address', 'friend_referral_code',
+            'referred_by',
         ]
-        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'google_id', 'google_picture_url', 'created_at']
+        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'google_id', 'google_picture_url', 'created_at', 'referral_code', 'referrals_count', 'referred_by']
+
+    def to_representation(self, instance):
+        # Ensure referral code exists for existing users
+        if not instance.referral_code:
+            while True:
+                code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+                if not User.objects.filter(referral_code=code).exists():
+                    instance.referral_code = code
+                    instance.save(update_fields=['referral_code'])
+                    break
+        return super().to_representation(instance)
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
@@ -119,6 +136,14 @@ class UserSerializer(serializers.ModelSerializer):
         if annotated is not None:
             return bool(annotated)
         return obj.addresses.exists()
+
+    def get_referrals_count(self, obj):
+        return obj.referrals.count()
+
+    def get_successful_referrals_count(self, obj):
+        # Since points are now awarded at registration, 
+        # a successful referral is anyone who has registered.
+        return obj.referrals.count()
 
     def validate_username(self, value):
         username = str(value or '').strip().lstrip('@').lower()
@@ -155,6 +180,23 @@ class UserSerializer(serializers.ModelSerializer):
         if not Role.objects.filter(name=value).exists():
             raise serializers.ValidationError('Select a valid role.')
         return value
+
+    def update(self, instance, validated_data):
+        friend_referral_code = validated_data.pop('friend_referral_code', None)
+        if friend_referral_code and not instance.referred_by:
+            friend_referral_code = friend_referral_code.strip().upper()
+            # Prevent self-referral
+            if friend_referral_code != instance.referral_code:
+                referrer = User.objects.filter(referral_code=friend_referral_code, is_active=True).first()
+                if referrer:
+                    instance.referred_by = referrer
+                    # Award referral bonus to the referrer immediately
+                    try:
+                        from apps.orders.rewards import award_referral_bonus
+                        award_referral_bonus(referrer, instance)
+                    except Exception:
+                        pass
+        return super().update(instance, validated_data)
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -201,12 +243,13 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, allow_blank=False)
     confirm_password = serializers.CharField(write_only=True)
+    referral_code = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
         model = User
         fields = [
             'username', 'email', 'first_name', 'last_name', 'phone',
-            'password', 'confirm_password',
+            'password', 'confirm_password', 'referral_code',
         ]
 
     def validate(self, attrs):

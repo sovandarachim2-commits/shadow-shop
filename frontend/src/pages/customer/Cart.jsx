@@ -6,6 +6,7 @@ import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency } from '@/utils/helpers'
+import CouponStatusModal from '@/components/rewards/CouponStatusModal'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -72,6 +73,7 @@ export default function Cart() {
   const [promoCode, setPromoCode] = useState(appliedCoupon?.coupon_code || '')
   const [applyingPromo, setApplyingPromo] = useState(false)
   const [showCoupons, setShowCoupons] = useState(false)
+  const [couponModal, setCouponModal] = useState({ isOpen: false, type: 'success', message: '', name: '' })
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
@@ -175,10 +177,21 @@ export default function Cart() {
       })
       applyCoupon(data)
       setPromoCode(data.coupon_code)
-      toast.success(t('rewardsPage.toast.couponApplied', { code: data.coupon_code }))
+      setCouponModal({
+        isOpen: true,
+        type: 'success',
+        message: t('rewardsPage.toast.couponApplied', { code: data.coupon_code }),
+        name: data.name
+      })
     } catch (error) {
       clearCoupon()
-      toast.error(error?.response?.data?.detail || t('cart.promoApplyFailed'))
+      const errorMsg = error?.response?.data?.detail || t('cart.promoApplyFailed')
+      setCouponModal({
+        isOpen: true,
+        type: 'error',
+        message: errorMsg,
+        name: ''
+      })
     } finally {
       setApplyingPromo(false)
     }
@@ -194,9 +207,20 @@ export default function Cart() {
       })
       applyCoupon(data)
       setShowCoupons(false)
-      toast.success(t('rewardsPage.toast.couponApplied', { code: data.coupon_code }))
+      setCouponModal({
+        isOpen: true,
+        type: 'success',
+        message: t('rewardsPage.toast.couponApplied', { code: data.coupon_code }),
+        name: data.name
+      })
     } catch (error) {
-      toast.error(error?.response?.data?.detail || t('cart.promoApplyFailed'))
+      const errorMsg = error?.response?.data?.detail || t('cart.promoApplyFailed')
+      setCouponModal({
+        isOpen: true,
+        type: 'error',
+        message: errorMsg,
+        name: ''
+      })
     } finally {
       setApplyingPromo(false)
     }
@@ -422,6 +446,13 @@ export default function Cart() {
           </div>
         </div>
       )}
+      <CouponStatusModal
+        isOpen={couponModal.isOpen}
+        onClose={() => setCouponModal(prev => ({ ...prev, isOpen: false }))}
+        type={couponModal.type}
+        message={couponModal.message}
+        couponName={couponModal.name}
+      />
     </div>
   )
 }

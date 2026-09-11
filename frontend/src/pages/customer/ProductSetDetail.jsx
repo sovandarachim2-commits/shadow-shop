@@ -481,7 +481,7 @@ export default function ProductSetDetail() {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] md:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
             {relatedLoading
               ? Array.from({ length: 4 }).map((_, index) => <RelatedSetSkeleton key={index} />)
               : relatedItems.map((item, index) => (

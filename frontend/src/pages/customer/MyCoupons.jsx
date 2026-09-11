@@ -123,15 +123,23 @@ export default function MyCoupons() {
   if (isError) return <div className="py-20 text-center text-sm font-bold text-gray-500">{t('rewardsPage.couponsLoadError')}</div>
 
   return (
-    <div className="min-h-screen bg-white pb-8">
-      <div className="mx-auto w-full max-w-[560px] px-4 md:max-w-[1440px] md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-4 md:flex md:min-h-0 md:items-start md:justify-between md:bg-transparent md:px-0 md:pt-0">
-          <button type="button" onClick={() => navigate('/profile/rewards')} className="flex h-10 w-10 items-center justify-center md:hidden"><ChevronLeft size={23} /></button>
-          <div className="min-w-0 text-center md:text-left">
+    <div className="min-h-screen bg-gray-50 pb-8">
+      <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
+        <header className="sticky top-0 z-30 -mx-5 flex min-h-[60px] items-center gap-3 bg-white/95 px-5 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-6 md:min-h-0 md:bg-transparent md:px-0 md:pt-0">
+          <button 
+            type="button" 
+            onClick={() => navigate('/profile/rewards')} 
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50 active:scale-95"
+          >
+            <ChevronLeft size={23} />
+          </button>
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.coupons.title')}</h1>
-            <p className="mt-1 hidden text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.coupons.subtitle')}</p>
+            <p className="mt-0.5 text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.coupons.subtitle')}</p>
           </div>
-          <button type="button" className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full text-pink-600"><HelpCircle size={21} /></button>
+          <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-pink-600 shadow-sm transition hover:bg-gray-50">
+            <HelpCircle size={21} />
+          </button>
         </header>
 
         <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

@@ -166,7 +166,7 @@ export default function NewOrder({ embedded = false, onCreated }) {
                 <label className="label">Phone Number *</label>
                 <input
                   className="input-field"
-                  placeholder="077322921"
+                  placeholder="012345678"
                   value={customerInfo.phone}
                   onChange={(e) => setCustomerInfo({ ...customerInfo, phone: normalizeCambodiaPhone(e.target.value) })}
                 />

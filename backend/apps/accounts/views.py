@@ -41,6 +41,9 @@ PAYMENT_METHOD_KEYS = {'bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contac
 
 
 def _verification_code():
+    """Generate a 4-digit verification code. In DEBUG mode, returns '1234' for easier development."""
+    if settings.DEBUG:
+        return '1234'
     return ''.join(random.choice(string.digits) for _ in range(4))
 
 
@@ -72,6 +75,11 @@ def _smtp_from_email(store_name='Shadow Shop'):
 def _send_email_verification(email, code, purpose='account'):
     from django.core.mail import EmailMultiAlternatives
     from django.utils.html import escape
+
+    # Skip sending real emails in development to keep terminal clean
+    if settings.DEBUG:
+        print(f"\n[DEV MODE] OTP for {email}: {code} (Purpose: {purpose})\n")
+        return
 
     site = SiteSettings.get_solo()
     store_name = site.store_name or 'Shadow Shop'
@@ -131,7 +139,7 @@ def _send_email_verification(email, code, purpose='account'):
 
 
 def _create_email_verification(user, request=None):
-    code = ''.join(random.choice(string.digits) for _ in range(4))
+    code = _verification_code()
     verification = EmailVerification.objects.create(
         user=user,
         email=(user.email or '').strip().lower(),
@@ -210,11 +218,13 @@ class RegisterView(generics.CreateAPIView):
         email = str(validated.get('email', '')).strip().lower()
         username = str(validated.get('username') or email).strip()
         password = validated.pop('password')
+        referral_code = validated.get('referral_code', '')
         validated.update({
             'email': email,
             'username': username,
             'role': 'customer',
             'phone': validated.get('phone', ''),
+            'referral_code': referral_code,
         })
         code = _verification_code()
         with transaction.atomic():
@@ -241,6 +251,36 @@ class RegisterView(generics.CreateAPIView):
             'detail': 'Verification code sent.',
             'email': email,
         }, status=status.HTTP_201_CREATED)
+
+
+def _give_signup_bonus(user):
+    """Give signup bonus points to a new user."""
+    signup_bonus_points = 0
+    try:
+        from apps.orders.models import PointTransaction, RewardSettings
+        reward_settings = RewardSettings.get_solo()
+        if reward_settings.is_active and reward_settings.signup_bonus_enabled and reward_settings.signup_bonus > 0:
+            signup_bonus_points = reward_settings.signup_bonus
+            # Use get_or_create to avoid double bonus if called twice for same user (e.g. social login)
+            PointTransaction.objects.get_or_create(
+                user=user,
+                order=None,
+                type=PointTransaction.TYPE_EARN,
+                note='Signup bonus',
+                defaults={'points': signup_bonus_points},
+            )
+    except Exception:
+        signup_bonus_points = 0
+    return signup_bonus_points
+
+
+def _give_referral_bonus(referrer, referred_user):
+    """Award referral bonus to the referrer."""
+    try:
+        from apps.orders.rewards import award_referral_bonus
+        award_referral_bonus(referrer, referred_user)
+    except Exception:
+        pass
 
 
 class EmailVerificationResendView(generics.GenericAPIView):
@@ -295,7 +335,8 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
         if pending.attempts >= 5:
             return Response({'detail': 'Too many attempts. Please resend a new code.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-        if pending.code != code:
+        is_master_otp = settings.DEBUG and code == '1234'
+        if pending.code != code and not is_master_otp:
             pending.attempts += 1
             pending.save(update_fields=['attempts', 'updated_at'])
             return Response({'detail': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -327,23 +368,20 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
                 is_active=True,
                 password=pending.password_hash,
             )
+            
+            # Handle referral
+            referral_code = data.get('referral_code')
+            if referral_code:
+                referrer = User.objects.filter(referral_code=referral_code, is_active=True).first()
+                if referrer:
+                    user.referred_by = referrer
+            
             user.save()
-            signup_bonus_points = 0
-            try:
-                from apps.orders.models import PointTransaction, RewardSettings
-
-                reward_settings = RewardSettings.get_solo()
-                if reward_settings.is_active and reward_settings.signup_bonus_enabled and reward_settings.signup_bonus > 0:
-                    signup_bonus_points = reward_settings.signup_bonus
-                    PointTransaction.objects.get_or_create(
-                        user=user,
-                        order=None,
-                        type=PointTransaction.TYPE_EARN,
-                        note='Signup bonus',
-                        defaults={'points': signup_bonus_points},
-                    )
-            except Exception:
-                signup_bonus_points = 0
+            signup_bonus_points = _give_signup_bonus(user)
+            # Give referral bonus to referrer immediately
+            if user.referred_by:
+                _give_referral_bonus(user.referred_by, user)
+            
             pending.is_verified = True
             pending.verified_at = timezone.now()
             pending.save(update_fields=['is_verified', 'verified_at', 'updated_at'])
@@ -495,8 +533,10 @@ class TelegramLoginView(generics.GenericAPIView):
         last_name = str(auth_data.get('last_name', '')).strip()
         telegram_username = str(auth_data.get('username', '')).strip()
         photo_url = str(auth_data.get('photo_url', '')).strip()
+        referral_code = str(request.data.get('referral_code', '')).strip()
 
         user = User.objects.filter(telegram_id=telegram_id).first()
+        is_new_user = user is None
         if not user:
             base_username = f"tg_{telegram_id}"
             username = base_username
@@ -512,6 +552,13 @@ class TelegramLoginView(generics.GenericAPIView):
                 role='customer',
                 telegram_id=telegram_id,
             )
+            
+            # Handle referral for new user
+            if referral_code:
+                referrer = User.objects.filter(referral_code=referral_code, is_active=True).first()
+                if referrer:
+                    user.referred_by = referrer
+                    
             user.set_unusable_password()
         elif not user.is_active:
             return Response({'detail': 'This account is disabled.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -523,9 +570,23 @@ class TelegramLoginView(generics.GenericAPIView):
             user.first_name = first_name
         if last_name:
             user.last_name = last_name
+        
+        is_new_user = user.pk is None
         user.save()
 
-        return _issue_auth_tokens(user, request, login_method='telegram')
+        signup_bonus_points = 0
+        if is_new_user:
+            signup_bonus_points = _give_signup_bonus(user)
+            # Give referral bonus to referrer immediately
+            if user.referred_by:
+                _give_referral_bonus(user.referred_by, user)
+
+        return _issue_auth_tokens(
+            user, 
+            request, 
+            login_method='telegram',
+            extra_data={'signup_bonus_points': signup_bonus_points} if signup_bonus_points > 0 else None
+        )
 
     def _verify_telegram_hash(self, auth_data, bot_token, telegram_hash):
         pairs = []
@@ -645,11 +706,13 @@ class GoogleLoginView(generics.GenericAPIView):
         last_name = str(payload.get('family_name', '')).strip()
         display_name = str(payload.get('name', '')).strip()
         picture_url = str(payload.get('picture', '')).strip()
+        referral_code = str(request.data.get('referral_code', '')).strip()
 
         user = User.objects.filter(google_id=google_id).first()
         if not user and email:
             user = User.objects.filter(email__iexact=email).first()
 
+        is_new_user = user is None
         if not user:
             base_username = email.split('@')[0] if email else f"google_{google_id}"
             username = base_username[:140] or f"google_{google_id}"
@@ -670,6 +733,13 @@ class GoogleLoginView(generics.GenericAPIView):
                 role='customer',
                 google_id=google_id,
             )
+            
+            # Handle referral for new user
+            if referral_code:
+                referrer = User.objects.filter(referral_code=referral_code, is_active=True).first()
+                if referrer:
+                    user.referred_by = referrer
+                    
             user.set_unusable_password()
         elif not user.is_active:
             return Response({'detail': 'This account is disabled.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -683,9 +753,23 @@ class GoogleLoginView(generics.GenericAPIView):
             user.first_name = first_name
         if last_name:
             user.last_name = last_name
+        
+        is_new_user = user.pk is None
         user.save()
 
-        return _issue_auth_tokens(user, request, login_method='google')
+        signup_bonus_points = 0
+        if is_new_user:
+            signup_bonus_points = _give_signup_bonus(user)
+            # Give referral bonus to referrer immediately
+            if user.referred_by:
+                _give_referral_bonus(user.referred_by, user)
+
+        return _issue_auth_tokens(
+            user, 
+            request, 
+            login_method='google',
+            extra_data={'signup_bonus_points': signup_bonus_points} if signup_bonus_points > 0 else None
+        )
 
 
 class TelegramVerificationStartView(generics.GenericAPIView):

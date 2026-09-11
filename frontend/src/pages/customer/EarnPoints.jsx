@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Cake, CalendarCheck, ChevronLeft, ChevronRight, Edit3, HelpCircle, Loader2,
-  Share2, ShoppingBag, Star, UserPlus,
+  Share2, ShoppingBag, Star, Users,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
+import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 
 function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, disabled, completed = false }) {
   const { t } = useTranslation()
@@ -56,6 +58,7 @@ export default function EarnPoints() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [showCheckinSuccess, setShowCheckinSuccess] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -66,7 +69,7 @@ export default function EarnPoints() {
     mutationFn: () => ordersApi.rewards.dailyCheckin().then((response) => response.data),
     onSuccess: (nextData) => {
       queryClient.setQueryData(['customer-rewards-summary'], nextData)
-      toast.success(t('rewardsPage.toast.checkinSuccess'))
+      setShowCheckinSuccess(true)
     },
     onError: (error) => toast.error(error.response?.data?.detail || t('rewardsPage.toast.checkinFailed')),
   })
@@ -103,36 +106,44 @@ export default function EarnPoints() {
   const pointUnit = pointsPerDollar === 1 ? t('rewardsPage.pointSingular') : t('rewardsPage.pointsPlural')
 
   return (
-    <div className="min-h-screen bg-white pb-8">
-      <div className="mx-auto w-full max-w-[560px] px-4 md:max-w-[1440px] md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-4 md:flex md:min-h-0 md:items-start md:justify-between md:bg-transparent md:px-0 md:pt-0">
-          <button type="button" onClick={() => navigate('/profile/rewards')} className="flex h-10 w-10 items-center justify-center md:hidden"><ChevronLeft size={23} /></button>
-          <div className="min-w-0 text-center md:text-left">
+    <div className="min-h-screen bg-gray-50 pb-8">
+      <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
+        <header className="sticky top-0 z-30 -mx-5 flex min-h-[60px] items-center gap-3 bg-white/95 px-5 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-6 md:min-h-0 md:bg-transparent md:px-0 md:pt-0">
+          <button 
+            type="button" 
+            onClick={() => navigate('/profile/rewards')} 
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50 active:scale-95"
+          >
+            <ChevronLeft size={23} />
+          </button>
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.earn.title')}</h1>
-            <p className="mt-1 hidden text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.earn.subtitle')}</p>
+            <p className="mt-0.5 text-xs font-semibold text-gray-500">{t('rewardsPage.earn.subtitle')}</p>
           </div>
-          <button type="button" className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full text-pink-600"><HelpCircle size={21} /></button>
+          <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-pink-600 shadow-sm transition hover:bg-gray-50">
+            <HelpCircle size={19} />
+          </button>
         </header>
 
-        <section className="relative mt-3 overflow-hidden rounded-[20px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-0 md:p-6">
-          <p className="text-sm font-bold text-white/90">{t('rewardsPage.yourPoints')}</p>
+        <section className="relative mt-3 overflow-hidden rounded-[20px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-0 md:p-5">
+          <p className="text-xs font-bold text-white/90 md:text-sm">{t('rewardsPage.yourPoints')}</p>
           <div className="mt-2 flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 ring-[3px] ring-white/30"><Star size={22} fill="currentColor" /></span>
-            <span className="text-[32px] font-black leading-none">{points.toLocaleString()}</span>
-            <span className="self-end pb-0.5 text-sm font-black">{t('rewardsPage.pts')}</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 ring-[3px] ring-white/30"><Star size={20} fill="currentColor" /></span>
+            <span className="text-[28px] font-black leading-none md:text-[32px]">{points.toLocaleString()}</span>
+            <span className="self-end pb-0.5 text-xs font-black md:text-sm">{t('rewardsPage.pts')}</span>
           </div>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-sm font-black text-gray-950">
-            <Star size={14} fill="currentColor" className="text-gray-400" /> {t('profile.memberLevel', { level: memberLevel })}
+          <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-xs font-black text-gray-950 md:mt-4 md:px-3.5 md:py-1.5">
+            <Star size={12} fill="currentColor" className="text-gray-400" /> {t('profile.memberLevel', { level: memberLevel })}
           </div>
-          <div className="mt-5 flex justify-between gap-3 text-xs font-black">
+          <div className="mt-5 flex justify-between gap-3 text-[11px] font-black md:mt-6 md:text-xs">
             <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>
             <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-yellow-300" style={{ width: `${progress}%` }} /></div>
-          <p className="mt-3 text-sm font-black">{t('rewardsPage.ptsProgress', { current: points.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2"><div className="h-full rounded-full bg-yellow-300" style={{ width: `${progress}%` }} /></div>
+          <p className="mt-2.5 text-xs font-black md:mt-3 md:text-sm">{t('rewardsPage.ptsProgress', { current: points.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>
         </section>
 
-        <h2 className="mb-3 mt-6 text-lg font-black text-gray-950">{t('rewardsPage.earn.waysToEarn')}</h2>
+        <h2 className="mb-2.5 mt-5 text-base font-black text-gray-950 md:text-lg">{t('rewardsPage.earn.waysToEarn')}</h2>
         <section className="grid overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm lg:grid-cols-2">
           <EarnRow
             icon={ShoppingBag}
@@ -151,11 +162,11 @@ export default function EarnPoints() {
             disabled={!reviewEnabled || !rules.review_bonus}
           />
           <EarnRow
-            icon={UserPlus}
+            icon={Users}
             title={t('rewardsPage.earn.referFriend')}
             description={t('rewardsPage.earn.referFriendDesc')}
             reward={referralEnabled && rules.referral_bonus ? t('rewardsPage.pointsReward', { count: rules.referral_bonus }) : t('rewardsPage.comingSoon')}
-            action={shareStore}
+            action={() => navigate('/profile/rewards/referral')}
             disabled={!referralEnabled || !rules.referral_bonus}
           />
           <EarnRow
@@ -193,6 +204,12 @@ export default function EarnPoints() {
           </div>
         </section>
       </div>
+
+      <CheckinSuccessModal
+        isOpen={showCheckinSuccess}
+        onClose={() => setShowCheckinSuccess(false)}
+        points={rules.daily_checkin_bonus}
+      />
     </div>
   )
 }

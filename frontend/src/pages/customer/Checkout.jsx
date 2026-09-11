@@ -9,7 +9,8 @@ import useAuthStore from '@/store/authStore'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, getUserContactDefaults } from '@/utils/helpers'
-import { formatAddressLocationKhmer, KHMER_FONT_FAMILY } from '@/utils/addressHelpers'
+import { formatAddressLocationKhmer } from '@/utils/addressHelpers'
+import { KHMER_FONT_FAMILY } from '@/utils/constants'
 import { CAMBODIA_PROVINCE_LABELS, toProvinceKey } from '@/utils/cambodiaProvinces'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
@@ -147,6 +148,17 @@ function submitAbaForm(endpoint, params) {
   form.submit()
 }
 
+function abaQrImageSrc(payment) {
+  const src = payment?.qr_image || payment?.qrImage || ''
+  if (!src) return ''
+  if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) return src
+  return `data:image/png;base64,${src}`
+}
+
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent || '')
+}
+
 function formatTimer(seconds) {
   const safeSeconds = Math.max(0, seconds || 0)
   const minutes = Math.floor(safeSeconds / 60)
@@ -186,9 +198,13 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false)
   const [bakongOrder, setBakongOrder] = useState(null)
   const [bakongPayment, setBakongPayment] = useState(null)
+  const [abaPayment, setAbaPayment] = useState(null)
   const [showBakongPopup, setShowBakongPopup] = useState(false)
+  const [showAbaPopup, setShowAbaPopup] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [showCodConfirm, setShowCodConfirm] = useState(false)
+  const [showAbaConfirm, setShowAbaConfirm] = useState(false)
+  const [abaConfirmSecondsLeft, setAbaConfirmSecondsLeft] = useState(600)
   const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(300)
   const [abaLoading, setAbaLoading] = useState(false)
   const [checkingBakong, setCheckingBakong] = useState(false)
@@ -406,6 +422,19 @@ export default function Checkout() {
     return () => clearInterval(timer)
   }, [showBakongPopup, bakongPayment?.id, bakongPayment?.expires_at, bakongPayment?.status])
 
+  useEffect(() => {
+    if (!showAbaConfirm) return undefined
+
+    setAbaConfirmSecondsLeft(600)
+    const startedAt = Date.now()
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000)
+      setAbaConfirmSecondsLeft(Math.max(0, 600 - elapsed))
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [showAbaConfirm])
+
   const buildCheckoutPayload = () => ({
     name: info.name,
     phone: info.phone,
@@ -449,6 +478,7 @@ export default function Checkout() {
 
   const handlePlaceOrder = async (options = {}) => {
     const codConfirmed = options?.codConfirmed === true
+    const abaConfirmed = options?.abaConfirmed === true
 
     if (paymentMethod === 'bakong' && bakongPayment && bakongPayment.status !== 'paid') {
       setShowBakongPopup(true)
@@ -463,6 +493,11 @@ export default function Checkout() {
 
     if (paymentMethod === 'cod' && !codConfirmed) {
       setShowCodConfirm(true)
+      return
+    }
+
+    if (paymentMethod === 'aba' && !abaConfirmed) {
+      setShowAbaConfirm(true)
       return
     }
 
@@ -490,7 +525,6 @@ export default function Checkout() {
         if (paymentMethod === 'aba') {
           const abaData = result.aba_payment
           if (!abaData) throw new Error('Missing ABA payment')
-          setAbaLoading(true)
           const pendingState = {
             reference: pending.reference,
             paymentMethod: 'aba',
@@ -498,6 +532,15 @@ export default function Checkout() {
           }
           localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(pendingState))
           setPendingReturnPayment(pendingState)
+          if (abaData.mode === 'qr') {
+            setAbaPayment(abaData)
+            setShowAbaPopup(true)
+            toast.success(t('checkout.scanQrToast'))
+            if (abaData.deeplink && isMobileDevice()) {
+              window.location.href = abaData.deeplink
+            }
+            return
+          }
           submitAbaForm(abaData.endpoint, abaData.params)
           return
         }
@@ -770,6 +813,74 @@ export default function Checkout() {
         </div>
       )}
 
+      {showAbaConfirm && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center bg-gray-950/50 px-4 backdrop-blur-sm"
+          onClick={() => setShowAbaConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[1.5rem] bg-white p-5 shadow-2xl md:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-pink-600">Confirm Payment</p>
+                <h2 className="mt-1 text-xl font-black leading-tight text-gray-950">Confirm ABA Payment</h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-gray-500">
+                  Please confirm this payment. You will pay with ABA Mobile.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAbaConfirm(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 text-gray-500 shadow-sm transition-colors hover:bg-gray-50"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-gray-500">Payment Method</span>
+                <span className="text-sm font-black text-gray-950">ABA PAY</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-gray-500">Total Amount</span>
+                <span className="text-base font-black text-gray-950">{formatCurrency(grandTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-gray-500">Time Left</span>
+                <span className="flex items-center gap-1.5 text-sm font-black text-gray-950">
+                  <Clock size={16} />
+                  {formatTimer(abaConfirmSecondsLeft)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAbaConfirm(false)}
+                className="rounded-full border border-gray-200 py-3 text-sm font-black text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAbaConfirm(false)
+                  handlePlaceOrder({ abaConfirmed: true })
+                }}
+                disabled={submitting}
+                className="flex items-center justify-center rounded-full bg-pink-600 py-3 text-sm font-black text-white shadow-lg shadow-pink-100 transition-all hover:bg-pink-700 active:scale-[0.98] disabled:opacity-50"
+              >
+                {submitting ? t('checkout.pleaseWait') : 'Pay'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bakongPayment && showBakongPopup && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-gray-950/55 px-4 py-5 backdrop-blur-sm">
           <div className="mx-auto w-full max-w-[340px] rounded-[1.5rem] bg-white p-4 shadow-2xl md:max-w-sm md:p-5">
@@ -861,6 +972,85 @@ export default function Checkout() {
             <div className="mt-3">
               <button
                 onClick={() => setShowBakongPopup(false)}
+                className="w-full rounded-full border border-gray-200 px-4 py-3 text-sm font-black text-gray-600"
+              >
+                {t('checkout.bakong.cancelPayment')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {abaPayment && showAbaPopup && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-gray-950/55 px-4 py-5 backdrop-blur-sm">
+          <div className="mx-auto w-full max-w-[340px] rounded-[1.5rem] bg-white p-4 shadow-2xl md:max-w-sm md:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                  <QrCode size={19} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wide text-blue-700">ABA PAY</p>
+                  <h2 className="mt-0.5 text-xl font-black text-gray-950">Scan to pay</h2>
+                  <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                    Payment ref {abaPayment.reference}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAbaPopup(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 text-gray-500"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-[1.4rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-pink-50 p-3.5 text-center">
+              {abaQrImageSrc(abaPayment) ? (
+                <img
+                  src={abaQrImageSrc(abaPayment)}
+                  alt="ABA KHQR"
+                  className="mx-auto h-48 w-48 rounded-2xl bg-white p-2 shadow-xl shadow-blue-100"
+                />
+              ) : (
+                <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-2xl bg-white p-3 text-center text-xs font-bold text-gray-500 shadow-xl shadow-blue-100">
+                  QR image unavailable
+                </div>
+              )}
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500">
+                <ShieldCheck size={14} className="text-blue-700" />
+                Secured by ABA PayWay
+              </div>
+            </div>
+
+            <div className="py-3.5 text-center">
+              <p className="text-xs font-bold text-gray-500">{t('checkout.totalAmount')}</p>
+              <p className="mt-0.5 text-3xl font-black text-blue-700">{formatCurrency(abaPayment.amount)}</p>
+            </div>
+
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-blue-700">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+                  <Clock size={21} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black">Waiting for payment</p>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">Your order will be created after ABA confirms payment.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2">
+              {abaPayment.deeplink && (
+                <button
+                  onClick={() => { window.location.href = abaPayment.deeplink }}
+                  className="w-full rounded-full bg-blue-700 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-100"
+                >
+                  Open ABA Mobile
+                </button>
+              )}
+              <button
+                onClick={() => setShowAbaPopup(false)}
                 className="w-full rounded-full border border-gray-200 px-4 py-3 text-sm font-black text-gray-600"
               >
                 {t('checkout.bakong.cancelPayment')}

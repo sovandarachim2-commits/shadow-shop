@@ -43,7 +43,6 @@ import {
   Truck,
   Send,
   Upload,
-  UserPlus,
   UserRound,
   Users,
   Warehouse,
@@ -117,7 +116,7 @@ const ADMIN_EARN_RULES = [
   { title: 'Daily Check-in', icon: CalendarDays, status: 'Auto', text: 'Customers can check in once per day when Daily check-in bonus is greater than 0.', tone: 'bg-sky-50 text-sky-600' },
   { title: 'Lucky Spin', icon: RotateCw, status: 'Plan', text: 'Future spin game for points, coupons, or lucky box entries.', tone: 'bg-amber-50 text-amber-600' },
   { title: 'Review Reward', icon: Camera, status: 'Manual', text: 'Add points from Customer Points after approving a useful review.', tone: 'bg-violet-50 text-violet-600' },
-  { title: 'Invite Friend', icon: UserPlus, status: 'Manual', text: 'Add points after the invited friend completes their first order.', tone: 'bg-emerald-50 text-emerald-600' },
+  { title: 'Invite Friend', icon: Users, status: 'Manual', text: 'Add points after the invited friend completes their first order.', tone: 'bg-emerald-50 text-emerald-600' },
   { title: 'VIP Level', icon: Crown, status: 'Auto', text: 'Customer level is based on point balance: Silver, Gold, Platinum.', tone: 'bg-rose-50 text-rose-600' },
 ]
 
@@ -771,7 +770,7 @@ export default function RewardDashboardAdmin() {
 export function RewardRulesAdmin() {
   const earningRules = [
     { id: 1, name: 'Points per Purchase', description: 'Earn 1 point per $1 spent', type: 'Purchase', points: '1 pt per $1', conditions: 'Min. spend $1', tier: 'All Tiers', priority: 1, status: 'Active', icon: ShoppingCart, tone: 'bg-pink-50 text-[#EC3F8F]' },
-    { id: 2, name: 'Signup Bonus', description: 'Welcome points after account creation', type: 'Signup', points: '500 pts', conditions: 'First time signup', tier: 'All Tiers', priority: 2, status: 'Active', icon: UserPlus, tone: 'bg-orange-50 text-orange-500' },
+    { id: 2, name: 'Signup Bonus', description: 'Welcome points after account creation', type: 'Signup', points: '500 pts', conditions: 'First time signup', tier: 'All Tiers', priority: 2, status: 'Active', icon: Users, tone: 'bg-orange-50 text-orange-500' },
     { id: 3, name: 'Birthday Bonus', description: 'Annual customer birthday reward', type: 'Birthday', points: '300 pts', conditions: 'Once per year', tier: 'All Tiers', priority: 3, status: 'Active', icon: Gift, tone: 'bg-emerald-50 text-emerald-600' },
     { id: 4, name: 'Product Review', description: 'Points for approved product review', type: 'Review', points: '100 pts', conditions: 'Min. 4 stars review', tier: 'All Tiers', priority: 4, status: 'Active', icon: Award, tone: 'bg-blue-50 text-blue-600' },
     { id: 5, name: 'Refer a Friend', description: 'Friend places first order', type: 'Referral', points: '1,000 pts', conditions: 'Friend places order', tier: 'All Tiers', priority: 5, status: 'Active', icon: UserRound, tone: 'bg-violet-50 text-violet-600' },
@@ -3696,7 +3695,7 @@ export function RewardSettingsAdmin() {
       title: 'New customer bonus',
       description: 'Bonus points when a new customer creates an account',
       footnote: 'Awarded once when account is created',
-      icon: UserPlus,
+      icon: Users,
       min: 0,
     },
     {

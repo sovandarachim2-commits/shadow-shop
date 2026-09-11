@@ -22,6 +22,7 @@ import {
   Zap,
   UserRound,
   UsersRound,
+  Gift,
 } from 'lucide-react'
 import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
@@ -44,7 +45,7 @@ function hasProfileBasics(user, form) {
   return Boolean(hasRealName && cleanPhone && isValidCambodiaPhone(cleanPhone) && gender)
 }
 
-function buildInitialForm(user) {
+function buildInitialForm(user, refParam) {
   return {
     full_name: [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || user?.full_name || '',
     phone: normalizeCambodiaPhone(user?.phone),
@@ -52,6 +53,7 @@ function buildInitialForm(user) {
     email: user?.email || '',
     password: '',
     confirm_password: '',
+    friend_referral_code: refParam || '',
   }
 }
 
@@ -74,8 +76,10 @@ export default function CompleteProfile() {
   )
   const needsPassword = user?.has_usable_password === false
   const needsAddress = user?.has_address !== true
+  const params = new URLSearchParams(location.search)
+  const refParam = params.get('ref')
   const [step, setStep] = useState(() => getInitialStep(user))
-  const [form, setForm] = useState(() => buildInitialForm(user))
+  const [form, setForm] = useState(() => buildInitialForm(user, refParam))
   const [errors, setErrors] = useState({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -198,6 +202,7 @@ export default function CompleteProfile() {
       phone: cleanPhone,
       gender: form.gender,
       email: cleanEmail,
+      friend_referral_code: form.friend_referral_code.trim(),
     }
 
     if (avatarFile) {
@@ -323,6 +328,7 @@ export default function CompleteProfile() {
               isPending={saveMutation.isPending}
               username={user?.username}
               emailLocked={Boolean(user?.email)}
+              hasReferrer={Boolean(user?.referred_by)}
               t={t}
             />
           )}
@@ -426,7 +432,7 @@ function StepProgress({ step, totalSteps = 3, progress }) {
   )
 }
 
-function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, username, emailLocked, t }) {
+function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, username, emailLocked, hasReferrer, t }) {
   return (
     <div className="mt-6 flex flex-1 flex-col">
       <div className="flex items-center justify-center gap-4 rounded-3xl bg-[#FFF8FB] px-4 py-4">
@@ -494,6 +500,19 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
           autoComplete="email"
           disabled={emailLocked}
         />
+
+        {!hasReferrer && (
+          <CompleteProfileField
+            label={t('completeProfile.referralCodeOptional')}
+            optional
+            icon={Gift}
+            placeholder={t('completeProfile.referralCodePlaceholder')}
+            value={form.friend_referral_code}
+            onChange={(value) => set('friend_referral_code', value)}
+            error={errors.friend_referral_code}
+            helper={t('completeProfile.referralCodeHelper')}
+          />
+        )}
       </div>
 
       <BottomAction isPending={isPending}>{t('common.next')}</BottomAction>

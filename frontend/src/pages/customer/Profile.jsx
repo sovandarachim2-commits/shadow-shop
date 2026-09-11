@@ -105,7 +105,8 @@ function compressImage(file, maxPx = 400, quality = 0.82) {
 }
 
 function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSaved, asPage = false }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isKhmer = i18n.language === 'km'
   const updateUser = useAuthStore((s) => s.updateUser)
   const fileInputRef = useRef(null)
   const [avatarFile, setAvatarFile] = useState(null)
@@ -206,129 +207,151 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   }
 
   const content = (
-      <form
-        onSubmit={handleSubmit}
-        className={cn('flex flex-col bg-white', asPage ? 'min-h-screen md:min-h-0 md:max-h-[88vh]' : 'max-h-[94vh]')}
-      >
-        <div className={cn(
-          'sticky top-0 z-20 grid grid-cols-[44px_1fr_64px] items-center gap-3 border-b border-gray-100 bg-white/95 px-4 pb-3 backdrop-blur',
-          asPage ? 'pt-[calc(0.45rem+env(safe-area-inset-top))] md:pt-3' : 'pt-3'
-        )}>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-50 active:scale-95"
-            aria-label={t('common.back')}
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h2 className="truncate text-center text-lg font-black text-gray-950">{t('profile.editProfile')}</h2>
-          <button
-            type="submit"
-            disabled={saveMutation.isPending}
-            className="flex h-10 items-center justify-center rounded-full px-2 text-sm font-black text-[#E91E63] transition hover:bg-pink-50 active:scale-95 disabled:opacity-60"
-          >
-            {saveMutation.isPending ? <Loader2 size={17} className="animate-spin" /> : t('common.save')}
-          </button>
-        </div>
+    <form
+      onSubmit={handleSubmit}
+      className={cn('flex flex-col bg-white', asPage ? 'min-h-screen md:min-h-0 md:max-h-[92vh]' : 'max-h-[96vh]')}
+    >
+      {/* Header */}
+      <div className={cn(
+        'sticky top-0 z-20 flex items-center justify-between border-b border-gray-100 bg-white/95 px-5 py-3 backdrop-blur',
+        asPage ? 'pt-[calc(0.5rem+env(safe-area-inset-top))] md:pt-4' : 'pt-4'
+      )}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 active:scale-95"
+          aria-label={t('common.back')}
+        >
+          <ArrowLeft size={22} />
+        </button>
+        <h2 className="text-lg font-black text-gray-950">{isKhmer ? 'កែប្រែព័ត៌មាន' : 'Edit Information'}</h2>
+        <button
+          type="submit"
+          disabled={saveMutation.isPending}
+          className="rounded-full px-3 py-2 text-sm font-black text-[#EC197A] transition hover:bg-pink-50 active:scale-95 disabled:opacity-60"
+        >
+          {saveMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : (isKhmer ? 'រក្សាទុក' : 'Save')}
+        </button>
+      </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-gray-50 px-4 pb-5 pt-4">
-          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-            <div className="px-4 py-5">
-              <div className="flex items-center gap-4">
-                <div className="relative shrink-0">
-                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-[#E91E63] to-pink-300 text-3xl font-black text-white shadow-[0_14px_30px_rgba(233,30,99,0.22)]">
-                    {avatarPreview
-                      ? <img src={avatarPreview} alt="Profile avatar" className="h-full w-full object-cover" />
-                      : initials}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#E91E63] text-white shadow-lg transition hover:bg-pink-600 active:scale-95"
-                    aria-label={t('profile.changePhoto')}
-                  >
-                    <Camera size={17} />
-                  </button>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-black text-gray-950">{form.full_name || user.username || t('profile.yourProfile')}</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-gray-500">@{user.username || t('profile.yourProfile')}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {avatarPreview && avatarPreview !== user.avatar_url && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAvatarFile(null)
-                          setAvatarPreview(user.avatar_url || null)
-                          if (fileInputRef.current) fileInputRef.current.value = ''
-                        }}
-                        className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-600 transition hover:bg-gray-50 active:scale-[0.98]"
-                      >
-                        {t('profile.reset')}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-          </section>
-
-          <ProfileSection title={t('profile.personalInfo')} icon={User}>
-            <ProfileField label={t('profile.fullName')} value={form.full_name} onChange={(v) => set('full_name', v)} required icon={User} error={errors.full_name} autoComplete="name" />
-            <ProfileField label={t('auth.username')} value={form.username} onChange={(v) => set('username', v.replace(/^@+/, '').toLowerCase())} required icon={IdCard} error={errors.username} autoComplete="username" placeholder="user1234567" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ProfileField label={t('profile.phoneNumber')} value={form.phone} onChange={(v) => set('phone', normalizeCambodiaPhone(v))} icon={Phone} error={errors.phone} autoComplete="tel" placeholder={t('common.phonePlaceholder')} />
-              <ProfileField label={t('profile.emailAddress')} type="email" value={form.email} onChange={(v) => set('email', v)} icon={Mail} error={errors.email} autoComplete="email" />
-            </div>
-            <ProfileSelect label={t('completeProfile.gender')} value={form.gender} onChange={(v) => set('gender', v)} icon={User} options={GENDER_OPTIONS} t={t} />
-          </ProfileSection>
-
-          <ProfileSection title={t('profile.address')} icon={MapPin}>
-            <div className="rounded-2xl border border-pink-100 bg-pink-50/60 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#E91E63] shadow-sm">
-                  <MapPin size={20} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black uppercase tracking-wide text-gray-400">{t('profile.defaultAddress')}</p>
-                  <p className="mt-1 text-sm font-black leading-5 text-gray-950">
-                    {defaultAddress ? defaultAddress.address_line1 : t('profile.noDefaultAddress')}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
-                    {defaultAddress
-                      ? [defaultAddress.address_line2, defaultAddress.city, defaultAddress.state, defaultAddress.postal_code].filter(Boolean).join(', ')
-                      : t('profile.addDeliveryAddressHint')}
-                  </p>
-                </div>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-gray-50/50 px-5 pb-8 pt-6">
+        {/* User Brief Card */}
+        <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-6">
+            <div className="relative shrink-0">
+              <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-pink-500 to-rose-400 text-3xl font-black text-white shadow-lg ring-1 ring-pink-100">
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                ) : initials}
               </div>
               <button
                 type="button"
-                onClick={onEditAddress}
-                className="mt-4 h-11 w-full rounded-xl border border-[#E91E63]/20 bg-white text-sm font-black text-[#E91E63] shadow-sm transition hover:bg-white/80 active:scale-[0.98]"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#EC197A] text-white shadow-md transition hover:bg-pink-700 active:scale-90"
               >
-                {defaultAddress ? t('profile.editDefaultAddress') : t('profile.addDeliveryAddress')}
+                <Camera size={18} />
               </button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             </div>
-          </ProfileSection>
+            <div className="min-w-0">
+              <h3 className="truncate text-2xl font-black text-gray-950">{form.full_name || user.username}</h3>
+              <p className="mt-1.5 font-bold text-gray-400">@{user.username}</p>
+            </div>
+          </div>
+        </section>
 
-          <ProfileSection title={t('profile.accountInfo')} icon={IdCard}>
-            <ProfileInfoRow label={t('auth.username')} value={usernameDisplay} />
-            <ProfileInfoRow label={t('profile.memberSince')} value={memberSince} />
-            <ProfileInfoRow
-              label={t('profile.verificationStatus')}
-              value={<span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-600"><CheckCircle2 size={13} /> {t('profile.verified')}</span>}
+        {/* Personal Information Section */}
+        <ProfileSection title={t('profile.personalInfo')} icon={User}>
+          <div className="grid gap-5">
+            <ProfileField
+              label={t('profile.fullName')}
+              value={form.full_name}
+              onChange={(v) => set('full_name', v)}
+              required
+              error={errors.full_name}
+              autoComplete="name"
             />
-          </ProfileSection>
-        </div>
-      </form>
+            <ProfileField
+              label={t('auth.username')}
+              value={form.username}
+              onChange={(v) => set('username', v.replace(/^@+/, '').toLowerCase())}
+              required
+              error={errors.username}
+              autoComplete="username"
+              icon={null}
+            />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <ProfileField
+                label={t('profile.phoneNumber')}
+                value={form.phone}
+                onChange={(v) => set('phone', normalizeCambodiaPhone(v))}
+                error={errors.phone}
+                autoComplete="tel"
+              />
+              <ProfileField
+                label={t('profile.emailAddress')}
+                type="email"
+                value={form.email}
+                onChange={(v) => set('email', v)}
+                error={errors.email}
+                autoComplete="email"
+              />
+            </div>
+            <ProfileSelect
+              label={t('completeProfile.gender')}
+              value={form.gender}
+              onChange={(v) => set('gender', v)}
+              options={GENDER_OPTIONS}
+              t={t}
+            />
+          </div>
+        </ProfileSection>
+
+        {/* Address Section */}
+        <ProfileSection title={t('profile.addresses')} icon={MapPin}>
+          <div className="rounded-2xl bg-pink-50/40 p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#EC197A] shadow-sm">
+                <MapPin size={26} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-wider text-gray-400">{t('profile.defaultAddress')}</p>
+                <p className="mt-2 text-[15px] font-black leading-relaxed text-gray-900">
+                  {defaultAddress ? [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state].filter(Boolean).join(', ') : t('profile.noDefaultAddress')}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onEditAddress}
+              className="mt-6 h-14 w-full rounded-2xl border border-pink-200 bg-white text-base font-black text-[#EC197A] transition hover:bg-pink-50 active:scale-[0.98]"
+            >
+              {defaultAddress ? t('profile.editDefaultAddress') : t('profile.addDeliveryAddress')}
+            </button>
+          </div>
+        </ProfileSection>
+
+        {/* Account Info Section */}
+        <ProfileSection title={t('profile.accountInfo')} icon={IdCard}>
+          <div className="space-y-5 py-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-500">{t('auth.username')}</span>
+              <span className="text-sm font-black text-gray-900">@{user.username}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-500">{isKhmer ? 'សមាជិកចាប់ពី' : 'Member Since'}</span>
+              <span className="text-sm font-black text-gray-900">{memberSince}</span>
+            </div>
+          </div>
+        </ProfileSection>
+      </div>
+    </form>
   )
 
   if (asPage) {
     return (
       <div className="min-h-screen bg-white md:flex md:items-center md:justify-center md:bg-gray-50/80 md:px-6 md:py-10">
-        <div className="w-full bg-white md:max-w-[560px] md:overflow-hidden md:rounded-3xl md:border md:border-gray-100 md:shadow-[0_22px_70px_rgba(15,23,42,0.16)]">
+        <div className="w-full bg-white md:max-w-[700px] md:overflow-hidden md:rounded-[32px] md:border md:border-gray-100 md:shadow-[0_22px_70px_rgba(15,23,42,0.16)]">
           {content}
         </div>
       </div>
@@ -494,13 +517,13 @@ function ProfileInfoRow({ label, value }) {
 function ProfileField({ label, value, onChange, type = 'text', readOnly, required, icon: Icon, error, autoComplete, placeholder }) {
   return (
     <label className="block">
-      <span className="mb-2 flex items-center gap-1 text-xs font-black uppercase tracking-wide text-gray-400">
+      <span className="mb-2 flex items-center gap-1 text-[13px] font-black text-gray-400">
         {label}
-        {required && <span className="text-[#E91E63]">*</span>}
+        {required && <span className="text-[#EC197A]">*</span>}
       </span>
       <div className="relative">
         {Icon && (
-          <Icon size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+          <Icon size={20} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
         )}
         <input
           type={type}
@@ -512,14 +535,14 @@ function ProfileField({ label, value, onChange, type = 'text', readOnly, require
           aria-invalid={error ? 'true' : 'false'}
           onChange={onChange ? (e) => onChange(e.target.value) : undefined}
           className={cn(
-            'h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-950 outline-none transition placeholder:text-gray-300 focus:border-[#E91E63] focus:bg-white focus:ring-4 focus:ring-pink-100',
-            Icon && 'pl-11',
+            'h-14 w-full rounded-[18px] border border-gray-100 bg-white px-5 text-base font-black text-gray-900 outline-none transition placeholder:text-gray-300 focus:border-[#EC197A] focus:bg-white focus:ring-4 focus:ring-pink-50',
+            Icon && 'pl-12',
             error && 'border-red-300 bg-red-50/40 focus:border-red-400 focus:ring-red-100',
             readOnly && 'cursor-not-allowed bg-gray-50 text-gray-500'
           )}
         />
       </div>
-      {error && <p className="mt-1.5 text-xs font-semibold text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs font-bold text-red-500">{error}</p>}
     </label>
   )
 }
@@ -527,22 +550,22 @@ function ProfileField({ label, value, onChange, type = 'text', readOnly, require
 function ProfileSelect({ label, value, onChange, required, icon: Icon, options = [], error, t }) {
   return (
     <label className="block">
-      <span className="mb-2 flex items-center gap-1 text-xs font-black uppercase tracking-wide text-gray-400">
+      <span className="mb-2 flex items-center gap-1 text-[13px] font-black text-gray-400">
         {label}
-        {required && <span className="text-[#E91E63]">*</span>}
+        {required && <span className="text-[#EC197A]">*</span>}
       </span>
       <div className="relative">
         {Icon && (
-          <Icon size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+          <Icon size={20} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
         )}
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-invalid={error ? 'true' : 'false'}
           className={cn(
-            'h-12 w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 pr-10 text-sm font-bold outline-none transition focus:border-[#E91E63] focus:bg-white focus:ring-4 focus:ring-pink-100',
-            Icon && 'pl-11',
-            value ? 'text-gray-950' : 'text-gray-400',
+            'h-14 w-full appearance-none rounded-[18px] border border-gray-100 bg-white px-5 pr-12 text-base font-black outline-none transition focus:border-[#EC197A] focus:bg-white focus:ring-4 focus:ring-pink-50',
+            Icon && 'pl-12',
+            value ? 'text-gray-900' : 'text-gray-400',
             error && 'border-red-300 bg-red-50/40 focus:border-red-400 focus:ring-red-100'
           )}
         >
@@ -550,9 +573,9 @@ function ProfileSelect({ label, value, onChange, required, icon: Icon, options =
             <option key={option.value} value={option.value}>{option.labelKey && t ? t(option.labelKey) : option.label}</option>
           ))}
         </select>
-        <ChevronDown size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+        <ChevronDown size={20} className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-gray-400" />
       </div>
-      {error && <p className="mt-1.5 text-xs font-semibold text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs font-bold text-red-500">{error}</p>}
     </label>
   )
 }
@@ -685,8 +708,8 @@ export default function Profile() {
   const isKhmer = i18n.language === 'km'
   const toggleLang = () => i18n.changeLanguage(isKhmer ? 'en' : 'km')
   const currentLanguage = isKhmer
-    ? { code: 'km', label: t('profile.khmer'), flag: '🇰🇭' }
-    : { code: 'en', label: t('profile.english'), flag: '🇺🇸' }
+    ? { code: 'km', label: t('profile.khmer'), flag: 'https://flagcdn.com/kh.svg' }
+    : { code: 'en', label: t('profile.english'), flag: 'https://flagcdn.com/us.svg' }
 
   const selectLanguage = (language) => {
     i18n.changeLanguage(language)
@@ -821,12 +844,12 @@ export default function Profile() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F8FAFC]">
 
       {/* ═══════════════════════════════════════════
           MOBILE FULL REDESIGN
       ═══════════════════════════════════════════ */}
-      <div className="min-h-screen bg-white px-5 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] lg:hidden">
+      <div className="min-h-screen bg-white px-5 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-black text-[#202A44]">{t('profile.title')}</h1>
           <div className="flex items-center gap-2">
@@ -838,7 +861,11 @@ export default function Profile() {
                 aria-label={t('profile.chooseLanguage')}
               >
                 <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-50 text-base">
-                  {currentLanguage.flag}
+                  <img
+                    src={currentLanguage.flag}
+                    alt={currentLanguage.label}
+                    className="h-full w-full object-cover"
+                  />
                 </span>
                 <ChevronDown
                   size={14}
@@ -849,8 +876,8 @@ export default function Profile() {
               {isLanguageMenuOpen && (
                 <div className="absolute right-0 top-11 z-30 w-40 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl">
                   {[
-                    { code: 'en', label: t('profile.english'), flag: '🇺🇸' },
-                    { code: 'km', label: t('profile.khmer'), flag: '🇰🇭' },
+                    { code: 'en', label: t('profile.english'), flag: 'https://flagcdn.com/us.svg' },
+                    { code: 'km', label: t('profile.khmer'), flag: 'https://flagcdn.com/kh.svg' },
                   ].map((language) => {
                     const isActive = i18n.language === language.code
                     return (
@@ -862,9 +889,14 @@ export default function Profile() {
                           isActive ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50'
                         )}
                       >
-                        <span className="text-lg leading-none">{language.flag}</span>
-                        <span className="flex-1">{language.label}</span>
-                        <span className="text-xs font-black">{language.code.toUpperCase()}</span>
+                        <div className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-100 shadow-sm">
+                          <img
+                            src={language.flag}
+                            alt={language.label}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <span className="flex-1 text-left">{language.label}</span>
                       </button>
                     )
                   })}
@@ -956,13 +988,9 @@ export default function Profile() {
       {/* ═══════════════════════════════════════════
           DESKTOP LAYOUT
       ═══════════════════════════════════════════ */}
-      <div className="hidden lg:flex lg:mx-auto lg:w-full lg:max-w-[1500px]">
-
-        {/* ── Sidebar ──────────────────────────────── */}
+      <div className="hidden md:block md:mx-auto md:w-full md:max-w-[1500px] md:px-6 md:py-10">
         {/* ── Main Content ────────────────────────── */}
-        <div className="flex-1 overflow-auto bg-slate-50 px-6 py-8">
-          <div className="mx-auto max-w-[1440px] space-y-7">
-
+        <div className="space-y-7">
           {/* ══ ACCOUNT OVERVIEW ══ */}
           {activeView === 'profile' && (
             <DesktopProfileOverview
@@ -980,6 +1008,7 @@ export default function Profile() {
               rewardPoints={rewardPoints}
               nextTierPoints={nextTierPoints}
               membershipLevel={membershipLevel}
+              ptsToNext={ptsToNext}
               progressPct={progressPct}
               wishlistCount={wishlistItems.length}
               currentLanguage={currentLanguage}
@@ -989,189 +1018,6 @@ export default function Profile() {
               handleLogout={handleLogout}
             />
           )}
-          {false && activeView === 'profile' && <>
-
-            {/* Row 1 — Profile card + Points card */}
-            <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
-              <div className="relative overflow-hidden rounded-3xl border border-pink-100 bg-white p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-                <div className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-pink-100/60" />
-                <div className="absolute right-24 bottom-0 h-28 w-28 rounded-full bg-purple-100/50" />
-                <div className="relative flex items-center gap-5">
-                  <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-pink-100 shadow-md">
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-pink-400 to-purple-500 text-3xl font-black text-white">
-                        {initials}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-2xl font-black text-gray-950">{displayName}</h2>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500">
-                          <span>{usernameDisplay}</span>
-                          <span className="text-gray-300">•</span>
-                          <span>{phone}</span>
-                        </div>
-                        <div className="mt-2.5 flex items-center gap-3">
-                          <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-600">
-                            <CheckCircle2 size={12} /> {t('profile.verified')}
-                          </span>
-                          <span className="text-xs text-gray-400">{t('profile.memberSince')} {memberSince}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => navigate('/profile/edit')}
-                        className="flex shrink-0 items-center gap-1.5 rounded-full border border-pink-200 bg-white/80 px-4 py-2 text-sm font-bold text-pink-600 shadow-sm transition hover:bg-pink-50"
-                      >
-                        <Pencil size={13} /> {t('profile.editProfile')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="shrink-0 rounded-3xl border border-pink-100 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-                <div className="flex items-center gap-2">
-                  <Gift size={15} className="text-pink-500" />
-                  <span className="text-sm font-black text-gray-700">{t('profile.myPoints')}</span>
-                </div>
-                <div className="mt-3 flex items-end justify-between gap-3">
-                  <div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-black text-pink-600">{rewardPoints.toLocaleString()}</span>
-                      <span className="text-sm font-bold text-gray-400">{t('profile.ptsLabel')}</span>
-                    </div>
-                    {ptsToNext > 0 && (
-                      <p className="mt-0.5 text-xs text-gray-400">{t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <div className="h-4 w-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-400" />
-                      <span className="text-sm font-black text-gray-700">{t('profile.memberLevel', { level: membershipLevel })}</span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-gray-400">{t('profile.enjoyBenefits')}</p>
-                    <button className="mt-1 text-xs font-bold text-pink-500 hover:text-pink-600">{t('profile.viewBenefits')}</button>
-                  </div>
-                </div>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                  <div className="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all" style={{ width: `${progressPct}%` }} />
-                </div>
-                <p className="mt-1.5 text-right text-[11px] font-semibold text-gray-400">
-                  {rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} {t('profile.ptsLabel')}
-                </p>
-              </div>
-            </div>
-
-            {/* Row 2 — Orders Status + Shortcuts */}
-            <div className="grid grid-cols-2 gap-5">
-              <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
-                <div className="mb-5 flex items-center justify-between">
-                  <h3 className="text-base font-black text-gray-950">{t('profile.myOrdersStatus')}</h3>
-                  <button onClick={() => navigate('/my-orders')} className="flex items-center gap-0.5 text-sm font-bold text-pink-500 hover:text-pink-600">
-                    {t('profile.viewAllOrders')} <ChevronRight size={14} />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between">
-                  {ORDER_STATUS_ITEMS.map(({ key, icon: Icon }, idx) => (
-                    <div key={key} className="flex items-center">
-                      <button onClick={() => navigate('/my-orders')} className="flex flex-col items-center gap-2 transition active:scale-95">
-                        <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-pink-500 ring-1 ring-pink-100">
-                          <Icon size={21} />
-                          {orderCounts[key] > 0 && (
-                            <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-pink-500 px-1 text-[10px] font-black text-white ring-[1.5px] ring-white">
-                              {orderCounts[key]}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs font-semibold text-gray-600">{t(`orders.status.${key}`)}</span>
-                      </button>
-                      {idx < ORDER_STATUS_ITEMS.length - 1 && (
-                        <ChevronRight size={15} className="mx-1 shrink-0 text-gray-300" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
-                <h3 className="mb-5 text-base font-black text-gray-950">{t('profile.myShortcuts')}</h3>
-                <div className="flex items-start gap-5">
-                  {SHORTCUTS.map(({ tKey, icon: Icon, path }) => (
-                    <button key={tKey} onClick={() => navigate(path)} className="flex flex-col items-center gap-2 transition hover:opacity-70 active:scale-95">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-50 text-pink-500 ring-1 ring-pink-100">
-                        <Icon size={19} />
-                      </div>
-                      <span className="text-[11px] font-semibold text-gray-600">{t(tKey)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 3 — Recent Orders */}
-            <div className="grid grid-cols-1 gap-5">
-              <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.045)]">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-base font-black text-gray-950">{t('profile.recentOrders')}</h3>
-                  <button onClick={() => navigate('/my-orders')} className="flex items-center gap-0.5 text-[13px] font-bold text-pink-500 hover:text-pink-600">
-                    {t('profile.viewAll')} <ChevronRight size={13} />
-                  </button>
-                </div>
-                {accountOrders.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-gray-400">{t('profile.noOrdersYet')}</div>
-                ) : (
-                  <div className="grid gap-1 xl:grid-cols-2">
-                    {accountOrders.slice(0, 4).map((order) => (
-                      <button
-                        key={order.id}
-                        onClick={() => navigate(`/my-orders/${order.id}`)}
-                        className="flex w-full items-center gap-3.5 rounded-2xl p-3 text-left transition hover:bg-pink-50/50"
-                      >
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-pink-50">
-                          <ShoppingBag size={17} className="text-pink-300" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-black text-gray-950">#{order.order_number}</p>
-                          <p className="mt-0.5 text-xs text-gray-400">{formatDate(order.created_at)} • {t('profile.itemsCount', { count: order.items_count ?? 0 })}</p>
-                        </div>
-                        <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-bold', STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500')}>
-                          {orderStatusLabel(t, order.status)}
-                        </span>
-                        <p className="shrink-0 text-sm font-black text-gray-950">{formatCurrency(order.grand_total)}</p>
-                        <ChevronRight size={14} className="shrink-0 text-gray-300" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Row 4 — Trust Badges */}
-            <div className="grid grid-cols-4 gap-4 pb-2">
-              {[
-                { icon: Shield, titleKey: 'profile.authenticTitle', descKey: 'profile.authenticDesc' },
-                { icon: Truck, titleKey: 'profile.fastDeliveryTitle', descKey: 'profile.fastDeliveryDesc' },
-                { icon: Lock, titleKey: 'profile.securePaymentTitle', descKey: 'profile.securePaymentDesc' },
-                { icon: Headphones, titleKey: 'profile.supportTitle', descKey: 'profile.supportDesc' },
-              ].map(({ icon: Icon, titleKey, descKey }) => (
-                <div key={titleKey} className="flex items-center gap-3.5 rounded-3xl border border-gray-100 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-50 text-pink-500">
-                    <Icon size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-gray-900">{t(titleKey)}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">{t(descKey)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-          </>}{/* end activeView === 'profile' */}
-
           {/* ══ MY ORDERS ══ */}
           {activeView === 'orders' && (
             <div className="space-y-4">
@@ -1476,7 +1322,6 @@ export default function Profile() {
 
           </div>
         </div>
-      </div>{/* end hidden lg:flex */}
 
       {activeModal === 'password' && (
         <ChangePasswordModal user={user} onClose={() => setActiveModal(null)} />
@@ -1513,6 +1358,7 @@ function DesktopProfileOverview({
   rewardPoints,
   nextTierPoints,
   membershipLevel,
+  ptsToNext,
   progressPct,
   wishlistCount,
   currentLanguage,
@@ -1525,27 +1371,9 @@ function DesktopProfileOverview({
   const orderTotal = accountOrders.length
   const completedOrders = orderCounts.completed || 0
   const completionRate = orderTotal > 0 ? Math.round((completedOrders / orderTotal) * 100) : progressPct
-  const memberCode = `#SS${String(user.id || 0).padStart(6, '0')}`
   const fullAddress = defaultAddress
     ? [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state, defaultAddress.postal_code].filter(Boolean).join(', ')
     : t('profile.noDefaultAddress')
-  const activityItems = accountOrders.slice(0, 4).map((order, index) => ({
-    color: ['bg-emerald-500', 'bg-sky-500', 'bg-purple-500', 'bg-amber-500'][index] || 'bg-pink-500',
-    title: `Order #${order.order_number}`,
-    text: `${orderStatusLabel(t, order.status)} - ${formatCurrency(order.grand_total)}`,
-    date: formatDate(order.created_at),
-    action: () => navigate(`/my-orders/${order.id}`),
-  }))
-
-  if (activityItems.length === 0) {
-    activityItems.push({
-      color: 'bg-pink-500',
-      title: t('profile.yourProfile'),
-      text: t('profile.memberSince'),
-      date: memberSince,
-      action: () => setActiveModal('edit-profile'),
-    })
-  }
 
   const stats = [
     { icon: ShoppingBag, value: orderTotal.toLocaleString(), label: t('profile.myOrders') },
@@ -1555,48 +1383,56 @@ function DesktopProfileOverview({
   ]
 
   return (
-    <div className="space-y-7">
-      <div className="flex items-start justify-between gap-6">
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex items-end justify-between px-2">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-950">{t('profile.title')}</h1>
+          <h1 className="text-[32px] font-black tracking-tight text-slate-950">{t('profile.title')}</h1>
           <p className="mt-1 text-base font-semibold text-slate-500">{t('profile.desktopSubtitle')}</p>
         </div>
         <button
           onClick={() => setActiveModal('edit-profile')}
-          className="inline-flex h-12 items-center gap-2 rounded-xl bg-pink-600 px-6 text-sm font-black text-white shadow-lg shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.98]"
+          className="flex h-11 items-center gap-2 rounded-xl bg-pink-600 px-6 text-sm font-black text-white shadow-lg shadow-pink-100 transition hover:bg-pink-700 active:scale-95"
         >
-          <Pencil size={17} />
+          <Pencil size={16} />
           {t('profile.editProfile')}
         </button>
       </div>
 
-      <section className="rounded-2xl border border-slate-100 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-        <div className="grid grid-cols-[minmax(360px,1.15fr)_minmax(620px,1.85fr)] items-center gap-9">
-          <div className="flex items-center gap-7">
-            <div className="relative h-40 w-40 shrink-0">
-              <div className="h-full w-full overflow-hidden rounded-full bg-gradient-to-br from-pink-500 to-purple-600 shadow-lg shadow-pink-100">
+      {/* Profile Hero Card */}
+      <section className="relative overflow-hidden rounded-[32px] bg-white p-8 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-50">
+        {/* Subtle Decorative Gradient */}
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-pink-50/50 blur-3xl" />
+        
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            {/* Avatar */}
+            <div className="relative h-36 w-36 shrink-0">
+              <div className="h-full w-full overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-pink-500 to-rose-400 shadow-xl ring-1 ring-pink-100">
                 {user.avatar_url ? (
                   <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-5xl font-black text-white">
+                  <div className="flex h-full w-full items-center justify-center text-4xl font-black text-white">
                     {initials}
                   </div>
                 )}
               </div>
               <button
                 onClick={() => setActiveModal('edit-profile')}
-                className="absolute bottom-2 right-0 flex h-11 w-11 items-center justify-center rounded-full border-4 border-white bg-white text-pink-500 shadow-md transition hover:bg-pink-50"
+                className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-white text-pink-600 shadow-md transition hover:bg-pink-50"
                 aria-label={t('profile.changePhoto')}
               >
-                <Camera size={19} />
+                <Camera size={18} />
               </button>
             </div>
+            
+            {/* User Details */}
             <div className="min-w-0">
-              <h2 className="truncate text-3xl font-black text-slate-950">{displayName}</h2>
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-base font-bold text-slate-500">
-                <span>{usernameDisplay}</span>
-                <span className="h-1 w-1 rounded-full bg-slate-300" />
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-black text-emerald-600">
+              <h2 className="truncate text-[32px] font-black tracking-tight text-slate-950">{displayName}</h2>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-lg font-bold text-slate-400">{usernameDisplay}</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-200" />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1.5 text-[13px] font-black text-emerald-600">
                   <CheckCircle2 size={14} />
                   {t('profile.verified')}
                 </span>
@@ -1604,25 +1440,32 @@ function DesktopProfileOverview({
             </div>
           </div>
 
-          <div className="grid grid-cols-4 divide-x divide-slate-100">
+          {/* Stats Grid - Compact Horizontal */}
+          <div className="flex items-center gap-16 pr-6">
             {stats.map(({ icon: Icon, value, label }) => (
               <button
                 key={label}
-                onClick={() => label === t('profile.myOrders') ? navigate('/my-orders') : setActiveView('profile')}
-                className="flex min-h-[145px] flex-col items-center justify-center gap-4 px-5 text-center transition hover:bg-slate-50"
+                onClick={() => {
+                  if (label === t('profile.myOrders')) navigate('/my-orders')
+                  else if (label === t('profile.myPoints')) setActiveView('rewards')
+                  else if (label === t('wishlist.title')) navigate('/wishlist')
+                  else setActiveView('profile')
+                }}
+                className="group text-center transition active:scale-95"
               >
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-pink-50 text-pink-500">
-                  <Icon size={30} strokeWidth={2} />
-                </span>
-                <span className="text-3xl font-black text-slate-950">{value}</span>
-                <span className="text-base font-semibold text-slate-500">{label}</span>
+                <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-2xl bg-slate-50 text-slate-400 mb-3 transition group-hover:bg-pink-50 group-hover:text-pink-600 group-hover:shadow-sm">
+                  <Icon size={26} strokeWidth={2} />
+                </div>
+                <div className="text-[28px] font-black text-slate-950 leading-none">{value}</div>
+                <div className="mt-2 text-[12px] font-black text-slate-400 uppercase tracking-widest">{label}</div>
               </button>
             ))}
           </div>
         </div>
       </section>
 
-      <div className="grid grid-cols-3 gap-7">
+      {/* Info Cards Grid */}
+      <div className="grid grid-cols-3 gap-8">
         <DesktopProfileCard title={t('profile.personalInfo')} icon={User}>
           <DesktopInfoRow icon={User} label={t('profile.fullName')} value={displayName} />
           <DesktopInfoRow icon={IdCard} label={t('auth.username')} value={usernameDisplay} />
@@ -1632,7 +1475,7 @@ function DesktopProfileOverview({
           <DesktopInfoRow icon={Home} label={t('profile.memberSince')} value={memberSince} />
         </DesktopProfileCard>
 
-        <DesktopProfileCard title={t('profile.accountInfo')} icon={IdCard}>
+        <DesktopProfileCard title={t('profile.accountInfo')} icon={Shield}>
           <DesktopInfoRow icon={Shield} label={t('profile.role')} value={user.role || t('orders.customer')} badge />
           <DesktopInfoRow icon={CheckCircle2} label={t('profile.verificationStatus')} value={t('profile.verified')} success />
           <DesktopInfoRow icon={ShoppingBag} label={t('profile.myOrders')} value={orderTotal.toLocaleString()} />
@@ -1642,18 +1485,17 @@ function DesktopProfileOverview({
         </DesktopProfileCard>
 
         <DesktopProfileCard title={t('profile.primaryAddress')} icon={MapPin}>
-          <div className="space-y-4">
-            <div>
-              <p className="text-base font-black text-slate-900">{defaultAddress?.label || t('profile.defaultAddress')}</p>
-              <p className="mt-2 min-h-[72px] text-base font-semibold leading-7 text-slate-500">{fullAddress}</p>
+          <div className="space-y-5">
+            <div className="px-3">
+              <p className="text-[15px] font-black text-slate-900">{defaultAddress?.label || t('profile.defaultAddress')}</p>
+              <p className="mt-2 min-h-[60px] text-[15px] font-semibold leading-relaxed text-slate-500">{fullAddress}</p>
             </div>
-            <div className="relative h-[112px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100">
-              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(45deg,rgba(255,255,255,.78)_25%,transparent_25%),linear-gradient(315deg,rgba(255,255,255,.78)_25%,#eef2f7_25%)] bg-[length:38px_38px] bg-[position:19px_0,19px_0,0_0,0_0]" />
-              <MapPin className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[58%] text-pink-600 drop-shadow" size={42} fill="currentColor" strokeWidth={1.5} />
+            <div className="relative h-32 overflow-hidden rounded-[24px] border border-slate-50 bg-slate-50/50">
+              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.6)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.6)_25%,transparent_25%),linear-gradient(45deg,rgba(255,255,255,.6)_25%,transparent_25%),linear-gradient(315deg,rgba(255,255,255,.6)_25%,#f1f5f9_25%)] bg-[length:32px_32px] opacity-40" />
+              <MapPin className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[58%] text-pink-500 drop-shadow-sm" size={42} fill="currentColor" strokeWidth={1.5} />
             </div>
           </div>
         </DesktopProfileCard>
-
       </div>
     </div>
   )
@@ -1661,32 +1503,36 @@ function DesktopProfileOverview({
 
 function DesktopProfileCard({ title, icon: Icon, children }) {
   return (
-    <section className="min-h-[330px] rounded-2xl border border-slate-100 bg-white p-7 shadow-[0_16px_42px_rgba(15,23,42,0.055)]">
+    <section className="rounded-[28px] bg-white p-7 shadow-[0_15px_40px_rgba(0,0,0,0.03)] border border-slate-50">
       <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-50 text-pink-500">
-          <Icon size={19} />
-        </span>
-        <h2 className="text-xl font-black text-slate-950">{title}</h2>
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-50 text-pink-600">
+          <Icon size={20} />
+        </div>
+        <h3 className="text-lg font-black text-slate-950 tracking-tight">{title}</h3>
       </div>
-      {children}
+      <div className="space-y-1">{children}</div>
     </section>
   )
 }
 
 function DesktopInfoRow({ icon: Icon, label, value, badge = false, success = false }) {
   return (
-    <div className="grid grid-cols-[32px_minmax(140px,1fr)_minmax(160px,1fr)] items-center gap-3 border-b border-slate-100 py-3.5 last:border-0">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-400">
-        <Icon size={16} />
-      </span>
-      <span className="text-base font-bold text-slate-500">{label}</span>
-      <span className="text-right text-base font-black text-slate-700">
+    <div className="group flex items-center justify-between rounded-2xl px-3 py-3 transition hover:bg-slate-50/80">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition group-hover:bg-white group-hover:text-slate-500">
+          <Icon size={16} />
+        </div>
+        <span className="text-[15px] font-bold text-slate-500">{label}</span>
+      </div>
+      <div className="text-right">
         {badge || success ? (
-          <span className={cn('inline-flex rounded-full px-3 py-1 text-sm font-black', success ? 'bg-emerald-100 text-emerald-600' : 'bg-pink-50 text-pink-600')}>
+          <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide', success ? 'bg-emerald-50 text-emerald-600' : 'bg-pink-50 text-pink-600')}>
             {value}
           </span>
-        ) : value}
-      </span>
+        ) : (
+          <span className="text-[15px] font-black text-slate-900">{value}</span>
+        )}
+      </div>
     </div>
   )
 }

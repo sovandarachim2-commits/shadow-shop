@@ -267,7 +267,34 @@ def award_points_for_paid_order(order):
             'note': f'Earned from paid order #{order.order_number}',
         },
     )
+
+    # Check for referral bonus if this is the user's first completed order
+    # (Removed: Referral bonus is now awarded immediately at registration)
+    
     return transaction_obj
+
+
+def award_referral_bonus(referrer, referred_user, order=None):
+    """Award referral bonus to the referrer when their friend registers."""
+    settings_obj = RewardSettings.get_solo()
+    if not settings_obj.is_active or not settings_obj.referral_bonus_enabled:
+        return None
+    
+    # Award Referrer (Customer A) - 100 Points
+    bonus_points = settings_obj.referral_bonus
+    if bonus_points > 0:
+        transaction_obj, created = PointTransaction.objects.get_or_create(
+            user=referrer,
+            type=PointTransaction.TYPE_EARN,
+            note=f'Referral bonus: Friend {referred_user.get_full_name() or referred_user.username} registered',
+            defaults={
+                'points': bonus_points,
+                'order': order,
+            },
+        )
+        return transaction_obj if created else None
+    
+    return None
 
 
 def sync_paid_order_points(user):

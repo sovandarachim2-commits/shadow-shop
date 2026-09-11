@@ -1,8 +1,7 @@
+import base64
 import hashlib
 import hmac
-import base64
 import json
-from datetime import datetime
 
 from django.conf import settings
 from django.db import transaction
@@ -42,6 +41,7 @@ PAYWAY_HASH_FIELDS = [
     'lifetime',
     'additional_params',
     'google_pay_token',
+    'skip_success_page',
 ]
 
 
@@ -84,7 +84,7 @@ def _checkout_items_for_aba(checkout_data):
 
 def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number=None):
     merchant_id = settings.ABA_PAYWAY_MERCHANT_ID
-    req_time = datetime.now().strftime('%Y%m%d%H%M%S')
+    req_time = timezone.now().strftime('%Y%m%d%H%M%S')
     amount_text = f"{float(amount):.2f}"
     currency = 'USD'
 
@@ -98,7 +98,9 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
     frontend_url = settings.FRONTEND_URL.rstrip('/')
     continue_success_url = f"{frontend_url}/order-success?reference={tran_id}"
     cancel_url = f"{frontend_url}/checkout"
-    return_url = f"{settings.BACKEND_URL.rstrip('/')}/api/payments/aba/callback/"
+    return_url = base64.b64encode(
+        f"{settings.BACKEND_URL.rstrip('/')}/api/payments/aba/callback/".encode('utf-8')
+    ).decode('utf-8')
 
     encoded_items = base64.b64encode(
         json.dumps(_checkout_items_for_aba(checkout_data), separators=(',', ':')).encode('utf-8')
@@ -112,7 +114,7 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
         'amount': amount_text,
         'merchant_id': merchant_id,
         'req_time': req_time,
-        'payment_option': 'abapay',
+        'payment_option': 'abapay_khqr',
         'currency': currency,
         'items': encoded_items,
         'shipping': '0.00',
@@ -124,13 +126,16 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
         'return_url': return_url,
         'continue_success_url': continue_success_url,
         'cancel_url': cancel_url,
-        'return_deeplink': continue_success_url,
+        'return_deeplink': '',
         'custom_fields': '',
         'return_params': return_params,
         'payout': '',
         'lifetime': '',
         'additional_params': '',
         'google_pay_token': '',
+        'skip_success_page': '1',
+        'view_type': 'hosted_view',
+        'payment_gate': '0',
     }
     params['hash'] = _aba_hash(params)
     return params

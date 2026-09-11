@@ -114,21 +114,25 @@ export default function RedeemRewards() {
   }
 
   return (
-    <div className="min-h-screen bg-white pb-8">
+    <div className="min-h-screen bg-gray-50 pb-8">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
-      <div className="mx-auto w-full max-w-[620px] px-4 md:max-w-[1440px] md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-4 md:flex md:min-h-0 md:items-start md:justify-between md:bg-transparent md:px-0 md:pt-0">
-          <button type="button" onClick={() => navigate('/profile/rewards')} className="flex h-10 w-10 items-center justify-center rounded-full text-gray-950 md:hidden">
+      <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
+        <header className="sticky top-0 z-30 -mx-5 flex min-h-[60px] items-center gap-3 bg-white/95 px-5 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-6 md:min-h-0 md:bg-transparent md:px-0 md:pt-0">
+          <button 
+            type="button" 
+            onClick={() => navigate('/profile/rewards')} 
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50 active:scale-95"
+          >
             <ChevronLeft size={23} />
           </button>
-          <div className="min-w-0 text-center md:text-left">
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.redeem.title')}</h1>
-            <p className="mt-1 hidden text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.redeem.subtitle')}</p>
+            <p className="mt-0.5 text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.redeem.subtitle')}</p>
           </div>
-          <button type="button" onClick={() => navigate('/cart')} className="relative flex h-10 w-10 items-center justify-center justify-self-end rounded-full text-gray-950">
+          <button type="button" onClick={() => navigate('/cart')} className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50">
             <ShoppingCart size={22} />
             {cartCount > 0 && (
-              <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-black text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-black text-white">
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}

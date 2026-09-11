@@ -15,6 +15,8 @@ import { BrandLogo } from '@/components/customer/CustomerUi'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
+import useAuthStore from '@/store/authStore'
+import WelcomeBonusModal from '@/components/rewards/WelcomeBonusModal'
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORY_SHORTCUTS = [
@@ -373,6 +375,19 @@ function FlashSaleCard({ product, nowMs }) {
 export default function Home() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const pendingWelcomeBonus = useAuthStore((s) => s.pendingWelcomeBonus)
+  const clearPendingWelcomeBonus = useAuthStore((s) => s.clearPendingWelcomeBonus)
+  const [showWelcomeBonus, setShowWelcomeBonus] = useState(false)
+  const [bonusPoints, setBonusPoints] = useState(0)
+
+  useEffect(() => {
+    if (pendingWelcomeBonus) {
+      setBonusPoints(pendingWelcomeBonus)
+      setShowWelcomeBonus(true)
+      clearPendingWelcomeBonus()
+    }
+  }, [pendingWelcomeBonus, clearPendingWelcomeBonus])
+
   const [nowMs, setNowMs] = useState(Date.now())
   const [categoryPage, setCategoryPage] = useState(0)
   const [activeBannerIndex, setActiveBannerIndex] = useState(0)
@@ -622,7 +637,7 @@ export default function Home() {
       </div>
 
       <div
-        className="mx-auto max-w-[1440px] transition-transform duration-200"
+        className="mx-auto max-w-[1500px] transition-transform duration-200"
         style={{ transform: isPulling || isRefreshing ? `translateY(${Math.min(pullDistance, 78)}px)` : 'translateY(0)' }}
       >
 
@@ -945,6 +960,17 @@ export default function Home() {
 
         <div className="h-4 bg-gray-50" />
       </div>
+
+      <WelcomeBonusModal
+         isOpen={showWelcomeBonus}
+         onClose={() => setShowWelcomeBonus(false)}
+         points={bonusPoints}
+         onStartShopping={() => setShowWelcomeBonus(false)}
+         onViewPoints={() => {
+           setShowWelcomeBonus(false)
+           navigate('/profile/rewards/history')
+         }}
+       />
     </div>
   )
 }

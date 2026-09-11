@@ -1,4 +1,7 @@
 import cambodiaAdmin from '@/data/cambodia_admin.json'
+import { KHMER_FONT_FAMILY } from './constants'
+
+export { KHMER_FONT_FAMILY }
 
 const KH = cambodiaAdmin?.provinces?.length ? cambodiaAdmin : { provinces: [], districts: {}, communes: {}, labels: {} }
 
@@ -36,8 +39,6 @@ const PROVINCE_KHMER_LABELS = {
 }
 
 const PROVINCE_SET = new Set([...KH.provinces, ...Object.keys(PROVINCE_KHMER_LABELS)])
-
-export const KHMER_FONT_FAMILY = "'Khmer OS Siemreap', 'Khmer OS', 'Noto Sans Khmer', 'Battambang', sans-serif"
 
 const ORDER_PROVINCE_KEYS = {
   phnom_penh: 'Phnom Penh',

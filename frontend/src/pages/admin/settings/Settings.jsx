@@ -887,7 +887,7 @@ export default function Settings({ tab = 'general' }) {
               </div>
               <div>
                 <label className="label">Store Phone</label>
-                <input className="input-field" placeholder="077322921" value={generalForm.store_phone}
+                <input className="input-field" placeholder="012345678" value={generalForm.store_phone}
                   onChange={(e) => setGeneralForm((f) => ({ ...f, store_phone: e.target.value }))} />
               </div>
               <div>

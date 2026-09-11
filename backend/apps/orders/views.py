@@ -815,6 +815,8 @@ class RewardsViewSet(viewsets.ViewSet):
                 'review_bonus': reward_settings.review_bonus,
                 'referral_bonus_enabled': reward_settings.referral_bonus_enabled,
                 'referral_bonus': reward_settings.referral_bonus,
+                'signup_bonus_enabled': reward_settings.signup_bonus_enabled,
+                'signup_bonus': reward_settings.signup_bonus,
                 'birthday_bonus_enabled': reward_settings.birthday_bonus_enabled,
                 'birthday_bonus': reward_settings.birthday_bonus,
                 'daily_checkin_enabled': reward_settings.daily_checkin_enabled,

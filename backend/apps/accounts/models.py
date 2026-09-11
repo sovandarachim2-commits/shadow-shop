@@ -30,6 +30,10 @@ class User(AbstractUser):
     google_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     google_picture_url = models.URLField(blank=True)
     google_auth_date = models.DateTimeField(null=True, blank=True)
+    
+    referral_code = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
+    
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -310,3 +314,19 @@ class SiteSettings(models.Model):
     def get_solo(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+import random
+import string
+
+@receiver(post_save, sender=User)
+def generate_referral_code(sender, instance, created, **kwargs):
+    if created and not instance.referral_code:
+        # Generate a unique 8-character referral code
+        while True:
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            if not User.objects.filter(referral_code=code).exists():
+                instance.referral_code = code
+                instance.save(update_fields=['referral_code'])
+                break

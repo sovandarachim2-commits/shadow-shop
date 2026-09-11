@@ -182,8 +182,7 @@ Keep both servers running:
 
 ```bash
 # Backend
-cd "C:\xampp\htdocs\Shadow Shop\backend"
-venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
+  
 
 # Frontend
 cd "C:\xampp\htdocs\Shadow Shop\frontend"

@@ -106,22 +106,25 @@ export default function RewardDetail() {
       : t('rewardsPage.unavailable')
 
   return (
-    <div className="mx-auto w-full max-w-[760px] bg-white pb-24 md:max-w-[1440px] md:px-6 md:pb-0 md:pt-6">
+    <div className="mx-auto min-h-screen w-full max-w-[760px] bg-gray-50 pb-24 md:max-w-[1440px] md:px-6 md:pb-6 md:pt-6">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
-      <div className="mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center gap-2 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
-        <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
-          <ChevronLeft size={20} />
+      
+      <header className="sticky top-0 z-30 -mx-4 flex min-h-[60px] items-center gap-3 bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-6 md:min-h-0 md:bg-transparent md:px-0 md:pt-0">
+        <button 
+          type="button" 
+          onClick={() => navigate('/profile/rewards')} 
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50 active:scale-95"
+        >
+          <ChevronLeft size={23} />
         </button>
-        <h1 className="min-w-0 truncate text-center text-lg font-black leading-tight text-gray-950">{t('rewardsPage.detail.title')}</h1>
-        <HeaderActionIcons />
-      </div>
-
-      <button onClick={() => navigate(-1)} className="mb-4 hidden items-center gap-3 text-sm font-black text-gray-600 hover:text-pink-600 md:inline-flex">
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700">
-          <ChevronLeft size={20} />
-        </span>
-        {t('rewardsPage.backToRewards')}
-      </button>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.detail.title')}</h1>
+          <p className="mt-0.5 text-xs font-semibold text-gray-500">{t('rewardsPage.detail.subtitle', 'Reward Details')}</p>
+        </div>
+        <div className="flex shrink-0 items-center md:hidden">
+          <HeaderActionIcons />
+        </div>
+      </header>
 
       <div className="grid gap-7 px-4 md:px-0 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-3xl bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">

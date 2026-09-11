@@ -5,6 +5,8 @@ import {
 } from 'lucide-react'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import cambodiaAdmin from '@/data/cambodia_admin.json'
+import { formatAddressRecordKhmer } from '@/utils/addressHelpers'
+import { KHMER_FONT_FAMILY } from '@/utils/constants'
 
 // ─── Cambodia administrative data ───────────────────────────────────────────
 const FALLBACK_KH = {
@@ -123,7 +125,6 @@ const PROVINCE_KHMER_LABELS = {
 
 const PROVINCE_SET = new Set([...KH.provinces, ...Object.keys(PROVINCE_KHMER_LABELS)])
 
-const KHMER_FONT_FAMILY = "'Khmer OS Siemreap', 'Khmer OS', 'Noto Sans Khmer', 'Battambang', sans-serif"
 
 const COUNTRY_OPTIONS = [
   { value: 'Cambodia', key: 'cambodia' },
