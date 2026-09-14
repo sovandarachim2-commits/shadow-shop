@@ -3,7 +3,7 @@ import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import { ClipboardList } from 'lucide-react'
+import { ClipboardList, Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -129,7 +129,6 @@ const MyOrders = lazyWithReload(() => import('@/pages/customer/MyOrders'))
 const OrderSuccess = lazyWithReload(() => import('@/pages/customer/OrderSuccess'))
 const Profile = lazyWithReload(() => import('@/pages/customer/Profile'))
 const EditProfilePage = lazyNamedWithReload(() => import('@/pages/customer/Profile'), 'EditProfilePage')
-const CompleteProfile = lazyWithReload(() => import('@/pages/customer/CompleteProfile'))
 const Wishlist = lazyWithReload(() => import('@/pages/customer/Wishlist'))
 const OrderTracking = lazyWithReload(() => import('@/pages/customer/OrderTracking'))
 const OrderReceipt = lazyWithReload(() => import('@/pages/customer/OrderReceipt'))
@@ -258,6 +257,26 @@ class AppErrorBoundary extends Component {
   }
 }
 
+function CompletionPrompt() {
+  const { t } = useTranslation()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
+  const user = useAuthStore((s) => s.user)
+  const incomplete = isSocialProfileIncomplete(user)
+  useEffect(() => { if (incomplete) openAuthModal('complete') }, [openAuthModal, incomplete])
+  if (!incomplete) return <Navigate to="/" replace />
+  return <button className="shop-btn-primary m-6" onClick={() => openAuthModal('complete')}>{t('completeProfile.title')}</button>
+}
+
+function CustomerLoginRedirect() {
+  const location = useLocation()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    openAuthModal(params.get('mode') === 'register' || location.state?.mode === 'register' ? 'register' : 'login')
+  }, [openAuthModal, location.search, location.state?.mode])
+  return <Navigate to={`/${location.search}`} replace />
+}
+
 function RequireAuth({ children, adminOnly = false }) {
   const { isAuthenticated, user } = useAuthStore()
   const openAuthModal = useUiStore((s) => s.openAuthModal)
@@ -265,7 +284,7 @@ function RequireAuth({ children, adminOnly = false }) {
   const { t } = useTranslation()
 
   if (!isAuthenticated) {
-    if (adminOnly) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    if (adminOnly) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />
 
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-white px-5">
@@ -300,7 +319,7 @@ function RequireAuth({ children, adminOnly = false }) {
 
   if (adminOnly && user?.role === 'customer') return <Navigate to="/" replace />
   if (!adminOnly && isSocialProfileIncomplete(user) && location.pathname !== '/profile/complete') {
-    return <Navigate to="/profile/complete" replace state={{ from: location.pathname }} />
+    return <CompletionPrompt />
   }
   return children
 }
@@ -342,7 +361,7 @@ function RequireRewardsAuth({ children }) {
   }
 
   if (isSocialProfileIncomplete(user)) {
-    return <Navigate to="/profile/complete" replace state={{ from: '/profile/rewards' }} />
+    return <CompletionPrompt />
   }
 
   return children
@@ -388,7 +407,7 @@ function RequireOrdersAuth({ children }) {
   }
 
   if (isSocialProfileIncomplete(user)) {
-    return <Navigate to="/profile/complete" replace state={{ from }} />
+    return <CompletionPrompt />
   }
 
   return children
@@ -570,14 +589,10 @@ export default function App() {
           <ScrollToTop />
           <Routes>
           {/* Auth */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<CustomerLoginRedirect />} />
+          <Route path="/admin/login" element={<Login />} />
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
           <Route path="/forgot-password" element={<LazyPage><ForgotPassword /></LazyPage>} />
-          <Route path="/profile/complete" element={
-            <RequireAuth>
-              <LazyPage><CompleteProfile /></LazyPage>
-            </RequireAuth>
-          } />
           <Route path="/demo" element={<LazyPage><DemoBottomNavigation /></LazyPage>} />
 
           {/* Customer App */}
@@ -587,6 +602,7 @@ export default function App() {
             </RequireStorefront>
           }>
             <Route index element={<LazyPage><Home /></LazyPage>} />
+            <Route path="profile/complete" element={<RequireAuth><CompletionPrompt /></RequireAuth>} />
             <Route path="search" element={<LazyPage><SearchPage /></LazyPage>} />
             <Route path="shop" element={<LazyPage><ProductList /></LazyPage>} />
             <Route path="lucky-box" element={<LazyPage><LuckyBox /></LazyPage>} />

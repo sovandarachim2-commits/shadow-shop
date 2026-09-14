@@ -287,7 +287,7 @@ export default function CustomerLayout() {
   const handleLogout = async () => {
     setIsProfileDropdownOpen(false)
     await logout()
-    navigate('/login')
+    navigate('/', { replace: true })
   }
 
   const { data: siteSettings } = useQuery({

@@ -15,6 +15,7 @@ import {
   Loader2,
   Lock,
   Mail,
+  MapPin,
   PackageCheck,
   Phone,
   ShieldCheck,
@@ -252,6 +253,39 @@ export default function CompleteProfile() {
   if (isAddressStep) {
     return (
       <div className="relative min-h-screen bg-white font-sans text-[#1A1A1A]" style={{ fontFamily: profileFontFamily }}>
+        {/* Background page - matches AddressBook style */}
+        <div className="mx-auto min-h-screen max-w-lg bg-white">
+          {/* Header with back button and step progress */}
+          <div className="border-b border-gray-100 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setStep('profile')}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div className="flex-1">
+                <StepProgress step={2} totalSteps={totalSteps} progress={progress} />
+              </div>
+            </div>
+          </div>
+
+          {/* Content - empty state like AddressBook */}
+          <div className="flex flex-col items-center px-5 py-16 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-pink-50">
+              <MapPin size={36} className="text-pink-400" />
+            </div>
+            <h2 className="mt-6 text-xl font-black text-gray-950">
+              {t('completeProfile.addDeliveryAddress')}
+            </h2>
+            <p className="mt-2 max-w-xs text-sm text-gray-500">
+              {t('completeProfile.addressSubtitle')}
+            </p>
+          </div>
+        </div>
+
+        {/* Address Form Modal - same as AddressBook */}
         <AddressForm
           address={null}
           defaultContact={{
@@ -259,9 +293,8 @@ export default function CompleteProfile() {
             phone: form.phone || user.phone,
           }}
           isFirstAddress
-          forceDefault
           isSaving={addressMutation.isPending}
-          onSave={(payload) => addressMutation.mutate({ ...payload, is_default: true, label: payload.label || 'home' })}
+          onSave={(payload) => addressMutation.mutate(payload)}
           onClose={() => setStep('profile')}
         />
       </div>

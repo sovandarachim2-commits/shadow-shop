@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronLeft, ChevronDown, ChevronRight, MapPin, X,
 } from 'lucide-react'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import cambodiaAdmin from '@/data/cambodia_admin.json'
-import { formatAddressRecordKhmer } from '@/utils/addressHelpers'
+import { formatAddressRecordKhmer, detectUserProvince } from '@/utils/addressHelpers'
 import { KHMER_FONT_FAMILY } from '@/utils/constants'
 
 // ─── Cambodia administrative data ───────────────────────────────────────────
@@ -456,6 +456,17 @@ export function AddressForm({ address, defaultContact, isFirstAddress, onSave, o
   const [showPicker, setShowPicker] = useState(false)
   const [phoneError, setPhoneError] = useState('')
 
+  useEffect(() => {
+    // Auto-detect location for new address
+    if (!address && !form.state) {
+      detectUserProvince().then(province => {
+        if (province) {
+          setForm(f => ({ ...f, state: province }))
+        }
+      })
+    }
+  }, [])
+
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const handleLocationSelect = ({ state, city, address_line2 }) => {
@@ -463,19 +474,17 @@ export function AddressForm({ address, defaultContact, isFirstAddress, onSave, o
   }
 
   const locationSummary = useMemo(() => {
-    const parts = []
-    if (form.state) parts.push(getLocationLabel(form.state))
-    if (form.city) parts.push(getLocationLabel(form.city, [form.state]))
+    const res = { province: '', district: '', commune: '', village: '' }
+    if (!form.state) return res
 
-    const line2Parts = form.address_line2
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-    line2Parts.forEach((part, index) => {
-      parts.push(getLocationLabel(part, [form.state, form.city, ...line2Parts.slice(0, index)]))
-    })
+    res.province = getLocationLabel(form.state)
+    if (form.city) res.district = getLocationLabel(form.city, [form.state])
 
-    return parts.join(' › ')
+    const line2Parts = form.address_line2.split(',').map((part) => part.trim()).filter(Boolean)
+    if (line2Parts[0]) res.commune = getLocationLabel(line2Parts[0], [form.state, form.city])
+    if (line2Parts[1]) res.village = getLocationLabel(line2Parts[1], [form.state, form.city, line2Parts[0]])
+
+    return res
   }, [form.address_line2, form.city, form.state])
 
   const handleSubmit = (e) => {
@@ -513,33 +522,34 @@ export function AddressForm({ address, defaultContact, isFirstAddress, onSave, o
 
           <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 space-y-3 overflow-y-auto bg-gray-50/60 px-5 py-4 md:px-6 md:py-5">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {/* Full name */}
+                <FlatInput
+                  required
+                  value={form.full_name}
+                  onChange={(v) => set('full_name', v)}
+                  placeholder={t('addressBook.fullNamePlaceholder')}
+                />
 
-              {/* Full name */}
-              <FlatInput
-                required
-                value={form.full_name}
-                onChange={(v) => set('full_name', v)}
-                placeholder={t('addressBook.fullNamePlaceholder')}
-              />
-
-              {/* Phone */}
-              <div>
-                <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
-                  <span className="shrink-0 text-sm text-pink-600">*</span>
-                  <input
-                    required
-                    type="tel"
-                    inputMode="numeric"
-                    value={form.phone}
-                    onChange={(e) => {
-                      setPhoneError('')
-                      set('phone', normalizeCambodiaPhone(e.target.value))
-                    }}
-                    placeholder={t('addressBook.phonePlaceholder')}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
-                  />
+                {/* Phone */}
+                <div>
+                  <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm h-full">
+                    <span className="shrink-0 text-sm text-pink-600">*</span>
+                    <input
+                      required
+                      type="tel"
+                      inputMode="numeric"
+                      value={form.phone}
+                      onChange={(e) => {
+                        setPhoneError('')
+                        set('phone', normalizeCambodiaPhone(e.target.value))
+                      }}
+                      placeholder={t('addressBook.phonePlaceholder')}
+                      className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
+                    />
+                  </div>
+                  {phoneError && <p className="mt-1.5 px-1 text-xs font-semibold text-red-500">{phoneError}</p>}
                 </div>
-                {phoneError && <p className="mt-1.5 px-1 text-xs font-semibold text-red-500">{phoneError}</p>}
               </div>
 
               {/* Country */}
@@ -559,19 +569,55 @@ export function AddressForm({ address, defaultContact, isFirstAddress, onSave, o
 
               {/* Location — cascading picker for Cambodia, free text otherwise */}
               {form.country === 'Cambodia' ? (
-                <button
-                  type="button"
-                  onClick={() => setShowPicker(true)}
-                  className="flex w-full items-center gap-1 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-left shadow-sm"
-                >
-                  <span className="mr-0.5 text-sm text-pink-600">*</span>
-                  {locationSummary ? (
-                    <span className="flex-1 text-sm text-gray-800" style={{ fontFamily: KHMER_FONT_FAMILY }}>{locationSummary}</span>
-                  ) : (
-                    <span className="flex-1 text-sm text-gray-400" style={{ fontFamily: KHMER_FONT_FAMILY }}>{t('addressBook.locationPlaceholder')}</span>
-                  )}
-                  <ChevronRight size={15} className="shrink-0 text-gray-400" />
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Province */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPicker(true)}
+                    className="flex h-12 items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-left shadow-sm transition-all hover:bg-slate-50"
+                  >
+                    <MapPin size={15} className="text-pink-600 shrink-0" />
+                    <span className={`truncate text-xs font-bold ${locationSummary.province ? 'text-gray-800' : 'text-gray-400'}`} style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                      {locationSummary.province || t('addressBook.locationPicker.province')}
+                    </span>
+                  </button>
+
+                  {/* District */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPicker(true)}
+                    className="flex h-12 items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-left shadow-sm transition-all hover:bg-slate-50"
+                  >
+                    <MapPin size={15} className="text-gray-300 shrink-0" />
+                    <span className={`truncate text-xs font-bold ${locationSummary.district ? 'text-gray-800' : 'text-gray-400'}`} style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                      {locationSummary.district || t('addressBook.locationPicker.district')}
+                    </span>
+                  </button>
+
+                  {/* Commune */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPicker(true)}
+                    className="flex h-12 items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-left shadow-sm transition-all hover:bg-slate-50"
+                  >
+                    <MapPin size={15} className="text-gray-300 shrink-0" />
+                    <span className={`truncate text-xs font-bold ${locationSummary.commune ? 'text-gray-800' : 'text-gray-400'}`} style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                      {locationSummary.commune || t('addressBook.locationPicker.commune')}
+                    </span>
+                  </button>
+
+                  {/* Village */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPicker(true)}
+                    className="flex h-12 items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 text-left shadow-sm transition-all hover:bg-slate-50"
+                  >
+                    <MapPin size={15} className="text-gray-300 shrink-0" />
+                    <span className={`truncate text-xs font-bold ${locationSummary.village ? 'text-gray-800' : 'text-gray-400'}`} style={{ fontFamily: KHMER_FONT_FAMILY }}>
+                      {locationSummary.village || t('addressBook.locationPicker.village')}
+                    </span>
+                  </button>
+                </div>
               ) : (
                 <>
                   <FlatInput required value={form.state} onChange={(v) => set('state', v)} placeholder={t('addressBook.provinceState')} />

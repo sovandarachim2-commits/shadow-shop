@@ -50,11 +50,6 @@ const useAuthStore = create(
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
         
-        const bonus = Number(data.signup_bonus_points || 0)
-        if (bonus > 0) {
-          set({ pendingWelcomeBonus: bonus })
-        }
-
         set({
           user: data.user,
           accessToken: data.access,
@@ -69,11 +64,6 @@ const useAuthStore = create(
         localStorage.setItem('access_token', data.access)
         localStorage.setItem('refresh_token', data.refresh)
         
-        const bonus = Number(data.signup_bonus_points || 0)
-        if (bonus > 0) {
-          set({ pendingWelcomeBonus: bonus })
-        }
-
         set({
           user: data.user,
           accessToken: data.access,
@@ -103,12 +93,10 @@ const useAuthStore = create(
         } catch {}
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
-        // Navigate first so Profile unmounts before auth state clears (avoids hook-order crash).
-        if (window.location.pathname !== '/login') {
-          window.location.replace('/login?signout=1')
-          return
-        }
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
+        // Clear persisted credentials before reloading to discard account query caches.
+        const destination = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/'
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, pendingWelcomeBonus: null })
+        window.location.replace(destination)
       },
 
       clearSession: () => {

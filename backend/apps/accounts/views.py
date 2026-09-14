@@ -377,7 +377,6 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
                     user.referred_by = referrer
             
             user.save()
-            signup_bonus_points = _give_signup_bonus(user)
             # Give referral bonus to referrer immediately
             if user.referred_by:
                 _give_referral_bonus(user.referred_by, user)
@@ -390,7 +389,6 @@ class EmailVerificationConfirmView(generics.GenericAPIView):
             user,
             request,
             login_method='email_verify',
-            extra_data={'signup_bonus_points': signup_bonus_points},
         )
 
 
@@ -574,18 +572,14 @@ class TelegramLoginView(generics.GenericAPIView):
         is_new_user = user.pk is None
         user.save()
 
-        signup_bonus_points = 0
-        if is_new_user:
-            signup_bonus_points = _give_signup_bonus(user)
-            # Give referral bonus to referrer immediately
-            if user.referred_by:
-                _give_referral_bonus(user.referred_by, user)
+        # Give referral bonus to referrer immediately
+        if is_new_user and user.referred_by:
+            _give_referral_bonus(user.referred_by, user)
 
         return _issue_auth_tokens(
             user, 
             request, 
             login_method='telegram',
-            extra_data={'signup_bonus_points': signup_bonus_points} if signup_bonus_points > 0 else None
         )
 
     def _verify_telegram_hash(self, auth_data, bot_token, telegram_hash):
@@ -757,18 +751,14 @@ class GoogleLoginView(generics.GenericAPIView):
         is_new_user = user.pk is None
         user.save()
 
-        signup_bonus_points = 0
-        if is_new_user:
-            signup_bonus_points = _give_signup_bonus(user)
-            # Give referral bonus to referrer immediately
-            if user.referred_by:
-                _give_referral_bonus(user.referred_by, user)
+        # Give referral bonus to referrer immediately
+        if is_new_user and user.referred_by:
+            _give_referral_bonus(user.referred_by, user)
 
         return _issue_auth_tokens(
             user, 
             request, 
             login_method='google',
-            extra_data={'signup_bonus_points': signup_bonus_points} if signup_bonus_points > 0 else None
         )
 
 
@@ -1211,6 +1201,21 @@ class AddressViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Address.objects.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        # Give signup bonus only after first address completion
+        bonus_points = _give_signup_bonus(request.user)
+        
+        headers = self.get_success_headers(serializer.data)
+        response_data = serializer.data
+        if bonus_points > 0:
+            response_data['signup_bonus_points'] = bonus_points
+            
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

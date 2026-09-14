@@ -1,7 +1,8 @@
+import { isValidCambodiaPhone } from './phone.js'
+
 export function isSocialProfileIncomplete(user) {
   if (!user || user.role !== 'customer') return false
 
-  const isSocialUser = Boolean(user.google_id || user.telegram_id)
   const phone = String(user.phone || '').trim()
   const gender = String(user.gender || '').trim()
   const firstName = String(user.first_name || '').trim()
@@ -11,10 +12,9 @@ export function isSocialProfileIncomplete(user) {
   const hasAddress = user.has_address === true
 
   return (
-    !phone
+    !isValidCambodiaPhone(phone)
     || !gender
     || !hasRealName
     || !hasAddress
-    || (isSocialUser && user.has_usable_password === false)
   )
 }

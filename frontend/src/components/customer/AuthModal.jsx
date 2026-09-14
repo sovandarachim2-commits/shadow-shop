@@ -5,19 +5,44 @@ import {
   X, UserCircle2, ChevronRight, LogIn, Mail, Lock, Eye, EyeOff, 
   Loader2, User, Send, Sparkles, CheckCircle2, AlertCircle,
   LockKeyhole, MailCheck, ArrowLeft, Camera, UserRound, Phone, UsersRound,
-  MapPin, ChevronDown
+  MapPin, ChevronDown, MessageSquare, ExternalLink, Globe
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import useAuthStore from '@/store/authStore'
 import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
-import cambodiaAdmin from '@/data/cambodia_admin.json'
-
+import PhoneInput from '@/components/ui/PhoneInput'
+import { COUNTRY_DATA, toE164, validatePhone } from '@/utils/phoneUtils'
+import { detectUserProvince } from '@/utils/addressHelpers'
+import { AddressForm } from '@/components/address/AddressFormModal'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
-const KH = cambodiaAdmin?.provinces?.length ? cambodiaAdmin : { provinces: [], districts: {}, communes: {}, villages: {} }
-const KHMER_LOCATION_LABELS = KH.labels || {}
+const EMPTY_CAMBODIA_ADMIN = {
+  provinces: [],
+  districts: {},
+  communes: {},
+  villages: {},
+  labels: {},
+}
+
+let cambodiaAdminCache = null
+let cambodiaAdminPromise = null
+
+async function loadCambodiaAdminData() {
+  if (cambodiaAdminCache) return cambodiaAdminCache
+  if (!cambodiaAdminPromise) {
+    cambodiaAdminPromise = import('@/data/cambodia_admin.json')
+      .then((module) => {
+        const data = module?.default?.provinces?.length ? module.default : EMPTY_CAMBODIA_ADMIN
+        cambodiaAdminCache = data
+        return data
+      })
+      .catch(() => EMPTY_CAMBODIA_ADMIN)
+  }
+  return cambodiaAdminPromise
+}
+
 const PROVINCE_KHMER_LABELS = {
   'Banteay Meanchey': 'ខេត្តបន្ទាយមានជ័យ',
   Battambang: 'ខេត្តបាត់ដំបង',
@@ -46,38 +71,30 @@ const PROVINCE_KHMER_LABELS = {
   'Tboung Khmum': 'ខេត្តត្បូងឃ្មុំ',
 }
 
-function getLocationLabel(name, pathParts = []) {
+function getLocationLabel(name, pathParts = [], adminData = EMPTY_CAMBODIA_ADMIN) {
+  const khmerLabels = adminData.labels || {}
   const key = [...pathParts, name].filter(Boolean).join('|')
   if (!pathParts.length && PROVINCE_KHMER_LABELS[name]) return PROVINCE_KHMER_LABELS[name]
-  return KHMER_LOCATION_LABELS[key] || KHMER_LOCATION_LABELS[name] || name
+  return khmerLabels[key] || khmerLabels[name] || name
 }
 
-function KhmerLocationName({ name, pathParts = [], className = '' }) {
-  return <span className={className}>{getLocationLabel(name, pathParts)}</span>
+function KhmerLocationName({ name, pathParts = [], className = '', adminData = EMPTY_CAMBODIA_ADMIN }) {
+  return <span className={className}>{getLocationLabel(name, pathParts, adminData)}</span>
 }
 
-function LocationPicker({ onSelect, onClose }) {
+function LocationPicker({ onSelect, onClose, adminData, loadingAdminData }) {
   const { t } = useTranslation()
   const [level, setLevel] = useState('province')
-  const [sel, setSel] = useState({ province: '', district: '', commune: '', village: '' })
+  const [sel, setSel] = useState({ province: '', district: '' })
   const [search, setSearch] = useState('')
 
-  const getVillages = (selection = sel) => {
-    const fullKey = [selection.province, selection.district, selection.commune].filter(Boolean).join('|')
-    return KH.villages[fullKey] || KH.villages[selection.commune] || []
-  }
-
   const currentList = useMemo(() => {
-    if (level === 'province') return KH.provinces || []
-    if (level === 'district') return KH.districts[sel.province] || []
-    if (level === 'commune') return KH.communes[[sel.province, sel.district].filter(Boolean).join('|')] || KH.communes[sel.district] || []
-    return getVillages()
-  }, [level, sel])
+    if (level === 'province') return adminData.provinces || []
+    return adminData.districts[sel.province] || []
+  }, [level, sel, adminData])
 
   const currentPathParts = useMemo(() => {
     if (level === 'district') return [sel.province]
-    if (level === 'commune') return [sel.province, sel.district]
-    if (level === 'village') return [sel.province, sel.district, sel.commune]
     return []
   }, [level, sel])
 
@@ -86,44 +103,32 @@ function LocationPicker({ onSelect, onClose }) {
     const keyword = search.toLowerCase()
     return currentList.filter(item => 
       item.toLowerCase().includes(keyword) || 
-      getLocationLabel(item, currentPathParts).toLowerCase().includes(keyword)
+      getLocationLabel(item, currentPathParts, adminData).toLowerCase().includes(keyword)
     )
-  }, [currentList, currentPathParts, search])
+  }, [currentList, currentPathParts, search, adminData])
 
   const grouped = useMemo(() => 
     filtered.reduce((acc, item) => {
-      const l = getLocationLabel(item, currentPathParts)[0] || item[0].toUpperCase()
+      const l = getLocationLabel(item, currentPathParts, adminData)[0] || item[0].toUpperCase()
       ;(acc[l] = acc[l] || []).push(item)
       return acc
     }, {}),
-    [filtered, currentPathParts]
+    [filtered, currentPathParts, adminData]
   )
 
   const titleMap = {
     province: t('addressBook.locationPicker.province'),
     district: t('addressBook.locationPicker.district'),
-    commune: t('addressBook.locationPicker.commune'),
-    village: t('addressBook.locationPicker.village'),
   }
 
   const pick = (item) => {
     if (level === 'province') {
-      const next = { province: item, district: '', commune: '', village: '' }
+      const next = { province: item, district: '' }
       setSel(next)
-      if ((KH.districts[item] || []).length) setLevel('district')
+      if ((adminData.districts[item] || []).length) setLevel('district')
       else { onSelect({ state: item, city: '', address_line2: '' }); onClose() }
-    } else if (level === 'district') {
-      const next = { ...sel, district: item, commune: '', village: '' }
-      setSel(next)
-      if ((KH.communes[[sel.province, item].filter(Boolean).join('|')] || KH.communes[item] || []).length) setLevel('commune')
-      else { onSelect({ state: sel.province, city: item, address_line2: '' }); onClose() }
-    } else if (level === 'commune') {
-      const next = { ...sel, commune: item, village: '' }
-      setSel(next)
-      if (getVillages(next).length) setLevel('village')
-      else { onSelect({ state: sel.province, city: sel.district, address_line2: item }); onClose() }
     } else {
-      onSelect({ state: sel.province, city: sel.district, address_line2: [sel.commune, item].filter(Boolean).join(', ') })
+      onSelect({ state: sel.province, city: item, address_line2: '' })
       onClose()
     }
     setSearch('')
@@ -136,13 +141,13 @@ function LocationPicker({ onSelect, onClose }) {
           <div className="flex items-center gap-3">
             {level !== 'province' && (
               <button 
-                onClick={() => setLevel(level === 'village' ? 'commune' : level === 'commune' ? 'district' : 'province')}
+                onClick={() => setLevel('province')}
                 className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400"
               >
                 <ArrowLeft size={16} />
               </button>
             )}
-            <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">{titleMap[level]}</h3>
+            <h3 className="font-semibold text-slate-800 tracking-normal text-sm">{titleMap[level]}</h3>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
             <X size={16} />
@@ -155,29 +160,32 @@ function LocationPicker({ onSelect, onClose }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('addressBook.locationPicker.search')}
-              className="w-full h-12 bg-transparent text-sm font-bold text-slate-800 outline-none placeholder:text-slate-400"
+              className="w-full h-12 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
             />
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {Object.keys(grouped).sort().map(letter => (
+          {loadingAdminData && (
+            <div className="py-20 text-center text-slate-400 font-medium">{t('common.loading')}</div>
+          )}
+          {!loadingAdminData && Object.keys(grouped).sort().map(letter => (
             <div key={letter} className="space-y-2">
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest pl-2">{letter}</span>
+              <span className="text-[10px] font-semibold text-slate-300 tracking-normalst pl-2">{letter}</span>
               <div className="grid grid-cols-1 gap-1">
                 {grouped[letter].map(item => (
                   <button 
                     key={item}
                     onClick={() => pick(item)}
-                    className="w-full text-left px-4 py-3.5 rounded-[16px] text-[15px] font-bold text-slate-700 hover:bg-pink-50 hover:text-pink-600 transition-all"
+                    className="w-full text-left px-4 py-3.5 rounded-[16px] text-[15px] font-medium text-slate-700 hover:bg-pink-50 hover:text-pink-600 transition-all"
                   >
-                    <KhmerLocationName name={item} pathParts={currentPathParts} />
+                    <KhmerLocationName name={item} pathParts={currentPathParts} adminData={adminData} />
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          {filtered.length === 0 && (
+          {!loadingAdminData && filtered.length === 0 && (
             <div className="py-20 text-center text-slate-400 font-medium">{t('addressBook.locationPicker.noResults')}</div>
           )}
         </div>
@@ -197,7 +205,8 @@ function hasProfileBasics(user, form) {
   const cleanName = String(form?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.full_name || '').trim()
   const cleanPhone = normalizeCambodiaPhone(form?.phone || user?.phone)
   const gender = String(form?.gender || user?.gender || '').trim()
-  const hasRealName = Boolean(cleanName && !['google', 'telegram'].includes(cleanName.toLowerCase()))
+  const placeholders = ['google', 'telegram', 'guest', 'user', 'customer']
+  const hasRealName = Boolean(cleanName && !placeholders.includes(cleanName.toLowerCase()))
   return Boolean(hasRealName && cleanPhone && isValidCambodiaPhone(cleanPhone) && gender)
 }
 
@@ -289,7 +298,7 @@ function triggerGoogleButtonFallback() {
         size: 'large',
         text: 'continue_with',
         shape: 'pill',
-        width: 280,
+        width: 180,
       })
     } catch (error) {
       host.remove()
@@ -350,6 +359,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const { user, login, register, googleLogin, telegramLogin, verifyEmailCode, setPendingWelcomeBonus, updateUser } = useAuthStore()
   
   const [view, setView] = useState('choice') // 'choice', 'login', 'register', 'verify', 'profile', 'address'
@@ -388,12 +398,52 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   })
   const [addressErrors, setAddressErrors] = useState({})
   const [showLocationPicker, setShowLocationPicker] = useState(false)
+  const [adminData, setAdminData] = useState(cambodiaAdminCache || EMPTY_CAMBODIA_ADMIN)
+  const [loadingAdminData, setLoadingAdminData] = useState(!cambodiaAdminCache)
+
+  useEffect(() => {
+    let active = true
+    if (cambodiaAdminCache) {
+      setAdminData(cambodiaAdminCache)
+      setLoadingAdminData(false)
+      return
+    }
+    loadCambodiaAdminData().then(data => {
+      if (active) setAdminData(data)
+    }).finally(() => {
+      if (active) setLoadingAdminData(false)
+    })
+    return () => { active = false }
+  }, [])
 
   const telegramWidgetRef = useRef(null)
-  const googleIdentityInitRef = useRef(null)
+  const googleFallbackRef = useRef(null)
+  const [googleFallback, setGoogleFallback] = useState(false)
   const inputsRef = useRef([])
 
+  // Telegram OTP Flow States
+  const [tgPhone, setTgPhone] = useState('')
+  const [tgPhoneE164, setTgPhoneE164] = useState('')
+  const [tgToken, setTgToken] = useState('')
+  const [tgBotLink, setTgBotLink] = useState('')
+  const [tgStatus, setTgStatus] = useState({ has_chat: false, verified: false, expired: false })
+  const [tgOtp, setTgOtp] = useState(['', '', '', '', '', ''])
+  const pollingInterval = useRef(null)
+  const [isGenderDropdownOpen, setIsGenderDropdownOpen] = useState(false)
+  const genderDropdownRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (genderDropdownRef.current && !genderDropdownRef.current.contains(event.target)) {
+        setIsGenderDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const checkProfileCompletion = useCallback((loggedInUser) => {
+    if (loggedInUser?.role && !['customer', 'seller'].includes(loggedInUser.role)) return false
     const needsProfile = !hasProfileBasics(loggedInUser)
     const needsAddress = loggedInUser?.has_address !== true
 
@@ -450,10 +500,18 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      if (type === 'register') setView('register')
+      if (user) {
+        if (!checkProfileCompletion(user)) onClose()
+      } else if (type === 'register') setView('register')
       else if (type === 'login') setView('login')
       else setView('choice')
       
+      setGoogleFallback(false)
+      setTelegramOpen(false)
+      setShowLocationPicker(false)
+      setLf({ username: '', password: '' })
+      setAvatarFile(null)
+      setAvatarPreview(user?.avatar || '')
       setNotice(null)
       setRegisterErrors({})
       setProfileErrors({})
@@ -462,7 +520,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       document.body.style.overflow = ''
     }
     return () => { document.body.style.overflow = '' }
-  }, [isOpen])
+  }, [isOpen, type])
 
   // Clear notice when switching views to avoid persistent error messages from previous steps
   useEffect(() => {
@@ -470,7 +528,27 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     setRegisterErrors({})
     setProfileErrors({})
     setAddressErrors({})
+
+    // Auto-detect location when entering address step
+    if (view === 'address' && !addressForm.state) {
+      detectUserProvince().then(province => {
+        if (province) {
+          setAddressForm(f => ({ ...f, state: province }))
+        }
+      })
+    }
   }, [view])
+
+  const addressSummary = useMemo(() => {
+    const res = { province: '', district: '' }
+    if (!addressForm.state) return res
+    
+    res.province = getLocationLabel(addressForm.state, [], adminData)
+    if (addressForm.city) {
+      res.district = getLocationLabel(addressForm.city, [addressForm.state], adminData)
+    }
+    return res
+  }, [addressForm.state, addressForm.city, adminData])
 
   const handleGoogleCredential = useCallback(async (response) => {
     const credential = typeof response === 'string' ? response : response?.credential
@@ -511,6 +589,13 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     })
   }, [googleClientId, handleGoogleCredential])
 
+  useEffect(() => {
+    if (!isOpen || !googleFallback || !googleFallbackRef.current) return
+    window.google?.accounts?.id.renderButton(googleFallbackRef.current, {
+      type: 'standard', theme: 'outline', size: 'large', text: 'continue_with', width: 180,
+    })
+  }, [isOpen, googleFallback, view])
+
   const openGoogleLogin = async () => {
     setNotice(null)
     if (googleConfigLoading) return
@@ -527,13 +612,86 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
           setGoogleLoading(false)
         }
         if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
-          triggerGoogleButtonFallback().catch(() => setGoogleLoading(false))
+          setGoogleFallback(true)
+          setGoogleLoading(false)
         }
       })
     } catch {
       setGoogleLoading(false)
+      setNotice({ type: 'error', message: t('auth.googleLoadFailed') })
     }
   }
+
+  const stopTelegramPolling = useCallback(() => {
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current)
+      pollingInterval.current = null
+    }
+  }, [])
+
+  const pollTelegramStatus = useCallback(async (token) => {
+    try {
+      const { data } = await authApi.telegramStatus({ token })
+      setTgStatus(data)
+      if (data.verified) {
+        stopTelegramPolling()
+        setView('telegram-otp')
+      }
+      if (data.expired) {
+        stopTelegramPolling()
+        setNotice({ type: 'error', message: t('auth.telegramSessionExpired') })
+      }
+    } catch (err) {
+      stopTelegramPolling()
+    }
+  }, [t, stopTelegramPolling])
+
+  const startTelegramAuth = async () => {
+    if (!tgPhoneE164) {
+      setNotice({ type: 'error', message: t('auth.pleaseEnterPhone') })
+      return
+    }
+    setTelegramLoading(true)
+    setNotice(null)
+    try {
+      const { data } = await authApi.telegramStart({ phone: tgPhoneE164 })
+      setTgToken(data.token)
+      setTgBotLink(data.bot_link)
+      setView('telegram-verify')
+      
+      // Start parallel polling
+      stopTelegramPolling()
+      pollingInterval.current = setInterval(() => pollTelegramStatus(data.token), 3000)
+    } catch (err) {
+      setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.telegramStartFailed') })
+    } finally {
+      setTelegramLoading(false)
+    }
+  }
+
+  const handleTgOtpSubmit = async (otpString) => {
+    setTelegramLoading(true)
+    try {
+      const loggedInUser = await telegramOtpLogin({
+        token: tgToken,
+        otp: otpString,
+        referral_code: rf.referral_code
+      })
+      toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
+      setTelegramOpen(false)
+      if (!checkProfileCompletion(loggedInUser)) {
+        onClose()
+      }
+    } catch (err) {
+      setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.invalidOtp') })
+    } finally {
+      setTelegramLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    return () => stopTelegramPolling()
+  }, [stopTelegramPolling])
 
   useEffect(() => {
     if (!telegramOpen || !telegramLoginEnabled || !telegramWidgetRef.current) return
@@ -580,7 +738,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     }
     setLoading(true)
     try {
-      const u = await login(lf)
+      const u = await login({ ...lf, username: lf.username.trim() })
       toast.success(t('auth.welcomeBackUser', { name: u.first_name || u.username }))
       if (!checkProfileCompletion(u)) {
         onClose()
@@ -614,6 +772,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         referral_code: rf.referral_code 
       })
       toast.success(t('auth.verificationCodeSent'))
+      setDigits(['', '', '', ''])
       setView('verify')
       setNotice(null)
       window.setTimeout(() => inputsRef.current[0]?.focus(), 100)
@@ -639,7 +798,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4)
     if (!pasted) return
     event.preventDefault()
-    const next = pasted.padEnd(4, '').slice(0, 4).split('')
+    const next = Array.from({ length: 4 }, (_, index) => pasted[index] || '')
     setDigits(next)
     inputsRef.current[Math.min(pasted.length, 4) - 1]?.focus()
   }
@@ -661,12 +820,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     setLoading(true)
     try {
       const result = await verifyEmailCode({ email: rf.email.trim().toLowerCase(), code })
-      const signupBonusPoints = Number(result.signup_bonus_points || 0)
       
-      if (signupBonusPoints > 0) {
-        setPendingWelcomeBonus(signupBonusPoints)
-      }
-
       toast.success(t('auth.welcomeUser', { name: result.user.first_name || result.user.username }))
       
       // Initialize profile form with what we know
@@ -693,15 +847,21 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const handleProfileSubmit = async (e) => {
     e.preventDefault()
     const cleanName = profileForm.full_name.trim()
-    const cleanPhone = normalizeCambodiaPhone(profileForm.phone)
+    const phone = profileForm.phone_e164 || toE164(profileForm.phone, COUNTRY_DATA[0])
     const cleanEmail = profileForm.email.trim().toLowerCase()
     const nextErrors = {}
 
     if (!cleanName || ['google', 'telegram'].includes(cleanName.toLowerCase())) {
       nextErrors.full_name = t('completeProfile.enterName')
     }
-    if (!cleanPhone) nextErrors.phone = t('completeProfile.enterPhone')
-    else if (!isValidCambodiaPhone(cleanPhone)) nextErrors.phone = t('common.invalidPhone')
+    if (!profileForm.phone) {
+      nextErrors.phone = t('completeProfile.enterPhone')
+    } else {
+      const country = COUNTRY_DATA.find(c => profileForm.phone_e164?.startsWith(c.dialCode)) || COUNTRY_DATA[0]
+      if (!validatePhone(profileForm.phone, country)) {
+        nextErrors.phone = t('common.invalidPhone')
+      }
+    }
     if (!profileForm.gender) nextErrors.gender = t('completeProfile.selectGenderError')
 
     if (Object.keys(nextErrors).length) {
@@ -718,7 +878,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       const payload = {
         first_name: firstName || '',
         last_name: lastParts.join(' '),
-        phone: cleanPhone,
+        phone: phone,
         gender: profileForm.gender,
         email: cleanEmail,
         friend_referral_code: profileForm.friend_referral_code.trim(),
@@ -743,10 +903,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       setAddressForm(f => ({
         ...f,
         full_name: cleanName,
-        phone: cleanPhone
+        phone: profileForm.phone,
+        phone_e164: phone
       }))
       
-      setView('address')
+      if (data.has_address === true || user?.has_address === true) onClose()
+      else setView('address')
     } catch (error) {
       const message = translateAuthError(error.response?.data, t, 'completeProfile.completeFailed')
       setNotice({ type: 'error', message })
@@ -756,18 +918,21 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     }
   }
 
-  const handleAddressSubmit = async (e) => {
+  const handleAddressSubmit = async (e, payload) => {
     e.preventDefault()
-    const cleanName = addressForm.full_name.trim()
-    const phone = normalizeCambodiaPhone(addressForm.phone)
-    const street = addressForm.address_line1.trim()
+    const formData = payload || addressForm
+    const cleanName = formData.full_name.trim()
+    const phone = formData.phone
+    const street = (formData.address_line1 || '').trim()
     const nextErrors = {}
 
     if (!cleanName) nextErrors.full_name = t('completeProfile.enterName')
-    if (!phone) nextErrors.phone = t('completeProfile.enterPhone')
-    else if (!isValidCambodiaPhone(phone)) nextErrors.phone = t('common.invalidPhone')
-    if (!addressForm.state) nextErrors.location = t('completeProfile.selectProvince')
-    if (!street) nextErrors.address_line1 = t('completeProfile.enterStreet')
+    if (!formData.phone) {
+      nextErrors.phone = t('completeProfile.enterPhone')
+    } else if (!isValidCambodiaPhone(phone)) {
+      nextErrors.phone = t('common.invalidPhone')
+    }
+    if (!formData.state) nextErrors.location = t('completeProfile.selectProvince')
 
     if (Object.keys(nextErrors).length) {
       setAddressErrors(nextErrors)
@@ -779,13 +944,19 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     setAddressErrors({})
     setLoading(true)
     try {
-      await authApi.addresses.create({ ...addressForm, full_name: cleanName, phone, address_line1: street })
+      const { data } = await authApi.addresses.create({ ...formData, full_name: cleanName, phone, address_line1: street })
+      
+      const bonus = Number(data.signup_bonus_points || 0)
+      if (bonus > 0) {
+        setPendingWelcomeBonus(bonus)
+      }
+
       updateUser({ has_address: true })
+      queryClient.invalidateQueries({ queryKey: ['my-addresses'] })
       toast.success(t('completeProfile.addressSaved'))
       onClose()
       
-      const from = location.state?.from || '/'
-      if (from !== '/') navigate(from, { replace: true })
+      if (location.pathname === '/profile/complete') navigate('/', { replace: true })
     } catch (error) {
       const message = translateAuthError(error.response?.data, t, 'completeProfile.addressFailed')
       setNotice({ type: 'error', message })
@@ -838,15 +1009,17 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       {/* Modal Card */}
       <div className={cn(
         "relative w-full bg-white shadow-2xl transition-all duration-300",
-        view === 'profile' || view === 'address' ? "sm:max-w-[480px]" : "sm:max-w-[520px]",
-        "rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-8",
+        "sm:max-w-[520px]",
+        "rounded-t-[32px] sm:rounded-[40px] p-8 sm:p-10",
         "animate-slide-up sm:animate-fade-in",
-        "mx-auto overflow-y-auto max-h-[95vh] sm:max-h-[none]"
+        "mx-auto overflow-y-auto max-h-[95dvh]"
       )}>
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute right-6 top-6 z-10 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
+          disabled={loading || googleLoading || telegramLoading}
+          aria-label={t('common.cancel')}
+          className="absolute right-4 top-4 z-10 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
         >
           <X size={22} />
         </button>
@@ -857,46 +1030,35 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
             "border-emerald-100 bg-emerald-50 text-emerald-700"
           )}>
             <CheckCircle2 size={19} className="shrink-0 mt-0.5" />
-            <p className="text-xs font-bold leading-relaxed">{notice.message}</p>
+            <p className="text-xs font-medium leading-relaxed">{notice.message}</p>
           </div>
         )}
 
         {notice?.type === 'error' && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-t-[28px] bg-white/75 px-5 backdrop-blur-sm sm:rounded-[28px]">
-            <div className="w-full max-w-[330px] animate-fade-in rounded-3xl border border-red-100 bg-white p-6 text-center shadow-2xl shadow-slate-900/10">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500">
-                <AlertCircle size={30} strokeWidth={1.8} />
-              </div>
-              <p className="text-[15px] font-black leading-7 text-slate-900">{notice.message}</p>
-              <button
-                type="button"
-                onClick={() => setNotice(null)}
-                className="mt-5 flex h-11 w-full items-center justify-center rounded-2xl bg-[#EC197A] text-[13px] font-black uppercase tracking-wide text-white transition-all hover:bg-[#D9166F] active:scale-[0.98]"
-              >
-                OK
-              </button>
-            </div>
+          <div role="alert" className="mb-5 flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 p-3.5 text-red-700">
+            <AlertCircle size={19} className="mt-0.5 shrink-0" />
+            <p className="text-sm font-semibold leading-relaxed">{notice.message}</p>
           </div>
         )}
 
         {view === 'choice' && (
           <div className="flex flex-col items-center text-center py-4">
-            <div className="w-24 h-24 rounded-[28px] bg-gradient-to-br from-pink-50 to-pink-100 flex items-center justify-center text-pink-600 mb-8 shadow-sm">
-              <UserCircle2 size={52} strokeWidth={1.5} />
+            <div className="w-24 h-24 rounded-[30px] bg-gradient-to-br from-pink-50 to-pink-100 flex items-center justify-center text-pink-600 mb-8 shadow-sm">
+              <UserCircle2 size={52} strokeWidth={1.2} />
             </div>
 
-            <h2 className="text-[26px] sm:text-[32px] font-black tracking-tight text-slate-900 leading-tight mb-4">
+            <h2 className="text-[28px] sm:text-[32px] font-bold tracking-tight text-slate-800 leading-tight mb-4">
               {title}
             </h2>
             
-            <p className="text-[16px] font-medium text-slate-500 leading-relaxed mb-10 px-4">
+            <p className="text-[16px] font-medium text-slate-400 leading-relaxed mb-10 px-6">
               {description}
             </p>
 
             <div className="w-full space-y-4">
               <button
                 onClick={() => setView('login')}
-                className="w-full h-16 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[22px] text-[16px] font-black uppercase tracking-wide transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200"
+                className="w-full h-14 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[20px] text-[16px] font-semibold tracking-normal transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200"
               >
                 <LogIn size={22} />
                 {t('auth.login')}
@@ -904,7 +1066,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               
               <button
                 onClick={() => setView('register')}
-                className="w-full h-16 flex items-center justify-center gap-2 border-2 border-slate-100 bg-white text-slate-700 rounded-[22px] text-[16px] font-black uppercase tracking-wide transition-all hover:bg-slate-50 active:scale-[0.98]"
+                className="w-full h-14 flex items-center justify-center gap-2 border-2 border-slate-100 bg-white text-slate-700 rounded-[20px] text-[16px] font-semibold tracking-normal transition-all hover:bg-slate-50 active:scale-[0.98]"
               >
                 {t('auth.register')}
                 <ChevronRight size={20} className="text-slate-400" />
@@ -914,35 +1076,35 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         )}
 
         {view === 'login' && (
-          <div className="animate-fade-in">
-            <h2 className="text-[26px] sm:text-[32px] font-black tracking-tight text-slate-900 mb-2">{t('auth.welcome')}</h2>
-            <p className="text-[15px] font-medium text-slate-500 mb-8">{t('auth.loginSubtitle')}</p>
+          <div className="animate-fade-in py-2">
+            <h2 className="text-[26px] sm:text-[32px] font-bold tracking-tight text-slate-800 mb-3">{t('auth.welcome')}</h2>
+            <p className="text-[16px] font-medium text-slate-400 mb-8">{t('auth.loginSubtitle')}</p>
 
-            <form onSubmit={handleLogin} className="space-y-5">
+            <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label className="mb-2.5 block text-xs font-black uppercase tracking-wider text-slate-600">{t('auth.emailOrUsername')}</label>
-                <div className="flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
+                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.emailOrUsername')}</label>
+                <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
                   <Mail size={20} className="text-slate-400" />
                   <input 
                     type="text" 
                     value={lf.username} 
                     onChange={(e) => setLf(f => ({ ...f, username: e.target.value }))}
                     placeholder={t('auth.emailOrUsernamePlaceholder')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
+                    className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-black uppercase tracking-wider text-slate-600">{t('auth.password')}</label>
-                <div className="flex h-14 items-center gap-3 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
+                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
+                <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
                   <Lock size={20} className="text-slate-400" />
                   <input 
                     type={showPass ? 'text' : 'password'} 
                     value={lf.password} 
                     onChange={(e) => setLf(f => ({ ...f, password: e.target.value }))}
                     placeholder={t('auth.passwordPlaceholder')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
+                    className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
                   <button type="button" onClick={() => setShowPass(!showPass)} className="text-slate-400 hover:text-pink-600 transition-colors">
                     {showPass ? <Eye size={19} /> : <EyeOff size={19} />}
@@ -953,29 +1115,33 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               <button 
                 type="submit" 
                 disabled={loading}
-                className="w-full h-16 mt-2 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[22px] text-[17px] font-black uppercase tracking-wider transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
+                className="w-full h-12 mt-2 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-xl text-[15px] font-semibold tracking-normal transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
               >
                 {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('auth.login')} <ChevronRight size={20} strokeWidth={3} /></>}
               </button>
             </form>
 
-            <div className="flex items-center gap-4 my-8">
+            <div className="flex items-center gap-4 my-5">
               <div className="h-px flex-1 bg-slate-100" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">{t('common.or')}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">{t('common.or')}</span>
               <div className="h-px flex-1 bg-slate-100" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <button 
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {googleFallback ? <div className="flex min-w-0 items-center justify-center overflow-hidden" ref={googleFallbackRef} /> : <button 
                 onClick={openGoogleLogin} 
-                className="flex h-14 items-center justify-center gap-3 rounded-[20px] border border-slate-200 bg-white text-[15px] font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
               >
                 {googleLoading ? <Loader2 size={20} className="animate-spin text-slate-400" /> : <GoogleMark size={20} />}
                 {t('auth.google')}
-              </button>
+              </button>}
               <button 
-                onClick={() => setTelegramOpen(true)}
-                className="flex h-14 items-center justify-center gap-3 rounded-[20px] border border-slate-200 bg-white text-[15px] font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+                onClick={() => {
+                  setNotice(null)
+                  setTelegramOpen(true)
+                  setView('telegram-choice')
+                }} 
+                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
               >
                 <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />
                 {t('auth.telegram')}
@@ -984,21 +1150,21 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
             <p className="text-center text-[15px] font-medium text-slate-500">
               {t('auth.noAccount')}{' '}
-              <button onClick={() => setView('register')} className="font-black text-[#EC4D97] hover:underline underline-offset-4 transition-all">{t('auth.register')}</button>
+              <button onClick={() => setView('register')} className="font-semibold text-[#EC4D97] hover:underline underline-offset-4 transition-all">{t('auth.register')}</button>
             </p>
           </div>
         )}
 
         {view === 'register' && (
-          <div className="animate-fade-in">
-            <h2 className="text-[26px] sm:text-[32px] font-black tracking-tight text-slate-900 mb-2">{t('auth.createAccount')}</h2>
-            <p className="text-[15px] font-medium text-slate-500 mb-8">{t('auth.createAccountSubtitle')}</p>
+          <div className="animate-fade-in py-2">
+            <h2 className="text-[26px] sm:text-[32px] font-bold tracking-tight text-slate-800 mb-3">{t('auth.createAccount')}</h2>
+            <p className="text-[16px] font-medium text-slate-400 mb-8">{t('auth.createAccountSubtitle')}</p>
 
-            <form onSubmit={handleRegister} className="space-y-5">
+            <form onSubmit={handleRegister} className="space-y-6">
               <div>
-                <label className="mb-2.5 block text-xs font-black uppercase tracking-wider text-slate-600">{t('auth.fullName')}</label>
+                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.fullName')}</label>
                 <div className={cn(
-                  "flex h-14 items-center gap-3 rounded-[20px] border bg-slate-50/50 px-5 transition-all duration-300",
+                  "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
                 )}>
                   <User size={20} className="text-slate-400" />
@@ -1007,15 +1173,20 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     value={rf.full_name} 
                     onChange={(e) => setRf(f => ({ ...f, full_name: e.target.value }))}
                     placeholder={t('auth.fullNamePlaceholder')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
+                    className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
                 </div>
+                {registerErrors.full_name && (
+                  <p className="mt-1.5 px-1 text-[12px] font-semibold text-red-500 animate-fade-in">
+                    {registerErrors.full_name}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-black uppercase tracking-wider text-slate-600">{t('auth.email')}</label>
+                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.email')}</label>
                 <div className={cn(
-                  "flex h-14 items-center gap-3 rounded-[20px] border bg-slate-50/50 px-5 transition-all duration-300",
+                  "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.email ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
                 )}>
                   <Mail size={20} className="text-slate-400" />
@@ -1024,15 +1195,20 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     value={rf.email} 
                     onChange={(e) => setRf(f => ({ ...f, email: e.target.value }))}
                     placeholder={t('auth.emailExample')}
-                    className="flex-1 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
+                    className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
                 </div>
+                {registerErrors.email && (
+                  <p className="mt-1.5 px-1 text-[12px] font-semibold text-red-500 animate-fade-in">
+                    {registerErrors.email}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-black uppercase tracking-wider text-slate-600">{t('auth.password')}</label>
+                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
                 <div className={cn(
-                  "flex h-14 items-center gap-3 rounded-[20px] border bg-slate-50/50 px-5 transition-all duration-300",
+                  "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.password ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
                 )}>
                   <Lock size={20} className="text-slate-400" />
@@ -1041,18 +1217,23 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     value={rf.password} 
                     onChange={(e) => setRf(f => ({ ...f, password: e.target.value }))}
                     placeholder={t('auth.passwordPlaceholder')}
-                    className="flex-1 min-w-0 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
+                    className="flex-1 min-w-0 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
                   <button type="button" onClick={() => setShowPass(!showPass)} className="text-slate-400 hover:text-pink-600 transition-colors">
                     {showPass ? <Eye size={19} /> : <EyeOff size={19} />}
                   </button>
                 </div>
+                {registerErrors.password && (
+                  <p className="mt-1.5 px-1 text-[12px] font-semibold text-red-500 animate-fade-in">
+                    {registerErrors.password}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-black uppercase tracking-wider text-slate-600">{t('auth.confirmPassword')}</label>
+                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.confirmPassword')}</label>
                 <div className={cn(
-                  "flex h-14 items-center gap-3 rounded-[20px] border bg-slate-50/50 px-5 transition-all duration-300",
+                  "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.confirm_password ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
                 )}>
                   <Lock size={20} className="text-slate-400" />
@@ -1061,32 +1242,58 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     value={rf.confirm_password} 
                     onChange={(e) => setRf(f => ({ ...f, confirm_password: e.target.value }))}
                     placeholder={t('auth.confirmPassword')}
-                    className="flex-1 min-w-0 bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
+                    className="flex-1 min-w-0 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
                   <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="text-slate-400 hover:text-pink-600 transition-colors">
                     {showConfirm ? <Eye size={19} /> : <EyeOff size={19} />}
                   </button>
                 </div>
+                {registerErrors.confirm_password && (
+                  <p className="mt-1.5 px-1 text-[12px] font-semibold text-red-500 animate-fade-in">
+                    {registerErrors.confirm_password}
+                  </p>
+                )}
               </div>
 
               <button 
                 type="submit" 
                 disabled={loading}
-                className="w-full h-16 mt-2 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[22px] text-[17px] font-black uppercase tracking-wider transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
+                className="w-full h-12 mt-2 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-xl text-[15px] font-semibold tracking-normal transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
               >
                 {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('auth.createAccount')} <ChevronRight size={20} strokeWidth={3} /></>}
               </button>
             </form>
 
-            <div className="flex items-center gap-4 my-8">
+            <div className="flex items-center gap-4 my-5">
               <div className="h-px flex-1 bg-slate-100" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">{t('common.or')}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">{t('common.or')}</span>
               <div className="h-px flex-1 bg-slate-100" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {googleFallback ? <div className="flex min-w-0 items-center justify-center overflow-hidden" ref={googleFallbackRef} /> : <button 
+                onClick={openGoogleLogin} 
+                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+              >
+                {googleLoading ? <Loader2 size={20} className="animate-spin text-slate-400" /> : <GoogleMark size={20} />}
+                {t('auth.google')}
+              </button>}
+              <button 
+                onClick={() => {
+                  setNotice(null)
+                  setTelegramOpen(true)
+                  setView('telegram-choice')
+                }}
+                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+              >
+                <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />
+                {t('auth.telegram')}
+              </button>
             </div>
 
             <p className="text-center text-[15px] font-medium text-slate-500">
               {t('auth.haveAccount')}{' '}
-              <button onClick={() => setView('login')} className="font-black text-[#EC4D97] hover:underline underline-offset-4 transition-all">{t('auth.logIn')}</button>
+              <button onClick={() => setView('login')} className="font-semibold text-[#EC4D97] hover:underline underline-offset-4 transition-all">{t('auth.logIn')}</button>
             </p>
           </div>
         )}
@@ -1105,12 +1312,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 <MailCheck size={42} strokeWidth={1.8} />
               </div>
 
-              <h2 className="text-[26px] sm:text-[32px] font-black tracking-tight text-slate-900 mb-2">
+              <h2 className="text-[24px] sm:text-[26px] font-semibold tracking-normal text-slate-900 mb-2">
                 {t('verifyEmail.title')}
               </h2>
-              <p className="text-[15px] font-medium text-slate-500 mb-8 max-w-[320px]">
+              <p className="text-[15px] font-medium text-slate-500 mb-5 max-w-[320px]">
                 {t('verifyEmail.subtitle')}
-                <span className="block font-bold text-slate-800 mt-1 truncate">{rf.email}</span>
+                <span className="block font-medium text-slate-800 mt-1 truncate">{rf.email}</span>
               </p>
 
               <form onSubmit={submitVerification} className="w-full flex flex-col items-center">
@@ -1126,7 +1333,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                       onChange={(e) => setDigit(index, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, index)}
                       className={cn(
-                        "w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] border-2 text-center text-xl font-black transition-all outline-none",
+                        "w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 text-center text-xl font-semibold transition-all outline-none",
                         digit 
                           ? "border-pink-500 bg-pink-50 text-pink-600" 
                           : "border-slate-100 bg-slate-50 text-slate-400 focus:border-pink-300 focus:bg-white focus:ring-4 focus:ring-pink-50"
@@ -1142,7 +1349,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     type="button"
                     onClick={resendCode}
                     disabled={resending}
-                    className="mt-1 text-sm font-black text-[#EC4D97] hover:underline underline-offset-4 disabled:opacity-50"
+                    className="mt-1 text-sm font-semibold text-[#EC4D97] hover:underline underline-offset-4 disabled:opacity-50"
                   >
                     {resending ? t('verifyEmail.sending') : t('verifyEmail.resendCode')}
                   </button>
@@ -1151,13 +1358,13 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 <button
                   type="submit"
                   disabled={loading || digits.join('').length < 4}
-                  className="w-full h-16 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[22px] text-[17px] font-black uppercase tracking-wider transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
+                  className="w-full h-14 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-xl text-[15px] font-semibold tracking-normal transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
                 >
                   {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('verifyEmail.verify')} <ChevronRight size={20} strokeWidth={3} /></>}
                 </button>
               </form>
 
-              <div className="mt-10 flex items-center justify-center gap-2 text-[13px] font-bold text-slate-400">
+              <div className="mt-10 flex items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
                 <LockKeyhole size={16} />
                 {t('verifyEmail.securityNote')}
               </div>
@@ -1168,25 +1375,25 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         {view === 'profile' && (
           <div className="animate-fade-in">
             <div className="flex flex-col items-center text-center mb-6">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC4D97]">
-                <Sparkles size={30} strokeWidth={1.8} />
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-pink-50 text-[#EC4D97] shadow-sm">
+                <Sparkles size={28} strokeWidth={1.5} />
               </div>
-              <h2 className="text-[24px] sm:text-[28px] font-black tracking-tight text-slate-900 mb-2">
+              <h2 className="text-[26px] sm:text-[30px] font-semibold tracking-tight text-slate-800 mb-2">
                 {t('completeProfile.title')}
               </h2>
-              <p className="text-[14px] font-medium leading-6 text-slate-500 max-w-[320px]">
+              <p className="text-[14px] font-medium leading-relaxed text-slate-400 max-w-[400px]">
                 {t('completeProfile.subtitle')}
               </p>
             </div>
 
-            <form onSubmit={handleProfileSubmit} className="space-y-5">
-              <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <form onSubmit={handleProfileSubmit} className="space-y-6">
+              <div className="flex items-center gap-4 rounded-[24px] border border-slate-100 bg-slate-50/30 p-4 transition-colors hover:bg-slate-50/50">
                 <div className="relative">
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-white shadow-md ring-1 ring-slate-100">
                     {avatarPreview ? (
                       <img src={avatarPreview} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-2xl font-black text-pink-600">
+                      <span className="text-2xl font-bold text-pink-500">
                         {profileForm.full_name?.charAt(0).toUpperCase() || '?'}
                       </span>
                     )}
@@ -1194,9 +1401,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <button 
                     type="button" 
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-[#EC197A] text-white shadow-md transition-transform hover:scale-105"
+                    className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-[2px] border-white bg-[#EC197A] text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
                   >
-                    <Camera size={13} fill="currentColor" />
+                    <Camera size={12} fill="currentColor" />
                   </button>
                   <input 
                     ref={fileInputRef} 
@@ -1213,21 +1420,23 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   />
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-[15px] font-black text-slate-800">{t('completeProfile.profilePhoto')}</p>
-                  <p className="mt-1 text-[12px] font-medium leading-5 text-slate-500">
-                    {t('completeProfile.photoHint')}
+                  <p className="text-[15px] font-bold text-slate-800">{t('completeProfile.profilePhoto')}</p>
+                  <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-slate-400">
+                    {t('completeProfile.photoHint') || t('completeProfile.chooseImage')}
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.fullName')} <span className="text-pink-600">*</span></label>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    {t('auth.fullName')} <span className="text-pink-600">*</span>
+                  </label>
                   <div className={cn(
-                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
-                    profileErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
+                    "flex h-14 items-center gap-4 rounded-[20px] border px-5 transition-all duration-300",
+                    profileErrors.full_name ? "border-red-500 bg-red-50/30 ring-4 ring-red-50" : "border-slate-200 bg-slate-50/50 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
                   )}>
-                    <UserRound size={18} className="text-slate-400" />
+                    <UserRound size={20} className="text-slate-400" />
                     <input 
                       value={profileForm.full_name}
                       onChange={(e) => {
@@ -1235,66 +1444,94 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                         setProfileErrors(errors => ({ ...errors, full_name: '' }))
                       }}
                       placeholder={t('auth.fullNamePlaceholder')}
-                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                      className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
                     />
                   </div>
-                  {profileErrors.full_name && <p className="mt-1.5 text-xs font-bold text-red-500">{profileErrors.full_name}</p>}
+                  {profileErrors.full_name && (
+                    <p className="mt-1.5 px-2 text-[12px] font-semibold text-red-500 animate-fade-in">
+                      {profileErrors.full_name}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.phoneNumber')} <span className="text-pink-600">*</span></label>
-                  <div className={cn(
-                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
-                    profileErrors.phone ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
-                  )}>
-                    <Phone size={18} className="text-slate-400" />
-                    <input 
-                      value={profileForm.phone}
-                      onChange={(e) => {
-                        setProfileForm(f => ({ ...f, phone: normalizeCambodiaPhone(e.target.value) }))
-                        setProfileErrors(errors => ({ ...errors, phone: '' }))
-                      }}
-                      placeholder={t('common.phonePlaceholder')}
-                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                    />
-                  </div>
-                  {profileErrors.phone && <p className="mt-1.5 text-xs font-bold text-red-500">{profileErrors.phone}</p>}
+                  <PhoneInput 
+                    required
+                    label={t('auth.phoneNumber')}
+                    value={profileForm.phone}
+                    onChange={(e) => {
+                      setProfileForm(f => ({ ...f, phone: e.target.value, phone_e164: e.target.e164 }))
+                      setProfileErrors(errors => ({ ...errors, phone: '' }))
+                    }}
+                    error={profileErrors.phone}
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('completeProfile.gender')} <span className="text-pink-600">*</span></label>
-                    <div className={cn(
-                      "relative flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
-                      profileErrors.gender ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
-                    )}>
-                      <UsersRound size={18} className="text-slate-400" />
-                      <select 
-                        value={profileForm.gender}
-                        onChange={(e) => {
-                          setProfileForm(f => ({ ...f, gender: e.target.value }))
-                          setProfileErrors(errors => ({ ...errors, gender: '' }))
-                        }}
-                        className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-[14px] font-bold text-slate-800 outline-none"
-                      >
-                        {GENDER_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={16} className="pointer-events-none absolute right-4 text-slate-400" />
-                    </div>
-                    {profileErrors.gender && <p className="mt-1.5 text-xs font-bold text-red-500">{profileErrors.gender}</p>}
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <div ref={genderDropdownRef} className="relative">
+                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      {t('completeProfile.gender')} <span className="text-pink-600">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsGenderDropdownOpen(!isGenderDropdownOpen)}
+                      className={cn(
+                        "flex h-14 w-full items-center justify-between gap-4 rounded-[20px] border px-5 transition-all duration-300",
+                        profileErrors.gender ? "border-red-500 bg-red-50/30 ring-4 ring-red-50" : "border-slate-200 bg-slate-50/50 hover:bg-white focus:border-pink-300 focus:ring-4 focus:ring-pink-50",
+                        isGenderDropdownOpen && "border-pink-300 bg-white ring-4 ring-pink-50"
+                      )}
+                    >
+                      <div className="flex items-center gap-4 min-w-0">
+                        <UsersRound size={20} className="text-slate-400 shrink-0" />
+                        <span className={cn("truncate text-[15px] font-semibold", profileForm.gender ? "text-slate-800" : "text-slate-400")}>
+                          {profileForm.gender ? t(GENDER_OPTIONS.find(o => o.value === profileForm.gender)?.labelKey) : t('completeProfile.selectGender')}
+                        </span>
+                      </div>
+                      <ChevronDown size={18} className={cn("text-slate-400 transition-transform duration-300", isGenderDropdownOpen && "rotate-180")} />
+                    </button>
+
+                    {isGenderDropdownOpen && (
+                      <div className="absolute left-0 top-[calc(100%+8px)] z-[60] w-full overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="py-2">
+                          {GENDER_OPTIONS.filter(o => o.value !== '').map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                setProfileForm(f => ({ ...f, gender: opt.value }))
+                                setProfileErrors(errors => ({ ...errors, gender: '' }))
+                                setIsGenderDropdownOpen(false)
+                              }}
+                              className={cn(
+                                "flex w-full items-center px-5 py-3 text-left text-[14px] font-semibold transition-colors",
+                                profileForm.gender === opt.value ? "bg-pink-50 text-[#EC197A]" : "text-slate-700 hover:bg-slate-50"
+                              )}
+                            >
+                              {t(opt.labelKey)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {profileErrors.gender && (
+                      <p className="mt-1.5 px-2 text-[12px] font-semibold text-red-500 animate-fade-in">
+                        {profileErrors.gender}
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('completeProfile.referralCodeOptional')}</label>
-                    <div className="flex h-12 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 transition-all duration-300 focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50">
-                      <Sparkles size={18} className="text-slate-400" />
+                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      {t('completeProfile.referralCodeOptional')}
+                    </label>
+                    <div className="flex h-14 items-center gap-4 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 transition-all duration-300 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50">
+                      <Sparkles size={20} className="text-slate-400" />
                       <input 
                         value={profileForm.friend_referral_code}
                         onChange={(e) => setProfileForm(f => ({ ...f, friend_referral_code: e.target.value.toUpperCase() }))}
                         placeholder="CODE"
-                        className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                        className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
                       />
                     </div>
                   </div>
@@ -1304,165 +1541,175 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-1 flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl bg-[#EC197A] text-[15px] font-black uppercase tracking-wide text-white shadow-lg shadow-pink-100 transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_24px_rgba(236,25,122,0.22)] active:scale-[0.98] disabled:opacity-50"
+                className="mt-2 flex h-14 w-full items-center justify-center gap-3 rounded-[20px] bg-[#EC197A] text-[15px] font-bold uppercase tracking-wider text-white shadow-[0_10px_25px_rgba(236,25,122,0.2)] transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] disabled:opacity-50"
               >
-                {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('common.next')} <ChevronRight size={20} strokeWidth={3} /></>}
+                {loading ? <Loader2 size={24} className="animate-spin" /> : <>{t('common.next')} <ChevronRight size={22} strokeWidth={3} /></>}
               </button>
             </form>
           </div>
         )}
 
         {view === 'address' && (
-          <div className="animate-fade-in">
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC4D97]">
-                <MapPin size={30} strokeWidth={1.8} />
-              </div>
-              <h2 className="text-[24px] sm:text-[28px] font-black tracking-tight text-slate-900 mb-2">
-                {t('completeProfile.addressTitle')}
-              </h2>
-              <p className="text-[14px] font-medium leading-6 text-slate-500 max-w-[320px]">
-                {t('completeProfile.addressSubtitle')}
-              </p>
-            </div>
-
-            <form onSubmit={handleAddressSubmit} className="space-y-5">
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.fullName')} <span className="text-pink-600">*</span></label>
-                  <div className={cn(
-                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
-                    addressErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
-                  )}>
-                    <UserRound size={18} className="text-slate-400" />
-                    <input 
-                      value={addressForm.full_name}
-                      onChange={(e) => {
-                        setAddressForm(f => ({ ...f, full_name: e.target.value }))
-                        setAddressErrors(errors => ({ ...errors, full_name: '' }))
-                      }}
-                      placeholder={t('addressBook.fullNamePlaceholder')}
-                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                    />
-                  </div>
-                  {addressErrors.full_name && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.full_name}</p>}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('auth.phoneNumber')} <span className="text-pink-600">*</span></label>
-                  <div className={cn(
-                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
-                    addressErrors.phone ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
-                  )}>
-                    <Phone size={18} className="text-slate-400" />
-                    <input 
-                      value={addressForm.phone}
-                      onChange={(e) => {
-                        setAddressForm(f => ({ ...f, phone: normalizeCambodiaPhone(e.target.value) }))
-                        setAddressErrors(errors => ({ ...errors, phone: '' }))
-                      }}
-                      placeholder={t('addressBook.phonePlaceholder')}
-                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                    />
-                  </div>
-                  {addressErrors.phone && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.phone}</p>}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('addressBook.locationPlaceholder')} <span className="text-pink-600">*</span></label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddressErrors(errors => ({ ...errors, location: '' }))
-                      setShowLocationPicker(true)
-                    }}
-                    className={cn(
-                      "flex h-12 w-full items-center gap-3 rounded-2xl border px-4 text-left transition-all duration-300 hover:bg-slate-50 focus:border-pink-300 focus:ring-4 focus:ring-pink-50",
-                      addressErrors.location ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white"
-                    )}
-                  >
-                    <MapPin size={18} className="text-[#EC197A]" />
-                    <div className="min-w-0 flex-1 truncate">
-                      {addressForm.state ? (
-                        <span className="text-[14px] font-bold text-slate-800">
-                          {addressForm.state} › {addressForm.city} › {addressForm.address_line2}
-                        </span>
-                      ) : (
-                        <span className="text-[14px] font-bold text-slate-400">{t('addressBook.locationPlaceholder')}</span>
-                      )}
-                    </div>
-                    <ChevronRight size={16} className="text-slate-400" />
-                  </button>
-                  {addressErrors.location && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.location}</p>}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-[11px] font-black uppercase tracking-wider text-slate-500">{t('completeProfile.streetAddress')} <span className="text-pink-600">*</span></label>
-                  <div className={cn(
-                    "flex h-12 items-center gap-3 rounded-2xl border px-4 transition-all duration-300",
-                    addressErrors.address_line1 ? "border-red-200 bg-red-50/30" : "border-slate-200 bg-white focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50"
-                  )}>
-                    <input 
-                      value={addressForm.address_line1}
-                      onChange={(e) => {
-                        setAddressForm(f => ({ ...f, address_line1: e.target.value }))
-                        setAddressErrors(errors => ({ ...errors, address_line1: '' }))
-                      }}
-                      placeholder={t('completeProfile.streetPlaceholder')}
-                      className="min-w-0 flex-1 bg-transparent text-[14px] font-bold text-slate-800 outline-none placeholder:text-slate-400"
-                    />
-                  </div>
-                  {addressErrors.address_line1 && <p className="mt-1.5 text-xs font-bold text-red-500">{addressErrors.address_line1}</p>}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="mt-1 flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl bg-[#EC197A] text-[15px] font-black uppercase tracking-wide text-white shadow-lg shadow-pink-100 transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_24px_rgba(236,25,122,0.22)] active:scale-[0.98] disabled:opacity-50"
-              >
-                {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('common.save')} <ChevronRight size={20} strokeWidth={3} /></>}
-              </button>
-            </form>
-          </div>
+          <AddressForm
+            address={null}
+            defaultContact={{
+              full_name: addressForm.full_name || profileForm.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' '),
+              phone: addressForm.phone || profileForm.phone || user?.phone,
+            }}
+            isFirstAddress
+            isSaving={loading}
+            onSave={(payload) => handleAddressSubmit({ preventDefault: () => {} }, payload)}
+            onClose={onClose}
+          />
         )}
 
-        <div className="mt-10 flex justify-center">
+        <div className="mt-5 flex justify-center">
           <button
             onClick={() => {
-              if (view === 'choice') onClose()
+              if (loading) return
+              if (view === 'profile' || view === 'address') onClose()
+              else if (view === 'choice') onClose()
               else setView('choice')
             }}
-            className="text-[14px] font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest"
+            className="text-[14px] font-semibold text-slate-400 hover:text-slate-600 transition-colors tracking-normalst"
           >
-            {view === 'choice' ? t('common.cancel') : t('common.back')}
+            {view === 'choice' || view === 'profile' || view === 'address' ? t('common.cancel') : t('common.back')}
           </button>
         </div>
       </div>
 
       {telegramOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-2xl">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-500 mb-4">
-              <Send size={24} fill="#2AABEE" />
+          <div className="w-full max-w-sm overflow-hidden rounded-[28px] bg-white text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            
+            {/* Header with reference-like UI */}
+            <div className="relative p-8 pb-4">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-sky-50 text-sky-500 mb-5 shadow-sm">
+                <Send size={32} fill="#2AABEE" className="ml-0.5" />
+              </div>
+              <h3 className="text-[22px] font-bold tracking-tight text-slate-900">{t('auth.continueWithTelegram')}</h3>
+              <p className="mt-3 text-[14px] font-medium leading-relaxed text-slate-500 px-4">
+                {t('auth.telegramLoginSubtitle')}
+              </p>
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">{t('auth.continueWithTelegram')}</h3>
-            <p className="text-sm text-slate-500 mb-6">{t('auth.approveTelegramLogin')}</p>
-            <div className="min-h-[60px] flex justify-center py-4 bg-slate-50 rounded-2xl border border-slate-100 mb-4">
-              <div ref={telegramWidgetRef} />
+
+            <div className="p-6 pt-5">
+              {view === 'telegram-verify' ? (
+                <div className="space-y-5 animate-fade-in">
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4 text-left">
+                    <div className="flex items-center gap-3 text-sky-600 mb-2">
+                      <Globe size={18} />
+                      <span className="text-[13px] font-bold uppercase tracking-wider">{t('auth.verificationInfo')}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[13px] font-medium text-slate-600 flex justify-between">
+                        <span>{t('auth.targetBot')}</span>
+                        <span className="font-bold text-slate-800">@{telegramBotUsername}</span>
+                      </p>
+                      <p className="text-[13px] font-medium text-slate-600 flex justify-between">
+                        <span>{t('auth.status')}</span>
+                        <span className={cn(
+                          "font-bold",
+                          tgStatus.has_chat ? "text-emerald-500" : "text-amber-500"
+                        )}>
+                          {tgStatus.has_chat ? t('auth.connected') : t('auth.waiting')}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <a 
+                    href={tgBotLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-14 w-full items-center justify-center gap-3 rounded-[18px] bg-[#2AABEE] text-[15px] font-bold text-white shadow-lg shadow-sky-100 transition-all hover:bg-[#229ED9] hover:shadow-sky-200 active:scale-[0.98]"
+                  >
+                    <ExternalLink size={20} />
+                    {t('auth.openTelegramBot')}
+                  </a>
+                  
+                  <div className="flex items-center gap-2 justify-center py-2">
+                    <Loader2 size={16} className="animate-spin text-sky-400" />
+                    <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">
+                      {t('auth.waitingForHandshake')}
+                    </span>
+                  </div>
+                </div>
+              ) : view === 'telegram-otp' ? (
+                <div className="space-y-6 animate-fade-in">
+                  <div className="text-left">
+                    <p className="text-[13px] font-medium text-slate-500 mb-4">
+                      {t('auth.otpSentToTelegram', { phone: tgPhone })}
+                    </p>
+                    <div className="grid grid-cols-6 gap-2">
+                      {tgOtp.map((digit, i) => (
+                        <input
+                          key={i}
+                          ref={el => inputsRef.current[i] = el}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(-1)
+                            const newOtp = [...tgOtp]
+                            newOtp[i] = val
+                            setTgOtp(newOtp)
+                            if (val && i < 5) inputsRef.current[i + 1]?.focus()
+                            if (newOtp.every(d => d !== '')) handleTgOtpSubmit(newOtp.join(''))
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Backspace' && !tgOtp[i] && i > 0) {
+                              inputsRef.current[i - 1]?.focus()
+                            }
+                          }}
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 text-center text-[18px] font-bold text-slate-800 focus:border-pink-300 focus:bg-white focus:ring-4 focus:ring-pink-50 transition-all outline-none"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleTgOtpSubmit(tgOtp.join(''))}
+                    disabled={telegramLoading || tgOtp.some(d => !d)}
+                    className="flex h-14 w-full items-center justify-center gap-3 rounded-[18px] bg-[#EC197A] text-[15px] font-bold text-white shadow-lg shadow-pink-100 transition-all hover:bg-[#D9166F] disabled:opacity-50"
+                  >
+                    {telegramLoading ? <Loader2 size={22} className="animate-spin" /> : t('auth.verifyAndLogin')}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 px-6 bg-slate-50/50 rounded-[28px] border border-slate-100/80 min-h-[140px]">
+                  <div className="min-h-[60px] flex items-center justify-center w-full">
+                    {telegramLoginEnabled ? (
+                      <div ref={telegramWidgetRef} className="flex justify-center scale-110" />
+                    ) : (
+                      <p className="text-sm font-medium text-red-500 bg-red-50 px-4 py-2 rounded-lg border border-red-100">
+                        {t('auth.telegramNotConfiguredShort')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  setTelegramOpen(false)
+                  stopTelegramPolling()
+                  if (view.startsWith('telegram-')) setView('login')
+                }}
+                className="mt-6 w-full py-2 text-[14px] font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
+              >
+                {t('common.cancel')}
+              </button>
             </div>
-            <button
-              onClick={() => setTelegramOpen(false)}
-              className="w-full h-12 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50"
-            >
-              {t('common.cancel')}
-            </button>
           </div>
         </div>
       )}
 
       {showLocationPicker && (
         <LocationPicker 
+          adminData={adminData}
+          loadingAdminData={loadingAdminData}
           onSelect={(data) => {
             setAddressForm(f => ({ ...f, ...data }))
             setAddressErrors(errors => ({ ...errors, location: '' }))

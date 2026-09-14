@@ -228,6 +228,19 @@ export function formatFullAddressKhmer(customer) {
   return note || location || '-'
 }
 
+export async function detectUserProvince() {
+  try {
+    const response = await fetch('https://ipapi.co/json/')
+    const data = await response.json()
+    if (data.country_code === 'KH' && data.region) {
+      return data.region
+    }
+  } catch (error) {
+    console.warn('Province detection failed:', error)
+  }
+  return null
+}
+
 export function getReceiptAddressNote(customer) {
   if (customer?.notes?.trim()) return customer.notes.trim()
 

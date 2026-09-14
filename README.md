@@ -120,8 +120,7 @@ venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
 Frontend:
 
 ```powershell
-cd "C:\xampp\htdocs\Shadow Shop\frontend"
-npm run dev
+![alt text](image.png)
 ```
 
 Open the app:
