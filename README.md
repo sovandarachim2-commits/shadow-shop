@@ -157,10 +157,23 @@ python manage.py runserver
 
 Run this after pulling new backend changes or deploying updates that add database fields, such as the login logo and splash screen settings:
 
+Local Windows / PowerShell (from the project root):
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe manage.py migrate
+```
+
+If your terminal is already in `backend`, run only the second command. This uses the backend virtual environment directly, so activation is not required.
+
+Ubuntu production (from the project root, using the Python 3.12 environment):
+
 ```bash
 cd backend
-python manage.py migrate
+./venv312/bin/python manage.py migrate --settings=config.settings.production
 ```
+
+Use the virtual environment path configured for your deployed backend if it differs from `venv312`.
 
 ### Frontend
 ```bash

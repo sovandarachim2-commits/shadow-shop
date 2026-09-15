@@ -170,6 +170,9 @@ def _issue_auth_tokens(user, request, login_method='password', extra_data=None):
         object_type='User',
         extra_data={'method': login_method},
     )
+    if user.role != 'customer':
+        from apps.notifications.services import TelegramService
+        TelegramService.notify_staff_login_async(user.pk, request)
     payload = {
         'refresh': str(refresh),
         'access': str(refresh.access_token),

@@ -734,12 +734,13 @@ export default function Settings({ tab = 'general' }) {
     ['notify_low_stock', 'Low Stock Alert'],
     ['notify_delivery', 'Delivery Updates'],
     ['notify_daily_summary', 'Daily Summary'],
+    ['notify_staff_login', 'Staff Login Alerts'],
   ]
   const emptyTelegramForm = {
     name: '', bot_username: '', bot_token: '', chat_id: '', topic_id: '', is_active: true,
     notify_new_order: true, notify_payment: true, notify_contact_sales_copy: true,
     notify_low_stock: true, notify_delivery: true,
-    notify_daily_summary: true,
+    notify_daily_summary: true, notify_staff_login: true,
     new_order_payment_methods: [],
   }
   const [telegramForm, setTelegramForm] = useState(emptyTelegramForm)

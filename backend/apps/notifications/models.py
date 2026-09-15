@@ -17,6 +17,7 @@ class TelegramConfig(models.Model):
     notify_low_stock = models.BooleanField(default=True)
     notify_delivery = models.BooleanField(default=True)
     notify_daily_summary = models.BooleanField(default=True)
+    notify_staff_login = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

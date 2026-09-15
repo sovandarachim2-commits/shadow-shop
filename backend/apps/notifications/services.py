@@ -862,3 +862,44 @@ class TelegramService:
             f"Tracking: {delivery.tracking_number or 'N/A'}"
         )
         return self.send_to_configs(configs, message, 'delivery')
+
+    def notify_staff_login(self, user, request=None) -> bool:
+        configs = self.get_configs_for('notify_staff_login')
+        if not configs.exists():
+            return False
+
+        ip = 'N/A'
+        if request:
+            forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+            if forwarded:
+                ip = forwarded.split(',')[0].strip()
+            else:
+                ip = request.META.get('REMOTE_ADDR', 'N/A')
+
+        now = timezone.localtime().strftime('%d-%m-%Y %I:%M:%S %p')
+        role_display = user.get_role_display()
+        full_name = user.get_full_name() or user.username
+
+        message = (
+            f"🔐 <b>Shadow Shop Login</b>\n\n"
+            f"Project: Shadow Shop\n"
+            f"Status: Login Successful ✅\n\n"
+            f"👤 User: {escape(full_name)}\n"
+            f"🛡 Role: {escape(role_display)}\n"
+            f"🌐 IP: {escape(ip)}\n"
+            f"🕐 {now}"
+        )
+        return self.send_to_configs(configs, message, 'staff_login', reference=str(user.pk))
+
+    @classmethod
+    def notify_staff_login_async(cls, user_id, request=None) -> None:
+        def send():
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                user = User.objects.get(pk=user_id)
+                cls().notify_staff_login(user, request)
+            except Exception as e:
+                logger.error(f"Async Telegram staff login notification failed: {e}")
+
+        Thread(target=send, daemon=True).start()
