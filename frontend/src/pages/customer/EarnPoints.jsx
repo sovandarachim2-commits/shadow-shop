@@ -92,7 +92,9 @@ export default function EarnPoints() {
 
   const points = data?.current_points || 0
   const memberLevel = data?.member_level || 'Silver'
-  const nextLevel = memberLevel === 'Silver' ? 'Gold' : 'Platinum'
+  const translatedLevel = t(`profile.tiers.${memberLevel.toLowerCase()}`, { defaultValue: memberLevel })
+  const nextLevelRaw = memberLevel === 'Silver' ? 'Gold' : 'Platinum'
+  const nextLevel = t(`profile.tiers.${nextLevelRaw.toLowerCase()}`, { defaultValue: nextLevelRaw })
   const nextTierPoints = data?.next_tier_points || points
   const pointsToNext = data?.points_to_next_level || 0
   const progress = Math.min(100, data?.progress_pct || 0)
@@ -133,7 +135,7 @@ export default function EarnPoints() {
             <span className="self-end pb-0.5 text-xs font-black md:text-sm">{t('rewardsPage.pts')}</span>
           </div>
           <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-xs font-black text-gray-950 md:mt-4 md:px-3.5 md:py-1.5">
-            <Star size={12} fill="currentColor" className="text-gray-400" /> {t('profile.memberLevel', { level: memberLevel })}
+            <Star size={12} fill="currentColor" className="text-gray-400" /> {t('profile.memberLevel', { level: translatedLevel })}
           </div>
           <div className="mt-5 flex justify-between gap-3 text-[11px] font-black md:mt-6 md:text-xs">
             <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>

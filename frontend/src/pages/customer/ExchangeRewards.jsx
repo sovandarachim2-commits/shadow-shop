@@ -278,6 +278,7 @@ export default function ExchangeRewards() {
   const nextTierPoints = data?.next_tier_points || 2000
   const pointsToNext = data?.points_to_next_level ?? Math.max(0, nextTierPoints - currentPoints)
   const memberLevel = data?.member_level || 'Silver'
+  const translatedLevel = t(`profile.tiers.${memberLevel.toLowerCase()}`, { defaultValue: memberLevel })
   const nextMemberLevel = memberLevel === 'Silver' ? 'Gold' : memberLevel === 'Gold' ? 'Platinum' : 'Platinum'
   const progressPct = Math.min(100, data?.progress_pct || Math.round((currentPoints / Math.max(nextTierPoints, 1)) * 100))
   const displayRewards = rewards.length > 0 ? rewards : sampleRewards
@@ -340,7 +341,7 @@ export default function ExchangeRewards() {
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-white md:h-6 md:w-6">
                   <Star size={12} fill="currentColor" />
                 </span>
-                <span className="text-xs font-black md:text-sm">{t('profile.memberLevel', { level: memberLevel })}</span>
+                <span className="text-xs font-black md:text-sm">{t('profile.memberLevel', { level: translatedLevel })}</span>
               </div>
             </div>
             <div className="absolute right-5 top-8 flex h-20 w-20 shrink-0 items-center justify-center opacity-90 sm:relative sm:right-auto sm:top-auto sm:mt-2 sm:h-24 sm:w-24">

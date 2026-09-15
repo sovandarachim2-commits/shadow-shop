@@ -122,15 +122,8 @@ function LocationPicker({ onSelect, onClose, adminData, loadingAdminData }) {
   }
 
   const pick = (item) => {
-    if (level === 'province') {
-      const next = { province: item, district: '' }
-      setSel(next)
-      if ((adminData.districts[item] || []).length) setLevel('district')
-      else { onSelect({ state: item, city: '', address_line2: '' }); onClose() }
-    } else {
-      onSelect({ state: sel.province, city: item, address_line2: '' })
-      onClose()
-    }
+    onSelect({ state: item, city: '', address_line2: '' })
+    onClose()
     setSearch('')
   }
 

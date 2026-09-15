@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
@@ -380,7 +380,6 @@ export default function ProductList() {
   const [categoryId, setCategoryId] = useState(categoryParam)
   const [brand, setBrand] = useState(brandParam)
   const [sortBy, setSortBy] = useState('-created_at')
-  const [showSearch, setShowSearch] = useState(Boolean(searchParams.get('search')))
   const { openAuthModal } = useUiStore()
   const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
 
@@ -392,7 +391,6 @@ export default function ProductList() {
     setSearch(searchParam)
     setCategoryId(categoryParam)
     setBrand(brandParam)
-    setShowSearch(Boolean(searchParam))
   }, [activeFilter, brandParam, categoryParam, searchParam])
 
   const { data: categoryData } = useQuery({
@@ -538,9 +536,6 @@ export default function ProductList() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowSearch((v) => !v)} className="shop-icon-btn h-11 w-11">
-            {showSearch ? <X size={18} /> : <Search size={18} />}
-          </button>
           <button className="shop-icon-btn h-11 w-11">
             <Grid2X2 size={18} />
           </button>
@@ -553,31 +548,6 @@ export default function ProductList() {
       <div>
         <section>
           <div className="-mx-4 mb-4 border-b border-gray-100 bg-white px-4 pb-3 pt-1 md:mx-0 md:mb-5 md:rounded-2xl md:border md:bg-white/95 md:p-3 md:shadow-card md:backdrop-blur">
-            {showSearch && !isSearchResult && (
-              <div className="mb-3 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm md:rounded-xl md:shadow-none">
-                <div className="relative">
-                  <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value) }}
-                    placeholder={t('header.searchPlaceholder')}
-                    autoFocus
-                    className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-10 text-sm outline-none focus:border-pink-300 focus:ring-4 focus:ring-pink-100"
-                  />
-                  {search && (
-                    <button
-                      type="button"
-                      onClick={() => { setSearch('') }}
-                      className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-gray-400 hover:bg-white hover:text-pink-600"
-                    >
-                      <X size={15} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
             <div className={cn('grid min-w-0 gap-2', isSearchResult ? 'grid-cols-[48px_1fr_1fr]' : 'grid-cols-3')}>
               {isSearchResult && (
                 <button className="flex h-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-800">

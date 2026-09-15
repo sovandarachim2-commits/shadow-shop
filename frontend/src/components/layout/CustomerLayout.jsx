@@ -62,7 +62,7 @@ const LANGUAGE_OPTIONS = [
   {
     code: 'km',
     label: 'Khmer',
-    short: 'KM',
+    short: 'KH',
     flag: 'https://flagcdn.com/kh.svg',
   },
 ]
@@ -226,29 +226,51 @@ export default function CustomerLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Sync header search with URL search param
+  useEffect(() => {
+    const searchParam = new URLSearchParams(location.search).get('search') || ''
+    if (searchParam !== headerSearch) {
+      setHeaderSearch(searchParam)
+    }
+  }, [location.search])
+
   useEffect(() => {
     const q = headerSearch.trim()
+
+    // 1. Suggestions logic (for all pages)
     if (!q || q.length < 2) {
       setSearchSuggestions([])
       setShowSuggestions(false)
-      return
+    } else {
+      const suggestTimer = setTimeout(async () => {
+        setIsSearching(true)
+        try {
+          const { data } = await productsApi.products.list({ search: q, limit: 8 })
+          setSearchSuggestions(data.results || [])
+          setShowSuggestions(true)
+        } catch (err) {
+          console.error('Search failed', err)
+        } finally {
+          setIsSearching(false)
+        }
+      }, 300)
+      return () => clearTimeout(suggestTimer)
     }
 
-    const timer = setTimeout(async () => {
-      setIsSearching(true)
-      try {
-        const { data } = await productsApi.products.list({ search: q, limit: 8 })
-        setSearchSuggestions(data.results || [])
-        setShowSuggestions(true)
-      } catch (err) {
-        console.error('Search failed', err)
-      } finally {
-        setIsSearching(false)
-      }
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [headerSearch])
+    // 2. Live Query logic (only if on shop page)
+    if (location.pathname === '/shop') {
+      const liveTimer = setTimeout(() => {
+        const params = new URLSearchParams(location.search)
+        const currentSearch = params.get('search') || ''
+        if (q !== currentSearch) {
+          if (q) params.set('search', q)
+          else params.delete('search')
+          navigate(`/shop?${params.toString()}`, { replace: true })
+        }
+      }, 400) // Debounce URL update to avoid excessive re-renders
+      return () => clearTimeout(liveTimer)
+    }
+  }, [headerSearch, location.pathname, navigate])
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
   const { t, i18n } = useTranslation()
   const { user, isAuthenticated, logout } = useAuthStore()
@@ -358,10 +380,14 @@ export default function CustomerLayout() {
     startTransition(() => navigate(routes[tab] || '/'))
   }
   const submitSearch = (e) => {
-    e.preventDefault()
+    e?.preventDefault()
     const q = headerSearch.trim()
-    if (!q) return
     setShowMobileSearch(false)
+    setShowSuggestions(false)
+    if (!q) {
+      navigate('/shop')
+      return
+    }
     navigate(`/shop?search=${encodeURIComponent(q)}`)
   }
 
@@ -397,6 +423,11 @@ export default function CustomerLayout() {
                       setHeaderSearch('')
                       setSearchSuggestions([])
                       setShowSuggestions(false)
+                      if (location.pathname === '/shop') {
+                        const params = new URLSearchParams(location.search)
+                        params.delete('search')
+                        navigate(`/shop?${params.toString()}`, { replace: true })
+                      }
                     }}
                     className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
                   >

@@ -1620,7 +1620,7 @@ export default function Settings({ tab = 'general' }) {
           <div className="space-y-8">
             <div className="rounded-2xl bg-pink-50 p-5 text-base leading-relaxed text-pink-800">
               Sample English + Khmer footer menus and social icons are pre-filled. Edit labels/URLs, then click Save Customer Footer.
-              Storefront shows Khmer when language is KM.
+              Storefront shows Khmer when language is KH.
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 md:p-6">
@@ -1715,7 +1715,7 @@ export default function Settings({ tab = 'general' }) {
                       />
                     </div>
                     <div>
-                      <label className="label text-sm">Column Title (KM)</label>
+                      <label className="label text-sm">Column Title (KH)</label>
                       <input
                         className="input-field h-12 bg-white text-base"
                         value={section.title_km || ''}
@@ -1740,7 +1740,7 @@ export default function Settings({ tab = 'general' }) {
                               />
                             </div>
                             <div>
-                              <label className="label text-sm">Label (KM)</label>
+                              <label className="label text-sm">Label (KH)</label>
                               <input
                                 className="input-field h-12 text-base"
                                 value={item.label_km || ''}

@@ -33,7 +33,6 @@ const PUBLIC_GET_PREFIXES = [
   '/products/home-sections/',
   '/products/items/',
   '/products/reviews/',
-  '/products/sets/',
   '/products/promotions/',
   '/products/banners/',
 ]

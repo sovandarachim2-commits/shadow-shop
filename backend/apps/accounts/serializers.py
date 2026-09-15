@@ -362,7 +362,18 @@ class AddressSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
         extra_kwargs = {
             'address_line1': {'required': False, 'allow_blank': True},
+            'city': {'required': False, 'allow_blank': True},
         }
+
+    def validate(self, attrs):
+        def current(field, default=''):
+            return attrs.get(field, getattr(self.instance, field, default))
+
+        city = str(current('city') or '').strip()
+        state = str(current('state') or '').strip()
+        if not city and not (current('country', 'Cambodia') == 'Cambodia' and state):
+            raise serializers.ValidationError({'city': 'City or province is required.'})
+        return attrs
 
     def validate_phone(self, value):
         return validate_cambodia_phone(value)

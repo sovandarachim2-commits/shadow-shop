@@ -33,6 +33,15 @@ const CATEGORY_SHORTCUTS = [
   { id: 'new-arrival',  name: 'New',          keywords: [],                                 icon: Gift,      bg: '#EC4899', color: '#FFFFFF', path: '/shop?filter=new_arrival', isNew: true },
 ]
 
+const DEFAULT_BRANDS = [
+  { id: 'innisfree', name: 'Innisfree' },
+  { id: 'laneige',   name: 'Laneige' },
+  { id: 'cosrx',     name: 'COSRX' },
+  { id: 'romand',    name: 'Rom&nd' },
+  { id: 'anessa',    name: 'Anessa' },
+  { id: 'loreal',    name: "L'Oréal" },
+]
+
 const HOME_QUERY_OPTIONS = {
   staleTime: 10 * 60 * 1000,
   gcTime: 45 * 60 * 1000,
@@ -323,93 +332,6 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
 }
 
 // ─── Flash sale card ──────────────────────────────────────────────────────────
-function FlashSaleCard({ product, nowMs, onAuthRequired }) {
-  const { t } = useTranslation()
-  const { addItem, updateQuantity, items } = useCartStore()
-  const loggedIn = useAuthStore((s) => s.isAuthenticated)
-  const navigate = useNavigate()
-  const cartItem = items.find((i) => i.product?.id === product.id)
-  const qty = cartItem?.quantity || 0
-  const available = isAvailableForSale(product)
-  const discountPct = product.old_price
-    ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
-    : null
-  const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
-  const handleAdd = (e) => {
-    e.stopPropagation()
-    if (!loggedIn) {
-      onAuthRequired('cart')
-      return
-    }
-    addItem(saleProduct, 1)
-    showCartAddedToast(saleProduct, navigate)
-  }
-  const handleIncrease = (e) => { 
-    e.stopPropagation()
-    if (!loggedIn) {
-      onAuthRequired('cart')
-      return
-    }
-    addItem(saleProduct, 1) 
-  }
-  const handleDecrease = (e) => { 
-    e.stopPropagation()
-    if (!loggedIn) {
-      onAuthRequired('cart')
-      return
-    }
-    updateQuantity(product.id, qty - 1) 
-  }
-
-  return (
-    <article
-      className="relative w-[136px] shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition active:scale-[0.97] md:w-auto"
-      onClick={() => navigate(`/product/${product.id}`)}
-    >
-      {discountPct && (
-        <div className="absolute left-2 top-2 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-[10px] font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">
-          -{discountPct}%
-        </div>
-      )}
-      <div className="aspect-square w-full bg-white">
-        {product.primary_image ? (
-          <img src={product.primary_image} alt={product.name} className="h-full w-full object-contain p-2" loading="lazy" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-pink-50">
-            <ShoppingBag size={24} className="text-pink-200" />
-          </div>
-        )}
-      </div>
-      <div className="px-2.5 pb-3 pt-1">
-        <p className="line-clamp-2 min-h-[30px] text-[11px] font-semibold leading-tight text-gray-800">{product.name}</p>
-        <p className="mt-1.5 text-sm font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</p>
-        {product.old_price && <p className="text-[10px] font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</p>}
-        <FlashSaleTimer item={product} nowMs={nowMs} compact />
-        {!available ? (
-          <div className="mt-2 w-full rounded-xl bg-gray-100 py-1.5 text-center text-[11px] font-black text-gray-400">Sold Out</div>
-        ) : qty === 0 ? (
-          <button
-            onClick={handleAdd}
-            className="mt-2 w-full rounded-xl bg-pink-600 py-1.5 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95"
-          >
-            + {t('common.add')}
-          </button>
-        ) : (
-          <div onClick={(e) => e.stopPropagation()} className="mt-2 flex w-fit items-center rounded-xl bg-pink-600 p-0.5 text-white shadow-sm shadow-pink-100">
-            <button onClick={handleDecrease} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 transition active:scale-95">
-              {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
-            </button>
-            <span className="min-w-[28px] text-center text-sm font-black">{qty}</span>
-            <button onClick={handleIncrease} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 transition active:scale-95">
-              <Plus size={13} />
-            </button>
-          </div>
-        )}
-      </div>
-    </article>
-  )
-}
-
 // ─── Home ─────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { t } = useTranslation()
@@ -477,7 +399,7 @@ export default function Home() {
   const showNewSkeleton = homeLoading && !newArrivalData
   const banners = useMemo(() => bannersData || [], [bannersData])
   const categories = useMemo(() => categoriesData || [], [categoriesData])
-  const brands = useMemo(() => brandsData || [], [brandsData])
+  const brands = useMemo(() => (brandsData && brandsData.length > 0 ? brandsData : DEFAULT_BRANDS), [brandsData])
   const marqueeBrands = useMemo(() => {
     if (!brands.length) return []
     const repeats = Math.max(1, Math.ceil(12 / brands.length))
@@ -706,24 +628,30 @@ export default function Home() {
               className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {Array.from({ length: categoryPages }).map((_, pi) => (
-                <div key={pi} className="grid w-full shrink-0 snap-start grid-cols-5 gap-y-3 px-4 py-3 md:grid-cols-10 md:px-6">
+                <div key={pi} className="grid w-full shrink-0 snap-start grid-cols-5 gap-y-3 px-4 py-3 sm:gap-y-4 md:grid-cols-10 md:px-6">
                   {categoryItems.slice(pi * 10, pi * 10 + 10).map((cat) => {
                     const Icon = cat.icon
                     return (
-                      <Link key={cat.id} to={cat.path} className="group flex flex-col items-center gap-1.5 transition active:scale-90">
+                      <Link 
+                        key={cat.id} 
+                        to={cat.path} 
+                        className="group flex flex-col items-center gap-2 transition-all active:scale-95 md:hover:-translate-y-1.5"
+                      >
                         <div
-                          className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full shadow-sm transition"
+                          className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl shadow-sm transition-all duration-300 group-hover:rounded-3xl group-hover:shadow-md md:h-16 md:w-16 lg:h-18 lg:w-18 ring-1 ring-black/5"
                           style={{ backgroundColor: cat.bg }}
                         >
                           {cat.imageUrl ? (
-                            <img src={cat.imageUrl} alt={cat.name} className="h-full w-full object-cover" loading="lazy" />
+                            <img src={cat.imageUrl} alt={cat.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" loading="lazy" />
                           ) : cat.isNew ? (
-                            <span className="text-[10px] font-black" style={{ color: cat.color }}>NEW</span>
+                            <span className="text-[10px] font-black tracking-wider md:text-xs" style={{ color: cat.color }}>NEW</span>
                           ) : (
-                            <Icon size={20} style={{ color: cat.color }} />
+                            <Icon size={20} className="transition-transform duration-300 group-hover:scale-110 md:h-7 md:w-7" style={{ color: cat.color }} />
                           )}
                         </div>
-                        <p className="line-clamp-2 max-w-[60px] text-center text-[10px] font-black leading-tight text-gray-800">{cat.name}</p>
+                        <p className="line-clamp-2 max-w-[65px] text-center text-[10px] font-black leading-tight text-gray-800 transition-colors group-hover:text-pink-600 md:max-w-[85px] md:text-xs">
+                          {cat.name}
+                        </p>
                       </Link>
                     )
                   })}
@@ -764,58 +692,156 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Mobile 1+0.1 (90%/10%, gap 12) · Desktop 3+0.1 (gap 18) */}
-            <div
-              ref={bannerScrollRef}
-              onScroll={handleBannerScroll}
-              onPointerDown={handleBannerPointerDown}
-              onTouchStart={handleBannerPointerDown}
-              className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-4 md:gap-[18px] md:px-6 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-              style={{ scrollPaddingInline: 16 }}
-            >
-              {banners.map((banner, idx) => (
-                <Link
-                  key={banner.id}
-                  to={banner.button_link || '/shop'}
-                  className="group block w-[90%] min-w-[90%] shrink-0 snap-start md:w-[calc((100%-54px)/3.1)] md:min-w-[calc((100%-54px)/3.1)]"
-                >
-                  <div className="aspect-[2/1] w-full overflow-hidden rounded-[22px] bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active:scale-[0.995] md:rounded-[28px]">
-                    {banner.image_url ? (
-                      <img
-                        src={banner.image_url}
-                        alt={banner.title || 'Promotion'}
-                        className="h-full w-full object-cover"
-                        loading={idx === 0 ? 'eager' : 'lazy'}
-                        decoding="async"
-                        fetchpriority={idx === 0 ? 'high' : 'auto'}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600">
-                        <ShoppingBag size={40} className="mb-2 text-white/50" />
-                        {banner.title && <p className="px-4 text-center text-lg font-black text-white">{banner.title}</p>}
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
+            {/* Concept 2 Layout: Responsive Desktop Split Grid (Slider + Side Quick Cards) */}
+            <div className="px-4 md:px-6">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
+                
+                {/* Left/Main Track Container (Full Carousel) */}
+                <div className="relative group lg:col-span-8 xl:col-span-9">
+                  {/* Desktop Chevron Left Button */}
+                  {banners.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pauseBannerAutoplay()
+                        scrollToBanner((activeBannerIndex - 1 + banners.length) % banners.length)
+                      }}
+                      aria-label="Previous Banner"
+                      className="hidden lg:flex absolute left-3 top-1/2 z-20 -translate-y-1/2 h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-800 shadow-md backdrop-blur-md transition-all hover:bg-white hover:scale-110 active:scale-95 opacity-0 group-hover:opacity-100"
+                    >
+                      <ChevronLeft size={20} strokeWidth={2.5} />
+                    </button>
+                  )}
 
-            {banners.length > 1 && (
-              <div className="mt-3 flex justify-center gap-1.5">
-                {banners.map((banner, i) => (
-                  <button
-                    key={banner.id}
-                    type="button"
-                    onClick={() => {
-                      pauseBannerAutoplay()
-                      scrollToBanner(i)
-                    }}
-                    aria-label={`Go to promotion ${i + 1}`}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${i === activeBannerIndex ? 'w-5 bg-pink-600' : 'w-1.5 bg-gray-200'}`}
-                  />
-                ))}
+                  {/* Desktop Chevron Right Button */}
+                  {banners.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pauseBannerAutoplay()
+                        scrollToBanner((activeBannerIndex + 1) % banners.length)
+                      }}
+                      aria-label="Next Banner"
+                      className="hidden lg:flex absolute right-3 top-1/2 z-20 -translate-y-1/2 h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-800 shadow-md backdrop-blur-md transition-all hover:bg-white hover:scale-110 active:scale-95 opacity-0 group-hover:opacity-100"
+                    >
+                      <ChevronRight size={20} strokeWidth={2.5} />
+                    </button>
+                  )}
+
+                  {/* Banner Scroll Track */}
+                  <div
+                    ref={bannerScrollRef}
+                    onScroll={handleBannerScroll}
+                    onPointerDown={handleBannerPointerDown}
+                    onTouchStart={handleBannerPointerDown}
+                    className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain scroll-smooth lg:gap-4 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollPaddingInline: 0 }}
+                  >
+                    {banners.map((banner, idx) => (
+                      <Link
+                        key={banner.id}
+                        to={banner.button_link || '/shop'}
+                        className="group/item block w-[90%] min-w-[90%] shrink-0 snap-start lg:w-full lg:min-w-full"
+                      >
+                        <div className="aspect-[2/1] w-full overflow-hidden rounded-[22px] bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] md:rounded-[28px] lg:aspect-[21/9]">
+                          {banner.image_url ? (
+                            <img
+                              src={banner.image_url}
+                              alt={banner.title || 'Promotion'}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover/item:scale-105"
+                              loading={idx === 0 ? 'eager' : 'lazy'}
+                              decoding="async"
+                              fetchpriority={idx === 0 ? 'high' : 'auto'}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600">
+                              <ShoppingBag size={44} className="mb-2 text-white/50" />
+                              {banner.title && <p className="px-4 text-center text-lg font-black text-white md:text-xl">{banner.title}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  {/* Active Indicator Dots */}
+                  {banners.length > 1 && (
+                    <div className="mt-3 flex justify-center gap-1.5">
+                      {banners.map((banner, i) => (
+                        <button
+                          key={banner.id}
+                          type="button"
+                          onClick={() => {
+                            pauseBannerAutoplay()
+                            scrollToBanner(i)
+                          }}
+                          aria-label={`Go to promotion ${i + 1}`}
+                          className={`h-1.5 rounded-full transition-all duration-300 ${i === activeBannerIndex ? 'w-5 bg-pink-600' : 'w-1.5 bg-gray-200 hover:bg-gray-300'}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Side Quick Cards (Desktop Only - Concept 2 Feature) */}
+                <div className="hidden lg:flex lg:col-span-4 lg:flex-col lg:gap-3.5 xl:col-span-3">
+                  
+                  {/* Card 1: Live Flash Deals */}
+                  <Link
+                    to="/shop?filter=flash_sale"
+                    className="group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700 p-5 text-white shadow-lg shadow-pink-200/50 transition hover:shadow-xl hover:shadow-pink-300/60 active:scale-[0.99]"
+                  >
+                    <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/10 blur-xl transition group-hover:scale-125" />
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
+                          <Zap size={13} className="fill-yellow-300 text-yellow-300" />
+                          <span>Flash Sale</span>
+                        </span>
+                        <ChevronRight size={16} className="text-white/70 transition group-hover:translate-x-1" />
+                      </div>
+                      <h3 className="mt-3 text-lg font-black leading-snug">Limited Time Offers</h3>
+                      <p className="mt-1 text-xs text-pink-100">Save up to 50% on top cosmetics brands</p>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+                      <span className="text-xs font-bold text-white/90">Shop Deals</span>
+                      <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm transition group-hover:bg-pink-50">
+                        Explore →
+                      </span>
+                    </div>
+                  </Link>
+
+                  {/* Card 2: VIP Rewards & Point Exchange */}
+                  <Link
+                    to="/profile/rewards"
+                    className="group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900 p-5 text-white shadow-lg shadow-indigo-200/50 transition hover:shadow-xl hover:shadow-indigo-300/60 active:scale-[0.99]"
+                  >
+                    <div className="absolute -right-4 -bottom-4 h-24 w-24 rounded-full bg-purple-500/20 blur-xl transition group-hover:scale-125" />
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
+                          <Gift size={13} className="text-pink-300" />
+                          <span>VIP Rewards</span>
+                        </span>
+                        <ChevronRight size={16} className="text-white/70 transition group-hover:translate-x-1" />
+                      </div>
+                      <h3 className="mt-3 text-lg font-black leading-snug">VIP Rewards & Points</h3>
+                      <p className="mt-1 text-xs text-indigo-200">Redeem points for exclusive cosmetics & vouchers</p>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+                      <span className="text-xs font-bold text-white/90">Claim Rewards</span>
+                      <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-indigo-900 shadow-sm transition group-hover:bg-indigo-50">
+                        Redeem Now →
+                      </span>
+                    </div>
+                  </Link>
+
+                </div>
+
               </div>
-            )}
+            </div>
           </section>
         )}
 
@@ -894,7 +920,7 @@ export default function Home() {
                 ))
                 : flashSale.map((p, i) => (
                   <div key={p.id} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
-                    <FlashSaleCard 
+                    <ProductCard 
                       product={p} 
                       nowMs={nowMs} 
                       onAuthRequired={(type) => openAuthModal(type)}
@@ -924,21 +950,45 @@ export default function Home() {
                 {t('common.viewAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
-            <div className="brand-marquee -mx-4 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+            {/* Desktop Responsive Grid (md: and lg: screens) */}
+            <div className="hidden grid-cols-2 gap-3.5 md:grid md:grid-cols-4 lg:grid-cols-6 lg:gap-4">
+              {brands.slice(0, 12).map((brand) => (
+                <Link
+                  key={brand.id}
+                  to={`/shop?brand=${brand.id}`}
+                  className="group flex flex-col items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-pink-200 hover:bg-gradient-to-b hover:from-white hover:to-pink-50/40 hover:shadow-md active:scale-95"
+                >
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 p-1 shadow-sm transition-transform duration-300 group-hover:scale-105 group-hover:border-pink-300">
+                    <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full object-cover" />
+                  </div>
+                  <div className="text-center">
+                    <p className="truncate text-sm font-black text-gray-900 transition-colors group-hover:text-pink-600">
+                      {brand.name}
+                    </p>
+                    <span className="text-[11px] font-semibold text-gray-400 group-hover:text-pink-500">
+                      Explore Catalog →
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* Mobile Continuous Marquee (< md screens) */}
+            <div className="brand-marquee -mx-4 overflow-x-auto px-4 pb-1 md:hidden">
               <div className="brand-marquee-track flex w-max">
                 {[0, 1, 2].map((copy) => (
-                  <div key={copy} className="flex shrink-0 gap-3 pr-3 md:gap-4 md:pr-4" aria-hidden={copy !== 0 || undefined}>
+                  <div key={copy} className="flex shrink-0 gap-3 pr-3" aria-hidden={copy !== 0 || undefined}>
                     {marqueeBrands.map((brand, index) => (
                       <Link
                         key={`${copy}-${brand.id}-${index}`}
                         to={`/shop?brand=${brand.id}`}
                         tabIndex={copy !== 0 ? -1 : undefined}
-                        className="group flex min-w-[84px] flex-col items-center gap-1.5 rounded-2xl border border-gray-100 bg-white px-2.5 py-3 shadow-sm transition active:scale-95 md:min-w-[220px] md:flex-row md:gap-4 md:px-4 md:py-3 md:hover:border-pink-100 md:hover:bg-pink-50"
+                        className="group flex min-w-[84px] flex-col items-center gap-1.5 rounded-2xl border border-gray-100 bg-white px-2.5 py-3 shadow-sm transition active:scale-95"
                       >
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm md:h-16 md:w-16">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm">
                           <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full transition group-hover:ring-2 group-hover:ring-pink-200" />
                         </div>
-                        <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900 group-hover:text-pink-600 md:max-w-[130px] md:text-left md:text-base">{brand.name}</p>
+                        <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900 group-hover:text-pink-600">{brand.name}</p>
                       </Link>
                     ))}
                   </div>

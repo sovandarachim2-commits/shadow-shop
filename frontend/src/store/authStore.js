@@ -94,7 +94,7 @@ const useAuthStore = create(
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         // Clear persisted credentials before reloading to discard account query caches.
-        const destination = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/'
+        const destination = '/'
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, pendingWelcomeBonus: null })
         window.location.replace(destination)
       },

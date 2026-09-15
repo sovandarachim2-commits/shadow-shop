@@ -56,12 +56,12 @@ function orderStatusLabel(t, status) {
 }
 
 const SHORTCUTS = [
-  { tKey: 'nav.orders',       icon: ShoppingBag, path: '/my-orders' },
-  { tKey: 'profile.address',  icon: MapPin,      path: '/address-book' },
-  { tKey: 'wishlist.title',   icon: Heart,       path: '/wishlist' },
-  { tKey: 'profile.rewards',  icon: Gift,        path: '/profile/rewards' },
-  { tKey: 'profile.coupons',  icon: Percent,     path: '/profile' },
-  { tKey: 'profile.reviews',  icon: Star,        path: '/my-orders' },
+  { tKey: 'nav.orders', icon: ShoppingBag, path: '/my-orders' },
+  { tKey: 'profile.address', icon: MapPin, path: '/address-book' },
+  { tKey: 'wishlist.title', icon: Heart, path: '/wishlist' },
+  { tKey: 'profile.rewards', icon: Gift, path: '/profile/rewards' },
+  { tKey: 'profile.coupons', icon: Percent, path: '/profile' },
+  { tKey: 'profile.reviews', icon: Star, path: '/my-orders' },
 ]
 
 const STATUS_STYLES = {
@@ -640,7 +640,7 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
           <Languages size={20} />
           <span className="flex-1">{isKhmer ? t('profile.englishLang') : t('profile.khmerLang')}</span>
           <span className="rounded-full bg-pink-50 px-2 py-0.5 text-xs font-bold text-pink-600">
-            {isKhmer ? 'EN' : 'KM'}
+            {isKhmer ? 'EN' : 'KH'}
           </span>
         </button>
         <button
@@ -819,6 +819,7 @@ export default function Profile() {
   const rewardPoints = rewardsSummary?.current_points ?? 0
   const nextTierPoints = rewardsSummary?.next_tier_points ?? 3000
   const membershipLevel = rewardsSummary?.member_level || 'Silver'
+  const translatedLevel = t(`profile.tiers.${membershipLevel.toLowerCase()}`, { defaultValue: membershipLevel })
   const ptsToNext = rewardsSummary?.points_to_next_level ?? Math.max(0, nextTierPoints - rewardPoints)
   const progressPct = rewardsSummary?.progress_pct ?? Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
   const rewardRedemptions = rewardsSummary?.redemptions ?? []
@@ -1010,7 +1011,7 @@ export default function Profile() {
               orderCounts={orderCounts}
               rewardPoints={rewardPoints}
               nextTierPoints={nextTierPoints}
-              membershipLevel={membershipLevel}
+              membershipLevel={translatedLevel}
               ptsToNext={ptsToNext}
               progressPct={progressPct}
               wishlistCount={wishlistItems.length}
@@ -1161,7 +1162,7 @@ export default function Profile() {
                   <div className="text-right">
                     <div className="inline-flex items-center gap-2 rounded-2xl bg-gray-100 px-4 py-2">
                       <div className="h-5 w-5 rounded-full bg-gradient-to-br from-gray-300 to-gray-400" />
-                      <span className="font-black text-gray-700">{t('profile.memberLevel', { level: membershipLevel })}</span>
+                      <span className="font-black text-gray-700">{t('profile.memberLevel', { level: translatedLevel })}</span>
                     </div>
                     <p className="mt-2 text-xs text-gray-400">{t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}</p>
                   </div>
@@ -1323,8 +1324,8 @@ export default function Profile() {
             </div>
           )}
 
-          </div>
         </div>
+      </div>
 
       {activeModal === 'password' && (
         <ChangePasswordModal user={user} onClose={() => setActiveModal(null)} />
@@ -1379,96 +1380,108 @@ function DesktopProfileOverview({
     : t('profile.noDefaultAddress')
 
   const stats = [
-    { icon: ShoppingBag, value: orderTotal.toLocaleString(), label: t('profile.myOrders') },
-    { icon: Gift, value: rewardPoints.toLocaleString(), label: t('profile.myPoints') },
-    { icon: Heart, value: wishlistCount.toLocaleString(), label: t('wishlist.title') },
-    { icon: Star, value: `${completionRate}%`, label: t('profile.memberLevel', { level: membershipLevel }) },
+    { icon: ShoppingBag, value: orderTotal.toLocaleString(), label: t('profile.myOrders'), bg: 'bg-pink-50 text-pink-600 border-pink-100', link: () => navigate('/my-orders') },
+    { icon: Gift, value: rewardPoints.toLocaleString(), label: t('profile.myPoints'), bg: 'bg-purple-50 text-purple-600 border-purple-100', link: () => navigate('/profile/rewards') },
+    { icon: Heart, value: wishlistCount.toLocaleString(), label: t('wishlist.title'), bg: 'bg-rose-50 text-rose-600 border-rose-100', link: () => navigate('/wishlist') },
+    { icon: Star, value: `${progressPct}%`, label: t('profile.memberLevel', { level: membershipLevel }), bg: 'bg-amber-50 text-amber-600 border-amber-100', link: () => navigate('/profile/rewards') },
   ]
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex items-end justify-between px-2">
+    <div className="space-y-7">
+      {/* Page Header Banner */}
+      <div className="flex items-center justify-between px-1">
         <div>
-          <h1 className="text-[32px] font-black tracking-tight text-slate-950">{t('profile.title')}</h1>
-          <p className="mt-1 text-base font-semibold text-slate-500">{t('profile.desktopSubtitle')}</p>
+          <h1 className="text-3xl font-black tracking-tight text-gray-950">{t('profile.title')}</h1>
+          <p className="mt-1 text-sm font-semibold text-gray-500">{t('profile.desktopSubtitle')}</p>
         </div>
         <button
+          type="button"
           onClick={() => setActiveModal('edit-profile')}
-          className="flex h-11 items-center gap-2 rounded-xl bg-pink-600 px-6 text-sm font-black text-white shadow-lg shadow-pink-100 transition hover:bg-pink-700 active:scale-95"
+          className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 px-6 py-3 text-sm font-black text-white shadow-md shadow-pink-200 transition-all hover:shadow-lg hover:shadow-pink-300 hover:scale-[1.02] active:scale-95"
         >
           <Pencil size={16} />
-          {t('profile.editProfile')}
+          <span>{t('profile.editProfile')}</span>
         </button>
       </div>
 
-      {/* Profile Hero Card */}
-      <section className="relative overflow-hidden rounded-[32px] bg-white p-8 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-50">
-        {/* Subtle Decorative Gradient */}
-        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-pink-50/50 blur-3xl" />
-        
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            {/* Avatar */}
-            <div className="relative h-36 w-36 shrink-0">
-              <div className="h-full w-full overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-pink-500 to-rose-400 shadow-xl ring-1 ring-pink-100">
+      {/* Main Profile Hero Card */}
+      <section className="relative overflow-hidden rounded-[32px] border border-gray-100 bg-white p-7 shadow-xl shadow-gray-100/80">
+        {/* Decorative Background Accents */}
+        <div className="absolute right-0 top-0 -mr-20 -mt-20 h-72 w-72 rounded-full bg-gradient-to-br from-pink-200/40 via-purple-200/30 to-transparent blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 -mb-20 h-60 w-60 rounded-full bg-rose-100/30 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          
+          {/* User Info Avatar Group */}
+          <div className="flex items-center gap-6">
+            <div className="relative h-28 w-28 shrink-0 lg:h-32 lg:w-32">
+              <div className="h-full w-full overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 shadow-xl ring-2 ring-pink-100">
                 {user.avatar_url ? (
                   <img src={user.avatar_url} alt={displayName} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-4xl font-black text-white">
+                  <div className="flex h-full w-full items-center justify-center text-3xl font-black text-white">
                     {initials}
                   </div>
                 )}
               </div>
               <button
+                type="button"
                 onClick={() => setActiveModal('edit-profile')}
-                className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-white text-pink-600 shadow-md transition hover:bg-pink-50"
+                className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-white text-pink-600 shadow-md transition hover:bg-pink-50 hover:scale-110 active:scale-95"
                 aria-label={t('profile.changePhoto')}
               >
-                <Camera size={18} />
+                <Camera size={16} />
               </button>
             </div>
-            
-            {/* User Details */}
+
             <div className="min-w-0">
-              <h2 className="truncate text-[32px] font-black tracking-tight text-slate-950">{displayName}</h2>
-              <div className="mt-3 flex items-center gap-3">
-                <span className="text-lg font-bold text-slate-400">{usernameDisplay}</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-200" />
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1.5 text-[13px] font-black text-emerald-600">
-                  <CheckCircle2 size={14} />
-                  {t('profile.verified')}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="truncate text-2xl font-black tracking-tight text-gray-950 lg:text-3xl">{displayName}</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-600 border border-emerald-200/60 shadow-sm">
+                  <CheckCircle2 size={13} />
+                  <span>{t('profile.verified')}</span>
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm font-bold text-gray-400">{usernameDisplay}</p>
+              <div className="mt-3 flex items-center gap-3 text-xs font-semibold text-gray-500">
+                <span className="inline-flex items-center gap-1 text-gray-600">
+                  <Mail size={13} className="text-gray-400" />
+                  <span>{email}</span>
+                </span>
+                <span className="h-1 w-1 rounded-full bg-gray-300" />
+                <span className="inline-flex items-center gap-1 text-gray-600">
+                  <Phone size={13} className="text-gray-400" />
+                  <span>{phone}</span>
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Stats Grid - Compact Horizontal */}
-          <div className="flex items-center gap-16 pr-6">
-            {stats.map(({ icon: Icon, value, label }) => (
+          {/* 4 Stat Cards */}
+          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4 lg:gap-4">
+            {stats.map(({ icon: Icon, value, label, bg, link }) => (
               <button
                 key={label}
-                onClick={() => {
-                  if (label === t('profile.myOrders')) navigate('/my-orders')
-                  else if (label === t('profile.myPoints')) setActiveView('rewards')
-                  else if (label === t('wishlist.title')) navigate('/wishlist')
-                  else setActiveView('profile')
-                }}
-                className="group text-center transition active:scale-95"
+                type="button"
+                onClick={link}
+                className="group flex flex-col items-center justify-center rounded-2xl border bg-white p-4 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-95 min-w-[110px]"
               >
-                <div className="flex h-14 w-14 mx-auto items-center justify-center rounded-2xl bg-slate-50 text-slate-400 mb-3 transition group-hover:bg-pink-50 group-hover:text-pink-600 group-hover:shadow-sm">
-                  <Icon size={26} strokeWidth={2} />
+                <div className={cn('flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-transform duration-300 group-hover:scale-110', bg)}>
+                  <Icon size={20} strokeWidth={2.2} />
                 </div>
-                <div className="text-[28px] font-black text-slate-950 leading-none">{value}</div>
-                <div className="mt-2 text-[12px] font-black text-slate-400 uppercase tracking-widest">{label}</div>
+                <div className="mt-2.5 text-xl font-black text-gray-950 group-hover:text-pink-600">{value}</div>
+                <div className="mt-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">{label}</div>
               </button>
             ))}
           </div>
+
         </div>
       </section>
 
-      {/* Info Cards Grid */}
-      <div className="grid grid-cols-3 gap-8">
+      {/* Info Cards Grid (3 Columns) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-7">
+        
+        {/* Card 1: Personal Information */}
         <DesktopProfileCard title={t('profile.personalInfo')} icon={User}>
           <DesktopInfoRow icon={User} label={t('profile.fullName')} value={displayName} />
           <DesktopInfoRow icon={IdCard} label={t('auth.username')} value={usernameDisplay} />
@@ -1478,27 +1491,59 @@ function DesktopProfileOverview({
           <DesktopInfoRow icon={Home} label={t('profile.memberSince')} value={memberSince} />
         </DesktopProfileCard>
 
+        {/* Card 2: Account Tier & VIP Status */}
         <DesktopProfileCard title={t('profile.accountInfo')} icon={Shield}>
           <DesktopInfoRow icon={Shield} label={t('profile.role')} value={user.role || t('orders.customer')} badge />
           <DesktopInfoRow icon={CheckCircle2} label={t('profile.verificationStatus')} value={t('profile.verified')} success />
-          <DesktopInfoRow icon={ShoppingBag} label={t('profile.myOrders')} value={orderTotal.toLocaleString()} />
-          <DesktopInfoRow icon={Gift} label={t('profile.myPoints')} value={`${rewardPoints.toLocaleString()} / ${nextTierPoints.toLocaleString()}`} />
           <DesktopInfoRow icon={Star} label={t('profile.memberLevelLabel')} value={membershipLevel} />
-          <DesktopInfoRow icon={Percent} label={t('profile.progress')} value={`${progressPct}%`} success />
+          
+          {/* Progress Bar Tier Widget */}
+          <div className="mt-4 rounded-2xl border border-pink-100 bg-gradient-to-br from-pink-50/50 via-purple-50/30 to-white p-4 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-black text-gray-700">
+              <span>{t('profile.myPoints')}</span>
+              <span className="text-pink-600">{rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} pt</span>
+            </div>
+            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-gray-200/80">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-600 transition-all duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <p className="mt-2 text-right text-[11px] font-bold text-gray-400">
+              {t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}
+            </p>
+          </div>
         </DesktopProfileCard>
 
+        {/* Card 3: Primary Delivery Address */}
         <DesktopProfileCard title={t('profile.primaryAddress')} icon={MapPin}>
-          <div className="space-y-5">
-            <div className="px-3">
-              <p className="text-[15px] font-black text-slate-900">{defaultAddress?.label || t('profile.defaultAddress')}</p>
-              <p className="mt-2 min-h-[60px] text-[15px] font-semibold leading-relaxed text-slate-500">{fullAddress}</p>
+          <div className="space-y-4">
+            <div className="px-1">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-black capitalize text-gray-900">{defaultAddress?.label || t('profile.defaultAddress')}</span>
+                {defaultAddress?.is_default && (
+                  <span className="rounded-full bg-pink-100 px-3 py-0.5 text-xs font-black text-pink-600">Default</span>
+                )}
+              </div>
+              <p className="mt-2.5 min-h-[56px] text-sm font-medium leading-relaxed text-gray-600">
+                {fullAddress}
+              </p>
             </div>
-            <div className="relative h-32 overflow-hidden rounded-[24px] border border-slate-50 bg-slate-50/50">
-              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.6)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.6)_25%,transparent_25%),linear-gradient(45deg,rgba(255,255,255,.6)_25%,transparent_25%),linear-gradient(315deg,rgba(255,255,255,.6)_25%,#f1f5f9_25%)] bg-[length:32px_32px] opacity-40" />
-              <MapPin className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[58%] text-pink-500 drop-shadow-sm" size={42} fill="currentColor" strokeWidth={1.5} />
+
+            {/* Interactive Map Badge Box */}
+            <div 
+              onClick={() => navigate('/address-book')}
+              className="group relative flex h-28 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-pink-200/80 bg-gradient-to-br from-pink-50/80 via-rose-50/60 to-purple-50/60 transition-all duration-300 hover:border-pink-300 hover:shadow-md active:scale-[0.99]"
+            >
+              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.7)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.7)_25%,transparent_25%)] bg-[length:24px_24px] opacity-40" />
+              <div className="relative z-10 flex items-center gap-2 text-center">
+                <MapPin className="text-pink-600 drop-shadow-sm transition-transform duration-300 group-hover:scale-110" size={20} fill="currentColor" strokeWidth={1.5} />
+                <span className="text-sm font-black text-pink-700 transition-colors group-hover:text-pink-800">{t('profile.manageAddresses')} →</span>
+              </div>
             </div>
           </div>
         </DesktopProfileCard>
+
       </div>
     </div>
   )
@@ -1506,34 +1551,36 @@ function DesktopProfileOverview({
 
 function DesktopProfileCard({ title, icon: Icon, children }) {
   return (
-    <section className="rounded-[28px] bg-white p-7 shadow-[0_15px_40px_rgba(0,0,0,0.03)] border border-slate-50">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-50 text-pink-600">
-          <Icon size={20} />
+    <section className="flex flex-col justify-between rounded-[28px] border border-gray-100 bg-white p-6 shadow-md shadow-gray-100/60 transition-all hover:shadow-lg hover:shadow-gray-200/50">
+      <div>
+        <div className="mb-5 flex items-center gap-3 border-b border-gray-100 pb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 ring-1 ring-pink-100">
+            <Icon size={20} strokeWidth={2.2} />
+          </div>
+          <h3 className="text-lg font-black tracking-tight text-gray-950">{title}</h3>
         </div>
-        <h3 className="text-lg font-black text-slate-950 tracking-tight">{title}</h3>
+        <div className="space-y-1">{children}</div>
       </div>
-      <div className="space-y-1">{children}</div>
     </section>
   )
 }
 
 function DesktopInfoRow({ icon: Icon, label, value, badge = false, success = false }) {
   return (
-    <div className="group flex items-center justify-between rounded-2xl px-3 py-3 transition hover:bg-slate-50/80">
+    <div className="group flex items-center justify-between rounded-xl px-3 py-2.5 transition hover:bg-pink-50/40">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition group-hover:bg-white group-hover:text-slate-500">
-          <Icon size={16} />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-400 transition group-hover:bg-white group-hover:text-pink-600">
+          <Icon size={15} />
         </div>
-        <span className="text-[15px] font-bold text-slate-500">{label}</span>
+        <span className="text-xs font-extrabold text-gray-500">{label}</span>
       </div>
       <div className="text-right">
         {badge || success ? (
-          <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide', success ? 'bg-emerald-50 text-emerald-600' : 'bg-pink-50 text-pink-600')}>
+          <span className={cn('inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider', success ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60' : 'bg-pink-50 text-pink-600 border border-pink-200/60')}>
             {value}
           </span>
         ) : (
-          <span className="text-[15px] font-black text-slate-900">{value}</span>
+          <span className="text-xs font-black text-gray-900">{value}</span>
         )}
       </div>
     </div>
