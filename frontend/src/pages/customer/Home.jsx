@@ -743,7 +743,7 @@ export default function Home() {
                         to={banner.button_link || '/shop'}
                         className="group/item block w-[90%] min-w-[90%] shrink-0 snap-start lg:w-full lg:min-w-full"
                       >
-                        <div className="aspect-[2/1] w-full overflow-hidden rounded-[22px] bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] md:rounded-[28px] lg:aspect-[21/9]">
+                        <div className="aspect-[2/1] w-full overflow-hidden rounded-[22px] bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] md:rounded-[28px]">
                           {banner.image_url ? (
                             <img
                               src={banner.image_url}
