@@ -1,0 +1,151 @@
+.shop-auth > [role='dialog'] {
+  max-width: 460px;
+  padding: 32px 28px 20px;
+  border-radius: 20px;
+  max-height: calc(100dvh - 32px);
+  overscroll-behavior: contain;
+}
+
+.shop-auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 12px 0 24px;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.shop-auth-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.shop-auth-tabs button[aria-pressed='true'] {
+  background: white;
+  color: #db2777;
+  box-shadow: 0 1px 4px #00000012;
+}
+
+.shop-auth h2 {
+  font-size: 24px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  margin-bottom: 8px;
+  padding-right: 16px;
+}
+
+.shop-auth h2 + p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+.shop-auth form.space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 18px;
+}
+
+.shop-auth label[for^='shop-'] {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.shop-auth input[id^='shop-'] {
+  font-size: 16px;
+}
+
+.shop-auth label[for^='shop-'] + div {
+  height: 50px;
+  padding-left: 14px;
+  padding-right: 10px;
+  border-radius: 8px;
+}
+
+.shop-auth input[id^='shop-'] + button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.shop-auth button:focus-visible {
+  outline: 2px solid #db2777;
+  outline-offset: 3px;
+}
+
+.shop-auth button:disabled {
+  cursor: not-allowed;
+}
+
+.shop-auth-verify h2 {
+  padding-right: 0;
+  font-size: 22px;
+}
+
+.shop-auth-code {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+  margin: 4px 0 24px;
+}
+
+.shop-auth-profile h2 {
+  padding-right: 0;
+  font-size: 22px;
+}
+
+.shop-auth-profile label {
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #4b5563;
+}
+
+.shop-auth-profile input:not([type='file']) {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.shop-auth-profile .h-14 {
+  min-height: 50px;
+  height: auto;
+  border-radius: 8px;
+}
+
+.shop-auth-profile .h-14:has(input),
+.shop-auth-profile button.h-14 {
+  padding: 12px 14px;
+  gap: 12px;
+}
+
+.shop-auth-profile button[type='submit'] {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.shop-auth form button[type='submit'] {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+@media (max-width: 639px) {
+  .shop-auth > [role='dialog'] {
+    max-width: 100%;
+    padding: 28px 20px max(20px, env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+    max-height: calc(100dvh - 12px);
+  }
+}

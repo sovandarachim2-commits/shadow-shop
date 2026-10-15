@@ -192,6 +192,8 @@
     "resultsFor": "លទ្ធផលសម្រាប់ \"{{query}}\""
   },
   "auth": {
+    "loginToUseRewardsTitle": "ចូលគណនីដើម្បីប្រើរង្វាន់",
+    "loginToUseRewardsDescription": "សូមចូលគណនី ឬចុះឈ្មោះជាមុន ដើម្បីទទួលបានពិន្ទុ ប្តូរយករង្វាន់ និងមើលគូប៉ុងរបស់អ្នក។",
     "login": "ចូល",
     "logout": "ចាកចេញ",
     "username": "ឈ្មោះអ្នកប្រើ",

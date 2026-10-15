@@ -951,24 +951,22 @@ export default function Home() {
               </Link>
             </div>
             {/* Desktop Responsive Grid (md: and lg: screens) */}
-            <div className="hidden grid-cols-2 gap-3.5 md:grid md:grid-cols-4 lg:grid-cols-6 lg:gap-4">
+            <div className="hidden gap-3 md:grid md:grid-cols-3 xl:grid-cols-4">
               {brands.slice(0, 12).map((brand) => (
                 <Link
                   key={brand.id}
                   to={`/shop?brand=${brand.id}`}
-                  className="group flex flex-col items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-pink-200 hover:bg-gradient-to-b hover:from-white hover:to-pink-50/40 hover:shadow-md active:scale-95"
+                  className="group flex min-w-0 items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-pink-300 hover:bg-pink-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
                 >
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 p-1 shadow-sm transition-transform duration-300 group-hover:scale-105 group-hover:border-pink-300">
-                    <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full object-cover" />
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
+                    <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
                   </div>
-                  <div className="text-center">
-                    <p className="truncate text-sm font-black text-gray-900 transition-colors group-hover:text-pink-600">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-base font-semibold leading-6 text-gray-900 transition-colors group-hover:text-pink-600">
                       {brand.name}
                     </p>
-                    <span className="text-[11px] font-semibold text-gray-400 group-hover:text-pink-500">
-                      Explore Catalog →
-                    </span>
                   </div>
+                  <ChevronRight size={18} className="shrink-0 text-gray-400 group-hover:text-pink-600" aria-hidden="true" />
                 </Link>
               ))}
             </div>
@@ -983,12 +981,12 @@ export default function Home() {
                         key={`${copy}-${brand.id}-${index}`}
                         to={`/shop?brand=${brand.id}`}
                         tabIndex={copy !== 0 ? -1 : undefined}
-                        className="group flex min-w-[84px] flex-col items-center gap-1.5 rounded-2xl border border-gray-100 bg-white px-2.5 py-3 shadow-sm transition active:scale-95"
+                        className="group flex w-[104px] shrink-0 flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-3 transition-colors hover:border-pink-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
                       >
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-pink-50 shadow-sm">
-                          <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full transition group-hover:ring-2 group-hover:ring-pink-200" />
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
+                          <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
                         </div>
-                        <p className="max-w-[68px] truncate text-center text-xs font-black leading-tight text-gray-900 group-hover:text-pink-600">{brand.name}</p>
+                        <p className="w-full break-words text-center text-xs font-semibold leading-5 text-gray-900 group-hover:text-pink-600">{brand.name}</p>
                       </Link>
                     ))}
                   </div>

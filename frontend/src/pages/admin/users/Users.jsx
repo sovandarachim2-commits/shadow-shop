@@ -81,7 +81,9 @@ function UserProfileModal({ user, roleConfig, onClose }) {
     ['Username', `@${user.username}`],
     ['Email', user.email || '-'],
     ['Phone', user.phone || '-'],
-    ['Telegram', user.telegram_username ? `@${user.telegram_username}` : user.telegram_id || '-'],
+    ['Telegram ID', user.telegram_id || '-'],
+    ['Telegram Username', user.telegram_username ? `@${user.telegram_username}` : '-'],
+    ['Telegram Login', user.telegram_auth_date ? formatDateTime(user.telegram_auth_date) : '-'],
     ['Joined', formatDateTime(user.created_at)],
   ]
 
@@ -100,7 +102,7 @@ function UserProfileModal({ user, roleConfig, onClose }) {
         </div>
         <div className="mt-5 divide-y divide-gray-100 rounded-xl border border-gray-100">
           {rows.map(([label, value]) => (
-            <div key={label} className="grid grid-cols-[120px_1fr] gap-3 px-4 py-3 text-sm">
+            <div key={label} className="grid grid-cols-[140px_1fr] gap-3 px-4 py-3 text-sm">
               <span className="font-semibold text-gray-500">{label}</span>
               <span className="min-w-0 break-words text-gray-900">{value}</span>
             </div>
@@ -303,13 +305,14 @@ export default function Users() {
               <Th>Username</Th>
               <Th>Role</Th>
               <Th>Phone</Th>
+              <Th>Telegram</Th>
               <Th>Status</Th>
               <Th>Joined</Th>
               <Th>Actions</Th>
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={9} />}
+            {isLoading && <LoadingRows cols={10} />}
             {!isLoading && users.map((u, index) => {
               const roleConf = getRoleConfig(u.role)
               return (
@@ -327,6 +330,12 @@ export default function Users() {
                   <Td><span className="font-mono text-sm">@{u.username}</span></Td>
                   <Td><Badge variant={roleConf.color}>{roleConf.label}</Badge></Td>
                   <Td><span className="text-sm">{u.phone || '—'}</span></Td>
+                  <Td>
+                    <div className="min-w-[120px] text-sm">
+                      <p>{u.telegram_username ? `@${u.telegram_username}` : '-'}</p>
+                      {u.telegram_id && <p className="mt-1 font-mono text-xs text-gray-500">ID: {u.telegram_id}</p>}
+                    </div>
+                  </Td>
                   <Td>
                     <StatusSwitch
                       active={u.is_active}

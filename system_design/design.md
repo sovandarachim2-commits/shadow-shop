@@ -91,8 +91,236 @@ Order lifecycle status badges provide immediate visual clarity across tables and
 
 ---
 
-## 6. Micro-Interactions & Animations
+## 6. Customer Visit To Payment Success Process
+
+The customer purchase journey must keep the shopper inside a clear guided flow from first page visit until the system confirms payment success.
+
+### 6.1 User Journey
+
+```
+Visit Home / Shop
+  -> Browse Product / Product Set
+  -> Add to Cart / Buy Now
+  -> Review Cart
+  -> Login / Register if needed
+  -> Checkout
+  -> Select Delivery Address
+  -> Select Payment Method
+  -> Confirm Order
+  -> Pay / Wait for Payment Confirmation
+  -> Payment Success
+  -> Order Success / Track Order
+```
+
+### 6.2 Flow Chart
+
+```mermaid
+flowchart TD
+    A[User visits Home / Shop] --> B[Browse product or product set]
+    B --> C{Product action before login}
+    C -->|Add to Cart| D[Cart]
+    C -->|Buy Now| E[Checkout intent]
+    D --> E
+    E --> F{Logged in?}
+    F -->|No| G[Login / Register]
+    G --> H[Checkout]
+    F -->|Yes| H
+    H --> I{Delivery address saved?}
+    I -->|No| J[Address Book]
+    J --> H
+    I -->|Yes| K[Select payment method]
+    K --> L{Payment type}
+    L -->|COD / Cash / Contact Sales| M[Create unpaid order]
+    M --> N[Order Success]
+    N --> O[Track order]
+    L -->|ABA / Bakong KHQR| P[Create PendingCheckout]
+    P --> Q{Gateway UI}
+    Q -->|Bakong| R[Show KHQR popup]
+    R --> S[Poll Bakong payment status]
+    Q -->|ABA| T[Open ABA PayWay / QR]
+    T --> U[ABA callback updates payment]
+    T --> V[User returns to shop]
+    V --> W[Poll checkout status by reference]
+    S --> X{Payment confirmed?}
+    U --> X
+    W --> X
+    X -->|Paid| Y[Create paid order from PendingCheckout]
+    Y --> Z[Record revenue / points / notifications]
+    Z --> AA[Payment Success / Order Success]
+    AA --> O
+    X -->|Pending| AB[Keep waiting UI and timer]
+    AB --> S
+    X -->|Expired / Cancelled / Failed| AC[Return to Checkout with cart kept]
+    AC --> K
+```
+
+### 6.3 Page-Level Flow
+
+| Step | Page / UI | User Action | System Response |
+| :--- | :--- | :--- | :--- |
+| 1 | `Home` / `Shop` / `Product Detail` | User opens the store and chooses an item. | Load products, promotions, stock-aware pricing, and product-set details. |
+| 2 | Product card/detail | User taps `Add to Cart` or `Buy Now`. | Add selected item and quantity to local cart state before login; require login only when checkout/payment starts. |
+| 3 | `Cart` | User reviews selected items. | Calculate subtotal, selected product count, quantity, discounts, and delivery readiness. |
+| 4 | Login / Register | Guest user continues to checkout. | Authenticate the user, then return to checkout with cart items preserved. |
+| 5 | `Checkout` | User confirms customer info and delivery address. | Require a saved address before enabling order submission; calculate delivery fee by province/district. |
+| 6 | Payment method selector | User selects `ABA`, `Bakong KHQR`, `COD`, cash, or contact sales. | Show the correct action label: pay now for online methods, place order for offline methods, contact sales for assisted orders. |
+| 7A | Online payment: `ABA` / `Bakong KHQR` | User confirms payment. | Backend creates a `PendingCheckout` reference and returns payment data without creating the final order yet. |
+| 7B | Offline payment: `COD`, cash, contact sales | User confirms order. | Backend creates an unpaid order immediately and sends the customer to `Order Success`. |
+| 8A | `Bakong KHQR` popup | User scans the QR. | Frontend polls payment check every short interval; backend verifies the KHQR transaction and fulfills the pending checkout when paid. |
+| 8B | `ABA` PayWay / ABA QR | User pays in ABA flow and returns to the shop. | ABA callback marks payment paid; frontend polls checkout status by pending reference after return. |
+| 9 | `Payment Success` / `Order Success` | Payment is confirmed. | Cart selection is cleared, order number is shown, and the user can track the order. |
+
+### 6.4 Online Payment Rules
+
+- Online methods (`aba`, `bakong`) use deferred checkout through `PendingCheckout`.
+- The real `Order` is created only after payment is confirmed as paid.
+- The final order must be created with `payment_status = paid` and the matching `payment_method`.
+- If the user leaves and returns during ABA payment, the browser stores the pending checkout reference and resumes status checking.
+- Expired or cancelled payment sessions must not create an order.
+- Once paid, the system records revenue, awards customer points, sends payment notifications, and allows normal order tracking.
+
+### 6.5 Success-State UX
+
+- Keep the success screen simple: order number, payment status, paid amount, and tracking action.
+- Never show payment success from the frontend alone; success must come from backend status or gateway callback verification.
+- If payment is still pending, keep the user on the payment waiting UI with a timer and retry/check state.
+- If payment fails, expires, or is cancelled, return the user to checkout with the cart selection still available.
+
+---
+
+## 7. Micro-Interactions & Animations
 
 - **Button States:** Hover light opacity transition (`transition-all duration-200 ease-in-out`), active scale reduction (`active:scale-95`).
 - **Modal Dialogs:** Smooth fade-in overlay and slide-up backdrop animation (`animate-in fade-in zoom-in-95`).
 - **Scanner Feedback:** High-contrast green flash outline on input when barcode scan succeeds; red pulse on error.
+
+                         ┌─────────────┐
+                         │    START    │
+                         │ Visit Shop  │
+                         └──────┬──────┘
+                                ↓
+                         ┌─────────────┐
+                         │    HOME     │
+                         └──────┬──────┘
+                                ↓
+               ┌───────────────────────────┐
+               │      Discover Product     │
+               │ Search / Category / Promo │
+               └─────────────┬─────────────┘
+                             ↓
+                     ┌───────────────┐
+                     │Product Detail │
+                     └───────┬───────┘
+                             ↓
+                    ┌─────────────────┐
+                    │ Choose Quantity │
+                    └────────┬────────┘
+                             ↓
+                     ┌───────────────┐
+                     │  User Action? │
+                     └───────┬───────┘
+                             │
+                 ┌───────────┴───────────┐
+                 ↓                       ↓
+          ┌─────────────┐         ┌─────────────┐
+          │ Add to Cart │         │   Buy Now   │
+          └──────┬──────┘         └──────┬──────┘
+                 ↓                       │
+          ┌─────────────┐                │
+          │    CART     │                │
+          └──────┬──────┘                │
+                 └──────────┬────────────┘
+                            ↓
+                      ┌───────────┐
+                      │ CHECKOUT  │
+                      └─────┬─────┘
+                            ↓
+                      ┌───────────┐
+                      │ Logged In?│
+                      └─────┬─────┘
+                            │
+                    ┌───────┴────────┐
+                  NO↓                ↓YES
+             ┌────────────┐          │
+             │Login /     │          │
+             │Register    │          │
+             └─────┬──────┘          │
+                   └────────┬────────┘
+                            ↓
+                    ┌───────────────┐
+                    │    Address    │
+                    └───────┬───────┘
+                            ↓
+                   ┌────────────────┐
+                   │Address Exists? │
+                   └────────┬───────┘
+                            │
+                     ┌──────┴──────┐
+                   NO↓             ↓YES
+              ┌─────────────┐      │
+              │ Add Address │      │
+              └──────┬──────┘      │
+                     └──────┬──────┘
+                            ↓
+                  ┌──────────────────┐
+                  │ Delivery Method  │
+                  └────────┬─────────┘
+                           ↓
+                  ┌──────────────────┐
+                  │ Payment Method   │
+                  └────────┬─────────┘
+                           ↓
+            ┌──────────────┴──────────────┐
+            ↓                             ↓
+     ONLINE PAYMENT                OFFLINE PAYMENT
+      ABA / Bakong                  COD / Cash
+            │                             │
+            ↓                             ↓
+   ┌─────────────────┐            ┌──────────────┐
+   │Pending Checkout │            │ Create Order │
+   └────────┬────────┘            │   UNPAID     │
+            ↓                     └──────┬───────┘
+   ┌─────────────────┐                   │
+   │ Payment Gateway │                   │
+   └────────┬────────┘                   │
+            ↓                            │
+     ┌──────────────┐                    │
+     │Payment Paid? │                    │
+     └──────┬───────┘                    │
+            │                            │
+      ┌─────┴──────┐                     │
+    NO↓            ↓YES                  │
+┌───────────┐ ┌──────────────┐           │
+│Pending /  │ │ Create Order │           │
+│Failed     │ │     PAID     │           │
+└─────┬─────┘ └──────┬───────┘           │
+      │              │                   │
+      │              └─────────┬─────────┘
+      │                        ↓
+      │                ┌───────────────┐
+      │                │ ORDER SUCCESS │
+      │                └───────┬───────┘
+      │                        ↓
+      │                ┌───────────────┐
+      │                │  MY ORDERS    │
+      │                └───────┬───────┘
+      │                        ↓
+      │                ┌───────────────┐
+      │                │ ORDER DETAIL  │
+      │                └───────┬───────┘
+      │                        ↓
+      │               ┌────────────────┐
+      │               │  TRACK ORDER   │
+      │               └───────┬────────┘
+      │                       ↓
+      │        New → Preparing → Packed
+      │                       ↓
+      │                    Shipped
+      │                       ↓
+      │                   Completed
+      │                       ↓
+      │                     END
+      │
+      └──→ Retry Payment / Change Payment
+                         │
+                         └──→ Checkout

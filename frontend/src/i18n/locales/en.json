@@ -192,6 +192,8 @@
     "resultsFor": "Results for \"{{query}}\""
   },
   "auth": {
+    "loginToUseRewardsTitle": "Login to Use Rewards",
+    "loginToUseRewardsDescription": "Please login or register first to earn points, redeem rewards, and view your coupons.",
     "login": "Login",
     "logout": "Logout",
     "username": "Username",

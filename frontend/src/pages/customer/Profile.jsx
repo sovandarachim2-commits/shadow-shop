@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
+import './ProfileEditor.css'
 
 const ACCOUNT_MENU_ITEMS = [
   { icon: User, labelKey: 'profile.menuProfile', descKey: 'profile.menuProfileDesc', view: 'profile' },
@@ -210,7 +211,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   const content = (
     <form
       onSubmit={handleSubmit}
-      className={cn('flex flex-col bg-white', asPage ? 'min-h-screen md:min-h-0 md:max-h-[92vh]' : 'max-h-[96vh]')}
+      className={cn('profile-editor flex flex-col bg-white', asPage ? 'min-h-screen md:min-h-0 md:max-h-[92vh]' : 'max-h-[90dvh]')}
     >
       {/* Header */}
       <div className={cn(
@@ -229,18 +230,18 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
         <button
           type="submit"
           disabled={saveMutation.isPending}
-          className="rounded-full px-3 py-2 text-sm font-black text-[#EC197A] transition hover:bg-pink-50 active:scale-95 disabled:opacity-60"
+          className="min-h-10 min-w-20 rounded-lg bg-[#EC197A] px-4 py-2 text-sm font-semibold text-white transition hover:bg-pink-700 disabled:opacity-60"
         >
           {saveMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : (isKhmer ? 'រក្សាទុក' : 'Save')}
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto bg-gray-50/50 px-5 pb-8 pt-6">
+      <div className="profile-editor-body min-h-0 flex-1 space-y-6 overflow-y-auto bg-white px-5 pb-6 pt-5">
         {/* User Brief Card */}
-        <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-6">
+        <section className="border-b border-gray-100 pb-5">
+          <div className="flex items-center gap-4">
             <div className="relative shrink-0">
-              <div className="h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-pink-500 to-rose-400 text-3xl font-black text-white shadow-lg ring-1 ring-pink-100">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-pink-100 text-2xl font-semibold text-pink-700 ring-1 ring-pink-200">
                 {avatarPreview ? (
                   <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
                 ) : initials}
@@ -248,6 +249,8 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
+                aria-label={t('completeProfile.chooseImage')}
+                title={t('completeProfile.chooseImage')}
                 className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#EC197A] text-white shadow-md transition hover:bg-pink-700 active:scale-90"
               >
                 <Camera size={18} />
@@ -255,8 +258,8 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             </div>
             <div className="min-w-0">
-              <h3 className="truncate text-2xl font-black text-gray-950">{form.full_name || user.username}</h3>
-              <p className="mt-1.5 font-bold text-gray-400">@{user.username}</p>
+              <h3 className="break-words text-lg font-semibold text-gray-950">{form.full_name || user.username}</h3>
+              <p className="mt-1 break-all text-sm text-gray-500">@{user.username}</p>
             </div>
           </div>
         </section>
@@ -281,9 +284,10 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               autoComplete="username"
               icon={null}
             />
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-5">
               <ProfileField
                 label={t('profile.phoneNumber')}
+                type="tel"
                 value={form.phone}
                 onChange={(v) => set('phone', normalizeCambodiaPhone(v))}
                 error={errors.phone}
@@ -310,7 +314,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
 
         {/* Address Section */}
         <ProfileSection title={t('profile.addresses')} icon={MapPin}>
-          <div className="rounded-2xl bg-pink-50/40 p-6">
+          <div className="profile-editor-address">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#EC197A] shadow-sm">
                 <MapPin size={26} />
@@ -325,7 +329,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
             <button
               type="button"
               onClick={onEditAddress}
-              className="mt-6 h-14 w-full rounded-2xl border border-pink-200 bg-white text-base font-black text-[#EC197A] transition hover:bg-pink-50 active:scale-[0.98]"
+              className="mt-4 min-h-11 w-full rounded-lg border border-pink-200 bg-white px-3 py-2 text-sm font-semibold text-[#EC197A] transition hover:bg-pink-50"
             >
               {defaultAddress ? t('profile.editDefaultAddress') : t('profile.addDeliveryAddress')}
             </button>
@@ -360,7 +364,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
   }
 
   return (
-    <Modal isOpen onClose={onClose} size="xl" className="overflow-hidden p-0 md:max-w-[760px]">
+    <Modal isOpen onClose={onClose} size="xl" className="overflow-hidden rounded-xl p-0 md:max-w-[560px]">
       {content}
     </Modal>
   )

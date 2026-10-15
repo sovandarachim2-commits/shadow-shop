@@ -98,14 +98,14 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
             'full_name', 'role', 'phone', 'gender',
-            'telegram_id', 'telegram_username', 'telegram_photo_url',
+            'telegram_id', 'telegram_username', 'telegram_photo_url', 'telegram_auth_date',
             'google_id', 'google_picture_url',
             'referral_code', 'referrals_count', 'successful_referrals_count',
             'avatar', 'avatar_url', 'is_active', 'created_at',
             'has_usable_password', 'has_address', 'friend_referral_code',
             'referred_by',
         ]
-        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'google_id', 'google_picture_url', 'created_at', 'referral_code', 'referrals_count', 'referred_by']
+        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'telegram_auth_date', 'google_id', 'google_picture_url', 'created_at', 'referral_code', 'referrals_count', 'referred_by']
 
     def to_representation(self, instance):
         # Ensure referral code exists for existing users

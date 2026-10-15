@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { 
-  X, UserCircle2, ChevronRight, LogIn, Mail, Lock, Eye, EyeOff, 
+  X, ChevronRight, LogIn, Mail, Lock, Eye, EyeOff, 
   Loader2, User, Send, Sparkles, CheckCircle2, AlertCircle,
   LockKeyhole, MailCheck, ArrowLeft, Camera, UserRound, Phone, UsersRound,
   MapPin, ChevronDown, MessageSquare, ExternalLink, Globe
@@ -13,10 +13,9 @@ import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
-import PhoneInput from '@/components/ui/PhoneInput'
-import { COUNTRY_DATA, toE164, validatePhone } from '@/utils/phoneUtils'
 import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
+import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
 const EMPTY_CAMBODIA_ADMIN = {
   provinces: [],
@@ -355,7 +354,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const queryClient = useQueryClient()
   const { user, login, register, googleLogin, telegramLogin, verifyEmailCode, setPendingWelcomeBonus, updateUser } = useAuthStore()
   
-  const [view, setView] = useState('choice') // 'choice', 'login', 'register', 'verify', 'profile', 'address'
+  const [view, setView] = useState('login')
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [showPass, setShowPass] = useState(false)
@@ -497,7 +496,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         if (!checkProfileCompletion(user)) onClose()
       } else if (type === 'register') setView('register')
       else if (type === 'login') setView('login')
-      else setView('choice')
+      else setView('login')
       
       setGoogleFallback(false)
       setTelegramOpen(false)
@@ -725,7 +724,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
   const handleLogin = async (e) => {
     e.preventDefault()
-    if (!lf.username || !lf.password) {
+    if (loading || googleLoading || telegramLoading) return
+    if (!lf.username.trim() || !lf.password) {
       setNotice({ type: 'error', message: t('auth.pleaseFillAllFields') })
       return
     }
@@ -743,6 +743,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
   const handleRegister = async (e) => {
     e.preventDefault()
+    if (loading || googleLoading || telegramLoading) return
     const { full_name, email, password, confirm_password, terms } = rf
     const errors = {}
     if (!full_name.trim()) errors.full_name = t('auth.validationNameRequired')
@@ -800,10 +801,15 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     if (event.key === 'Backspace' && !digits[index] && index > 0) {
       inputsRef.current[index - 1]?.focus()
     }
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      inputsRef.current[index + (event.key === 'ArrowLeft' ? -1 : 1)]?.focus()
+    }
   }
 
   const submitVerification = async (e) => {
     e.preventDefault()
+    if (loading || resending) return
     const code = digits.join('')
     if (code.length < 4) {
       setNotice({ type: 'error', message: t('verifyEmail.incompleteMessage') })
@@ -840,7 +846,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const handleProfileSubmit = async (e) => {
     e.preventDefault()
     const cleanName = profileForm.full_name.trim()
-    const phone = profileForm.phone_e164 || toE164(profileForm.phone, COUNTRY_DATA[0])
+    const localPhone = normalizeCambodiaPhone(profileForm.phone)
+    const phone = `+855${localPhone.slice(1)}`
     const cleanEmail = profileForm.email.trim().toLowerCase()
     const nextErrors = {}
 
@@ -850,8 +857,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     if (!profileForm.phone) {
       nextErrors.phone = t('completeProfile.enterPhone')
     } else {
-      const country = COUNTRY_DATA.find(c => profileForm.phone_e164?.startsWith(c.dialCode)) || COUNTRY_DATA[0]
-      if (!validatePhone(profileForm.phone, country)) {
+      if (!isValidCambodiaPhone(localPhone)) {
         nextErrors.phone = t('common.invalidPhone')
       }
     }
@@ -960,7 +966,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   }
 
   const resendCode = async () => {
-    if (resending) return
+    if (resending || loading) return
     setResending(true)
     try {
       await authApi.resendEmailCode({ email: rf.email.trim().toLowerCase() })
@@ -982,18 +988,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
   if (!isOpen) return null
 
-  const title = t('auth.loginRequired')
-  const description = (() => {
-    switch (type) {
-      case 'checkout': return t('auth.loginToCheckout')
-      case 'coupon': return t('auth.loginToUseCoupon')
-      case 'buy_now': return t('auth.loginToBuyNow')
-      default: return t('auth.loginToAddToCart')
-    }
-  })()
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
+    <div className="shop-auth fixed inset-0 z-[100] flex items-end justify-center sm:items-center">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-fade-in" 
@@ -1006,7 +1002,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         "rounded-t-[32px] sm:rounded-[40px] p-8 sm:p-10",
         "animate-slide-up sm:animate-fade-in",
         "mx-auto overflow-y-auto max-h-[95dvh]"
-      )}>
+      )} role="dialog" aria-modal="true" aria-label={t(view === 'verify' ? 'verifyEmail.title' : view === 'register' ? 'auth.createAccount' : view === 'login' ? 'auth.login' : 'auth.loginRequired')}>
         {/* Close Button */}
         <button 
           onClick={onClose}
@@ -1034,37 +1030,14 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
           </div>
         )}
 
-        {view === 'choice' && (
-          <div className="flex flex-col items-center text-center py-4">
-            <div className="w-24 h-24 rounded-[30px] bg-gradient-to-br from-pink-50 to-pink-100 flex items-center justify-center text-pink-600 mb-8 shadow-sm">
-              <UserCircle2 size={52} strokeWidth={1.2} />
-            </div>
-
-            <h2 className="text-[28px] sm:text-[32px] font-bold tracking-tight text-slate-800 leading-tight mb-4">
-              {title}
-            </h2>
-            
-            <p className="text-[16px] font-medium text-slate-400 leading-relaxed mb-10 px-6">
-              {description}
-            </p>
-
-            <div className="w-full space-y-4">
-              <button
-                onClick={() => setView('login')}
-                className="w-full h-14 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-[20px] text-[16px] font-semibold tracking-normal transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200"
-              >
-                <LogIn size={22} />
-                {t('auth.login')}
-              </button>
-              
-              <button
-                onClick={() => setView('register')}
-                className="w-full h-14 flex items-center justify-center gap-2 border-2 border-slate-100 bg-white text-slate-700 rounded-[20px] text-[16px] font-semibold tracking-normal transition-all hover:bg-slate-50 active:scale-[0.98]"
-              >
-                {t('auth.register')}
-                <ChevronRight size={20} className="text-slate-400" />
-              </button>
-            </div>
+        {(view === 'login' || view === 'register') && (
+          <div className="shop-auth-tabs" role="group" aria-label={t('auth.loginRequired')}>
+            <button type="button" aria-pressed={view === 'login'} disabled={loading || googleLoading || telegramLoading} onClick={() => setView('login')}>
+              <LogIn size={18} />{t('auth.login')}
+            </button>
+            <button type="button" aria-pressed={view === 'register'} disabled={loading || googleLoading || telegramLoading} onClick={() => setView('register')}>
+              <User size={18} />{t('auth.register')}
+            </button>
           </div>
         )}
 
@@ -1075,11 +1048,17 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
             <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.emailOrUsername')}</label>
+                <label htmlFor="shop-login-username" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.emailOrUsername')}</label>
                 <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
                   <Mail size={20} className="text-slate-400" />
                   <input 
                     type="text" 
+                    id="shop-login-username"
+                    name="username"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    required
                     value={lf.username} 
                     onChange={(e) => setLf(f => ({ ...f, username: e.target.value }))}
                     placeholder={t('auth.emailOrUsernamePlaceholder')}
@@ -1089,20 +1068,30 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
+                <label htmlFor="shop-login-password" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
                 <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
                   <Lock size={20} className="text-slate-400" />
                   <input 
                     type={showPass ? 'text' : 'password'} 
                     value={lf.password} 
+                    id="shop-login-password"
+                    name="password"
+                    autoComplete="current-password"
+                    required
                     onChange={(e) => setLf(f => ({ ...f, password: e.target.value }))}
                     placeholder={t('auth.passwordPlaceholder')}
                     className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
-                  <button type="button" onClick={() => setShowPass(!showPass)} className="text-slate-400 hover:text-pink-600 transition-colors">
+                  <button type="button" aria-label={t(showPass ? 'completeProfile.hideField' : 'completeProfile.showField', { label: t('auth.password') })} onClick={() => setShowPass(!showPass)} className="text-slate-400 hover:text-pink-600 transition-colors">
                     {showPass ? <Eye size={19} /> : <EyeOff size={19} />}
                   </button>
                 </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button type="button" disabled={loading} onClick={() => { onClose(); navigate('/forgot-password') }} className="text-sm font-semibold text-pink-600 hover:underline">
+                  {t('auth.forgotPassword')}
+                </button>
               </div>
 
               <button 
@@ -1155,7 +1144,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
             <form onSubmit={handleRegister} className="space-y-6">
               <div>
-                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.fullName')}</label>
+                <label htmlFor="shop-register-name" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.fullName')}</label>
                 <div className={cn(
                   "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.full_name ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
@@ -1164,6 +1153,10 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <input 
                     type="text" 
                     value={rf.full_name} 
+                    id="shop-register-name"
+                    name="name"
+                    autoComplete="name"
+                    aria-invalid={Boolean(registerErrors.full_name)}
                     onChange={(e) => setRf(f => ({ ...f, full_name: e.target.value }))}
                     placeholder={t('auth.fullNamePlaceholder')}
                     className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
@@ -1177,7 +1170,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.email')}</label>
+                <label htmlFor="shop-register-email" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.email')}</label>
                 <div className={cn(
                   "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.email ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
@@ -1186,6 +1179,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <input 
                     type="email" 
                     value={rf.email} 
+                    id="shop-register-email"
+                    name="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    aria-invalid={Boolean(registerErrors.email)}
                     onChange={(e) => setRf(f => ({ ...f, email: e.target.value }))}
                     placeholder={t('auth.emailExample')}
                     className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
@@ -1199,7 +1198,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
+                <label htmlFor="shop-register-password" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
                 <div className={cn(
                   "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.password ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
@@ -1208,11 +1207,15 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <input 
                     type={showPass ? 'text' : 'password'} 
                     value={rf.password} 
+                    id="shop-register-password"
+                    name="new-password"
+                    autoComplete="new-password"
+                    aria-invalid={Boolean(registerErrors.password)}
                     onChange={(e) => setRf(f => ({ ...f, password: e.target.value }))}
                     placeholder={t('auth.passwordPlaceholder')}
                     className="flex-1 min-w-0 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
-                  <button type="button" onClick={() => setShowPass(!showPass)} className="text-slate-400 hover:text-pink-600 transition-colors">
+                  <button type="button" aria-label={t(showPass ? 'completeProfile.hideField' : 'completeProfile.showField', { label: t('auth.password') })} onClick={() => setShowPass(!showPass)} className="text-slate-400 hover:text-pink-600 transition-colors">
                     {showPass ? <Eye size={19} /> : <EyeOff size={19} />}
                   </button>
                 </div>
@@ -1224,7 +1227,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </div>
 
               <div>
-                <label className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.confirmPassword')}</label>
+                <label htmlFor="shop-register-confirm" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.confirmPassword')}</label>
                 <div className={cn(
                   "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
                   registerErrors.confirm_password ? "border-red-200 bg-red-50/30" : "border-slate-200 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50"
@@ -1233,11 +1236,15 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <input 
                     type={showConfirm ? 'text' : 'password'} 
                     value={rf.confirm_password} 
+                    id="shop-register-confirm"
+                    name="confirm-password"
+                    autoComplete="new-password"
+                    aria-invalid={Boolean(registerErrors.confirm_password)}
                     onChange={(e) => setRf(f => ({ ...f, confirm_password: e.target.value }))}
                     placeholder={t('auth.confirmPassword')}
                     className="flex-1 min-w-0 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="text-slate-400 hover:text-pink-600 transition-colors">
+                  <button type="button" aria-label={t(showConfirm ? 'completeProfile.hideField' : 'completeProfile.showField', { label: t('auth.confirmPassword') })} onClick={() => setShowConfirm(!showConfirm)} className="text-slate-400 hover:text-pink-600 transition-colors">
                     {showConfirm ? <Eye size={19} /> : <EyeOff size={19} />}
                   </button>
                 </div>
@@ -1292,17 +1299,19 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         )}
 
         {view === 'verify' && (
-          <div className="animate-fade-in">
+          <div className="shop-auth-verify animate-fade-in">
             <button
               onClick={() => setView('register')}
+              disabled={loading || resending}
+              aria-label={t('common.back')}
               className="absolute left-6 top-6 grid h-10 w-10 place-items-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"
             >
               <ArrowLeft size={20} />
             </button>
 
             <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-[24px] bg-pink-50 flex items-center justify-center text-[#EC4D97] mb-6 shadow-sm">
-                <MailCheck size={42} strokeWidth={1.8} />
+              <div className="mt-4 mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-pink-50 text-pink-600">
+                <MailCheck size={28} strokeWidth={1.8} />
               </div>
 
               <h2 className="text-[24px] sm:text-[26px] font-semibold tracking-normal text-slate-900 mb-2">
@@ -1310,55 +1319,59 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </h2>
               <p className="text-[15px] font-medium text-slate-500 mb-5 max-w-[320px]">
                 {t('verifyEmail.subtitle')}
-                <span className="block font-medium text-slate-800 mt-1 truncate">{rf.email}</span>
+                <span className="mt-2 block break-all font-semibold text-slate-800">{rf.email}</span>
               </p>
 
               <form onSubmit={submitVerification} className="w-full flex flex-col items-center">
-                <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-10" onPaste={handlePaste}>
+                <div className="shop-auth-code" role="group" aria-label={t('verifyEmail.title')} onPaste={handlePaste}>
                   {digits.map((digit, index) => (
                     <input
                       key={index}
                       ref={(el) => (inputsRef.current[index] = el)}
                       type="text"
                       inputMode="numeric"
+                      autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                      aria-label={`${t('verifyEmail.title')} ${index + 1}`}
+                      disabled={loading || resending}
+                      onFocus={(event) => event.target.select()}
                       maxLength={1}
                       value={digit}
                       onChange={(e) => setDigit(index, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(e, index)}
                       className={cn(
-                        "w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 text-center text-xl font-semibold transition-all outline-none",
+                        "min-w-0 w-full h-14 rounded-lg border text-center text-2xl font-semibold transition-colors outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100",
                         digit 
                           ? "border-pink-500 bg-pink-50 text-pink-600" 
                           : "border-slate-100 bg-slate-50 text-slate-400 focus:border-pink-300 focus:bg-white focus:ring-4 focus:ring-pink-50"
                       )}
-                      placeholder="-"
                     />
                   ))}
                 </div>
 
-                <div className="mb-8 text-center">
+                <div className="mb-5 text-center">
                   <p className="text-sm font-medium text-slate-500">{t('verifyEmail.dontReceive')}</p>
                   <button
                     type="button"
                     onClick={resendCode}
-                    disabled={resending}
-                    className="mt-1 text-sm font-semibold text-[#EC4D97] hover:underline underline-offset-4 disabled:opacity-50"
+                    disabled={resending || loading}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 text-sm font-semibold text-pink-600 hover:underline underline-offset-4 disabled:opacity-50"
                   >
+                    {resending && <Loader2 size={16} className="animate-spin" />}
                     {resending ? t('verifyEmail.sending') : t('verifyEmail.resendCode')}
                   </button>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={loading || digits.join('').length < 4}
+                  disabled={loading || resending || digits.join('').length < 4}
                   className="w-full h-14 flex items-center justify-center gap-3 bg-[#EC197A] text-white rounded-xl text-[15px] font-semibold tracking-normal transition-all hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.25)] active:scale-[0.98] shadow-lg shadow-pink-200 disabled:opacity-50"
                 >
                   {loading ? <Loader2 size={22} className="animate-spin" /> : <>{t('verifyEmail.verify')} <ChevronRight size={20} strokeWidth={3} /></>}
                 </button>
               </form>
 
-              <div className="mt-10 flex items-center justify-center gap-2 text-[13px] font-medium text-slate-400">
-                <LockKeyhole size={16} />
+              <div className="mt-5 flex items-start justify-center gap-2 text-[12px] leading-6 font-medium text-slate-500">
+                <LockKeyhole size={16} className="mt-1 shrink-0" />
                 {t('verifyEmail.securityNote')}
               </div>
             </div>
@@ -1366,7 +1379,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         )}
 
         {view === 'profile' && (
-          <div className="animate-fade-in">
+          <div className="shop-auth-profile animate-fade-in">
             <div className="flex flex-col items-center text-center mb-6">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-pink-50 text-[#EC4D97] shadow-sm">
                 <Sparkles size={28} strokeWidth={1.5} />
@@ -1374,17 +1387,14 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               <h2 className="text-[26px] sm:text-[30px] font-semibold tracking-tight text-slate-800 mb-2">
                 {t('completeProfile.title')}
               </h2>
-              <p className="text-[14px] font-medium leading-relaxed text-slate-400 max-w-[400px]">
-                {t('completeProfile.subtitle')}
-              </p>
             </div>
 
             <form onSubmit={handleProfileSubmit} className="space-y-6">
-              <div className="flex items-center gap-4 rounded-[24px] border border-slate-100 bg-slate-50/30 p-4 transition-colors hover:bg-slate-50/50">
+              <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
                 <div className="relative">
                   <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-[3px] border-white bg-white shadow-md ring-1 ring-slate-100">
                     {avatarPreview ? (
-                      <img src={avatarPreview} className="w-full h-full object-cover" />
+                      <img src={avatarPreview} alt={t('completeProfile.profilePhoto')} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-2xl font-bold text-pink-500">
                         {profileForm.full_name?.charAt(0).toUpperCase() || '?'}
@@ -1394,9 +1404,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <button 
                     type="button" 
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-[2px] border-white bg-[#EC197A] text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
+                    aria-label={t('completeProfile.chooseImage')}
+                    title={t('completeProfile.chooseImage')}
+                    disabled={loading}
+                    className="absolute -right-2 -bottom-2 flex h-10 w-10 items-center justify-center rounded-full border-[2px] border-white bg-[#EC197A] text-white shadow-sm"
                   >
-                    <Camera size={12} fill="currentColor" />
+                    <Camera size={17} />
                   </button>
                   <input 
                     ref={fileInputRef} 
@@ -1422,7 +1435,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
               <div className="space-y-5">
                 <div>
-                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  <label htmlFor="shop-profile-name" className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     {t('auth.fullName')} <span className="text-pink-600">*</span>
                   </label>
                   <div className={cn(
@@ -1432,6 +1445,10 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     <UserRound size={20} className="text-slate-400" />
                     <input 
                       value={profileForm.full_name}
+                      id="shop-profile-name"
+                      name="name"
+                      autoComplete="name"
+                      aria-invalid={Boolean(profileErrors.full_name)}
                       onChange={(e) => {
                         setProfileForm(f => ({ ...f, full_name: e.target.value }))
                         setProfileErrors(errors => ({ ...errors, full_name: '' }))
@@ -1448,43 +1465,64 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 </div>
 
                 <div>
-                  <PhoneInput 
-                    required
-                    label={t('auth.phoneNumber')}
-                    value={profileForm.phone}
-                    onChange={(e) => {
-                      setProfileForm(f => ({ ...f, phone: e.target.value, phone_e164: e.target.e164 }))
-                      setProfileErrors(errors => ({ ...errors, phone: '' }))
-                    }}
-                    error={profileErrors.phone}
-                  />
+                  <label htmlFor="shop-profile-phone" className="mb-2 block font-semibold">
+                    {t('auth.phoneNumber')} <span className="text-pink-600">*</span>
+                  </label>
+                  <div className={cn(
+                    'flex h-14 items-center gap-3 rounded-lg border px-4',
+                    profileErrors.phone ? 'border-red-500 bg-red-50/30' : 'border-slate-200 bg-slate-50/50 focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-50'
+                  )}>
+                    <Phone size={20} className="shrink-0 text-slate-400" />
+                    <input
+                      id="shop-profile-phone"
+                      name="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      aria-invalid={Boolean(profileErrors.phone)}
+                      aria-describedby={profileErrors.phone ? 'shop-profile-phone-error' : undefined}
+                      value={profileForm.phone}
+                      placeholder="097 123 4567"
+                      onChange={(event) => {
+                        setProfileForm(form => ({ ...form, phone: event.target.value, phone_e164: '' }))
+                        setProfileErrors(errors => ({ ...errors, phone: '' }))
+                      }}
+                      className="min-w-0 flex-1 bg-transparent text-slate-800 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
+                  {profileErrors.phone && <p id="shop-profile-phone-error" className="mt-1.5 text-xs text-red-500">{profileErrors.phone}</p>}
                 </div>
 
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-5">
                   <div ref={genderDropdownRef} className="relative">
-                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <label id="shop-profile-gender-label" className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                       {t('completeProfile.gender')} <span className="text-pink-600">*</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsGenderDropdownOpen(!isGenderDropdownOpen)}
+                    <div
                       className={cn(
                         "flex h-14 w-full items-center justify-between gap-4 rounded-[20px] border px-5 transition-all duration-300",
                         profileErrors.gender ? "border-red-500 bg-red-50/30 ring-4 ring-red-50" : "border-slate-200 bg-slate-50/50 hover:bg-white focus:border-pink-300 focus:ring-4 focus:ring-pink-50",
                         isGenderDropdownOpen && "border-pink-300 bg-white ring-4 ring-pink-50"
                       )}
                     >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <UsersRound size={20} className="text-slate-400 shrink-0" />
-                        <span className={cn("truncate text-[15px] font-semibold", profileForm.gender ? "text-slate-800" : "text-slate-400")}>
-                          {profileForm.gender ? t(GENDER_OPTIONS.find(o => o.value === profileForm.gender)?.labelKey) : t('completeProfile.selectGender')}
-                        </span>
-                      </div>
-                      <ChevronDown size={18} className={cn("text-slate-400 transition-transform duration-300", isGenderDropdownOpen && "rotate-180")} />
-                    </button>
+                      <UsersRound size={20} className="text-slate-400 shrink-0" />
+                      <select
+                        aria-labelledby="shop-profile-gender-label"
+                        aria-invalid={Boolean(profileErrors.gender)}
+                        disabled={loading}
+                        value={profileForm.gender}
+                        onChange={(event) => {
+                          setProfileForm(form => ({ ...form, gender: event.target.value }))
+                          setProfileErrors(errors => ({ ...errors, gender: '' }))
+                        }}
+                        className="min-w-0 flex-1 bg-transparent py-3 text-base text-slate-800 outline-none"
+                      >
+                        {GENDER_OPTIONS.map(option => <option key={option.value} value={option.value}>{t(option.labelKey)}</option>)}
+                      </select>
+                    </div>
 
                     {isGenderDropdownOpen && (
-                      <div className="absolute left-0 top-[calc(100%+8px)] z-[60] w-full overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div id="shop-profile-gender-options" className="absolute left-0 top-[calc(100%+8px)] z-[60] w-full overflow-hidden rounded-lg border border-slate-100 bg-white shadow-lg">
                         <div className="py-2">
                           {GENDER_OPTIONS.filter(o => o.value !== '').map(opt => (
                             <button
@@ -1515,13 +1553,16 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <label htmlFor="shop-profile-referral" className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                       {t('completeProfile.referralCodeOptional')}
                     </label>
                     <div className="flex h-14 items-center gap-4 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 transition-all duration-300 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50">
                       <Sparkles size={20} className="text-slate-400" />
                       <input 
                         value={profileForm.friend_referral_code}
+                        id="shop-profile-referral"
+                        autoCapitalize="characters"
+                        spellCheck={false}
                         onChange={(e) => setProfileForm(f => ({ ...f, friend_referral_code: e.target.value.toUpperCase() }))}
                         placeholder="CODE"
                         className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
@@ -1559,14 +1600,13 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         <div className="mt-5 flex justify-center">
           <button
             onClick={() => {
-              if (loading) return
-              if (view === 'profile' || view === 'address') onClose()
-              else if (view === 'choice') onClose()
-              else setView('choice')
+              if (loading || googleLoading || telegramLoading || resending) return
+              if (view === 'verify') setView('register')
+              else onClose()
             }}
             className="text-[14px] font-semibold text-slate-400 hover:text-slate-600 transition-colors tracking-normalst"
           >
-            {view === 'choice' || view === 'profile' || view === 'address' ? t('common.cancel') : t('common.back')}
+            {view === 'verify' ? t('common.back') : t('common.cancel')}
           </button>
         </div>
       </div>

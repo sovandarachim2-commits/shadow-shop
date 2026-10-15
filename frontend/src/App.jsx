@@ -325,6 +325,7 @@ function RequireAuth({ children, adminOnly = false }) {
 }
 
 function RequireRewardsAuth({ children }) {
+  const { t } = useTranslation()
   const { isAuthenticated, user } = useAuthStore()
   const openAuthModal = useUiStore((s) => s.openAuthModal)
 
@@ -335,9 +336,9 @@ function RequireRewardsAuth({ children }) {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-50 text-3xl">
             <span aria-hidden="true">★</span>
           </div>
-          <h1 className="mt-5 text-2xl font-black text-gray-950">Login to Use Rewards</h1>
+          <h1 className="mt-5 text-2xl font-black text-gray-950">{t('auth.loginToUseRewardsTitle')}</h1>
           <p className="mt-2 text-sm font-semibold leading-6 text-gray-500">
-            Please login or register first to earn points, redeem rewards, and view your coupons.
+            {t('auth.loginToUseRewardsDescription')}
           </p>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button
@@ -345,14 +346,14 @@ function RequireRewardsAuth({ children }) {
               onClick={() => openAuthModal('login')}
               className="shop-btn-primary h-11 px-4 py-0"
             >
-              Login
+              {t('auth.login')}
             </button>
             <button
               type="button"
               onClick={() => openAuthModal('register')}
               className="shop-btn-outline h-11 px-4 py-0"
             >
-              Register
+              {t('auth.register')}
             </button>
           </div>
         </div>
