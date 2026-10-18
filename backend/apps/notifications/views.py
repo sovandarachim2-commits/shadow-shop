@@ -29,6 +29,7 @@ class TelegramConfigViewSet(viewsets.ModelViewSet):
         from django.core.cache import cache
         try:
             cache.delete('auth:telegram_login_config:v1')
+            cache.delete('auth:telegram_login_config:v2')
         except Exception:
             pass
 

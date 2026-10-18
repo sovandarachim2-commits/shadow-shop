@@ -118,10 +118,10 @@ class HomeFeedPerformanceTests(TestCase):
 class SafeCacheTests(TestCase):
     def test_bump_clears_home_and_auth_keys(self):
         cache.set(HOME_FEED_CACHE_KEY, {'ok': True}, 60)
-        cache.set('auth:telegram_login_config:v1', {'configured': True}, 60)
+        cache.set('auth:telegram_login_config:v2', {'configured': True}, 60)
         bump_storefront_cache()
         self.assertIsNone(cache.get(HOME_FEED_CACHE_KEY))
-        self.assertIsNone(cache.get('auth:telegram_login_config:v1'))
+        self.assertIsNone(cache.get('auth:telegram_login_config:v2'))
 
     def test_stock_save_clears_home_feed_cache(self):
         category = Category.objects.create(name='Skin', slug='skin')

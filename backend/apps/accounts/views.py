@@ -503,21 +503,42 @@ class ForgotPasswordResetView(generics.GenericAPIView):
 
 class TelegramLoginView(generics.GenericAPIView):
     permission_classes = [AllowAny]
+    TELEGRAM_JWKS_URL = 'https://oauth.telegram.org/.well-known/jwks.json'
+    TELEGRAM_ISSUER = 'https://oauth.telegram.org'
 
     def post(self, request):
         auth_data = request.data or {}
-        telegram_hash = str(auth_data.get('hash', '')).strip()
-        auth_date = str(auth_data.get('auth_date', '')).strip()
-        telegram_id = str(auth_data.get('id', '')).strip()
-
-        if not telegram_hash or not auth_date or not telegram_id:
-            return Response({'detail': 'Telegram login data is incomplete.'}, status=status.HTTP_400_BAD_REQUEST)
+        referral_code = str(auth_data.get('referral_code', '')).strip()
+        id_token = str(auth_data.get('id_token', '')).strip()
 
         from apps.notifications.services import TelegramService
         telegram_service = TelegramService()
         bot_token = telegram_service.get_bot_token()
         if not bot_token:
             return Response({'detail': 'Telegram bot token is not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if id_token:
+            try:
+                profile = self._verify_telegram_id_token(id_token, telegram_service.get_bot_id())
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return self._login_telegram_user(
+                telegram_id=profile['telegram_id'],
+                first_name=profile['first_name'],
+                last_name=profile['last_name'],
+                telegram_username=profile['username'],
+                photo_url=profile['photo_url'],
+                auth_datetime=profile['auth_datetime'],
+                referral_code=referral_code,
+                request=request,
+            )
+
+        telegram_hash = str(auth_data.get('hash', '')).strip()
+        auth_date = str(auth_data.get('auth_date', '')).strip()
+        telegram_id = str(auth_data.get('id', '')).strip()
+
+        if not telegram_hash or not auth_date or not telegram_id:
+            return Response({'detail': 'Telegram login data is incomplete.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if not self._verify_telegram_hash(auth_data, bot_token, telegram_hash):
             return Response({'detail': 'Telegram login signature is invalid.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -530,14 +551,30 @@ class TelegramLoginView(generics.GenericAPIView):
         if timezone.now() - auth_datetime > timedelta(days=1):
             return Response({'detail': 'Telegram login expired. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        first_name = str(auth_data.get('first_name', '')).strip()
-        last_name = str(auth_data.get('last_name', '')).strip()
-        telegram_username = str(auth_data.get('username', '')).strip()
-        photo_url = str(auth_data.get('photo_url', '')).strip()
-        referral_code = str(request.data.get('referral_code', '')).strip()
+        return self._login_telegram_user(
+            telegram_id=telegram_id,
+            first_name=str(auth_data.get('first_name', '')).strip(),
+            last_name=str(auth_data.get('last_name', '')).strip(),
+            telegram_username=str(auth_data.get('username', '')).strip(),
+            photo_url=str(auth_data.get('photo_url', '')).strip(),
+            auth_datetime=auth_datetime,
+            referral_code=referral_code,
+            request=request,
+        )
 
+    def _login_telegram_user(
+        self,
+        *,
+        telegram_id,
+        first_name,
+        last_name,
+        telegram_username,
+        photo_url,
+        auth_datetime,
+        referral_code,
+        request,
+    ):
         user = User.objects.filter(telegram_id=telegram_id).first()
-        is_new_user = user is None
         if not user:
             base_username = f"tg_{telegram_id}"
             username = base_username
@@ -553,13 +590,12 @@ class TelegramLoginView(generics.GenericAPIView):
                 role='customer',
                 telegram_id=telegram_id,
             )
-            
-            # Handle referral for new user
+
             if referral_code:
                 referrer = User.objects.filter(referral_code=referral_code, is_active=True).first()
                 if referrer:
                     user.referred_by = referrer
-                    
+
             user.set_unusable_password()
         elif not user.is_active:
             return Response({'detail': 'This account is disabled.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -571,24 +607,72 @@ class TelegramLoginView(generics.GenericAPIView):
             user.first_name = first_name
         if last_name:
             user.last_name = last_name
-        
+
         is_new_user = user.pk is None
         user.save()
 
-        # Give referral bonus to referrer immediately
         if is_new_user and user.referred_by:
             _give_referral_bonus(user.referred_by, user)
 
         return _issue_auth_tokens(
-            user, 
-            request, 
+            user,
+            request,
             login_method='telegram',
         )
+
+    def _verify_telegram_id_token(self, id_token, bot_id):
+        if not bot_id:
+            raise ValueError('Telegram bot id is not configured.')
+
+        try:
+            import jwt
+            from jwt import PyJWKClient
+        except ImportError as exc:
+            raise ValueError('Telegram OIDC support is unavailable.') from exc
+
+        try:
+            jwks_client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True)
+            signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+            claims = jwt.decode(
+                id_token,
+                signing_key.key,
+                algorithms=['RS256', 'ES256', 'EdDSA', 'ES256K'],
+                audience=str(bot_id),
+                issuer=self.TELEGRAM_ISSUER,
+                options={'require': ['exp', 'iat', 'iss', 'aud']},
+            )
+        except Exception:
+            raise ValueError('Telegram login token is invalid.')
+
+        telegram_id = str(claims.get('id') or claims.get('sub') or '').strip()
+        if not telegram_id:
+            raise ValueError('Telegram login token is missing user id.')
+
+        auth_datetime = datetime.fromtimestamp(
+            int(claims.get('iat') or timezone.now().timestamp()),
+            tz=timezone.get_current_timezone(),
+        )
+        given = str(claims.get('given_name') or '').strip()
+        family = str(claims.get('family_name') or '').strip()
+        full_name = str(claims.get('name') or '').strip()
+        if not given and full_name:
+            parts = full_name.split(None, 1)
+            given = parts[0]
+            family = parts[1] if len(parts) > 1 else family
+
+        return {
+            'telegram_id': telegram_id,
+            'first_name': given,
+            'last_name': family,
+            'username': str(claims.get('preferred_username') or '').strip(),
+            'photo_url': str(claims.get('picture') or '').strip(),
+            'auth_datetime': auth_datetime,
+        }
 
     def _verify_telegram_hash(self, auth_data, bot_token, telegram_hash):
         pairs = []
         for key, value in auth_data.items():
-            if key == 'hash' or value in [None, '']:
+            if key in ('hash', 'referral_code', 'id_token') or value in [None, '']:
                 continue
             pairs.append(f"{key}={value}")
 
@@ -605,7 +689,7 @@ class TelegramLoginConfigView(generics.GenericAPIView):
         from apps.notifications.services import TelegramService
         from utils.storefront_cache import safe_cache_get, safe_cache_set
 
-        cache_key = 'auth:telegram_login_config:v1'
+        cache_key = 'auth:telegram_login_config:v2'
         cached = safe_cache_get(cache_key)
         if cached is not None:
             return Response(cached)
@@ -614,9 +698,12 @@ class TelegramLoginConfigView(generics.GenericAPIView):
         # Never block login on live Telegram getMe (up to 8s).
         bot_username = telegram_service.get_bot_username(allow_remote=False)
         bot_token = telegram_service.get_bot_token()
+        bot_id = telegram_service.get_bot_id()
         payload = {
             'bot_username': bot_username,
-            'configured': bool(bot_username and bot_token),
+            'bot_id': bot_id,
+            'client_id': bot_id,
+            'configured': bool(bot_id and bot_token),
         }
         safe_cache_set(cache_key, payload, 120)
         return Response(payload)

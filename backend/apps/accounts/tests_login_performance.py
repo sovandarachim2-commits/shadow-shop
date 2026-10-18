@@ -28,6 +28,8 @@ class TelegramLoginConfigPerformanceTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.data['configured'])
             self.assertEqual(response.data['bot_username'], 'shadow_shop_bot')
+            self.assertEqual(response.data['bot_id'], '123456')
+            self.assertEqual(response.data['client_id'], '123456')
             mock_get.assert_not_called()
 
     def test_get_bot_username_skips_remote_when_disabled(self):
@@ -52,10 +54,10 @@ class TelegramLoginConfigPerformanceTests(TestCase):
 
 class StorefrontCacheBumpTests(TestCase):
     def test_bump_clears_auth_cache_keys(self):
-        cache.set('auth:telegram_login_config:v1', {'configured': True}, 60)
+        cache.set('auth:telegram_login_config:v2', {'configured': True}, 60)
         cache.set('auth:site_favicon_url:v1', '/app-icon-512.png', 60)
         bump_storefront_cache()
-        self.assertIsNone(cache.get('auth:telegram_login_config:v1'))
+        self.assertIsNone(cache.get('auth:telegram_login_config:v2'))
         self.assertIsNone(cache.get('auth:site_favicon_url:v1'))
 
 

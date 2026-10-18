@@ -102,6 +102,14 @@ class TelegramService:
         token = self.config.bot_token if self.config else getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
         return '' if self.is_placeholder(token) else token.strip()
 
+    def get_bot_id(self) -> str:
+        """Numeric bot id (= OIDC client_id), taken from bot token prefix."""
+        token = self.get_bot_token()
+        if not token or ':' not in token:
+            return ''
+        bot_id = token.split(':', 1)[0].strip()
+        return bot_id if bot_id.isdigit() else ''
+
     def send_message(
         self,
         message: str,

@@ -53,6 +53,7 @@ def bump_storefront_cache():
         SITE_SETTINGS_CACHE_KEY,
         STORE_NAME_CACHE_KEY,
         'auth:telegram_login_config:v1',
+        'auth:telegram_login_config:v2',
         'auth:site_manifest:v1',
         'auth:site_favicon_url:v1',
         'auth:site_app_icon_png:v2:180',

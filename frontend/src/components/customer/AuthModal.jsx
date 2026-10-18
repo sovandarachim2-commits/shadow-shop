@@ -5,7 +5,7 @@ import {
   X, ChevronRight, LogIn, Mail, Lock, Eye, EyeOff, 
   Loader2, User, Send, Sparkles, CheckCircle2, AlertCircle,
   LockKeyhole, MailCheck, ArrowLeft, Camera, UserRound, Phone, UsersRound,
-  MapPin, ChevronDown, MessageSquare, ExternalLink, Globe
+  MapPin, ChevronDown
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import useAuthStore from '@/store/authStore'
@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
+import { openTelegramLoginPopup } from '@/utils/telegramLogin'
 import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
 const EMPTY_CAMBODIA_ADMIN = {
@@ -193,15 +194,6 @@ const GENDER_OPTIONS = [
   { value: 'prefer_not_to_say', labelKey: 'completeProfile.genderPreferNot' },
 ]
 
-function hasProfileBasics(user, form) {
-  const cleanName = String(form?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.full_name || '').trim()
-  const cleanPhone = normalizeCambodiaPhone(form?.phone || user?.phone)
-  const gender = String(form?.gender || user?.gender || '').trim()
-  const placeholders = ['google', 'telegram', 'guest', 'user', 'customer']
-  const hasRealName = Boolean(cleanName && !placeholders.includes(cleanName.toLowerCase()))
-  return Boolean(hasRealName && cleanPhone && isValidCambodiaPhone(cleanPhone) && gender)
-}
-
 function GoogleMark({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
@@ -360,7 +352,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [telegramOpen, setTelegramOpen] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
   const [notice, setNotice] = useState(null)
   
@@ -408,21 +399,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     return () => { active = false }
   }, [])
 
-  const telegramWidgetRef = useRef(null)
   const googleFallbackRef = useRef(null)
   const [googleFallback, setGoogleFallback] = useState(false)
   const inputsRef = useRef([])
-
-  // Telegram OTP Flow States
-  const [tgPhone, setTgPhone] = useState('')
-  const [tgPhoneE164, setTgPhoneE164] = useState('')
-  const [tgToken, setTgToken] = useState('')
-  const [tgBotLink, setTgBotLink] = useState('')
-  const [tgStatus, setTgStatus] = useState({ has_chat: false, verified: false, expired: false })
-  const [tgOtp, setTgOtp] = useState(['', '', '', '', '', ''])
-  const pollingInterval = useRef(null)
   const [isGenderDropdownOpen, setIsGenderDropdownOpen] = useState(false)
   const genderDropdownRef = useRef(null)
+  const isKhmer = i18n.language?.startsWith('km')
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -434,40 +416,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const checkProfileCompletion = useCallback((loggedInUser) => {
-    if (loggedInUser?.role && !['customer', 'seller'].includes(loggedInUser.role)) return false
-    const needsProfile = !hasProfileBasics(loggedInUser)
-    const needsAddress = loggedInUser?.has_address !== true
-
-    if (needsProfile) {
-      setProfileForm({
-        full_name: [loggedInUser.first_name, loggedInUser.last_name].filter(Boolean).join(' ') || loggedInUser.full_name || '',
-        email: loggedInUser.email || '',
-        phone: normalizeCambodiaPhone(loggedInUser.phone),
-        gender: loggedInUser.gender || '',
-        friend_referral_code: ''
-      })
-      setAddressForm(f => ({
-        ...f,
-        full_name: [loggedInUser.first_name, loggedInUser.last_name].filter(Boolean).join(' ') || loggedInUser.full_name || '',
-        phone: normalizeCambodiaPhone(loggedInUser.phone)
-      }))
-      setView('profile')
-      return true
-    }
-
-    if (needsAddress) {
-      setAddressForm(f => ({
-        ...f,
-        full_name: [loggedInUser.first_name, loggedInUser.last_name].filter(Boolean).join(' ') || loggedInUser.full_name || '',
-        phone: normalizeCambodiaPhone(loggedInUser.phone)
-      }))
-      setView('address')
-      return true
-    }
-
-    return false
-  }, [onClose])
+  // Telegram widget / Google: close auth and shop immediately.
+  // Phone is required later on Address Book / Checkout, not at login.
+  const checkProfileCompletion = useCallback((_loggedInUser) => false, [])
 
   const { data: telegramConfig } = useQuery({
     queryKey: ['telegram-login-config'],
@@ -486,8 +437,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
   const googleClientId = googleConfig?.client_id || ''
   const googleLoginEnabled = Boolean(googleConfig?.configured && googleClientId)
-  const telegramBotUsername = telegramConfig?.bot_username || ''
-  const telegramLoginEnabled = Boolean(telegramConfig?.configured && telegramBotUsername)
+  const telegramClientId = telegramConfig?.client_id || telegramConfig?.bot_id || ''
+  const telegramLoginEnabled = Boolean(telegramConfig?.configured && telegramClientId)
 
   useEffect(() => {
     if (isOpen) {
@@ -499,7 +450,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       else setView('login')
       
       setGoogleFallback(false)
-      setTelegramOpen(false)
       setShowLocationPicker(false)
       setLf({ username: '', password: '' })
       setAvatarFile(null)
@@ -614,113 +564,39 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     }
   }
 
-  const stopTelegramPolling = useCallback(() => {
-    if (pollingInterval.current) {
-      clearInterval(pollingInterval.current)
-      pollingInterval.current = null
-    }
-  }, [])
-
-  const pollTelegramStatus = useCallback(async (token) => {
-    try {
-      const { data } = await authApi.telegramStatus({ token })
-      setTgStatus(data)
-      if (data.verified) {
-        stopTelegramPolling()
-        setView('telegram-otp')
-      }
-      if (data.expired) {
-        stopTelegramPolling()
-        setNotice({ type: 'error', message: t('auth.telegramSessionExpired') })
-      }
-    } catch (err) {
-      stopTelegramPolling()
-    }
-  }, [t, stopTelegramPolling])
-
-  const startTelegramAuth = async () => {
-    if (!tgPhoneE164) {
-      setNotice({ type: 'error', message: t('auth.pleaseEnterPhone') })
+  const openTelegramLogin = async () => {
+    setNotice(null)
+    if (!telegramLoginEnabled) {
+      setNotice({ type: 'error', message: t('auth.telegramNotConfigured') })
       return
     }
-    setTelegramLoading(true)
-    setNotice(null)
-    try {
-      const { data } = await authApi.telegramStart({ phone: tgPhoneE164 })
-      setTgToken(data.token)
-      setTgBotLink(data.bot_link)
-      setView('telegram-verify')
-      
-      // Start parallel polling
-      stopTelegramPolling()
-      pollingInterval.current = setInterval(() => pollTelegramStatus(data.token), 3000)
-    } catch (err) {
-      setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.telegramStartFailed') })
-    } finally {
-      setTelegramLoading(false)
-    }
-  }
-
-  const handleTgOtpSubmit = async (otpString) => {
+    if (telegramLoading || googleLoading || loading) return
     setTelegramLoading(true)
     try {
-      const loggedInUser = await telegramOtpLogin({
-        token: tgToken,
-        otp: otpString,
-        referral_code: rf.referral_code
+      const data = await openTelegramLoginPopup({
+        clientId: telegramClientId,
+        lang: isKhmer ? 'km' : 'en',
+      })
+      const loggedInUser = await telegramLogin({
+        id_token: data.id_token,
+        referral_code: rf.referral_code,
       })
       toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
-      setTelegramOpen(false)
       if (!checkProfileCompletion(loggedInUser)) {
         onClose()
       }
     } catch (err) {
-      setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.invalidOtp') })
+      if (String(err?.message || '').toLowerCase().includes('cancel')) return
+      setNotice({
+        type: 'error',
+        message: err?.response
+          ? translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed')
+          : (err?.message || t('auth.telegramLoginFailed')),
+      })
     } finally {
       setTelegramLoading(false)
     }
   }
-
-  useEffect(() => {
-    return () => stopTelegramPolling()
-  }, [stopTelegramPolling])
-
-  useEffect(() => {
-    if (!telegramOpen || !telegramLoginEnabled || !telegramWidgetRef.current) return
-
-    const callbackName = 'shadowShopTelegramAuthModal'
-    window[callbackName] = async (telegramUser) => {
-      setTelegramLoading(true)
-      try {
-        const loggedInUser = await telegramLogin({
-          ...telegramUser,
-          referral_code: rf.referral_code
-        })
-        toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
-        setTelegramOpen(false)
-        if (!checkProfileCompletion(loggedInUser)) {
-          onClose()
-        }
-      } catch (err) {
-        setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed') })
-      } finally {
-        setTelegramLoading(false)
-      }
-    }
-
-    telegramWidgetRef.current.innerHTML = ''
-    const script = document.createElement('script')
-    script.src = 'https://telegram.org/js/telegram-widget.js?22'
-    script.async = true
-    script.setAttribute('data-telegram-login', telegramBotUsername)
-    script.setAttribute('data-size', 'large')
-    script.setAttribute('data-radius', '10')
-    script.setAttribute('data-request-access', 'write')
-    script.setAttribute('data-onauth', `${callbackName}(user)`)
-    telegramWidgetRef.current.appendChild(script)
-
-    return () => { if (window[callbackName]) delete window[callbackName] }
-  }, [telegramOpen, telegramLoginEnabled, telegramBotUsername, telegramLogin, t, rf.referral_code, onClose, checkProfileCompletion])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -1118,14 +994,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 {t('auth.google')}
               </button>}
               <button 
-                onClick={() => {
-                  setNotice(null)
-                  setTelegramOpen(true)
-                  setView('telegram-choice')
-                }} 
-                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+                type="button"
+                onClick={openTelegramLogin}
+                disabled={telegramLoading}
+                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm disabled:opacity-60"
               >
-                <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />
+                {telegramLoading ? <Loader2 size={20} className="animate-spin text-sky-500" /> : <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />}
                 {t('auth.telegram')}
               </button>
             </div>
@@ -1279,14 +1153,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 {t('auth.google')}
               </button>}
               <button 
-                onClick={() => {
-                  setNotice(null)
-                  setTelegramOpen(true)
-                  setView('telegram-choice')
-                }}
-                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+                type="button"
+                onClick={openTelegramLogin}
+                disabled={telegramLoading}
+                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm disabled:opacity-60"
               >
-                <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />
+                {telegramLoading ? <Loader2 size={20} className="animate-spin text-sky-500" /> : <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />}
                 {t('auth.telegram')}
               </button>
             </div>
@@ -1610,134 +1482,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
           </button>
         </div>
       </div>
-
-      {telegramOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-sm overflow-hidden rounded-[28px] bg-white text-center shadow-2xl animate-in zoom-in-95 duration-200">
-            
-            {/* Header with reference-like UI */}
-            <div className="relative p-8 pb-4">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-sky-50 text-sky-500 mb-5 shadow-sm">
-                <Send size={32} fill="#2AABEE" className="ml-0.5" />
-              </div>
-              <h3 className="text-[22px] font-bold tracking-tight text-slate-900">{t('auth.continueWithTelegram')}</h3>
-              <p className="mt-3 text-[14px] font-medium leading-relaxed text-slate-500 px-4">
-                {t('auth.telegramLoginSubtitle')}
-              </p>
-            </div>
-
-            <div className="p-6 pt-5">
-              {view === 'telegram-verify' ? (
-                <div className="space-y-5 animate-fade-in">
-                  <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4 text-left">
-                    <div className="flex items-center gap-3 text-sky-600 mb-2">
-                      <Globe size={18} />
-                      <span className="text-[13px] font-bold uppercase tracking-wider">{t('auth.verificationInfo')}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-[13px] font-medium text-slate-600 flex justify-between">
-                        <span>{t('auth.targetBot')}</span>
-                        <span className="font-bold text-slate-800">@{telegramBotUsername}</span>
-                      </p>
-                      <p className="text-[13px] font-medium text-slate-600 flex justify-between">
-                        <span>{t('auth.status')}</span>
-                        <span className={cn(
-                          "font-bold",
-                          tgStatus.has_chat ? "text-emerald-500" : "text-amber-500"
-                        )}>
-                          {tgStatus.has_chat ? t('auth.connected') : t('auth.waiting')}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <a 
-                    href={tgBotLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-14 w-full items-center justify-center gap-3 rounded-[18px] bg-[#2AABEE] text-[15px] font-bold text-white shadow-lg shadow-sky-100 transition-all hover:bg-[#229ED9] hover:shadow-sky-200 active:scale-[0.98]"
-                  >
-                    <ExternalLink size={20} />
-                    {t('auth.openTelegramBot')}
-                  </a>
-                  
-                  <div className="flex items-center gap-2 justify-center py-2">
-                    <Loader2 size={16} className="animate-spin text-sky-400" />
-                    <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">
-                      {t('auth.waitingForHandshake')}
-                    </span>
-                  </div>
-                </div>
-              ) : view === 'telegram-otp' ? (
-                <div className="space-y-6 animate-fade-in">
-                  <div className="text-left">
-                    <p className="text-[13px] font-medium text-slate-500 mb-4">
-                      {t('auth.otpSentToTelegram', { phone: tgPhone })}
-                    </p>
-                    <div className="grid grid-cols-6 gap-2">
-                      {tgOtp.map((digit, i) => (
-                        <input
-                          key={i}
-                          ref={el => inputsRef.current[i] = el}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, '').slice(-1)
-                            const newOtp = [...tgOtp]
-                            newOtp[i] = val
-                            setTgOtp(newOtp)
-                            if (val && i < 5) inputsRef.current[i + 1]?.focus()
-                            if (newOtp.every(d => d !== '')) handleTgOtpSubmit(newOtp.join(''))
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Backspace' && !tgOtp[i] && i > 0) {
-                              inputsRef.current[i - 1]?.focus()
-                            }
-                          }}
-                          className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 text-center text-[18px] font-bold text-slate-800 focus:border-pink-300 focus:bg-white focus:ring-4 focus:ring-pink-50 transition-all outline-none"
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleTgOtpSubmit(tgOtp.join(''))}
-                    disabled={telegramLoading || tgOtp.some(d => !d)}
-                    className="flex h-14 w-full items-center justify-center gap-3 rounded-[18px] bg-[#EC197A] text-[15px] font-bold text-white shadow-lg shadow-pink-100 transition-all hover:bg-[#D9166F] disabled:opacity-50"
-                  >
-                    {telegramLoading ? <Loader2 size={22} className="animate-spin" /> : t('auth.verifyAndLogin')}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 px-6 bg-slate-50/50 rounded-[28px] border border-slate-100/80 min-h-[140px]">
-                  <div className="min-h-[60px] flex items-center justify-center w-full">
-                    {telegramLoginEnabled ? (
-                      <div ref={telegramWidgetRef} className="flex justify-center scale-110" />
-                    ) : (
-                      <p className="text-sm font-medium text-red-500 bg-red-50 px-4 py-2 rounded-lg border border-red-100">
-                        {t('auth.telegramNotConfiguredShort')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => {
-                  setTelegramOpen(false)
-                  stopTelegramPolling()
-                  if (view.startsWith('telegram-')) setView('login')
-                }}
-                className="mt-6 w-full py-2 text-[14px] font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
-              >
-                {t('common.cancel')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showLocationPicker && (
         <LocationPicker 
