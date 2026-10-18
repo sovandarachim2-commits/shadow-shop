@@ -303,6 +303,7 @@
     "passwordEntirelyNumeric": "This password cannot be entirely numeric.",
     "telegramLoginSubtitle": "Confirm in the Telegram app — no phone number typing on the website.",
     "telegramLoginCancelled": "Telegram login was cancelled.",
+    "telegramPopupBlocked": "Allow popups for Shadow Shop, then try Telegram login again.",
     "verificationInfo": "VERIFICATION INFO",
     "targetBot": "Target Bot",
     "status": "Status",

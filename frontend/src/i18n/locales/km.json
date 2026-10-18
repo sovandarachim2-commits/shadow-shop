@@ -303,6 +303,7 @@
     "passwordEntirelyNumeric": "ពាក្យសម្ងាត់មិនអាចជាលេខទាំងអស់បានទេ។",
     "telegramLoginSubtitle": "បញ្ជាក់នៅក្នុងកម្មវិធី Telegram — មិនចាំបាច់វាយលេខទូរស័ព្ទនៅលើគេហទំព័រ។",
     "telegramLoginCancelled": "ការចូលតាម Telegram ត្រូវបានបោះបង់។",
+    "telegramPopupBlocked": "សូមអនុញ្ញាត popup សម្រាប់ Shadow Shop រួចព្យាយាមចូលតាម Telegram ម្តងទៀត។",
     "verificationInfo": "ព័ត៌មានផ្ទៀងផ្ទាត់",
     "targetBot": "Bot គោលដៅ",
     "status": "ស្ថានភាព",

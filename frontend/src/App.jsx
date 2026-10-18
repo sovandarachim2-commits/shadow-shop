@@ -12,6 +12,7 @@ import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 
 // Auth-critical first paint only. Layouts/home are lazy so /login stays light.
 import Login from '@/pages/Login'
+import TelegramAuthCallback from '@/pages/TelegramAuthCallback'
 
 async function clearFrontendCaches() {
   if (!('caches' in window)) return
@@ -592,6 +593,7 @@ export default function App() {
           <Routes>
           {/* Auth */}
           <Route path="/login" element={<CustomerLoginRedirect />} />
+          <Route path="/auth/telegram/callback" element={<TelegramAuthCallback />} />
           <Route path="/admin/login" element={<Login />} />
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
           <Route path="/forgot-password" element={<LazyPage><ForgotPassword /></LazyPage>} />

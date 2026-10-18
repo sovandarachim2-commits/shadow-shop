@@ -15,7 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
-import { openTelegramLoginPopup } from '@/utils/telegramLogin'
+import { openBlankTelegramAuthWindow, openTelegramLoginPopup } from '@/utils/telegramLogin'
 import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
 const EMPTY_CAMBODIA_ADMIN = {
@@ -571,14 +571,31 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       return
     }
     if (telegramLoading || googleLoading || loading) return
+    // Open NEW tab/window in the same click tick (keeps cart in this tab).
+    const popup = openBlankTelegramAuthWindow()
+    if (!popup) {
+      setNotice({ type: 'error', message: t('auth.telegramPopupBlocked') || 'Allow popups to continue with Telegram.' })
+      return
+    }
     setTelegramLoading(true)
     try {
       const data = await openTelegramLoginPopup({
         clientId: telegramClientId,
         lang: isKhmer ? 'km' : 'en',
+        popup,
       })
       const loggedInUser = await telegramLogin({
-        id_token: data.id_token,
+        ...(data.id_token
+          ? { id_token: data.id_token }
+          : {
+              id: data.id,
+              first_name: data.first_name,
+              last_name: data.last_name,
+              username: data.username,
+              photo_url: data.photo_url,
+              auth_date: data.auth_date,
+              hash: data.hash,
+            }),
         referral_code: rf.referral_code,
       })
       toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
