@@ -113,8 +113,7 @@ Run the backend and frontend from two separate terminals.
 Backend:
 
 ```powershell
-cd "C:\xampp\htdocs\Shadow Shop\backend"
-venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
+![alt text](image-1.png)
 ```
 
 Frontend:
