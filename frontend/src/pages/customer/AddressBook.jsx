@@ -93,7 +93,7 @@ export default function AddressBook() {
     mutationFn: (payload) =>
       editing ? authApi.addresses.update(editing.id, payload) : authApi.addresses.create(payload),
     onSuccess: () => {
-      qc.invalidateQueries(['my-addresses'])
+      qc.invalidateQueries({ queryKey: ['my-addresses'] })
       toast.success(editing ? t('addressBook.toast.updated') : t('addressBook.toast.saved'))
       setShowForm(false)
       setEditing(null)
@@ -107,13 +107,13 @@ export default function AddressBook() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => authApi.addresses.delete(id),
-    onSuccess: () => { qc.invalidateQueries(['my-addresses']); toast.success(t('addressBook.toast.removed')) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-addresses'] }); toast.success(t('addressBook.toast.removed')) },
     onError: () => toast.error(t('addressBook.toast.deleteFailed')),
   })
 
   const defaultMutation = useMutation({
     mutationFn: (id) => authApi.addresses.setDefault(id),
-    onSuccess: () => { qc.invalidateQueries(['my-addresses']); toast.success(t('addressBook.toast.defaultUpdated')) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-addresses'] }); toast.success(t('addressBook.toast.defaultUpdated')) },
     onError: () => toast.error(t('addressBook.toast.defaultFailed')),
   })
 

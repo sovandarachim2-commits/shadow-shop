@@ -1,6 +1,18 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authApi } from '@/api/auth'
+import useCartStore from '@/store/cartStore'
+
+function rememberAccountCart(user) {
+  if (user?.id == null) return
+  useCartStore.getState().restoreCartForUser(user.id)
+}
+
+function stashAccountCart(userId) {
+  if (userId == null) return
+  useCartStore.getState().saveCartForUser(userId)
+  useCartStore.getState().clearCart()
+}
 
 const useAuthStore = create(
   persist(
@@ -21,6 +33,7 @@ const useAuthStore = create(
           refreshToken: data.refresh,
           isAuthenticated: true,
         })
+        rememberAccountCart(data.user)
         return data.user
       },
 
@@ -39,6 +52,7 @@ const useAuthStore = create(
           refreshToken: data.refresh,
           isAuthenticated: true,
         })
+        rememberAccountCart(data.user)
         return data
       },
 
@@ -56,6 +70,7 @@ const useAuthStore = create(
           refreshToken: data.refresh,
           isAuthenticated: true,
         })
+        rememberAccountCart(data.user)
         return data.user
       },
 
@@ -70,6 +85,7 @@ const useAuthStore = create(
           refreshToken: data.refresh,
           isAuthenticated: true,
         })
+        rememberAccountCart(data.user)
         return data.user
       },
 
@@ -83,16 +99,19 @@ const useAuthStore = create(
           refreshToken: data.refresh,
           isAuthenticated: true,
         })
+        rememberAccountCart(data.user)
         return data.user
       },
 
       logout: async () => {
+        const userId = get().user?.id
         const refresh = get().refreshToken || localStorage.getItem('refresh_token')
         try {
           if (refresh) await authApi.logout(refresh)
         } catch {}
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
+        stashAccountCart(userId)
         // Clear persisted credentials before reloading to discard account query caches.
         const destination = '/'
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, pendingWelcomeBonus: null })
@@ -100,8 +119,10 @@ const useAuthStore = create(
       },
 
       clearSession: () => {
+        const userId = get().user?.id
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
+        stashAccountCart(userId)
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
       },
 

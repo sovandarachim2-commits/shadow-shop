@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Gift, Minus, PackageSearch, Plus, ShoppingCart, Trash2, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
@@ -174,6 +175,7 @@ export default function ProductSetDetail() {
     queryKey: ['product-set-detail', id],
     queryFn: () => productsApi.sets.get(id).then((r) => r.data),
     enabled: !!id,
+    ...STOREFRONT_LIVE_QUERY,
   })
   const { data: otherSetsData, isLoading: otherSetsLoading } = useQuery({
     queryKey: ['product-set-related-sets', id],
@@ -183,7 +185,7 @@ export default function ProductSetDetail() {
       page_size: 9,
     }).then((r) => r.data),
     enabled: !!id,
-    staleTime: 30_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
   const { data: recommendedData, isLoading: recommendedLoading } = useQuery({
     queryKey: ['product-set-recommended-products', id],
@@ -193,7 +195,7 @@ export default function ProductSetDetail() {
       page_size: 12,
     }).then((r) => r.data),
     enabled: !!id,
-    staleTime: 30_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
 
   const cartProduct = useMemo(() => productSet ? toCartProduct(productSet, t('product.productSet')) : null, [productSet, t])

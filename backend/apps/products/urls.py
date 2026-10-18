@@ -13,6 +13,7 @@ router.register('promotions', views.PromotionViewSet, basename='promotions')
 router.register('banners', views.BannerViewSet, basename='banners')
 
 urlpatterns = [
+    path('revision/', views.StorefrontRevisionView.as_view(), name='storefront-revision'),
     path('home/', views.HomeFeedView.as_view(), name='home-feed'),
     path('', include(router.urls)),
 ]

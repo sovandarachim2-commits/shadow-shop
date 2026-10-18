@@ -431,7 +431,8 @@ export default function Login() {
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   })
 
   const { data: telegramConfig } = useQuery({

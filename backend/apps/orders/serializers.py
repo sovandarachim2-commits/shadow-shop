@@ -64,6 +64,19 @@ def display_seller_name(order):
     return seller.get_full_name() or seller.username
 
 
+def price_checkout_items(items):
+    """Customer checkout pays the price that is active now, not a price saved in the cart."""
+    for item in items:
+        product = item.get('product')
+        product_set = item.get('product_set')
+        if product is not None:
+            item['unit_price'] = product.active_price
+            item['cost_price'] = product.cost_price
+        elif product_set is not None:
+            item['unit_price'] = product_set.active_price
+    return items
+
+
 def validate_flash_sale_max_quantities(requested):
     errors = []
     for product, quantity in requested.items():

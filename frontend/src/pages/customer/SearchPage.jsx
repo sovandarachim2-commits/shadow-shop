@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Flame, History, Search, TrendingUp, X } from 'lucide-react'
 import { productsApi } from '@/api/products'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { cn } from '@/utils/helpers'
 import { useTranslation } from 'react-i18next'
 
@@ -42,19 +43,19 @@ export default function SearchPage() {
   const { data: brandData = [] } = useQuery({
     queryKey: ['search-brands'],
     queryFn: () => productsApi.brands.list({ is_active: true, page_size: 12 }).then((r) => r.data.results || r.data || []),
-    staleTime: 60_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
 
   const { data: categoryData = [] } = useQuery({
     queryKey: ['search-categories'],
     queryFn: () => productsApi.categories.list({ is_active: true, page_size: 12 }).then((r) => r.data.results || r.data || []),
-    staleTime: 60_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
 
   const { data: popularProducts = [] } = useQuery({
     queryKey: ['search-popular-products'],
     queryFn: () => productsApi.products.list({ is_active: true, ordering: '-created_at', page_size: 10 }).then((r) => r.data.results || r.data || []),
-    staleTime: 60_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
 
   useEffect(() => {

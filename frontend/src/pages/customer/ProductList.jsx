@@ -6,6 +6,7 @@ import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash
 import { productsApi } from '@/api/products'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { cn, formatCurrency } from '@/utils/helpers'
 import { getFlashSaleTimerState, hasFlashSaleTimer } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
@@ -396,13 +397,13 @@ export default function ProductList() {
   const { data: categoryData } = useQuery({
     queryKey: ['categories'],
     queryFn: () => productsApi.categories.list({ is_active: true }).then((r) => r.data.results || r.data),
-    staleTime: 10 * 60 * 1000,
+    ...STOREFRONT_LIVE_QUERY,
   })
 
   const { data: brandData } = useQuery({
     queryKey: ['brands-shop'],
     queryFn: () => productsApi.brands.list({ is_active: true }).then((r) => r.data.results || r.data),
-    staleTime: 10 * 60 * 1000,
+    ...STOREFRONT_LIVE_QUERY,
   })
 
   const { data, isLoading, isFetching } = useQuery({
@@ -419,7 +420,7 @@ export default function ProductList() {
       page_size: 1000,
       is_active: true,
     }).then((r) => r.data),
-    staleTime: 2 * 60 * 1000,
+    ...STOREFRONT_LIVE_QUERY,
     placeholderData: keepPreviousData,
   })
 
@@ -441,7 +442,7 @@ export default function ProductList() {
       is_active: true,
     }).then((r) => r.data.results ?? r.data ?? []),
     enabled: !categoryId && !brand && (!activeFilter || activeFilter === 'flash_sale'),
-    staleTime: 2 * 60 * 1000,
+    ...STOREFRONT_LIVE_QUERY,
     placeholderData: keepPreviousData,
   })
 

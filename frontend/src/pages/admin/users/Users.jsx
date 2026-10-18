@@ -210,7 +210,6 @@ export default function Users() {
   const { data: rolesData = [] } = useQuery({
     queryKey: ['roles'],
     queryFn: () => authApi.roles.list().then((r) => r.data),
-    staleTime: Infinity,
   })
 
   const { data, isLoading } = useQuery({
@@ -220,25 +219,25 @@ export default function Users() {
 
   const createMutation = useMutation({
     mutationFn: authApi.users.create,
-    onSuccess: () => { queryClient.invalidateQueries(['users']); closeUserModal(); toast.success('User created!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); closeUserModal(); toast.success('User created!') },
     onError: (e) => toast.error(getApiError(e, 'Failed to create user')),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => authApi.users.update(id, data),
-    onSuccess: () => { queryClient.invalidateQueries(['users']); closeUserModal(); toast.success('User updated!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); closeUserModal(); toast.success('User updated!') },
     onError: (e) => toast.error(getApiError(e, 'Failed to update user')),
   })
 
   const toggleMutation = useMutation({
     mutationFn: authApi.users.toggleActive,
-    onSuccess: () => { queryClient.invalidateQueries(['users']); toast.success('Status toggled!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); toast.success('Status toggled!') },
     onError: (e) => toast.error(getApiError(e, 'Failed to update status')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: authApi.users.delete,
-    onSuccess: () => { queryClient.invalidateQueries(['users']); toast.success('User deleted!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); toast.success('User deleted!') },
     onError: (e) => toast.error(getApiError(e, 'Failed to delete user')),
   })
 

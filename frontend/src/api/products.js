@@ -76,4 +76,5 @@ export const productsApi = {
   home: {
     feed: () => client.get('/products/home/'),
   },
+  revision: () => client.get('/products/revision/'),
 }

@@ -8,6 +8,7 @@ HOME_FEED_CACHE_KEY = 'storefront:home_feed:v1'
 SITE_SETTINGS_CACHE_KEY = 'storefront:site_settings:v1'
 STORE_NAME_CACHE_KEY = 'storefront:store_name:v1'
 PRODUCT_LIST_CACHE_PREFIX = 'storefront:product_list:v1:'
+STOREFRONT_REVISION_KEY = 'storefront:revision'
 
 HOME_FEED_TTL = 120
 SITE_SETTINGS_TTL = 120
@@ -68,6 +69,24 @@ def bump_storefront_cache():
         safe_cache_set('storefront:product_list:version', 1, None)
     except Exception:
         logger.warning('product_list_cache_bump_failed', exc_info=True)
+    _bump_revision()
+
+
+def _bump_revision():
+    try:
+        cache.incr(STOREFRONT_REVISION_KEY)
+    except ValueError:
+        safe_cache_set(STOREFRONT_REVISION_KEY, 1, None)
+    except Exception:
+        logger.warning('storefront_revision_bump_failed', exc_info=True)
+
+
+def get_storefront_revision():
+    value = safe_cache_get(STOREFRONT_REVISION_KEY, 0) or 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 def product_list_cache_key(query_string: str) -> str:

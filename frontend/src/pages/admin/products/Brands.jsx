@@ -34,9 +34,9 @@ function BrandFormModal({ brand, onClose, onSaved }) {
     mutationFn: (payload) =>
       brand ? productsApi.brands.update(brand.id, payload) : productsApi.brands.create(payload),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-brands'])
-      qc.invalidateQueries(['brands-home'])
-      qc.invalidateQueries(['brands-shop'])
+      qc.invalidateQueries({ queryKey: ['admin-brands'] })
+      qc.invalidateQueries({ queryKey: ['brands-home'] })
+      qc.invalidateQueries({ queryKey: ['brands-shop'] })
       toast.success(brand ? 'Brand updated' : 'Brand created')
       onSaved()
     },
@@ -170,8 +170,8 @@ export default function Brands() {
   const deleteMutation = useMutation({
     mutationFn: (id) => productsApi.brands.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-brands'])
-      qc.invalidateQueries(['brands-home'])
+      qc.invalidateQueries({ queryKey: ['admin-brands'] })
+      qc.invalidateQueries({ queryKey: ['brands-home'] })
       toast.success('Brand deleted')
     },
     onError: () => toast.error('Failed to delete brand'),

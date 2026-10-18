@@ -105,7 +105,6 @@ export default function PrepareItemsHistory() {
   const { data: productSets = [] } = useQuery({
     queryKey: ['prepare-history-product-sets'],
     queryFn: () => productsApi.sets.list({ page_size: 200 }).then((r) => getListResults(r.data)),
-    staleTime: 60000,
   })
 
   const { data, isLoading, refetch, isFetching } = useQuery({

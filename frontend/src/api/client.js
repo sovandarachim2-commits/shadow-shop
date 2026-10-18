@@ -35,6 +35,13 @@ const PUBLIC_GET_PREFIXES = [
   '/products/reviews/',
   '/products/promotions/',
   '/products/banners/',
+  '/products/revision/',
+]
+
+const STOREFRONT_WRITE_MARKERS = [
+  '/products/',
+  '/inventory/',
+  '/auth/site-settings/',
 ]
 
 function requestPath(config) {
@@ -50,6 +57,23 @@ function requestPath(config) {
 function isAuthFreeRequest(config) {
   const path = requestPath(config)
   return AUTH_FREE_PATHS.some((authPath) => path.endsWith(authPath))
+}
+
+function isStorefrontWrite(config) {
+  const method = (config?.method || 'get').toLowerCase()
+  if (method === 'get' || method === 'head' || method === 'options') return false
+  const path = requestPath(config)
+  return STOREFRONT_WRITE_MARKERS.some((marker) => path.includes(marker))
+}
+
+function notifyStorefrontChanged() {
+  try {
+    const channel = new BroadcastChannel('shadow-shop-storefront')
+    channel.postMessage({ type: 'changed' })
+    channel.close()
+  } catch {
+    // Shop pages also watch the revision endpoint.
+  }
 }
 
 function isPublicGetRequest(config) {
@@ -80,7 +104,10 @@ client.interceptors.request.use((config) => {
 })
 
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isStorefrontWrite(response.config)) notifyStorefrontChanged()
+    return response
+  },
   async (error) => {
     const original = error.config
     if (error.response?.status === 401 && original && !original._retry && !isAuthFreeRequest(original) && !isPublicGetRequest(original)) {

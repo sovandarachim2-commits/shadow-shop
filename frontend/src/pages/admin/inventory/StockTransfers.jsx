@@ -165,25 +165,25 @@ export default function StockTransfers() {
 
   const createMutation = useMutation({
     mutationFn: inventoryApi.transfers.create,
-    onSuccess: () => { qc.invalidateQueries(['stock-transfers']); setShowModal(false); toast.success('Transfer created!') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-transfers'] }); setShowModal(false); toast.success('Transfer created!') },
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to create transfer'),
   })
 
   const completeMutation = useMutation({
     mutationFn: inventoryApi.transfers.complete,
-    onSuccess: () => { qc.invalidateQueries(['stock-transfers']); toast.success('Transfer completed!') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-transfers'] }); toast.success('Transfer completed!') },
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to complete transfer'),
   })
 
   const cancelMutation = useMutation({
     mutationFn: inventoryApi.transfers.cancel,
-    onSuccess: () => { qc.invalidateQueries(['stock-transfers']); toast.success('Transfer cancelled') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-transfers'] }); toast.success('Transfer cancelled') },
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to cancel transfer'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: inventoryApi.transfers.delete,
-    onSuccess: () => { qc.invalidateQueries(['stock-transfers']); toast.success('Transfer deleted') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-transfers'] }); toast.success('Transfer deleted') },
     onError: () => toast.error('Failed to delete transfer'),
   })
 
@@ -194,7 +194,7 @@ export default function StockTransfers() {
         : inventoryApi.warehouses.create(payload)
     ),
     onSuccess: () => {
-      qc.invalidateQueries(['warehouses'])
+      qc.invalidateQueries({ queryKey: ['warehouses'] })
       setShowWarehouseModal(false)
       setEditWarehouse(null)
       toast.success(editWarehouse ? 'Warehouse updated!' : 'Warehouse created!')
@@ -209,7 +209,7 @@ export default function StockTransfers() {
   const deleteWarehouseMutation = useMutation({
     mutationFn: inventoryApi.warehouses.delete,
     onSuccess: () => {
-      qc.invalidateQueries(['warehouses'])
+      qc.invalidateQueries({ queryKey: ['warehouses'] })
       toast.success('Warehouse deleted')
     },
     onError: (e) => toast.error(e?.response?.data?.detail || 'Failed to delete warehouse'),

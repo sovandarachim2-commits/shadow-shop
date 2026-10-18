@@ -139,8 +139,8 @@ export default function Categories() {
     mutationFn: (fd) =>
       editing ? productsApi.categories.update(editing.id, fd) : productsApi.categories.create(fd),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-categories'])
-      qc.invalidateQueries(['categories-home'])
+      qc.invalidateQueries({ queryKey: ['admin-categories'] })
+      qc.invalidateQueries({ queryKey: ['categories-home'] })
       toast.success(editing ? 'Category updated' : 'Category created')
       setShowModal(false)
       setEditing(null)
@@ -151,8 +151,8 @@ export default function Categories() {
   const deleteMutation = useMutation({
     mutationFn: (id) => productsApi.categories.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-categories'])
-      qc.invalidateQueries(['categories-home'])
+      qc.invalidateQueries({ queryKey: ['admin-categories'] })
+      qc.invalidateQueries({ queryKey: ['categories-home'] })
       toast.success('Category deleted')
     },
   })

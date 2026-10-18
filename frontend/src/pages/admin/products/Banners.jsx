@@ -54,8 +54,8 @@ function BannerForm({ banner, onClose, onSaved }) {
     mutationFn: (fd) =>
       banner ? productsApi.banners.update(banner.id, fd) : productsApi.banners.create(fd),
     onSuccess: () => {
-      qc.invalidateQueries(['admin-banners'])
-      qc.invalidateQueries(['home-banners'])
+      qc.invalidateQueries({ queryKey: ['admin-banners'] })
+      qc.invalidateQueries({ queryKey: ['home-banners'] })
       toast.success(banner ? 'Banner updated' : 'Banner created')
       onSaved()
     },
@@ -180,7 +180,7 @@ export default function Banners() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => productsApi.banners.delete(id),
-    onSuccess: () => { qc.invalidateQueries(['admin-banners']); qc.invalidateQueries(['home-banners']); toast.success('Banner deleted') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-banners'] }); qc.invalidateQueries({ queryKey: ['home-banners'] }); toast.success('Banner deleted') },
     onError: () => toast.error('Failed to delete'),
   })
 
@@ -189,7 +189,7 @@ export default function Banners() {
       const fd = new FormData(); fd.append('is_active', is_active)
       return productsApi.banners.update(id, fd)
     },
-    onSuccess: () => { qc.invalidateQueries(['admin-banners']); qc.invalidateQueries(['home-banners']) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-banners'] }); qc.invalidateQueries({ queryKey: ['home-banners'] }) },
     onError: () => toast.error('Failed to toggle'),
   })
 

@@ -29,6 +29,8 @@ import {
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
+import { useLiveStorefront } from '@/utils/storefrontSync'
 import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
@@ -206,6 +208,7 @@ function isItemActive(location, item) {
 }
 
 export default function CustomerLayout() {
+  useLiveStorefront()
   const location = useLocation()
   const navigate = useNavigate()
   const [headerSearch, setHeaderSearch] = useState('')
@@ -315,7 +318,7 @@ export default function CustomerLayout() {
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
+    ...STOREFRONT_LIVE_QUERY,
   })
   const logoUrl = siteSettings?.logo_url || null
   const storeName = siteSettings?.store_name || 'Shadow Shop'

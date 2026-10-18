@@ -249,7 +249,6 @@ export default function Roles() {
   const { data: allPerms = [], isLoading: loadingPerms } = useQuery({
     queryKey: ['permissions'],
     queryFn: () => authApi.permissions.list().then((r) => r.data),
-    staleTime: Infinity,
   })
 
   const { data: rolePerms = [], isLoading: loadingRole } = useQuery({

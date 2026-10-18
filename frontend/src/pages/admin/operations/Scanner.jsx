@@ -48,7 +48,6 @@ export default function Scanner() {
   const { data: summary } = useQuery({
     queryKey: ['scanner-summary'],
     queryFn: () => ordersApi.orders.operationSummary().then((r) => r.data),
-    staleTime: 60 * 1000,
   })
 
   return (

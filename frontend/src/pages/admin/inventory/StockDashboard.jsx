@@ -32,9 +32,9 @@ function AddStockModal({ onClose }) {
       notes,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['stock'])
-      queryClient.invalidateQueries(['stock-dashboard'])
-      queryClient.invalidateQueries(['stock-movements'])
+      queryClient.invalidateQueries({ queryKey: ['stock'] })
+      queryClient.invalidateQueries({ queryKey: ['stock-dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['stock-movements'] })
       toast.success('Stock added!')
       onClose()
     },
@@ -112,8 +112,8 @@ function AdjustStockModal({ stock, onClose }) {
   const adjustMutation = useMutation({
     mutationFn: () => inventoryApi.stock.adjust(stock.id, { quantity: qty, notes }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['stock'])
-      queryClient.invalidateQueries(['stock-dashboard'])
+      queryClient.invalidateQueries({ queryKey: ['stock'] })
+      queryClient.invalidateQueries({ queryKey: ['stock-dashboard'] })
       toast.success('Stock adjusted!')
       onClose()
     },

@@ -28,7 +28,7 @@ export default function Expenses() {
   const createMutation = useMutation({
     mutationFn: (d) => financeApi.expenses.create(d),
     onSuccess: () => {
-      qc.invalidateQueries(['expenses'])
+      qc.invalidateQueries({ queryKey: ['expenses'] })
       toast.success('Expense recorded')
       setShowForm(false)
       setForm({ description: '', amount: '', date: new Date().toISOString().slice(0, 10), category: '', notes: '' })
@@ -38,7 +38,7 @@ export default function Expenses() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => financeApi.expenses.delete(id),
-    onSuccess: () => { qc.invalidateQueries(['expenses']); toast.success('Expense deleted') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses'] }); toast.success('Expense deleted') },
   })
 
   const total = (expenses ?? []).reduce((s, e) => s + parseFloat(e.amount || 0), 0)

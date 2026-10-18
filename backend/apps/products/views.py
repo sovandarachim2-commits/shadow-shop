@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status, generics
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
@@ -20,11 +21,21 @@ from utils.permissions import IsAdminOrSuperAdmin, IsStaff
 from utils.storefront_cache import (
     HOME_FEED_CACHE_KEY,
     HOME_FEED_TTL,
+    get_storefront_revision,
     product_list_cache_key,
     safe_cache_get,
     safe_cache_set,
     PRODUCT_LIST_TTL,
 )
+
+
+class StorefrontRevisionView(APIView):
+    """Tiny public counter. Shop pages watch it and reload the moment admin saves."""
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'revision': get_storefront_revision()})
 
 class ProductFilter(filters.FilterSet):
     min_price = filters.NumberFilter(field_name='wholesale_price', lookup_expr='gte')

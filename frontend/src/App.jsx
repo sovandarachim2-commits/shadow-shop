@@ -152,10 +152,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 2 * 60 * 1000,
+      staleTime: 0,
       gcTime: 30 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
       // Keep showing last data while a background refetch runs
       placeholderData: (previousData) => previousData,
     },
@@ -486,7 +486,8 @@ function AppIconSync() {
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   })
 
   useEffect(() => {

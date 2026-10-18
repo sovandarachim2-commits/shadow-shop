@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
@@ -189,6 +190,7 @@ export default function ProductDetail() {
   const { data: product, isLoading, isError } = useQuery({
     queryKey: ['product', id],
     queryFn: () => productsApi.products.get(id).then((r) => r.data),
+    ...STOREFRONT_LIVE_QUERY,
   })
   const { data: reviewData } = useQuery({
     queryKey: ['product-reviews', id],
@@ -204,7 +206,7 @@ export default function ProductDetail() {
       page_size: 9,
     }).then((r) => r.data),
     enabled: Boolean(product?.category),
-    staleTime: 30_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
   const { data: recommendedData, isLoading: recommendedLoading } = useQuery({
     queryKey: ['recommended-products', id],
@@ -214,7 +216,7 @@ export default function ProductDetail() {
       page_size: 12,
     }).then((r) => r.data),
     enabled: Boolean(product?.id),
-    staleTime: 30_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
   const reviews = reviewData || []
 

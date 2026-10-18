@@ -7,6 +7,7 @@ import {
   Sparkles, Clock3,
 } from 'lucide-react'
 import { productsApi } from '@/api/products'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import { formatFlashSaleCountdown, getFlashSaleTimerState, hasFlashSaleTimer, isVisibleFlashSaleItem } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
@@ -43,9 +44,8 @@ const DEFAULT_BRANDS = [
 ]
 
 const HOME_QUERY_OPTIONS = {
-  staleTime: 10 * 60 * 1000,
+  ...STOREFRONT_LIVE_QUERY,
   gcTime: 45 * 60 * 1000,
-  refetchOnMount: false,
 }
 
 function iconForCategory(name) {
@@ -386,7 +386,7 @@ export default function Home() {
       page_size: 24,
     }).then((r) => (r.data.results || r.data || []).filter((item) => isVisibleFlashSaleItem(item)).slice(0, 10)),
     enabled: !homeLoading && (homeData?.flash_sale?.length || 0) === 0,
-    staleTime: 30_000,
+    ...STOREFRONT_LIVE_QUERY,
   })
   const bannersData = homeData?.banners
   const categoriesData = homeData?.categories

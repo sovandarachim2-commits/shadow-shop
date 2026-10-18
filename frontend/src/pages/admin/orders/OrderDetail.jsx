@@ -428,7 +428,7 @@ export default function OrderDetail() {
   const updateStatusMutation = useMutation({
     mutationFn: ({ status, note }) => ordersApi.orders.updateStatus(id, { status, note }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['order', id])
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
       toast.success('Status updated!')
     },
     onError: () => toast.error('Failed to update status'),
@@ -437,7 +437,7 @@ export default function OrderDetail() {
   const markPaidMutation = useMutation({
     mutationFn: () => ordersApi.orders.markPaid(id, { payment_method: payMethod }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['order', id])
+      queryClient.invalidateQueries({ queryKey: ['order', id] })
       setShowPayModal(false)
       toast.success('Payment recorded!')
     },
@@ -685,8 +685,8 @@ export default function OrderDetail() {
               })
             }
             setShowEditModal(false)
-            queryClient.invalidateQueries(['order', id])
-            queryClient.invalidateQueries(['orders'])
+            queryClient.invalidateQueries({ queryKey: ['order', id] })
+            queryClient.invalidateQueries({ queryKey: ['orders'] })
           }}
         />
       )}

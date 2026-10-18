@@ -2,13 +2,15 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ShoppingBag } from 'lucide-react'
 import { authApi } from '@/api/auth'
+import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { cn } from '@/utils/helpers'
 
 export default function HeaderBrandMark({ className = 'h-9 w-9', imageClassName = 'rounded-xl' }) {
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
+    staleTime: STOREFRONT_LIVE_QUERY.staleTime,
+    refetchOnWindowFocus: true,
   })
 
   const logoUrl = siteSettings?.logo_url || null

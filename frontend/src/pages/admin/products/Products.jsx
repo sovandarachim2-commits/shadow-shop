@@ -425,15 +425,15 @@ function ImageManagerModal({ product, onClose }) {
 
   const setPrimaryMutation = useMutation({
     mutationFn: (imageId) => productsApi.products.setPrimaryImage(product.id, imageId),
-    onSuccess: () => qc.invalidateQueries(['product-images', product.id]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['product-images', product.id] }),
     onError: () => toast.error('Failed to set primary'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (imageId) => productsApi.products.deleteImage(product.id, imageId),
     onSuccess: () => {
-      qc.invalidateQueries(['product-images', product.id])
-      qc.invalidateQueries(['products'])
+      qc.invalidateQueries({ queryKey: ['product-images', product.id] })
+      qc.invalidateQueries({ queryKey: ['products'] })
       toast.success('Image deleted')
     },
     onError: () => toast.error('Failed to delete image'),
@@ -449,8 +449,8 @@ function ImageManagerModal({ product, onClose }) {
       optimized.forEach((f) => fd.append('images', f))
       if (images.length === 0) fd.append('is_primary', 'true')
       await productsApi.products.uploadImages(product.id, fd)
-      qc.invalidateQueries(['product-images', product.id])
-      qc.invalidateQueries(['products'])
+      qc.invalidateQueries({ queryKey: ['product-images', product.id] })
+      qc.invalidateQueries({ queryKey: ['products'] })
       toast.success(`${files.length} image${files.length > 1 ? 's' : ''} uploaded`)
     } catch {
       toast.error('Upload failed')
@@ -612,7 +612,7 @@ export default function Products() {
   const statusMutation = useMutation({
     mutationFn: ({ id, is_active }) => productsApi.products.update(id, { is_active }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['products'])
+      queryClient.invalidateQueries({ queryKey: ['products'] })
       toast.success('Product status updated')
     },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to update product status')),
@@ -620,7 +620,7 @@ export default function Products() {
 
   const deleteMutation = useMutation({
     mutationFn: productsApi.products.delete,
-    onSuccess: () => { queryClient.invalidateQueries(['products']); toast.success('Product deleted') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); toast.success('Product deleted') },
     onError: (error) => toast.error(getApiErrorMessage(error, 'Failed to delete product')),
   })
 
@@ -671,7 +671,7 @@ export default function Products() {
 
     toast.loading('Uploading product image...', { id: `product-image-${productId}` })
     uploadImages(productId, files, options).then((uploaded) => {
-      queryClient.invalidateQueries(['products'])
+      queryClient.invalidateQueries({ queryKey: ['products'] })
       if (uploaded) {
         toast.success('Product image uploaded', { id: `product-image-${productId}` })
       } else {
@@ -701,7 +701,7 @@ export default function Products() {
       const hasImages = Array.isArray(editProduct.images) && editProduct.images.length > 0
       updateMutation.mutate({ id: editProduct.id, data: payload }, {
         onSuccess: (res) => {
-          queryClient.invalidateQueries(['products'])
+          queryClient.invalidateQueries({ queryKey: ['products'] })
           setShowModal(false)
           toast.success('Product updated!')
           uploadImagesInBackground(res.data.id, files, { setAsPrimary: !hasImages })
@@ -710,7 +710,7 @@ export default function Products() {
     } else {
       createMutation.mutate(payload, {
         onSuccess: (res) => {
-          queryClient.invalidateQueries(['products'])
+          queryClient.invalidateQueries({ queryKey: ['products'] })
           setShowModal(false)
           toast.success('Product created!')
           uploadImagesInBackground(res.data.id, files, { setAsPrimary: true })

@@ -98,13 +98,11 @@ export default function StockMovements() {
   const { data, isLoading } = useQuery({
     queryKey: ['stock-movements-layout'],
     queryFn: () => inventoryApi.movements.list({ ordering: '-created_at', page_size: 1000 }).then((r) => r.data),
-    staleTime: 30_000,
   })
 
   const { data: products = [] } = useQuery({
     queryKey: ['stock-movement-products'],
     queryFn: () => productsApi.products.list({ page_size: 500, is_active: true }).then((r) => getListResults(r.data)),
-    staleTime: 60_000,
   })
 
   const allMovements = useMemo(() => getListResults(data), [data])

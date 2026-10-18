@@ -129,8 +129,8 @@ export default function Delivery() {
   const createMutation = useMutation({
     mutationFn: (data) => client.post('/delivery/list/', data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['deliveries'])
-      queryClient.invalidateQueries(['packed-orders'])
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
+      queryClient.invalidateQueries({ queryKey: ['packed-orders'] })
       setShowAssignForm(false)
       toast.success('Delivery assigned!')
     },
@@ -140,7 +140,7 @@ export default function Delivery() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => client.patch(`/delivery/list/${id}/`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['deliveries'])
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
       setShowEditForm(false)
       toast.success('Delivery updated!')
     },
@@ -149,13 +149,13 @@ export default function Delivery() {
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }) => client.post(`/delivery/list/${id}/update_status/`, { status }),
-    onSuccess: () => { queryClient.invalidateQueries(['deliveries']); toast.success('Status updated!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['deliveries'] }); toast.success('Status updated!') },
     onError: () => toast.error('Update failed'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id) => client.delete(`/delivery/list/${id}/`),
-    onSuccess: () => { queryClient.invalidateQueries(['deliveries']); toast.success('Delivery deleted') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['deliveries'] }); toast.success('Delivery deleted') },
     onError: () => toast.error('Failed to delete delivery'),
   })
 

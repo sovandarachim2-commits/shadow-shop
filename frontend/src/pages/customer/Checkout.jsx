@@ -11,6 +11,7 @@ import { authApi } from '@/api/auth'
 import { formatCurrency, getUserContactDefaults } from '@/utils/helpers'
 import { formatAddressLocationKhmer } from '@/utils/addressHelpers'
 import { KHMER_FONT_FAMILY } from '@/utils/constants'
+import { useCartPriceSync } from '@/utils/cartPriceSync'
 import { CAMBODIA_PROVINCE_LABELS, toProvinceKey } from '@/utils/cambodiaProvinces'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
@@ -190,11 +191,12 @@ function getCouponDiscount(coupon, subtotal, deliveryFee) {
 }
 
 export default function Checkout() {
+  useCartPriceSync()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { items, selectedProductIds, selectAll, removeSelectedItems, appliedCoupon } = useCartStore()
   const { user } = useAuthStore()
-  const [paymentMethod, setPaymentMethod] = useState('aba')
+  const [paymentMethod, setPaymentMethod] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [bakongOrder, setBakongOrder] = useState(null)
   const [bakongPayment, setBakongPayment] = useState(null)
@@ -295,10 +297,10 @@ export default function Checkout() {
   }, [])
 
   useEffect(() => {
-    if (paymentMethods.length > 0 && !paymentMethods.find((m) => m.key === paymentMethod)) {
-      setPaymentMethod(paymentMethods[0].key)
+    if (paymentMethod && !paymentMethods.find((m) => m.key === paymentMethod)) {
+      setPaymentMethod('')
     }
-  }, [paymentMethods])
+  }, [paymentMethods, paymentMethod])
 
   useEffect(() => {
     const reference = pendingReturnPayment?.reference
@@ -482,6 +484,11 @@ export default function Checkout() {
   const handlePlaceOrder = async (options = {}) => {
     const codConfirmed = options?.codConfirmed === true
     const abaConfirmed = options?.abaConfirmed === true
+
+    if (!paymentMethod) {
+      toast.error(t('checkout.selectPaymentMethod'))
+      return
+    }
 
     if (paymentMethod === 'bakong' && bakongPayment && bakongPayment.status !== 'paid') {
       setShowBakongPopup(true)
@@ -691,6 +698,9 @@ export default function Checkout() {
                 </button>
               ))}
             </div>
+            {!paymentMethod && paymentMethods.length > 0 && (
+              <p className="mt-3 text-sm font-semibold text-pink-600">{t('checkout.selectPaymentMethod')}</p>
+            )}
             {paymentMethod === 'contact_sales' && (
               <p className="mt-4 rounded-2xl border border-pink-100 bg-pink-50 px-4 py-3 text-sm font-bold leading-relaxed text-pink-600">
                 {t('checkout.contactSalesNotice')}
@@ -745,7 +755,7 @@ export default function Checkout() {
           </div>
           <button
             onClick={handlePlaceOrder}
-            disabled={submitting || abaLoading || !hasAddress}
+            disabled={submitting || abaLoading || !hasAddress || !paymentMethod}
             className="shop-btn-primary mt-6 hidden w-full py-4 disabled:cursor-not-allowed disabled:opacity-60 md:block"
           >
             {checkoutActionLabel}
@@ -761,7 +771,7 @@ export default function Checkout() {
           </div>
           <button
             onClick={handlePlaceOrder}
-            disabled={submitting || abaLoading || !hasAddress}
+            disabled={submitting || abaLoading || !hasAddress || !paymentMethod}
             className="rounded-full bg-pink-600 px-6 py-2.5 text-base font-black text-white shadow-lg shadow-pink-200 disabled:opacity-60"
           >
             {checkoutActionLabel}
@@ -943,9 +953,11 @@ export default function Checkout() {
                     ? 'border-red-100 bg-red-50 text-red-700'
                     : 'border-pink-100 bg-pink-50 text-pink-600'
               }`}>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
-                  {bakongPayment.status === 'paid' ? <Check size={21} /> : <Clock size={21} className={checkingBakong ? 'animate-spin' : ''} />}
-                </div>
+                {bakongPayment.status !== 'pending' && (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+                    {bakongPayment.status === 'paid' ? <Check size={21} /> : <Clock size={21} />}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1 text-left">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-black">
@@ -953,7 +965,7 @@ export default function Checkout() {
                         ? t('checkout.bakong.paymentReceived')
                         : bakongPayment.status === 'expired'
                           ? t('checkout.bakong.qrExpired')
-                          : checkingBakong ? t('checkout.bakong.checkingPayment') : t('checkout.bakong.waitingPayment')}
+                          : t('checkout.bakong.waitingPayment')}
                     </p>
                     {bakongPayment.status === 'pending' && (
                       <span className="rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-sm font-black text-pink-600">
@@ -961,13 +973,6 @@ export default function Checkout() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs font-semibold text-gray-500">
-                    {bakongPayment.status === 'paid'
-                      ? t('checkout.bakong.paidSuccess')
-                      : bakongPayment.status === 'expired'
-                        ? t('checkout.bakong.qrExpiredHint')
-                        : checkingBakong ? t('checkout.bakong.confirmingPayment') : t('checkout.bakong.payToCreate')}
-                  </p>
                 </div>
               </div>
             </div>

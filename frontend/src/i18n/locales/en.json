@@ -173,7 +173,8 @@
     "couponAppliedSuccess": "Coupon Applied!",
     "couponAppliedDesc": "Your discount has been applied to the cart.",
     "couponInvalidDesc": "The promo code you entered is invalid or expired.",
-    "activeVoucher": "Active Voucher"
+    "activeVoucher": "Active Voucher",
+    "flashSaleEnded": "The flash sale for {{name}} has ended. The price is now {{price}}."
   },
   "shop": {
     "shopCosmetics": "Shop Cosmetics",
@@ -702,6 +703,7 @@
     "noAddress": "No delivery address found",
     "addAddress": "Add Address",
     "paymentMethod": "Payment Method",
+    "selectPaymentMethod": "Please select a payment method.",
     "orderItems": "Order Items",
     "orderSummary": "Order Summary",
     "subtotal": "Subtotal",

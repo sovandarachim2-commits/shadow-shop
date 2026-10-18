@@ -7,9 +7,10 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.products.flash_sale_stats import attach_flash_sale_stats
+from apps.inventory.models import Stock
 from apps.products.models import Brand, Category, Product
 from apps.orders.models import Customer, Order, OrderItem
-from utils.storefront_cache import HOME_FEED_CACHE_KEY, bump_storefront_cache, safe_cache_get
+from utils.storefront_cache import HOME_FEED_CACHE_KEY, bump_storefront_cache, get_storefront_revision, safe_cache_get
 
 
 class FlashSaleStatsBatchTests(TestCase):
@@ -121,6 +122,37 @@ class SafeCacheTests(TestCase):
         bump_storefront_cache()
         self.assertIsNone(cache.get(HOME_FEED_CACHE_KEY))
         self.assertIsNone(cache.get('auth:telegram_login_config:v1'))
+
+    def test_stock_save_clears_home_feed_cache(self):
+        category = Category.objects.create(name='Skin', slug='skin')
+        brand = Brand.objects.create(name='Glow', slug='glow')
+        product = Product.objects.create(
+            code='ST1',
+            name='Toner',
+            slug='toner',
+            category=category,
+            brand=brand,
+            retail_price=Decimal('8.00'),
+            wholesale_price=Decimal('4.00'),
+            cost_price=Decimal('2.00'),
+            is_active=True,
+        )
+        stock, _ = Stock.objects.get_or_create(product=product, defaults={'quantity': 5})
+        cache.set(HOME_FEED_CACHE_KEY, {'stale': True}, 60)
+        stock.quantity = 0
+        stock.save()
+        self.assertIsNone(cache.get(HOME_FEED_CACHE_KEY))
+
+    def test_revision_endpoint_changes_when_cache_bumps(self):
+        client = APIClient()
+        first = client.get('/api/products/revision/')
+        self.assertEqual(first.status_code, 200)
+        before = get_storefront_revision()
+        bump_storefront_cache()
+        second = client.get('/api/products/revision/')
+        self.assertEqual(second.status_code, 200)
+        self.assertGreater(second.data['revision'], before)
+        self.assertGreater(second.data['revision'], first.data['revision'])
 
 
 @override_settings(PERF_INSTRUMENT_DB=False)

@@ -51,7 +51,6 @@ export default function ScannerOrders() {
         outRecords: getListResults(outResponse.data),
       }
     },
-    staleTime: 30000,
   })
 
   const rows = useMemo(() => {

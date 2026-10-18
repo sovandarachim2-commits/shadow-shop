@@ -87,6 +87,43 @@ class CustomerOrderFlowTests(TestCase):
 
     @patch('django.db.transaction.on_commit')
     @patch('apps.notifications.services.TelegramService.notify_new_order_async')
+    def test_checkout_charges_regular_price_after_flash_sale_is_turned_off(self, notify_new_order_async, on_commit):
+        self.product.flash_sale_price = Decimal('6.00')
+        self.product.is_featured = False
+        self.product.save()
+        payload = self.checkout_payload()
+        payload['items'][0]['unit_price'] = '6.00'
+
+        serializer = CustomerCheckoutSerializer(data=payload, context={'request': self.request})
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
+
+        item = order.items.get()
+        self.assertEqual(item.unit_price, Decimal('10.00'))
+        self.assertEqual(order.subtotal, Decimal('20.00'))
+
+    @patch('django.db.transaction.on_commit')
+    @patch('apps.notifications.services.TelegramService.notify_new_order_async')
+    def test_checkout_charges_flash_price_while_sale_is_active(self, notify_new_order_async, on_commit):
+        now = timezone.now()
+        self.product.flash_sale_price = Decimal('6.00')
+        self.product.is_featured = True
+        self.product.flash_sale_starts_at = now - timezone.timedelta(hours=1)
+        self.product.flash_sale_ends_at = now + timezone.timedelta(hours=1)
+        self.product.save()
+        payload = self.checkout_payload()
+        payload['items'][0]['unit_price'] = '10.00'
+
+        serializer = CustomerCheckoutSerializer(data=payload, context={'request': self.request})
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
+
+        item = order.items.get()
+        self.assertEqual(item.unit_price, Decimal('6.00'))
+        self.assertEqual(order.subtotal, Decimal('12.00'))
+
+    @patch('django.db.transaction.on_commit')
+    @patch('apps.notifications.services.TelegramService.notify_new_order_async')
     def test_cash_checkout_queues_new_order_notification(self, notify_new_order_async, on_commit):
         order = self.create_customer_order('cash')
 

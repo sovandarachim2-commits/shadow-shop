@@ -12,6 +12,7 @@ import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import { useCartPriceSync } from '@/utils/cartPriceSync'
 
 const DEFAULT_PROVINCE_FEES = {
   phnom_penh: 3, siem_reap: 6, battambang: 6,
@@ -64,6 +65,7 @@ function couponVisual(coupon, t) {
 }
 
 export default function Cart() {
+  useCartPriceSync()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)

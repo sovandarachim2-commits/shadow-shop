@@ -17,6 +17,14 @@ function toDatetimeLocal(value) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
+function flashSaleScheduleLabel(product) {
+  if (!product.is_featured) return { label: 'Inactive', variant: 'default' }
+  if (product.is_flash_sale_active) return { label: 'Live', variant: 'danger' }
+  const endMs = product.flash_sale_ends_at ? new Date(product.flash_sale_ends_at).getTime() : null
+  if (Number.isFinite(endMs) && endMs < Date.now()) return { label: 'Ended', variant: 'warning' }
+  return { label: 'Scheduled', variant: 'info' }
+}
+
 function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     product: saleProduct ? `${saleProduct._saleType}:${saleProduct.id}` : '',
@@ -24,6 +32,7 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
     flash_sale_max_order_qty: saleProduct?.flash_sale_max_order_qty || '',
     flash_sale_starts_at: toDatetimeLocal(saleProduct?.flash_sale_starts_at),
     flash_sale_ends_at: toDatetimeLocal(saleProduct?.flash_sale_ends_at),
+    status: saleProduct?.is_featured === false ? 'inactive' : 'active',
   })
 
   const selectedProduct = items.find((item) => `${item._saleType}:${item.id}` === form.product)
@@ -134,6 +143,22 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
         </div>
       </div>
 
+      <div>
+        <label className="label">Status</label>
+        <select
+          value={form.status}
+          onChange={(event) => set('status', event.target.value)}
+          disabled={saving}
+          className="select-field"
+        >
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <p className="mt-1 text-xs font-semibold text-gray-400">
+          Inactive keeps the price and schedule, and hides this sale from customers.
+        </p>
+      </div>
+
       <div className="flex gap-3 border-t border-gray-100 pt-4">
         <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center disabled:opacity-60">
           {saving ? 'Saving...' : saleProduct ? 'Update Flash Sale' : 'Create Flash Sale'}
@@ -155,13 +180,11 @@ export default function FlashSales() {
   const { data: allProducts = [], isLoading } = useQuery({
     queryKey: ['flash-sale-products'],
     queryFn: () => productsApi.products.list({ page_size: 200, is_active: true }).then((r) => getListResults(r.data)),
-    staleTime: 60000,
   })
 
   const { data: allSets = [], isLoading: setsLoading } = useQuery({
     queryKey: ['flash-sale-product-sets'],
     queryFn: () => productsApi.sets.list({ page_size: 200, is_active: true }).then((r) => getListResults(r.data)),
-    staleTime: 60000,
   })
 
   const saleItems = useMemo(() => [
@@ -188,7 +211,7 @@ export default function FlashSales() {
 
   const saveMutation = useMutation({
     mutationFn: ({ product, form }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
-      is_featured: true,
+      is_featured: form.status !== 'inactive',
       flash_sale_price: Number(form.flash_sale_price),
       flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
       flash_sale_starts_at: form.flash_sale_starts_at || null,
@@ -205,6 +228,21 @@ export default function FlashSales() {
       toast.success('Flash sale saved')
     },
     onError: () => toast.error('Failed to save flash sale'),
+  })
+
+  const statusMutation = useMutation({
+    mutationFn: ({ product, status }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
+      is_featured: status === 'active',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
+      queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['home-feed'] })
+      queryClient.invalidateQueries({ queryKey: ['home-flash-sale-fallback'] })
+      toast.success('Flash sale status updated')
+    },
+    onError: () => toast.error('Failed to update flash sale status'),
   })
 
   const removeMutation = useMutation({
@@ -364,9 +402,19 @@ export default function FlashSales() {
                   </p>
                 </div>
 
-                <div>
-                  <Badge variant={product.is_flash_sale_active ? 'danger' : 'default'}>
-                    {product.is_flash_sale_active ? 'Live' : 'Scheduled / Inactive'}
+                <div className="space-y-1.5">
+                  <select
+                    value={product.is_featured ? 'active' : 'inactive'}
+                    disabled={statusMutation.isPending}
+                    onChange={(event) => statusMutation.mutate({ product, status: event.target.value })}
+                    className="h-9 w-full rounded-xl border border-gray-200 bg-white px-2 text-xs font-black text-gray-700 outline-none focus:border-pink-300 disabled:opacity-60"
+                    aria-label={`Status for ${product.name}`}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                  <Badge variant={flashSaleScheduleLabel(product).variant}>
+                    {flashSaleScheduleLabel(product).label}
                   </Badge>
                 </div>
 

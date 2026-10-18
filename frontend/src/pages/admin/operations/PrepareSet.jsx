@@ -45,7 +45,6 @@ export default function PrepareSet() {
   const { data: productSets = [], isLoading: setsLoading } = useQuery({
     queryKey: ['prepare-set-product-sets'],
     queryFn: () => productsApi.sets.list({ page_size: 200, is_active: true }).then((r) => getListResults(r.data)),
-    staleTime: 60000,
   })
 
   useEffect(() => {
