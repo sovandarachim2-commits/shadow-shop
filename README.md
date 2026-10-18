@@ -199,7 +199,9 @@ Keep both servers running:
 cd "C:\xampp\htdocs\Shadow Shop\frontend"
 npm run dev
 ```
-
+cd "C:\xampp\htdocs\Shadow Shop\backend"
+venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
+```
 If your computer IP changes, update `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` in `backend/.env`.
 
 ### API Documentation

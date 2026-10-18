@@ -79,6 +79,9 @@ export default function Cart() {
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+    staleTime: 0,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   })
   const { data: addresses = [], isLoading: addressesLoading, isError: addressesError } = useQuery({
     queryKey: ['my-addresses'],
