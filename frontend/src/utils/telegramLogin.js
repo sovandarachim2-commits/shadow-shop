@@ -16,20 +16,13 @@ function decodeJwtPayload(token) {
   }
 }
 
-function popupFeatures() {
-  const width = 550
-  const height = 650
-  const left = Math.max(0, (window.screen.width - width) / 2) + (window.screen.availLeft || 0)
-  const top = Math.max(0, (window.screen.height - height) / 2) + (window.screen.availTop || 0)
-  return `popup=yes,width=${width},height=${height},left=${left},top=${top},status=0,location=1,menubar=0,toolbar=0`
-}
-
 /**
  * MUST be called synchronously inside the click handler (before await/setState),
  * otherwise the browser opens Telegram auth in the current tab.
+ * No size features: Chrome then uses a full browser tab, not a small popup.
  */
 export function openBlankTelegramAuthWindow() {
-  const popup = window.open('about:blank', '_blank', popupFeatures())
+  const popup = window.open('about:blank', '_blank')
   if (popup) {
     try {
       popup.document.write('<!doctype html><title>Telegram</title><body style="font-family:sans-serif;padding:24px;color:#64748b">Opening Telegram…</body>')
@@ -47,15 +40,6 @@ function randomUrlSafe(size = 32) {
   crypto.getRandomValues(bytes)
   let binary = ''
   bytes.forEach((value) => {
-    binary += String.fromCharCode(value)
-  })
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
-}
-
-async function codeChallenge(verifier) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  let binary = ''
-  new Uint8Array(digest).forEach((value) => {
     binary += String.fromCharCode(value)
   })
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
@@ -202,26 +186,21 @@ export function completeTelegramLoginCallback() {
   return { mode: 'storage', payload }
 }
 
-async function buildAuthUrl({ clientId, lang = 'en' }) {
-  // post_message returns the account to this shop window, so login does not
-  // depend on a client secret. origin is required by this bot.
+function buildAuthUrl({ clientId, lang = 'en' }) {
+  // Same shape as Telegram's own login script: the token is posted straight
+  // back to this tab. No code exchange, so the shop does not wait on another
+  // round trip after the user confirms.
   const redirectUri = `${window.location.origin}/auth/telegram/callback`
-  const state = randomUrlSafe(24)
   const nonce = randomUrlSafe(24)
-  const codeVerifier = randomUrlSafe(48)
-  const challenge = await codeChallenge(codeVerifier)
   let authUrl =
     `${OIDC_AUTH_URL}?response_type=post_message` +
     `&client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&origin=${encodeURIComponent(window.location.origin)}` +
     `&scope=${encodeURIComponent('openid profile')}` +
-    `&state=${encodeURIComponent(state)}` +
-    `&nonce=${encodeURIComponent(nonce)}` +
-    `&code_challenge=${encodeURIComponent(challenge)}` +
-    '&code_challenge_method=S256'
+    `&nonce=${encodeURIComponent(nonce)}`
   if (lang) authUrl += `&lang=${encodeURIComponent(lang)}`
-  return { authUrl, redirectUri, state, codeVerifier }
+  return { authUrl, redirectUri, nonce }
 }
 
 /**
@@ -244,13 +223,13 @@ export async function openTelegramLoginPopup({
     throw new Error('Telegram login popup was blocked. Allow popups for this site.')
   }
 
-  const { authUrl, redirectUri, state, codeVerifier } = await buildAuthUrl({ clientId: id, lang })
-  sessionStorage.setItem(STATE_KEY, JSON.stringify({ state, codeVerifier, redirectUri }))
+  const { authUrl, redirectUri, nonce } = buildAuthUrl({ clientId: id, lang })
+  sessionStorage.setItem(STATE_KEY, JSON.stringify({ nonce, redirectUri }))
 
   try {
     popup.location.href = authUrl
   } catch {
-    window.open(authUrl, 'telegram_oidc_login', popupFeatures())
+    window.open(authUrl, '_blank')
   }
 
   return new Promise((resolve, reject) => {
@@ -281,14 +260,10 @@ export async function openTelegramLoginPopup({
         return
       }
       if (result?.code) {
-        if (!saved.codeVerifier || saved.state !== result.state) {
-          reject(new Error('Telegram login state did not match'))
-          return
-        }
         resolve({
           code: result.code,
-          code_verifier: saved.codeVerifier,
-          redirect_uri: saved.redirectUri,
+          code_verifier: saved.codeVerifier || '',
+          redirect_uri: saved.redirectUri || '',
         })
         return
       }
@@ -300,8 +275,9 @@ export async function openTelegramLoginPopup({
     }
 
     const onMessage = (event) => {
-      // Official popup posts { event: 'auth_result', result: id_token } from oauth.telegram.org.
-      if (event.origin === OIDC_ORIGIN && event.source === popup) {
+      // Telegram posts { event: 'auth_result', result: id_token } from oauth.telegram.org.
+      // The sender may be the popup or a frame inside it, so do not wait for a redirect.
+      if (event.origin === OIDC_ORIGIN) {
         let data = event.data
         if (typeof data === 'string') {
           try {

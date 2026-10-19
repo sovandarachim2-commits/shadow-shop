@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'shadow-shop-v6'
+const CACHE_VERSION = 'shadow-shop-v7'
 const APP_SHELL = [
   '/manifest.webmanifest',
   '/app-icon.svg',
@@ -65,6 +65,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.mode === 'navigate') {
+    if (url.pathname.replace(/\/+$/, '') === '/auth/telegram/callback') return
     event.respondWith(networkFirst(event.request, '/index.html'))
     return
   }

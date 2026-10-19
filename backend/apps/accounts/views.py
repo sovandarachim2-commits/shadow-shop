@@ -646,7 +646,7 @@ class TelegramLoginView(generics.GenericAPIView):
         )
 
     def _exchange_telegram_code(self, code, code_verifier, redirect_uri, bot_id, bot_token):
-        if not code_verifier or not bot_id:
+        if not bot_id:
             raise ValueError('Telegram login data is incomplete.')
         parsed = urlparse(redirect_uri)
         if parsed.scheme not in ('http', 'https') or parsed.path.rstrip('/') != '/auth/telegram/callback':
@@ -662,17 +662,19 @@ class TelegramLoginView(generics.GenericAPIView):
 
         last_error = 'Telegram login could not be confirmed.'
         for secret in secrets:
+            token_data = {
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': redirect_uri,
+                'client_id': str(bot_id),
+                'client_secret': secret,
+            }
+            if code_verifier:
+                token_data['code_verifier'] = code_verifier
             response = requests.post(
                 'https://oauth.telegram.org/token',
-                data={
-                    'grant_type': 'authorization_code',
-                    'code': code,
-                    'redirect_uri': redirect_uri,
-                    'client_id': str(bot_id),
-                    'client_secret': secret,
-                    'code_verifier': code_verifier,
-                },
-                timeout=15,
+                data=token_data,
+                timeout=6,
             )
             try:
                 body = response.json()
@@ -685,12 +687,23 @@ class TelegramLoginView(generics.GenericAPIView):
                 last_error = 'Telegram login could not be confirmed.'
         raise ValueError(last_error)
 
+    def _jwks_client(self):
+        client = getattr(self.__class__, '_telegram_jwks_client', None)
+        if client is not None:
+            return client
+        from jwt import PyJWKClient
+        try:
+            client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True, lifespan=6 * 60 * 60, timeout=4)
+        except TypeError:
+            client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True)
+        self.__class__._telegram_jwks_client = client
+        return client
+
     def _telegram_signing_keys(self, id_token):
         import jwt
-        from jwt import PyJWKClient
 
         header = jwt.get_unverified_header(id_token)
-        jwks_client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True)
+        jwks_client = self._jwks_client()
         if header.get('kid'):
             return [jwks_client.get_signing_key_from_jwt(id_token).key]
         return [jwk.key for jwk in jwks_client.get_jwk_set().keys]

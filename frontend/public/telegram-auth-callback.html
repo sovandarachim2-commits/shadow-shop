@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Telegram</title>
+  </head>
+  <body>
+    <p style="font-family:sans-serif;color:#64748b;padding:24px">Signing you in…</p>
+    <script>
+      (function () {
+        function read(raw) {
+          var text = raw.charAt(0) === '#' || raw.charAt(0) === '?' ? raw.slice(1) : raw
+          return new URLSearchParams(text)
+        }
+        function jwtUser(token) {
+          try {
+            var parts = String(token || '').split('.')
+            if (parts.length !== 3) return null
+            var payload = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+            var pad = payload.length % 4
+            if (pad) payload += '='.repeat(4 - pad)
+            return JSON.parse(atob(payload))
+          } catch (e) {
+            return null
+          }
+        }
+        function fromParams(p) {
+          var id = p.get('id')
+          var hash = p.get('hash')
+          if (!id || !hash) return null
+          return {
+            id: id,
+            first_name: p.get('first_name') || '',
+            last_name: p.get('last_name') || '',
+            username: p.get('username') || '',
+            photo_url: p.get('photo_url') || '',
+            auth_date: p.get('auth_date') || '',
+            hash: hash,
+            state: p.get('state') || '',
+          }
+        }
+        var search = read(location.search)
+        var hash = read(location.hash)
+        var payload = null
+        var error = search.get('error') || hash.get('error')
+        var code = search.get('code') || hash.get('code')
+        var idToken = search.get('id_token') || hash.get('id_token')
+        if (error) payload = { error: error }
+        else if (code) payload = { code: code, state: search.get('state') || hash.get('state') }
+        else if (idToken) payload = { id_token: idToken, user: jwtUser(idToken), state: search.get('state') || hash.get('state') }
+        else payload = fromParams(search) || fromParams(hash)
+        if (!payload) {
+          var tg = hash.get('tgAuthResult') || search.get('tgAuthResult')
+          if (tg) {
+            try {
+              var decoded = JSON.parse(atob(tg.replace(/-/g, '+').replace(/_/g, '/')))
+              if (decoded && decoded.error) payload = { error: decoded.error }
+              else if (decoded && decoded.id_token) payload = { id_token: decoded.id_token, user: jwtUser(decoded.id_token), state: decoded.state }
+              else if (decoded && decoded.hash && decoded.id) payload = decoded
+              else if (decoded && decoded.result) payload = { id_token: decoded.result, user: jwtUser(decoded.result), state: decoded.state }
+            } catch (e) {
+              payload = { error: 'invalid_tg_auth_result' }
+            }
+          }
+        }
+        if (!payload) {
+          document.body.textContent = 'Telegram login was not received. You can close this tab.'
+          return
+        }
+        var opener = window.opener
+        if (opener && !opener.closed) {
+          try {
+            opener.postMessage({ type: 'shadow-shop:telegram-auth', payload: payload }, location.origin)
+          } catch (e) {}
+          window.stop()
+          window.close()
+          return
+        }
+        try {
+          sessionStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
+        } catch (e) {}
+        location.replace('/')
+      })()
+    </script>
+  </body>
+</html>
