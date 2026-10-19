@@ -110,6 +110,7 @@ function buildAuthUrl({ clientId, lang = 'en' }) {
     `${OIDC_AUTH_URL}?response_type=post_message` +
     `&client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&origin=${encodeURIComponent(window.location.origin)}` +
     `&scope=${encodeURIComponent('openid profile')}`
 
   if (lang) {
