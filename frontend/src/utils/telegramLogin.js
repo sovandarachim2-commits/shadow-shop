@@ -95,14 +95,25 @@ function widgetUserFromObject(result) {
   }
 }
 
+function isJwt(value) {
+  return typeof value === 'string' && value.split('.').length === 3 && value.split('.').every(Boolean)
+}
+
 function normalizeTelegramMessage(data) {
   if (!data || data.event !== 'auth_result') return null
   if (data.error) return { error: data.error }
 
   const result = data.result
   if (typeof result === 'string' && result) {
-    if (result.includes('.')) {
+    if (isJwt(result)) {
       return { id_token: result, user: decodeJwtPayload(result) }
+    }
+    if (result.trim().startsWith('{')) {
+      try {
+        return widgetUserFromObject(JSON.parse(result))
+      } catch {
+        return null
+      }
     }
     try {
       const decoded = JSON.parse(atob(result.replace(/-/g, '+').replace(/_/g, '/')))

@@ -685,33 +685,59 @@ class TelegramLoginView(generics.GenericAPIView):
                 last_error = 'Telegram login could not be confirmed.'
         raise ValueError(last_error)
 
+    def _telegram_signing_keys(self, id_token):
+        import jwt
+        from jwt import PyJWKClient
+
+        header = jwt.get_unverified_header(id_token)
+        jwks_client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True)
+        if header.get('kid'):
+            return [jwks_client.get_signing_key_from_jwt(id_token).key]
+        return [jwk.key for jwk in jwks_client.get_jwk_set().keys]
+
     def _verify_telegram_id_token(self, id_token, bot_id):
         if not bot_id:
             raise ValueError('Telegram bot id is not configured.')
 
         try:
             import jwt
-            from jwt import PyJWKClient
         except ImportError as exc:
             raise ValueError('Telegram OIDC support is unavailable.') from exc
 
+        algorithms = ['RS256', 'ES256', 'EdDSA', 'ES256K']
+        claims = None
+        last_error = None
         try:
-            jwks_client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True)
-            signing_key = jwks_client.get_signing_key_from_jwt(id_token)
-            claims = jwt.decode(
-                id_token,
-                signing_key.key,
-                algorithms=['RS256', 'ES256', 'EdDSA', 'ES256K'],
-                issuer=self.TELEGRAM_ISSUER,
-                options={'verify_aud': False, 'require': ['exp', 'iat', 'iss']},
-            )
+            keys = self._telegram_signing_keys(id_token)
         except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning('Telegram id_token verification failed: %s', exc)
-            text = str(exc).lower()
-            if 'expired' in text or 'signature has expired' in text:
-                raise ValueError('Telegram login expired. Please try again.') from exc
+            logging.getLogger(__name__).warning('Telegram JWKS lookup failed: %s', exc)
             raise ValueError('Telegram login token is invalid.') from exc
+
+        for key in keys:
+            try:
+                claims = jwt.decode(
+                    id_token,
+                    key,
+                    algorithms=algorithms,
+                    leeway=120,
+                    options={'verify_aud': False, 'verify_iss': False, 'require': ['exp', 'iat']},
+                )
+                break
+            except Exception as exc:
+                last_error = exc
+                claims = None
+        if claims is None:
+            import logging
+            logging.getLogger(__name__).warning('Telegram id_token verification failed: %s', last_error)
+            text = str(last_error or '').lower()
+            if 'expired' in text or 'signature has expired' in text:
+                raise ValueError('Telegram login expired. Please try again.') from last_error
+            raise ValueError('Telegram login token is invalid.') from last_error
+
+        issuer = str(claims.get('iss') or '').rstrip('/')
+        if issuer and issuer != self.TELEGRAM_ISSUER.rstrip('/'):
+            raise ValueError('Telegram login token is invalid.')
 
         audience = claims.get('aud')
         audiences = audience if isinstance(audience, (list, tuple)) else [audience]
