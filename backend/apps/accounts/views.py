@@ -641,8 +641,15 @@ class TelegramLoginView(generics.GenericAPIView):
                 issuer=self.TELEGRAM_ISSUER,
                 options={'require': ['exp', 'iat', 'iss', 'aud']},
             )
-        except Exception:
-            raise ValueError('Telegram login token is invalid.')
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning('Telegram id_token verification failed: %s', exc)
+            text = str(exc).lower()
+            if 'audience' in text:
+                raise ValueError('Telegram login client does not match this bot.') from exc
+            if 'expired' in text or 'signature has expired' in text:
+                raise ValueError('Telegram login expired. Please try again.') from exc
+            raise ValueError('Telegram login token is invalid.') from exc
 
         telegram_id = str(claims.get('id') or claims.get('sub') or '').strip()
         if not telegram_id:

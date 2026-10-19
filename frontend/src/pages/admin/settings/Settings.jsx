@@ -945,7 +945,7 @@ export default function Settings({ tab = 'general' }) {
               <ol className="ml-4 list-decimal space-y-1 text-xs">
                 <li>Create a bot with @BotFather on Telegram</li>
                 <li>Copy the bot username and token into a destination below</li>
-                <li>For customer Telegram login: in @BotFather run /setdomain and set your public site domain (example: shadowshop.com) — no https://, no path, no port</li>
+                <li>For customer Telegram login: in @BotFather open the bot, then Login Widget, and add this site as an Allowed URL (example: https://shadowshop.com). Copy the Client ID shown there — it must match the number at the start of the bot token.</li>
                 <li>Add the bot to each group you want to notify</li>
                 <li>Use Group Topic ID when the group uses Telegram forum topics</li>
                 <li>Set the webhook to /api/auth/telegram/webhook/ on your public HTTPS domain</li>

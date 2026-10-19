@@ -1,17 +1,7 @@
 const OIDC_ORIGIN = 'https://oauth.telegram.org'
 const OIDC_AUTH_URL = `${OIDC_ORIGIN}/auth`
-const CALLBACK_PATH = '/auth/telegram/callback'
 const RESULT_MESSAGE = 'shadow-shop:telegram-auth'
 const STATE_KEY = 'shadow-shop-telegram-oauth-state'
-
-function randomState() {
-  if (window.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(16)
-    window.crypto.getRandomValues(bytes)
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
 
 function decodeJwtPayload(token) {
   try {
@@ -113,23 +103,20 @@ export function completeTelegramLoginCallback() {
 }
 
 function buildAuthUrl({ clientId, lang = 'en' }) {
-  const origin = window.location.origin
-  const returnTo = `${origin}${CALLBACK_PATH}`
-  const state = randomState()
-  sessionStorage.setItem(STATE_KEY, state)
-
+  // Match oauth.telegram.org/js/telegram-login.js:
+  // response_type=post_message, redirect_uri = this page (must be an Allowed URL in BotFather).
+  const redirectUri = `${window.location.origin}${window.location.pathname}`
   let authUrl =
-    `${OIDC_AUTH_URL}?client_id=${encodeURIComponent(clientId)}` +
-    `&origin=${encodeURIComponent(origin)}` +
-    `&return_to=${encodeURIComponent(returnTo)}` +
-    `&scope=${encodeURIComponent('openid profile')}` +
-    `&state=${encodeURIComponent(state)}`
+    `${OIDC_AUTH_URL}?response_type=post_message` +
+    `&client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${encodeURIComponent('openid profile')}`
 
   if (lang) {
     authUrl += `&lang=${encodeURIComponent(lang)}`
   }
 
-  return { authUrl, state, origin }
+  return { authUrl, redirectUri }
 }
 
 /**
@@ -152,18 +139,16 @@ export async function openTelegramLoginPopup({
     throw new Error('Telegram login popup was blocked. Allow popups for this site.')
   }
 
-  const { authUrl, state, origin } = buildAuthUrl({ clientId: id, lang })
+  const { authUrl } = buildAuthUrl({ clientId: id, lang })
 
   try {
     popup.location.href = authUrl
   } catch {
-    // If we can't navigate the blank window, fall back to assigning via open again
-    window.open(authUrl, popup.name || '_blank', popupFeatures())
+    window.open(authUrl, 'telegram_oidc_login', popupFeatures())
   }
 
   return new Promise((resolve, reject) => {
     let finished = false
-    const expectedState = state
 
     const finish = (result) => {
       if (finished) return
@@ -176,9 +161,10 @@ export async function openTelegramLoginPopup({
         /* ignore */
       }
       if (result?.error) {
-        const msg = result.error === 'popup_closed' || result.error === 'access_denied'
+        const code = String(result.error)
+        const msg = code === 'popup_closed' || code === 'access_denied'
           ? 'Telegram login cancelled'
-          : result.error
+          : code
         reject(new Error(msg))
         return
       }
@@ -190,20 +176,35 @@ export async function openTelegramLoginPopup({
     }
 
     const onMessage = (event) => {
-      if (event.origin !== origin) return
+      // Official popup posts { event: 'auth_result', result: id_token } from oauth.telegram.org.
+      if (event.origin === OIDC_ORIGIN && event.source === popup) {
+        let data = event.data
+        if (typeof data === 'string') {
+          try {
+            data = JSON.parse(data)
+          } catch {
+            return
+          }
+        }
+        if (!data || data.event !== 'auth_result') return
+        if (data.error) {
+          finish({ error: data.error })
+          return
+        }
+        const idToken = typeof data.result === 'string' ? data.result : ''
+        if (!idToken) {
+          finish({ error: 'missing id_token' })
+          return
+        }
+        finish({ id_token: idToken, user: decodeJwtPayload(idToken) })
+        return
+      }
+
+      // Fallback if a callback tab posts back to this page.
+      if (event.origin !== window.location.origin) return
       const data = event.data
       if (!data || data.type !== RESULT_MESSAGE) return
-
-      const payload = data.payload
-      if (!payload) {
-        finish({ error: 'empty_callback' })
-        return
-      }
-      if (payload.state && payload.state !== expectedState) {
-        finish({ error: 'invalid_state' })
-        return
-      }
-      finish(payload)
+      finish(data.payload || { error: 'empty_callback' })
     }
 
     window.addEventListener('message', onMessage)
