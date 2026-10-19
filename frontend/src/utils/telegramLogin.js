@@ -42,6 +42,87 @@ export function openBlankTelegramAuthWindow() {
   return popup
 }
 
+function randomUrlSafe(size = 32) {
+  const bytes = new Uint8Array(size)
+  crypto.getRandomValues(bytes)
+  let binary = ''
+  bytes.forEach((value) => {
+    binary += String.fromCharCode(value)
+  })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+async function codeChallenge(verifier) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  let binary = ''
+  new Uint8Array(digest).forEach((value) => {
+    binary += String.fromCharCode(value)
+  })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function widgetUserFromParams(params) {
+  const id = params.get('id')
+  const hash = params.get('hash')
+  if (!id || !hash) return null
+  return {
+    id,
+    first_name: params.get('first_name') || '',
+    last_name: params.get('last_name') || '',
+    username: params.get('username') || '',
+    photo_url: params.get('photo_url') || '',
+    auth_date: params.get('auth_date') || '',
+    hash,
+    state: params.get('state') || '',
+  }
+}
+
+function widgetUserFromObject(result) {
+  if (!result || typeof result !== 'object') return null
+  const source = result.id ? result : (result.user?.id ? result.user : null)
+  if (!source?.id) return null
+  const hash = result.hash || source.hash
+  if (!hash) return null
+  return {
+    id: source.id,
+    first_name: source.first_name || '',
+    last_name: source.last_name || '',
+    username: source.username || '',
+    photo_url: source.photo_url || '',
+    auth_date: source.auth_date || '',
+    hash,
+    state: result.state || source.state || '',
+  }
+}
+
+function normalizeTelegramMessage(data) {
+  if (!data || data.event !== 'auth_result') return null
+  if (data.error) return { error: data.error }
+
+  const result = data.result
+  if (typeof result === 'string' && result) {
+    if (result.includes('.')) {
+      return { id_token: result, user: decodeJwtPayload(result) }
+    }
+    try {
+      const decoded = JSON.parse(atob(result.replace(/-/g, '+').replace(/_/g, '/')))
+      return widgetUserFromObject(decoded) || (decoded?.id_token ? { id_token: decoded.id_token, user: decodeJwtPayload(decoded.id_token) } : null)
+    } catch {
+      return null
+    }
+  }
+
+  if (result && typeof result === 'object') {
+    if (typeof result.id_token === 'string' && result.id_token) {
+      return { id_token: result.id_token, user: decodeJwtPayload(result.id_token), state: result.state }
+    }
+    const widgetUser = widgetUserFromObject(result)
+    if (widgetUser) return widgetUser
+  }
+
+  return widgetUserFromObject(data)
+}
+
 function parseCallbackPayload() {
   const search = new URLSearchParams(window.location.search)
   const hashRaw = window.location.hash.startsWith('#')
@@ -52,10 +133,18 @@ function parseCallbackPayload() {
   const error = search.get('error') || hash.get('error')
   if (error) return { error }
 
+  const code = search.get('code') || hash.get('code')
+  if (code) {
+    return { code, state: search.get('state') || hash.get('state') }
+  }
+
   const idToken = search.get('id_token') || hash.get('id_token')
   if (idToken) {
     return { id_token: idToken, user: decodeJwtPayload(idToken), state: search.get('state') || hash.get('state') }
   }
+
+  const widgetUser = widgetUserFromParams(search) || widgetUserFromParams(hash)
+  if (widgetUser) return widgetUser
 
   const tgAuthResult = hash.get('tgAuthResult') || search.get('tgAuthResult')
   if (tgAuthResult) {
@@ -102,22 +191,26 @@ export function completeTelegramLoginCallback() {
   return { mode: 'storage', payload }
 }
 
-function buildAuthUrl({ clientId, lang = 'en' }) {
-  // Match oauth.telegram.org/js/telegram-login.js:
-  // response_type=post_message, redirect_uri = this page (must be an Allowed URL in BotFather).
-  const redirectUri = `${window.location.origin}${window.location.pathname}`
+async function buildAuthUrl({ clientId, lang = 'en' }) {
+  // post_message returns the account to this shop window, so login does not
+  // depend on a client secret. origin is required by this bot.
+  const redirectUri = `${window.location.origin}/auth/telegram/callback`
+  const state = randomUrlSafe(24)
+  const nonce = randomUrlSafe(24)
+  const codeVerifier = randomUrlSafe(48)
+  const challenge = await codeChallenge(codeVerifier)
   let authUrl =
     `${OIDC_AUTH_URL}?response_type=post_message` +
     `&client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&origin=${encodeURIComponent(window.location.origin)}` +
-    `&scope=${encodeURIComponent('openid profile')}`
-
-  if (lang) {
-    authUrl += `&lang=${encodeURIComponent(lang)}`
-  }
-
-  return { authUrl, redirectUri }
+    `&scope=${encodeURIComponent('openid profile')}` +
+    `&state=${encodeURIComponent(state)}` +
+    `&nonce=${encodeURIComponent(nonce)}` +
+    `&code_challenge=${encodeURIComponent(challenge)}` +
+    '&code_challenge_method=S256'
+  if (lang) authUrl += `&lang=${encodeURIComponent(lang)}`
+  return { authUrl, redirectUri, state, codeVerifier }
 }
 
 /**
@@ -140,7 +233,8 @@ export async function openTelegramLoginPopup({
     throw new Error('Telegram login popup was blocked. Allow popups for this site.')
   }
 
-  const { authUrl } = buildAuthUrl({ clientId: id, lang })
+  const { authUrl, redirectUri, state, codeVerifier } = await buildAuthUrl({ clientId: id, lang })
+  sessionStorage.setItem(STATE_KEY, JSON.stringify({ state, codeVerifier, redirectUri }))
 
   try {
     popup.location.href = authUrl
@@ -155,6 +249,12 @@ export async function openTelegramLoginPopup({
       if (finished) return
       finished = true
       window.removeEventListener('message', onMessage)
+      let saved = {}
+      try {
+        saved = JSON.parse(sessionStorage.getItem(STATE_KEY) || '{}')
+      } catch {
+        saved = {}
+      }
       sessionStorage.removeItem(STATE_KEY)
       try {
         if (popup && !popup.closed) popup.close()
@@ -167,6 +267,18 @@ export async function openTelegramLoginPopup({
           ? 'Telegram login cancelled'
           : code
         reject(new Error(msg))
+        return
+      }
+      if (result?.code) {
+        if (!saved.codeVerifier || saved.state !== result.state) {
+          reject(new Error('Telegram login state did not match'))
+          return
+        }
+        resolve({
+          code: result.code,
+          code_verifier: saved.codeVerifier,
+          redirect_uri: saved.redirectUri,
+        })
         return
       }
       if (!result?.id_token && !(result?.hash && result?.id)) {
@@ -187,17 +299,9 @@ export async function openTelegramLoginPopup({
             return
           }
         }
-        if (!data || data.event !== 'auth_result') return
-        if (data.error) {
-          finish({ error: data.error })
-          return
-        }
-        const idToken = typeof data.result === 'string' ? data.result : ''
-        if (!idToken) {
-          finish({ error: 'missing id_token' })
-          return
-        }
-        finish({ id_token: idToken, user: decodeJwtPayload(idToken) })
+        const normalized = normalizeTelegramMessage(data)
+        if (!normalized) return
+        finish(normalized)
         return
       }
 

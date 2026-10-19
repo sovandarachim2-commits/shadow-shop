@@ -25,6 +25,7 @@ import requests
 import smtplib
 from PIL import Image, ImageOps
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from .models import Permission, Role, RolePermission, ActivityLog, TelegramVerification, EmailVerification, PendingRegistration, Address, SiteSettings
@@ -517,6 +518,30 @@ class TelegramLoginView(generics.GenericAPIView):
         if not bot_token:
             return Response({'detail': 'Telegram bot token is not configured.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        code = str(auth_data.get('code', '')).strip()
+        if code:
+            try:
+                id_token = self._exchange_telegram_code(
+                    code,
+                    str(auth_data.get('code_verifier', '')).strip(),
+                    str(auth_data.get('redirect_uri', '')).strip(),
+                    telegram_service.get_bot_id(),
+                    bot_token,
+                )
+                profile = self._verify_telegram_id_token(id_token, telegram_service.get_bot_id())
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return self._login_telegram_user(
+                telegram_id=profile['telegram_id'],
+                first_name=profile['first_name'],
+                last_name=profile['last_name'],
+                telegram_username=profile['username'],
+                photo_url=profile['photo_url'],
+                auth_datetime=profile['auth_datetime'],
+                referral_code=referral_code,
+                request=request,
+            )
+
         if id_token:
             try:
                 profile = self._verify_telegram_id_token(id_token, telegram_service.get_bot_id())
@@ -620,6 +645,46 @@ class TelegramLoginView(generics.GenericAPIView):
             login_method='telegram',
         )
 
+    def _exchange_telegram_code(self, code, code_verifier, redirect_uri, bot_id, bot_token):
+        if not code_verifier or not bot_id:
+            raise ValueError('Telegram login data is incomplete.')
+        parsed = urlparse(redirect_uri)
+        if parsed.scheme not in ('http', 'https') or parsed.path.rstrip('/') != '/auth/telegram/callback':
+            raise ValueError('Telegram redirect is invalid.')
+
+        configured_secret = str(getattr(settings, 'TELEGRAM_OIDC_CLIENT_SECRET', '') or '').strip()
+        secrets = []
+        for candidate in (configured_secret, bot_token):
+            if candidate and candidate not in secrets:
+                secrets.append(candidate)
+        if not secrets:
+            raise ValueError('Telegram login could not be confirmed.')
+
+        last_error = 'Telegram login could not be confirmed.'
+        for secret in secrets:
+            response = requests.post(
+                'https://oauth.telegram.org/token',
+                data={
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': redirect_uri,
+                    'client_id': str(bot_id),
+                    'client_secret': secret,
+                    'code_verifier': code_verifier,
+                },
+                timeout=15,
+            )
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            id_token = body.get('id_token') if isinstance(body, dict) else None
+            if response.status_code == 200 and id_token:
+                return id_token
+            if isinstance(body, dict) and body.get('error_description'):
+                last_error = 'Telegram login could not be confirmed.'
+        raise ValueError(last_error)
+
     def _verify_telegram_id_token(self, id_token, bot_id):
         if not bot_id:
             raise ValueError('Telegram bot id is not configured.')
@@ -637,21 +702,23 @@ class TelegramLoginView(generics.GenericAPIView):
                 id_token,
                 signing_key.key,
                 algorithms=['RS256', 'ES256', 'EdDSA', 'ES256K'],
-                audience=str(bot_id),
                 issuer=self.TELEGRAM_ISSUER,
-                options={'require': ['exp', 'iat', 'iss', 'aud']},
+                options={'verify_aud': False, 'require': ['exp', 'iat', 'iss']},
             )
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning('Telegram id_token verification failed: %s', exc)
             text = str(exc).lower()
-            if 'audience' in text:
-                raise ValueError('Telegram login client does not match this bot.') from exc
             if 'expired' in text or 'signature has expired' in text:
                 raise ValueError('Telegram login expired. Please try again.') from exc
             raise ValueError('Telegram login token is invalid.') from exc
 
-        telegram_id = str(claims.get('id') or claims.get('sub') or '').strip()
+        audience = claims.get('aud')
+        audiences = audience if isinstance(audience, (list, tuple)) else [audience]
+        if str(bot_id) not in {str(item) for item in audiences if item not in (None, '')}:
+            raise ValueError('Telegram login client does not match this bot.')
+
+        telegram_id = self._telegram_subject(claims)
         if not telegram_id:
             raise ValueError('Telegram login token is missing user id.')
 
@@ -676,10 +743,25 @@ class TelegramLoginView(generics.GenericAPIView):
             'auth_datetime': auth_datetime,
         }
 
+    def _telegram_subject(self, claims):
+        user = claims.get('user') if isinstance(claims.get('user'), dict) else {}
+        for value in (
+            claims.get('id'),
+            claims.get('telegram_id'),
+            claims.get('user_id'),
+            user.get('id'),
+            claims.get('sub'),
+        ):
+            text = str(value or '').strip()
+            if text:
+                return text
+        return ''
+
     def _verify_telegram_hash(self, auth_data, bot_token, telegram_hash):
         pairs = []
-        for key, value in auth_data.items():
-            if key in ('hash', 'referral_code', 'id_token') or value in [None, '']:
+        for key in ('auth_date', 'first_name', 'id', 'last_name', 'photo_url', 'username'):
+            value = auth_data.get(key)
+            if value in (None, ''):
                 continue
             pairs.append(f"{key}={value}")
 

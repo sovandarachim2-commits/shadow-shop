@@ -701,24 +701,30 @@ export default function Login() {
         popup,
       })
       const loggedInUser = await telegramLogin({
-        ...(data.id_token
-          ? { id_token: data.id_token }
-          : {
-              id: data.id,
-              first_name: data.first_name,
-              last_name: data.last_name,
-              username: data.username,
-              photo_url: data.photo_url,
-              auth_date: data.auth_date,
-              hash: data.hash,
-            }),
+        ...(data.code
+          ? {
+              code: data.code,
+              code_verifier: data.code_verifier,
+              redirect_uri: data.redirect_uri,
+            }
+          : data.id_token
+            ? { id_token: data.id_token }
+            : {
+                id: data.id,
+                first_name: data.first_name,
+                last_name: data.last_name,
+                username: data.username,
+                photo_url: data.photo_url,
+                auth_date: data.auth_date,
+                hash: data.hash,
+              }),
         referral_code: rf.referral_code,
       })
       toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
     } catch (err) {
       const message = err?.response
         ? translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed')
-        : (err?.message?.includes('cancel') ? t('auth.telegramLoginCancelled') : (err?.message || t('auth.telegramLoginFailed')))
+        : (err?.message?.includes('cancel') ? t('auth.telegramLoginCancelled') : t('auth.telegramLoginFailed'))
       if (!String(err?.message || '').toLowerCase().includes('cancel')) {
         showError(message)
       }
