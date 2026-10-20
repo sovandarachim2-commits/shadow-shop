@@ -451,8 +451,10 @@ function AuthBootstrap() {
 
   useEffect(() => {
     const raw = sessionStorage.getItem('shadow-shop-telegram-auth-result')
+      || localStorage.getItem('shadow-shop-telegram-auth-result')
     if (!raw) return
     sessionStorage.removeItem('shadow-shop-telegram-auth-result')
+    localStorage.removeItem('shadow-shop-telegram-auth-result')
     let payload
     try {
       payload = JSON.parse(raw)

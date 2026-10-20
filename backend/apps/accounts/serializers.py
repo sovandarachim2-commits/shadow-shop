@@ -90,6 +90,7 @@ class UserSerializer(serializers.ModelSerializer):
     has_address = serializers.SerializerMethodField()
     referrals_count = serializers.SerializerMethodField()
     successful_referrals_count = serializers.SerializerMethodField()
+    referred_by_code = serializers.SerializerMethodField()
     role = serializers.CharField(required=False)
     friend_referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
@@ -101,6 +102,7 @@ class UserSerializer(serializers.ModelSerializer):
             'telegram_id', 'telegram_username', 'telegram_photo_url', 'telegram_auth_date',
             'google_id', 'google_picture_url',
             'referral_code', 'referrals_count', 'successful_referrals_count',
+            'referred_by_code',
             'avatar', 'avatar_url', 'is_active', 'created_at',
             'has_usable_password', 'has_address', 'friend_referral_code',
             'referred_by',
@@ -145,6 +147,9 @@ class UserSerializer(serializers.ModelSerializer):
         # a successful referral is anyone who has registered.
         return obj.referrals.count()
 
+    def get_referred_by_code(self, obj):
+        return obj.referred_by.referral_code if obj.referred_by_id else ''
+
     def validate_username(self, value):
         username = str(value or '').strip().lstrip('@').lower()
         if not username:
@@ -183,20 +188,26 @@ class UserSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         friend_referral_code = validated_data.pop('friend_referral_code', None)
-        if friend_referral_code and not instance.referred_by:
+        referrer = None
+        if friend_referral_code is not None and friend_referral_code.strip():
             friend_referral_code = friend_referral_code.strip().upper()
-            # Prevent self-referral
-            if friend_referral_code != instance.referral_code:
-                referrer = User.objects.filter(referral_code=friend_referral_code, is_active=True).first()
-                if referrer:
-                    instance.referred_by = referrer
-                    # Award referral bonus to the referrer immediately
-                    try:
-                        from apps.orders.rewards import award_referral_bonus
-                        award_referral_bonus(referrer, instance)
-                    except Exception:
-                        pass
-        return super().update(instance, validated_data)
+            if instance.referred_by_id:
+                raise serializers.ValidationError({'friend_referral_code': 'A friend referral code has already been saved.'})
+            if friend_referral_code == (instance.referral_code or '').upper():
+                raise serializers.ValidationError({'friend_referral_code': 'You cannot use your own referral code.'})
+            referrer = User.objects.filter(referral_code=friend_referral_code, is_active=True).first()
+            if not referrer:
+                raise serializers.ValidationError({'friend_referral_code': 'This friend referral code is invalid.'})
+            validated_data['referred_by'] = referrer
+
+        updated_instance = super().update(instance, validated_data)
+        if referrer:
+            try:
+                from apps.orders.rewards import award_referral_bonus
+                award_referral_bonus(referrer, updated_instance)
+            except Exception:
+                pass
+        return updated_instance
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

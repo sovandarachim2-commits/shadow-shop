@@ -325,6 +325,7 @@ export async function openTelegramLoginPopup({
     }
 
     let closedAt = 0
+    let leftForTelegram = false
     const takeSharedResult = () => {
       try {
         const raw = sessionStorage.getItem(RESULT_KEY) || localStorage.getItem(RESULT_KEY)
@@ -356,13 +357,18 @@ export async function openTelegramLoginPopup({
       }
       try {
         const path = popup.location.pathname.replace(/\/+$/, '')
-        if (popup.location.origin === window.location.origin && path !== '/auth/telegram/callback') {
+        const onShop = popup.location.origin === window.location.origin
+        if (!onShop) leftForTelegram = true
+        // about:blank is our own page. Only the return AFTER Telegram counts.
+        if (leftForTelegram && onShop && path && path !== '/auth/telegram/callback') {
           const late = takeSharedResult()
-          finish(late && !late.error ? late : { handedOff: true })
-          return
+          if (late && !late.error) {
+            finish(late)
+            return
+          }
         }
       } catch {
-        /* Telegram's page is still open */
+        leftForTelegram = true
       }
       window.setTimeout(checkClose, 200)
     }

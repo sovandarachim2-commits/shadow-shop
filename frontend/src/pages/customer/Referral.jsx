@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -15,12 +15,29 @@ import { cn } from '@/utils/helpers'
 export default function Referral() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [friendReferralCode, setFriendReferralCode] = useState('')
 
   const { data: user } = useQuery({
     queryKey: ['me'],
     queryFn: () => authApi.me().then(res => res.data),
+  })
+
+  const saveFriendCode = useMutation({
+    mutationFn: (code) => authApi.updateMe({ friend_referral_code: code }),
+    onSuccess: ({ data }) => {
+      queryClient.setQueryData(['me'], data)
+      toast.success(t('rewardsPage.referral.friendCodeSaved'))
+      setFriendReferralCode('')
+    },
+    onError: (error) => {
+      const message = error.response?.data?.friend_referral_code?.[0]
+        || error.response?.data?.detail
+        || t('rewardsPage.referral.friendCodeSaveFailed')
+      toast.error(message)
+    },
   })
 
   const { data: summary, isLoading } = useQuery({
@@ -52,6 +69,13 @@ export default function Referral() {
     } catch (err) {
       toast.error('Could not copy link')
     }
+  }
+
+  const handleSaveFriendCode = (event) => {
+    event.preventDefault()
+    const code = friendReferralCode.trim().toUpperCase()
+    if (!code) return toast.error(t('rewardsPage.referral.friendCodeRequired'))
+    saveFriendCode.mutate(code)
   }
 
   if (isLoading) {
@@ -110,6 +134,42 @@ export default function Referral() {
                   {copiedCode ? "Copied" : t('rewardsPage.referral.copy')}
                 </button>
               </div>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-pink-100 bg-pink-50/60 p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-pink-600 shadow-sm">
+                  <Gift size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-950">{t('rewardsPage.referral.friendCodeTitle')}</h3>
+                  <p className="text-sm font-medium text-slate-500">{t('rewardsPage.referral.friendCodeSubtitle')}</p>
+                </div>
+              </div>
+              {user?.referred_by ? (
+                <div className="mt-4 flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-emerald-700">
+                  <CheckCircle2 size={17} /> {t('rewardsPage.referral.friendCodeAlreadySaved')}
+                </div>
+              ) : (
+                <form onSubmit={handleSaveFriendCode} className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={friendReferralCode}
+                    onChange={(event) => setFriendReferralCode(event.target.value.toUpperCase())}
+                    placeholder={t('rewardsPage.referral.friendCodePlaceholder')}
+                    maxLength={20}
+                    autoComplete="off"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold uppercase tracking-wider text-slate-900 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
+                  />
+                  <button
+                    type="submit"
+                    disabled={saveFriendCode.isPending || !friendReferralCode.trim()}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-pink-600 px-5 py-3 text-sm font-black text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saveFriendCode.isPending && <Loader2 size={16} className="animate-spin" />}
+                    {t('rewardsPage.referral.saveFriendCode')}
+                  </button>
+                </form>
+              )}
             </div>
 
             <div>

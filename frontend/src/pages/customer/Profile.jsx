@@ -7,7 +7,7 @@ import {
   Package, Heart, CheckCircle2, Pencil, Lock, Loader2, Truck, ShoppingBag,
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
-  Home, Headphones, Eye, EyeOff, Clock,
+  Home, Headphones, Eye, EyeOff, Clock, Share2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -120,6 +120,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     email: user.email || '',
     phone: normalizeCambodiaPhone(user.phone),
     gender: user.gender || '',
+    friend_referral_code: '',
   })
 
   const initials = [user.first_name, user.last_name].filter(Boolean).map((n) => n[0]).join('').toUpperCase() || user.username?.[0]?.toUpperCase() || '?'
@@ -153,7 +154,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.username?.[0] || body?.email?.[0] || body?.phone?.[0] || body?.gender?.[0] || body?.detail || t('profile.updateProfileFailed')
+      const message = body?.friend_referral_code?.[0] || body?.username?.[0] || body?.email?.[0] || body?.phone?.[0] || body?.gender?.[0] || body?.detail || t('profile.updateProfileFailed')
       toast.error(message)
     },
   })
@@ -196,6 +197,9 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
       gender: form.gender,
       first_name: firstName || '',
       last_name: lastParts.join(' '),
+    }
+    if (!user.referred_by && form.friend_referral_code.trim()) {
+      payload.friend_referral_code = form.friend_referral_code.trim().toUpperCase()
     }
 
     if (avatarFile) {
@@ -309,6 +313,32 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               options={GENDER_OPTIONS}
               t={t}
             />
+            {user.referred_by ? (
+              <div>
+                <ProfileField
+                  label={t('completeProfile.referralCodeOptional')}
+                  value={user.referred_by_code || ''}
+                  readOnly
+                  icon={Gift}
+                />
+                <p className="mt-2 text-xs font-semibold text-emerald-700">
+                  {t('rewardsPage.referral.friendCodeAlreadySaved')}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <ProfileField
+                  label={t('completeProfile.referralCodeOptional')}
+                  value={form.friend_referral_code}
+                  onChange={(value) => set('friend_referral_code', value.toUpperCase())}
+                  placeholder={t('completeProfile.referralCodePlaceholder')}
+                  icon={Gift}
+                />
+                <p className="mt-2 text-xs font-medium text-gray-400">
+                  {t('completeProfile.referralCodeHelper')}
+                </p>
+              </div>
+            )}
           </div>
         </ProfileSection>
 
@@ -832,6 +862,7 @@ export default function Profile() {
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },
     { icon: Percent, labelKey: 'profile.coupons', action: () => setActiveView('coupons'), color: 'text-rose-400' },
     { icon: Heart, labelKey: 'profile.following', action: () => navigate('/wishlist'), color: 'text-amber-400' },
+    { icon: Share2, labelKey: 'profile.referral', action: () => navigate('/profile/rewards/referral'), color: 'text-pink-500' },
   ]
 
   const mobileGeneralSettings = [
@@ -954,19 +985,19 @@ export default function Profile() {
         </div>
 
         <div className="mt-8 overflow-hidden rounded-xl bg-slate-50">
-          <div className="grid grid-cols-3">
+          <div className="grid grid-cols-4">
             {mobileQuickActions.map(({ icon: Icon, labelKey, action, color }, index) => (
               <button
                 key={labelKey}
                 type="button"
                 onClick={action}
                 className={cn(
-                  'flex h-[74px] flex-col items-center justify-center gap-2 transition active:bg-slate-100',
+                  'flex min-h-[74px] flex-col items-center justify-center gap-1.5 px-1 py-2 transition active:bg-slate-100',
                   index > 0 && 'border-l border-slate-200'
                 )}
               >
                 <Icon size={20} strokeWidth={1.8} className={color} />
-                <span className="text-[10px] font-black text-slate-500">{t(labelKey)}</span>
+                <span className="line-clamp-2 text-center text-[10px] font-black leading-tight text-slate-500">{t(labelKey)}</span>
               </button>
             ))}
           </div>
@@ -1491,6 +1522,11 @@ function DesktopProfileOverview({
           <DesktopInfoRow icon={IdCard} label={t('auth.username')} value={usernameDisplay} />
           <DesktopInfoRow icon={Mail} label={t('profile.emailAddress')} value={email} />
           <DesktopInfoRow icon={Phone} label={t('profile.phoneNumber')} value={phone} />
+          {user.referred_by ? (
+            <DesktopInfoRow icon={Gift} label={t('completeProfile.referralCodeOptional')} value={user.referred_by_code || 'Saved'} />
+          ) : (
+            <FriendReferralCodeEditor t={t} />
+          )}
           <DesktopInfoRow icon={Languages} label={t('profile.chooseLanguage')} value={currentLanguage.label} />
           <DesktopInfoRow icon={Home} label={t('profile.memberSince')} value={memberSince} />
         </DesktopProfileCard>
@@ -1503,7 +1539,7 @@ function DesktopProfileOverview({
           
           {/* Progress Bar Tier Widget */}
           <div className="mt-4 rounded-2xl border border-pink-100 bg-gradient-to-br from-pink-50/50 via-purple-50/30 to-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-xs font-black text-gray-700">
+            <div className="flex items-center justify-between text-sm font-black text-gray-700">
               <span>{t('profile.myPoints')}</span>
               <span className="text-pink-600">{rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} pt</span>
             </div>
@@ -1513,7 +1549,7 @@ function DesktopProfileOverview({
                 style={{ width: `${progressPct}%` }}
               />
             </div>
-            <p className="mt-2 text-right text-[11px] font-bold text-gray-400">
+            <p className="mt-2 text-right text-xs font-bold text-gray-400">
               {t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}
             </p>
           </div>
@@ -1526,10 +1562,10 @@ function DesktopProfileOverview({
               <div className="flex items-center justify-between">
                 <span className="text-base font-black capitalize text-gray-900">{defaultAddress?.label || t('profile.defaultAddress')}</span>
                 {defaultAddress?.is_default && (
-                  <span className="rounded-full bg-pink-100 px-3 py-0.5 text-xs font-black text-pink-600">Default</span>
+                  <span className="rounded-full bg-pink-100 px-3 py-1 text-sm font-black text-pink-600">{t('addressBook.default')}</span>
                 )}
               </div>
-              <p className="mt-2.5 min-h-[56px] text-sm font-medium leading-relaxed text-gray-600">
+              <p className="mt-2.5 min-h-[56px] text-base font-medium leading-relaxed text-gray-600">
                 {fullAddress}
               </p>
             </div>
@@ -1542,7 +1578,7 @@ function DesktopProfileOverview({
               <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,.7)_25%,transparent_25%),linear-gradient(225deg,rgba(255,255,255,.7)_25%,transparent_25%)] bg-[length:24px_24px] opacity-40" />
               <div className="relative z-10 flex items-center gap-2 text-center">
                 <MapPin className="text-pink-600 drop-shadow-sm transition-transform duration-300 group-hover:scale-110" size={20} fill="currentColor" strokeWidth={1.5} />
-                <span className="text-sm font-black text-pink-700 transition-colors group-hover:text-pink-800">{t('profile.manageAddresses')} →</span>
+                <span className="text-base font-black text-pink-700 transition-colors group-hover:text-pink-800">{t('profile.manageAddresses')} →</span>
               </div>
             </div>
           </div>
@@ -1569,22 +1605,76 @@ function DesktopProfileCard({ title, icon: Icon, children }) {
   )
 }
 
+function FriendReferralCodeEditor({ t }) {
+  const [code, setCode] = useState('')
+  const updateUser = useAuthStore((state) => state.updateUser)
+  const saveCode = useMutation({
+    mutationFn: (friend_referral_code) => authApi.updateMe({ friend_referral_code }),
+    onSuccess: ({ data }) => {
+      updateUser(data)
+      setCode('')
+      toast.success(t('rewardsPage.referral.friendCodeSaved'))
+    },
+    onError: (error) => {
+      const message = error.response?.data?.friend_referral_code?.[0]
+        || error.response?.data?.detail
+        || t('rewardsPage.referral.friendCodeSaveFailed')
+      toast.error(message)
+    },
+  })
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    const normalizedCode = code.trim().toUpperCase()
+    if (normalizedCode) saveCode.mutate(normalizedCode)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-xl px-3 py-3 transition hover:bg-pink-50/40">
+      <label htmlFor="profile-friend-referral-code" className="mb-2 flex items-center gap-3 text-sm font-extrabold text-gray-500">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-400">
+          <Gift size={16} />
+        </span>
+        {t('completeProfile.referralCodeOptional')}
+      </label>
+      <div className="ml-12 flex h-11 overflow-hidden rounded-lg border border-gray-200 bg-white focus-within:border-pink-400 focus-within:ring-2 focus-within:ring-pink-100">
+        <input
+          id="profile-friend-referral-code"
+          value={code}
+          onChange={(event) => setCode(event.target.value.toUpperCase())}
+          placeholder={t('completeProfile.referralCodePlaceholder')}
+          maxLength={20}
+          autoComplete="off"
+          className="min-w-0 flex-1 px-3 text-sm font-black uppercase tracking-wider text-gray-900 outline-none placeholder:font-semibold placeholder:normal-case placeholder:tracking-normal placeholder:text-gray-400"
+        />
+        <button
+          type="submit"
+          disabled={saveCode.isPending || !code.trim()}
+          className="inline-flex shrink-0 items-center justify-center border-l border-pink-500 bg-pink-600 px-4 text-sm font-black text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+        >
+          {saveCode.isPending ? <Loader2 size={14} className="animate-spin" /> : t('rewardsPage.referral.saveFriendCode')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 function DesktopInfoRow({ icon: Icon, label, value, badge = false, success = false }) {
   return (
     <div className="group flex items-center justify-between rounded-xl px-3 py-2.5 transition hover:bg-pink-50/40">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-400 transition group-hover:bg-white group-hover:text-pink-600">
-          <Icon size={15} />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-400 transition group-hover:bg-white group-hover:text-pink-600">
+          <Icon size={16} />
         </div>
-        <span className="text-xs font-extrabold text-gray-500">{label}</span>
+        <span className="text-sm font-extrabold text-gray-500">{label}</span>
       </div>
       <div className="text-right">
         {badge || success ? (
-          <span className={cn('inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider', success ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60' : 'bg-pink-50 text-pink-600 border border-pink-200/60')}>
+          <span className={cn('inline-flex rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider', success ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60' : 'bg-pink-50 text-pink-600 border border-pink-200/60')}>
             {value}
           </span>
         ) : (
-          <span className="text-xs font-black text-gray-900">{value}</span>
+          <span className="text-sm font-black text-gray-900">{value}</span>
         )}
       </div>
     </div>
