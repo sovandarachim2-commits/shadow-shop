@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, QrCode } from 'lucide-react'
@@ -27,13 +27,14 @@ export default function OrderSuccess() {
   const orderId = location.state?.orderId
   const orderNumber = location.state?.orderNumber || query.get('order') || query.get('tran_id') || ''
   const checkoutReference = query.get('reference') || ''
+  const checkoutStatusToken = query.get('status_token') || ''
   const statePaymentMethod = location.state?.paymentMethod || ''
   const [bakongPayment, setBakongPayment] = useState(location.state?.bakongPayment || null)
   const removeSelectedItems = useCartStore((s) => s.removeSelectedItems)
 
   const { data: checkoutStatus, refetch: refetchCheckoutStatus } = useQuery({
     queryKey: ['checkout-status', checkoutReference],
-    queryFn: () => ordersApi.orders.checkoutStatus(checkoutReference).then((r) => r.data),
+    queryFn: () => ordersApi.orders.checkoutStatus(checkoutReference, checkoutStatusToken).then((r) => r.data),
     enabled: !!checkoutReference,
     refetchInterval: (q) => (q.state.data?.order_id ? false : 1500),
   })
@@ -70,6 +71,7 @@ export default function OrderSuccess() {
   const paid = isPaymentComplete(order, bakongPayment) || checkoutStatus?.status === 'paid'
   const isContactSales = order?.payment_method === 'contact_sales' || statePaymentMethod === 'contact_sales'
   const isCashOnDelivery = order?.payment_method === 'cod' || statePaymentMethod === 'cod'
+  const isGatewayConfirmationPending = !!checkoutReference && !checkoutStatus?.order_id && !paid
   const isBakongPending = bakongPayment && bakongPayment.status !== 'paid' && !paid
   const isBakongExpired = bakongPayment?.status === 'expired'
   const trackPath = (order?.id || resolvedOrderId) ? `/my-orders/${order?.id || resolvedOrderId}` : '/my-orders'
@@ -168,6 +170,26 @@ export default function OrderSuccess() {
     )
   }
 
+  if (isGatewayConfirmationPending) {
+    return (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-gray-900/45 backdrop-blur-[2px]">
+        <svg className="h-12 w-12 animate-spin" viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="3" />
+          <circle
+            cx="24"
+            cy="24"
+            r="20"
+            fill="none"
+            stroke="#db2777"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray="36 90"
+          />
+        </svg>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-2xl pb-8">
       <section className="rounded-[2rem] border border-yellow-100 bg-gradient-to-br from-white via-yellow-50 to-pink-50 p-6 text-center shadow-soft md:p-10">
@@ -204,13 +226,27 @@ export default function OrderSuccess() {
             {formatCurrency(bakongPayment.amount)}
           </p>
           <p className="mt-1 break-all text-center text-[11px] text-gray-400">MD5: {bakongPayment.md5}</p>
-          <p className={`mt-3 rounded-full px-4 py-2 text-center text-xs font-black ${
-            isBakongExpired
-              ? 'bg-red-100 text-red-700'
-              : 'bg-yellow-100 text-yellow-700'
-          }`}>
-            {isBakongExpired ? t('orders.qrExpired') : t('orders.waitingPayment')}
-          </p>
+          {isBakongExpired ? (
+            <p className="mt-3 rounded-full bg-red-100 px-4 py-2 text-center text-xs font-black text-red-700">
+              {t('orders.qrExpired')}
+            </p>
+          ) : (
+            <div className="mt-3 flex justify-center">
+              <svg className="h-8 w-8 animate-spin" viewBox="0 0 48 48" aria-hidden="true">
+                <circle cx="24" cy="24" r="20" fill="none" stroke="#fbcfe8" strokeWidth="3" />
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  fill="none"
+                  stroke="#db2777"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray="36 90"
+                />
+              </svg>
+            </div>
+          )}
         </div>
       )}
 

@@ -107,9 +107,12 @@
           }
         }
         if (!payload) return
-        window.__shadowTelegramCallbackDone = true
+        try {
+          localStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
+        } catch (e) {}
         var opener = window.opener
         if (opener && !opener.closed) {
+          window.__shadowTelegramCallbackDone = true
           try {
             opener.postMessage({ type: 'shadow-shop:telegram-auth', payload: payload }, location.origin)
           } catch (e) {}
@@ -120,6 +123,14 @@
         try {
           sessionStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
         } catch (e) {}
+        var back = '/'
+        try {
+          var saved = localStorage.getItem('shadow-shop-telegram-return') || ''
+          if (saved.charAt(0) === '/' && saved.charAt(1) !== '/' && saved.indexOf('/auth/telegram/callback') !== 0) back = saved
+          localStorage.removeItem('shadow-shop-telegram-return')
+        } catch (e) {}
+        window.__shadowTelegramCallbackDone = true
+        location.replace(back)
       })()
     </script>
     <div id="root"></div>

@@ -78,6 +78,7 @@ export default function OrderList() {
   const [orderHistoryOrder, setOrderHistoryOrder] = useState(null)
   const [contactSalesReceipt, setContactSalesReceipt] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash')
+  const [transactionReference, setTransactionReference] = useState('')
   const [confirm, ConfirmDialog] = useConfirm()
 
   const { data, isLoading, refetch } = useQuery({
@@ -147,12 +148,14 @@ export default function OrderList() {
   })
 
   const markPaidMutation = useMutation({
-    mutationFn: ({ order, paymentMethod }) => ordersApi.orders.markPaid(order.id, {
+    mutationFn: ({ order, paymentMethod, transactionReference: reference }) => ordersApi.orders.markPaid(order.id, {
       payment_method: paymentMethod,
+      transaction_reference: reference.trim(),
     }),
     onSuccess: (_, { order }) => {
       queryClient.invalidateQueries({ queryKey: ['order', order.id] })
       setPayOrder(null)
+          setTransactionReference('')
       refetch()
       toast.success('Payment recorded')
     },
@@ -309,6 +312,7 @@ export default function OrderList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           setSelectedPaymentMethod(order.payment_method || 'cash')
+                          setTransactionReference('')
                           setPayOrder(order)
                         }}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-700 transition-colors hover:border-green-300 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -668,6 +672,18 @@ export default function OrderList() {
               </div>
             </div>
 
+            <div>
+              <label className="label">Transaction ID / Reference <span className="font-normal text-gray-400">(optional)</span></label>
+              <input
+                type="text"
+                maxLength={100}
+                value={transactionReference}
+                onChange={(e) => setTransactionReference(e.target.value)}
+                className="input-field"
+                placeholder="Bank transaction or receipt reference"
+              />
+            </div>
+
             <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
               <button
                 type="button"
@@ -679,7 +695,7 @@ export default function OrderList() {
               </button>
               <button
                 type="button"
-                onClick={() => markPaidMutation.mutate({ order: payOrder, paymentMethod: selectedPaymentMethod })}
+                onClick={() => markPaidMutation.mutate({ order: payOrder, paymentMethod: selectedPaymentMethod, transactionReference })}
                 disabled={markPaidMutation.isPending || !selectedPaymentMethod}
                 className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-60"
               >

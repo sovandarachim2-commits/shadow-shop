@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
-import { Toaster } from 'react-hot-toast'
+import toast, { Toaster } from 'react-hot-toast'
 import { ClipboardList, Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -443,9 +443,48 @@ function RequireStorefront({ children }) {
 }
 
 function AuthBootstrap() {
+  const { t } = useTranslation()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const clearSession = useAuthStore((s) => s.clearSession)
   const fetchMe = useAuthStore((s) => s.fetchMe)
+  const telegramLogin = useAuthStore((s) => s.telegramLogin)
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem('shadow-shop-telegram-auth-result')
+    if (!raw) return
+    sessionStorage.removeItem('shadow-shop-telegram-auth-result')
+    let payload
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (!payload || payload.error) return
+    const referralCode = new URLSearchParams(window.location.search).get('ref') || ''
+    const body = payload.code
+      ? {
+          code: payload.code,
+          code_verifier: payload.code_verifier || '',
+          redirect_uri: payload.redirect_uri || `${window.location.origin}/auth/telegram/callback`,
+        }
+      : payload.id_token
+        ? { id_token: payload.id_token }
+        : {
+            id: payload.id,
+            first_name: payload.first_name,
+            last_name: payload.last_name,
+            username: payload.username,
+            photo_url: payload.photo_url,
+            auth_date: payload.auth_date,
+            hash: payload.hash,
+          }
+    if (referralCode) body.referral_code = referralCode
+    telegramLogin(body)
+      .then((user) => {
+        toast.success(t('auth.welcomeUser', { name: user?.first_name || user?.username || '' }))
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('access_token')

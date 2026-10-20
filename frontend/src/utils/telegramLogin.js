@@ -1,6 +1,7 @@
 const OIDC_ORIGIN = 'https://oauth.telegram.org'
 const OIDC_AUTH_URL = `${OIDC_ORIGIN}/auth`
 const RESULT_MESSAGE = 'shadow-shop:telegram-auth'
+const RESULT_KEY = 'shadow-shop-telegram-auth-result'
 const STATE_KEY = 'shadow-shop-telegram-oauth-state'
 
 function decodeJwtPayload(token) {
@@ -111,6 +112,9 @@ function normalizeTelegramMessage(data) {
     if (typeof result.id_token === 'string' && result.id_token) {
       return { id_token: result.id_token, user: decodeJwtPayload(result.id_token), state: result.state }
     }
+    if (typeof result.code === 'string' && result.code) {
+      return { code: result.code, state: result.state || '' }
+    }
     const widgetUser = widgetUserFromObject(result)
     if (widgetUser) return widgetUser
   }
@@ -181,7 +185,13 @@ export function completeTelegramLoginCallback() {
   }
   // Opened as a full tab with no opener — stash for the shop tab to read
   if (payload && !payload.error) {
-    sessionStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
+    const encoded = JSON.stringify(payload)
+    sessionStorage.setItem(RESULT_KEY, encoded)
+    try {
+      localStorage.setItem(RESULT_KEY, encoded)
+    } catch {
+      /* ignore */
+    }
   }
   return { mode: 'storage', payload }
 }
@@ -224,7 +234,11 @@ export async function openTelegramLoginPopup({
   }
 
   const { authUrl, redirectUri, nonce } = buildAuthUrl({ clientId: id, lang })
-  sessionStorage.setItem(STATE_KEY, JSON.stringify({ nonce, redirectUri }))
+  const returnPath = `${window.location.pathname}${window.location.search}`
+  sessionStorage.setItem(STATE_KEY, JSON.stringify({ nonce, redirectUri, returnPath }))
+  if (returnPath.startsWith('/') && !returnPath.startsWith('//') && !returnPath.startsWith('/auth/telegram/callback')) {
+    localStorage.setItem('shadow-shop-telegram-return', returnPath)
+  }
 
   try {
     popup.location.href = authUrl
@@ -246,6 +260,10 @@ export async function openTelegramLoginPopup({
         saved = {}
       }
       sessionStorage.removeItem(STATE_KEY)
+      if (result?.handedOff) {
+        resolve({ handedOff: true })
+        return
+      }
       try {
         if (popup && !popup.closed) popup.close()
       } catch {
@@ -306,22 +324,45 @@ export async function openTelegramLoginPopup({
       /* ignore */
     }
 
+    let closedAt = 0
+    const takeSharedResult = () => {
+      try {
+        const raw = sessionStorage.getItem(RESULT_KEY) || localStorage.getItem(RESULT_KEY)
+        if (!raw) return null
+        sessionStorage.removeItem(RESULT_KEY)
+        localStorage.removeItem(RESULT_KEY)
+        return JSON.parse(raw)
+      } catch {
+        return null
+      }
+    }
+
     const checkClose = () => {
       if (finished) return
-      // Also accept result left in sessionStorage if callback ran as a normal tab
+      const shared = takeSharedResult()
+      if (shared && !shared.error) {
+        finish(shared)
+        return
+      }
+      if (!popup || popup.closed) {
+        if (!closedAt) closedAt = Date.now()
+        // Phone and QR leave the tab while the user confirms in Telegram.
+        if (Date.now() - closedAt < 15000) {
+          window.setTimeout(checkClose, 200)
+          return
+        }
+        finish({ error: 'popup_closed' })
+        return
+      }
       try {
-        const raw = sessionStorage.getItem('shadow-shop-telegram-auth-result')
-        if (raw) {
-          sessionStorage.removeItem('shadow-shop-telegram-auth-result')
-          finish(JSON.parse(raw))
+        const path = popup.location.pathname.replace(/\/+$/, '')
+        if (popup.location.origin === window.location.origin && path !== '/auth/telegram/callback') {
+          const late = takeSharedResult()
+          finish(late && !late.error ? late : { handedOff: true })
           return
         }
       } catch {
-        /* ignore */
-      }
-      if (!popup || popup.closed) {
-        finish({ error: 'popup_closed' })
-        return
+        /* Telegram's page is still open */
       }
       window.setTimeout(checkClose, 200)
     }

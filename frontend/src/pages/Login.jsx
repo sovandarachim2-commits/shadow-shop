@@ -411,7 +411,7 @@ export default function Login() {
     password: '', 
     confirm_password: '', 
     terms: true,
-    referral_code: new URLSearchParams(location.search).get('ref') || ''
+    referral_code: (new URLSearchParams(location.search).get('ref') || '').trim().toUpperCase()
   })
   const [registerErrors, setRegisterErrors] = useState({})
   const [notice, setNotice] = useState(null)
@@ -700,6 +700,7 @@ export default function Login() {
         lang: isKhmer ? 'km' : 'en',
         popup,
       })
+      if (data?.handedOff) return
       const loggedInUser = await telegramLogin({
         ...(data.code
           ? {
@@ -908,6 +909,24 @@ export default function Login() {
                           className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
                       </div>
                       {registerErrors.email && <p id="register-email-error" className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.email}</p>}
+                    </div>
+
+                    <div>
+                      <label htmlFor="register-referral-code" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">
+                        {t('completeProfile.referralCodeOptional')}
+                      </label>
+                      <input
+                        id="register-referral-code"
+                        type="text"
+                        value={rf.referral_code}
+                        onChange={(e) => sr('referral_code', e.target.value.toUpperCase())}
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        maxLength={20}
+                        placeholder={t('completeProfile.referralCodePlaceholder')}
+                        className="input-field"
+                      />
+                      <p className="mt-1 text-xs font-medium text-gray-400">{t('completeProfile.referralCodeHelper')}</p>
                     </div>
 
                     {/* Password Fields */}

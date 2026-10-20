@@ -122,11 +122,19 @@ def prepare_online_checkout(request, checkout_data):
     return result
 
 
-def get_pending_checkout_status(request, reference):
-    pending = PendingCheckout.objects.select_related('order', 'order__customer').get(
-        reference=reference,
-        user=request.user,
-    )
+def get_pending_checkout_status(request, reference, allow_guest=False):
+    pending_qs = PendingCheckout.objects.select_related('order', 'order__customer').filter(reference=reference)
+    if not allow_guest:
+        pending_qs = pending_qs.filter(user=request.user)
+    pending = pending_qs.get()
+    if (
+        pending.payment_method == 'aba'
+        and pending.status == PendingCheckout.STATUS_PENDING
+        and not pending.order_id
+    ):
+        from .aba_services import confirm_pending_aba_payment
+        confirm_pending_aba_payment(pending.reference)
+        pending.refresh_from_db()
     data = {
         'reference': pending.reference,
         'status': pending.status,
@@ -136,7 +144,7 @@ def get_pending_checkout_status(request, reference):
         'order_id': pending.order_id,
         'order_number': pending.order.order_number if pending.order_id else None,
     }
-    if pending.order_id:
+    if pending.order_id and not allow_guest:
         from apps.orders.serializers import OrderDetailSerializer
 
         data['order'] = OrderDetailSerializer(pending.order, context={'request': request}).data

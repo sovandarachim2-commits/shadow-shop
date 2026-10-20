@@ -41,6 +41,7 @@ function formatValue(type, value) {
 
 function parsePaymentHistoryNote(note = '') {
   const cleanNote = formatPaymentHistoryNote(note)
+  const transactionReference = cleanNote.match(/\btransaction reference:\s*(.+)$/i)?.[1]?.trim() || ''
   const changes = []
   String(note).replace(
     /\b(status|method)\s+([a-z_]+|-)\s*->\s*([a-z_]+|-)/gi,
@@ -63,6 +64,7 @@ function parsePaymentHistoryNote(note = '') {
         : 'Payment Event',
     note: cleanNote,
     changes,
+    transactionReference,
   }
 }
 
@@ -214,6 +216,11 @@ export function PaymentHistoryModal({ order, onClose }) {
                           </ul>
                         ) : (
                           <p className="mt-1 text-sm font-semibold text-gray-700">{parsed.note}</p>
+                        )}
+                        {parsed.transactionReference && (
+                          <p className="mt-2 break-all rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
+                            Transaction reference: {parsed.transactionReference}
+                          </p>
                         )}
                       </>
                     )

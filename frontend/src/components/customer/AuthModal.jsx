@@ -362,7 +362,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     password: '', 
     confirm_password: '', 
     terms: true,
-    referral_code: new URLSearchParams(location.search).get('ref') || ''
+    referral_code: (new URLSearchParams(location.search).get('ref') || '').trim().toUpperCase()
   })
   const [registerErrors, setRegisterErrors] = useState({})
   const [digits, setDigits] = useState(['', '', '', ''])
@@ -584,6 +584,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         lang: isKhmer ? 'km' : 'en',
         popup,
       })
+      if (data?.handedOff) return
       const loggedInUser = await telegramLogin({
         ...(data.code
           ? {
@@ -1092,6 +1093,24 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     {registerErrors.email}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label htmlFor="shop-register-referral" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">
+                  {t('completeProfile.referralCodeOptional')}
+                </label>
+                <input
+                  type="text"
+                  id="shop-register-referral"
+                  value={rf.referral_code}
+                  onChange={(e) => setRf((f) => ({ ...f, referral_code: e.target.value.toUpperCase() }))}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  maxLength={20}
+                  placeholder={t('completeProfile.referralCodePlaceholder')}
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-5 text-[15px] font-medium text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-pink-300 focus:bg-white focus:ring-4 focus:ring-pink-50"
+                />
+                <p className="mt-1.5 px-1 text-xs font-medium text-slate-400">{t('completeProfile.referralCodeHelper')}</p>
               </div>
 
               <div>

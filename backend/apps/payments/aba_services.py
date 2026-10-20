@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+from django.core import signing
 
 from django.conf import settings
 from django.db import transaction
@@ -56,6 +57,61 @@ def get_payway_endpoint():
     return PAYWAY_SANDBOX_URL if settings.ABA_PAYWAY_IS_SANDBOX else PAYWAY_PROD_URL
 
 
+def get_payway_check_endpoint():
+    return get_payway_endpoint().rsplit('/', 1)[0] + '/check-transaction'
+
+
+def aba_check_response_is_paid(body):
+    """PayWay's API success code is not the payment result. Only an approved payment counts."""
+    if not isinstance(body, dict):
+        return False, ''
+    data = body.get('data') if isinstance(body.get('data'), dict) else {}
+    for source in (data, body):
+        status_name = str(source.get('payment_status') or '').strip().upper()
+        description = str(source.get('description') or '').strip().upper()
+        code = source.get('payment_status_code')
+        if status_name == 'APPROVED' or description == 'APPROVED' or str(code) == '0':
+            return True, str(source.get('apv') or body.get('apv') or '')
+    return False, ''
+
+
+def confirm_pending_aba_payment(tran_id):
+    """Ask PayWay whether this checkout is paid, then create the order if it is.
+
+    The browser returns from ABA before PayWay's server callback reaches the shop.
+    """
+    merchant_id = str(settings.ABA_PAYWAY_MERCHANT_ID or '').strip()
+    api_key = str(settings.ABA_PAYWAY_API_KEY or '').strip()
+    if not merchant_id or not api_key or not tran_id:
+        return None
+
+    req_time = timezone.now().strftime('%Y%m%d%H%M%S')
+    payload = f'{req_time}{merchant_id}{tran_id}'
+    digest = hmac.new(api_key.encode('utf-8'), payload.encode('utf-8'), hashlib.sha512).digest()
+    body = {
+        'req_time': req_time,
+        'merchant_id': merchant_id,
+        'tran_id': tran_id,
+        'hash': base64.b64encode(digest).decode('utf-8'),
+    }
+    try:
+        import requests
+        response = requests.post(get_payway_check_endpoint(), json=body, timeout=4)
+        response.raise_for_status()
+        result = response.json()
+    except Exception:
+        return None
+
+    paid, apv = aba_check_response_is_paid(result)
+    if not paid:
+        return None
+    return handle_aba_callback({
+        'tran_id': tran_id,
+        'status': '0',
+        'apv': apv,
+    })
+
+
 def _checkout_items_for_aba(checkout_data):
     from apps.products.models import Product, ProductSet
 
@@ -97,6 +153,9 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
 
     frontend_url = settings.FRONTEND_URL.rstrip('/')
     continue_success_url = f"{frontend_url}/order-success?reference={tran_id}"
+    if order_number is None:
+        status_token = signing.dumps({'reference': tran_id}, salt='aba-checkout-return')
+        continue_success_url += f"&status_token={status_token}"
     cancel_url = f"{frontend_url}/checkout"
     return_url = base64.b64encode(
         f"{settings.BACKEND_URL.rstrip('/')}/api/payments/aba/callback/".encode('utf-8')

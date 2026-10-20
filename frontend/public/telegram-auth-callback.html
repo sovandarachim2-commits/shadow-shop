@@ -68,6 +68,9 @@
           document.body.textContent = 'Telegram login was not received. You can close this tab.'
           return
         }
+        try {
+          localStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
+        } catch (e) {}
         var opener = window.opener
         if (opener && !opener.closed) {
           try {
@@ -80,7 +83,13 @@
         try {
           sessionStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
         } catch (e) {}
-        location.replace('/')
+        var back = '/'
+        try {
+          var saved = localStorage.getItem('shadow-shop-telegram-return') || ''
+          if (saved.charAt(0) === '/' && saved.charAt(1) !== '/' && saved.indexOf('/auth/telegram/callback') !== 0) back = saved
+          localStorage.removeItem('shadow-shop-telegram-return')
+        } catch (e) {}
+        location.replace(back)
       })()
     </script>
   </body>

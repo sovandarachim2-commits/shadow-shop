@@ -91,6 +91,10 @@ async function clearAuthSession() {
 }
 
 client.interceptors.request.use((config) => {
+  if (config.skipAuth) {
+    delete config.headers.Authorization
+    return config
+  }
   if (isAuthFreeRequest(config) || isPublicGetRequest(config)) {
     delete config.headers.Authorization
     return config
@@ -110,7 +114,7 @@ client.interceptors.response.use(
   },
   async (error) => {
     const original = error.config
-    if (error.response?.status === 401 && original && !original._retry && !isAuthFreeRequest(original) && !isPublicGetRequest(original)) {
+    if (error.response?.status === 401 && original && !original.skipAuth && !original._retry && !isAuthFreeRequest(original) && !isPublicGetRequest(original)) {
       original._retry = true
       const refresh = localStorage.getItem('refresh_token')
       if (refresh) {

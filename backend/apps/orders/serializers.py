@@ -476,6 +476,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[c[0] for c in Order.STATUS_CHOICES], required=False)
     payment_method = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_METHOD_CHOICES], required=False, allow_blank=True)
     payment_status = serializers.ChoiceField(choices=[c[0] for c in Order.PAYMENT_STATUS_CHOICES], required=False)
+    transaction_reference = serializers.CharField(required=False, allow_blank=True, max_length=100, write_only=True)
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     discount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     notes = serializers.CharField(required=False, allow_blank=True)
@@ -490,6 +491,8 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         if request and getattr(request.user, 'role', None) == 'seller':
             errors = {}
             order = self.instance
+            if attrs.get('transaction_reference'):
+                errors['transaction_reference'] = 'Sellers cannot record payment transaction references.'
             if order and (order.printed_at or order.status == Order.STATUS_PRINTED):
                 raise serializers.ValidationError('Sellers cannot update printed orders.')
             if attrs.get('status') not in (None, *SELLER_ALLOWED_ORDER_STATUSES):
@@ -533,6 +536,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         request = self.context['request']
         items_data = validated_data.pop('items', None)
         customer_info = validated_data.pop('customer_info', None)
+        transaction_reference = validated_data.pop('transaction_reference', '').strip()
 
         with transaction.atomic():
             old_status = order.status
@@ -632,13 +636,31 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                 payment_changes.append(f'status {old_payment_status or "-"} -> {order.payment_status or "-"}')
             if old_payment_method != order.payment_method:
                 payment_changes.append(f'method {old_payment_method or "-"} -> {order.payment_method or "-"}')
-            if payment_changes:
+            if payment_changes or transaction_reference:
+                history_note = f'Payment updated: {"; ".join(payment_changes) or "transaction reference recorded"}'
+                if transaction_reference:
+                    history_note += f'; transaction reference: {transaction_reference}'
                 OrderStatusHistory.objects.create(
                     order=order,
                     status=order.status,
                     changed_by=request.user,
-                    note=f'Payment updated: {"; ".join(payment_changes)}',
+                    note=history_note,
                 )
+            if transaction_reference and order.payment_status == 'paid':
+                from apps.finance.models import Revenue
+                revenue, created = Revenue.objects.get_or_create(
+                    order=order,
+                    defaults={
+                        'amount': order.grand_total,
+                        'payment_method': order.payment_method or 'cash',
+                        'reference': transaction_reference,
+                        'received_at': timezone.now(),
+                        'received_by': request.user,
+                    },
+                )
+                if not created and revenue.reference != transaction_reference:
+                    revenue.reference = transaction_reference
+                    revenue.save(update_fields=['reference'])
 
             from apps.notifications.services import TelegramService
             transaction.on_commit(lambda: TelegramService.notify_order_edited_async(order.id))

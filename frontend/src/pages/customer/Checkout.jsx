@@ -946,35 +946,39 @@ export default function Checkout() {
                   ? 'border-red-100'
                   : 'border-pink-100'
             }`}>
-              <div className={`flex items-center gap-3 rounded-2xl border p-3 ${
-                bakongPayment.status === 'paid'
-                  ? 'border-green-100 bg-green-50 text-green-700'
-                  : bakongPayment.status === 'expired'
-                    ? 'border-red-100 bg-red-50 text-red-700'
-                    : 'border-pink-100 bg-pink-50 text-pink-600'
-              }`}>
-                {bakongPayment.status !== 'pending' && (
+              {bakongPayment.status === 'pending' ? (
+                <div className="flex items-center justify-center gap-3 py-2">
+                  <svg className="h-8 w-8 animate-spin" viewBox="0 0 48 48" aria-hidden="true">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="#fbcfe8" strokeWidth="3" />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      fill="none"
+                      stroke="#db2777"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeDasharray="36 90"
+                    />
+                  </svg>
+                  <span className="text-sm font-black text-pink-600">{formatTimer(paymentSecondsLeft)}</span>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-3 rounded-2xl border p-3 ${
+                  bakongPayment.status === 'paid'
+                    ? 'border-green-100 bg-green-50 text-green-700'
+                    : 'border-red-100 bg-red-50 text-red-700'
+                }`}>
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
                     {bakongPayment.status === 'paid' ? <Check size={21} /> : <Clock size={21} />}
                   </div>
-                )}
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-black">
-                      {bakongPayment.status === 'paid'
-                        ? t('checkout.bakong.paymentReceived')
-                        : bakongPayment.status === 'expired'
-                          ? t('checkout.bakong.qrExpired')
-                          : t('checkout.bakong.waitingPayment')}
-                    </p>
-                    {bakongPayment.status === 'pending' && (
-                      <span className="rounded-full border border-pink-200 bg-pink-50 px-3 py-1 text-sm font-black text-pink-600">
-                        {formatTimer(paymentSecondsLeft)}
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-sm font-black">
+                    {bakongPayment.status === 'paid'
+                      ? t('checkout.bakong.paymentReceived')
+                      : t('checkout.bakong.qrExpired')}
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="mt-3">

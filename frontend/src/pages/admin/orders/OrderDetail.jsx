@@ -69,6 +69,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
     status: 'new',
     payment_status: 'unpaid',
     payment_method: 'cod',
+    transaction_reference: '',
     delivery_fee: 0,
     discount: 0,
     notes: '',
@@ -90,6 +91,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       status: order.status || 'new',
       payment_status: order.payment_status || 'unpaid',
       payment_method: order.payment_method || 'cod',
+      transaction_reference: '',
       delivery_fee: order.delivery_fee || 0,
       discount: order.discount || 0,
       notes: order.notes || '',
@@ -368,6 +370,17 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                   </select>
                 </div>
                 <div>
+                  <label className="label">Transaction ID / Reference <span className="font-normal text-gray-400">(optional)</span></label>
+                  <input
+                    className="input-field"
+                    type="text"
+                    maxLength={100}
+                    value={orderForm.transaction_reference}
+                    onChange={(e) => setOrderForm({ ...orderForm, transaction_reference: e.target.value })}
+                    placeholder="Bank transaction or receipt reference"
+                  />
+                </div>
+                <div>
                   <label className="label">Delivery Fee</label>
                   <input className="input-field" type="number" step="0.01" value={orderForm.delivery_fee} onChange={(e) => setOrderForm({ ...orderForm, delivery_fee: e.target.value })} />
                 </div>
@@ -418,6 +431,7 @@ export default function OrderDetail() {
   const [showOrderHistory, setShowOrderHistory] = useState(false)
   const [contactSalesReceipt, setContactSalesReceipt] = useState(null)
   const [payMethod, setPayMethod] = useState('cash')
+  const [payTransactionReference, setPayTransactionReference] = useState('')
   const [confirm, ConfirmDialog] = useConfirm()
 
   const { data: order, isLoading } = useQuery({
@@ -435,10 +449,14 @@ export default function OrderDetail() {
   })
 
   const markPaidMutation = useMutation({
-    mutationFn: () => ordersApi.orders.markPaid(id, { payment_method: payMethod }),
+    mutationFn: () => ordersApi.orders.markPaid(id, {
+      payment_method: payMethod,
+      transaction_reference: payTransactionReference.trim(),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['order', id] })
       setShowPayModal(false)
+      setPayTransactionReference('')
       toast.success('Payment recorded!')
     },
   })
@@ -709,7 +727,18 @@ export default function OrderDetail() {
               <option value="cod">Cash on Delivery</option>
             </select>
           </div>
-          <button onClick={() => markPaidMutation.mutate()} className="btn-primary w-full justify-center py-3 bg-green-600 hover:bg-green-700">
+          <div>
+            <label className="label">Transaction ID / Reference <span className="font-normal text-gray-400">(optional)</span></label>
+            <input
+              type="text"
+              maxLength={100}
+              value={payTransactionReference}
+              onChange={(e) => setPayTransactionReference(e.target.value)}
+              className="input-field"
+              placeholder="Bank transaction or receipt reference"
+            />
+          </div>
+          <button onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending} className="btn-primary w-full justify-center py-3 bg-green-600 hover:bg-green-700 disabled:opacity-60">
             <Check size={16} /> Confirm Payment
           </button>
         </div>

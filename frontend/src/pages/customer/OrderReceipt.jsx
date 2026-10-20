@@ -2,6 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Loader2, Printer, ReceiptText, ShoppingBag } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
+import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { formatFullAddressKhmer } from '@/utils/addressHelpers'
 import { KHMER_FONT_FAMILY } from '@/utils/constants'
@@ -39,6 +40,12 @@ export default function OrderReceipt() {
     enabled: !!id,
   })
 
+  const { data: siteSettings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+    staleTime: 2 * 60 * 1000,
+  })
+
   if (isLoading && !order) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -67,6 +74,7 @@ export default function OrderReceipt() {
   const discount = Number(order.discount || 0)
   const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
   const isPaid = order.payment_status === 'paid'
+  const storeName = siteSettings?.store_name?.trim() || 'Shadow Shop'
 
   return (
     <div className="print-preview-window mx-auto max-w-2xl pb-8">
@@ -85,7 +93,7 @@ export default function OrderReceipt() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-pink-600">
             <ReceiptText size={28} />
           </div>
-          <h2 className="mt-3 text-xl font-black text-gray-950">Shadow Shop</h2>
+          <h2 className="mt-3 text-xl font-black text-gray-950">{storeName}</h2>
           <p className="mt-1 text-xs font-semibold text-gray-400">Customer Receipt</p>
         </div>
 

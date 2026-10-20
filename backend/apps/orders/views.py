@@ -1,7 +1,7 @@
 from rest_framework import viewsets, generics, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -197,7 +197,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'grand_total']
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve', 'checkout', 'checkout_status'):
+        if self.action == 'checkout_status':
+            return [AllowAny()]
+        if self.action in ('list', 'retrieve', 'checkout'):
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaff()]
 
@@ -441,6 +443,12 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         payment_method = request.data.get('payment_method', 'cash')
+        transaction_reference = request.data.get('transaction_reference', '') or ''
+        if not isinstance(transaction_reference, str):
+            return Response({'transaction_reference': 'Enter a valid transaction reference.'}, status=status.HTTP_400_BAD_REQUEST)
+        transaction_reference = transaction_reference.strip()
+        if len(transaction_reference) > 100:
+            return Response({'transaction_reference': 'Transaction reference must be 100 characters or fewer.'}, status=status.HTTP_400_BAD_REQUEST)
         old_payment_status = order.payment_status
         old_payment_method = order.payment_method
         order.payment_status = 'paid'
@@ -453,25 +461,34 @@ class OrderViewSet(viewsets.ModelViewSet):
             note=(
                 f'Payment recorded: status {old_payment_status or "-"} -> paid; '
                 f'method {old_payment_method or "-"} -> {payment_method or "-"}'
+                + (f'; transaction reference: {transaction_reference}' if transaction_reference else '')
             ),
         )
         award_points_for_paid_order(order)
 
         from apps.finance.models import Revenue
-        Revenue.objects.get_or_create(
+        revenue, created = Revenue.objects.get_or_create(
             order=order,
             defaults={
                 'amount': order.grand_total,
                 'payment_method': payment_method,
+                'reference': transaction_reference,
                 'received_at': timezone.now(),
                 'received_by': request.user,
             }
         )
+        if not created and transaction_reference:
+            revenue.reference = transaction_reference
+            revenue.save(update_fields=['reference'])
 
         from apps.notifications.services import TelegramService
         TelegramService().notify_payment_received(order)
 
-        return Response({'payment_status': 'paid'})
+        return Response({
+            'payment_status': 'paid',
+            'payment_method': payment_method,
+            'transaction_reference': transaction_reference,
+        })
 
     @action(detail=False, methods=['post'])
     def validate_print_stock(self, request):
@@ -665,10 +682,21 @@ class OrderViewSet(viewsets.ModelViewSet):
         reference = request.query_params.get('reference')
         if not reference:
             return Response({'detail': 'reference is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        from django.core import signing
         from apps.payments.models import PendingCheckout
         from apps.payments.checkout_flow import get_pending_checkout_status
+        status_token = request.headers.get('X-Checkout-Status-Token') or request.query_params.get('status_token')
+        is_signed_return = False
+        if status_token:
+            try:
+                token_data = signing.loads(status_token, salt='aba-checkout-return', max_age=60 * 60 * 12)
+                is_signed_return = token_data.get('reference') == reference
+            except (signing.BadSignature, signing.SignatureExpired):
+                is_signed_return = False
+        if not is_signed_return and not request.user.is_authenticated:
+            return Response({'detail': 'A valid checkout return token is required.'}, status=status.HTTP_401_UNAUTHORIZED)
         try:
-            data = get_pending_checkout_status(request, reference)
+            data = get_pending_checkout_status(request, reference, allow_guest=is_signed_return)
         except PendingCheckout.DoesNotExist:
             return Response({'detail': 'Checkout session not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(data)

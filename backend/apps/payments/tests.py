@@ -3,7 +3,37 @@ from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
+from apps.payments.aba_services import aba_check_response_is_paid
 from apps.payments.services import _bakong_response_is_paid, _mark_bakong_paid
+
+
+class AbaCheckResponseTests(SimpleTestCase):
+    def test_approved_payment_is_paid(self):
+        paid, apv = aba_check_response_is_paid({
+            'status': {'code': '00', 'message': 'Success!'},
+            'data': {'payment_status_code': 0, 'payment_status': 'APPROVED', 'apv': '998877'},
+        })
+        self.assertTrue(paid)
+        self.assertEqual(apv, '998877')
+
+    def test_flat_sandbox_response_is_paid(self):
+        paid, apv = aba_check_response_is_paid({
+            'status': 0,
+            'description': 'approved',
+            'amount': 22.02,
+            'apv': '686077',
+            'payment_status': 'APPROVED',
+        })
+        self.assertTrue(paid)
+        self.assertEqual(apv, '686077')
+
+    def test_api_success_without_approval_is_not_paid(self):
+        paid, apv = aba_check_response_is_paid({
+            'status': {'code': '00', 'message': 'Success!'},
+            'data': {'payment_status_code': 2, 'payment_status': 'PENDING'},
+        })
+        self.assertFalse(paid)
+        self.assertEqual(apv, '')
 
 
 class BakongPaymentStatusTests(SimpleTestCase):

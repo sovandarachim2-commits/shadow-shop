@@ -38,7 +38,11 @@ export const ordersApi = {
     kanban: () => client.get('/orders/list/kanban/'),
     operationSummary: () => client.get('/orders/list/operation_summary/'),
     checkout: (data) => client.post('/orders/list/checkout/', data),
-    checkoutStatus: (reference) => client.get('/orders/list/checkout_status/', { params: { reference } }),
+    checkoutStatus: (reference, statusToken) => client.get('/orders/list/checkout_status/', {
+      params: { reference },
+      headers: statusToken ? { 'X-Checkout-Status-Token': statusToken } : undefined,
+      skipAuth: !!statusToken,
+    }),
   },
   prepareRecords: {
     list: (params) => client.get('/orders/prepare-records/', { params }),

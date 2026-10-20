@@ -209,6 +209,13 @@ export default function FlashSales() {
       })
   }, [saleItems, search])
 
+  const updateSaleListImmediately = (saleType, id, changes) => {
+    const queryKey = saleType === 'set' ? ['flash-sale-product-sets'] : ['flash-sale-products']
+    queryClient.setQueryData(queryKey, (current = []) =>
+      current.map((item) => item.id === id ? { ...item, ...changes } : item),
+    )
+  }
+
   const saveMutation = useMutation({
     mutationFn: ({ product, form }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
       is_featured: form.status !== 'inactive',
@@ -217,7 +224,15 @@ export default function FlashSales() {
       flash_sale_starts_at: form.flash_sale_starts_at || null,
       flash_sale_ends_at: form.flash_sale_ends_at || null,
     }),
-    onSuccess: () => {
+    onSuccess: (response, { product, form }) => {
+      updateSaleListImmediately(product._saleType, product.id, {
+        ...response.data,
+        is_featured: form.status !== 'inactive',
+        flash_sale_price: Number(form.flash_sale_price),
+        flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
+        flash_sale_starts_at: form.flash_sale_starts_at || null,
+        flash_sale_ends_at: form.flash_sale_ends_at || null,
+      })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
@@ -234,7 +249,8 @@ export default function FlashSales() {
     mutationFn: ({ product, status }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
       is_featured: status === 'active',
     }),
-    onSuccess: () => {
+    onSuccess: (_, { product, status }) => {
+      updateSaleListImmediately(product._saleType, product.id, { is_featured: status === 'active' })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
@@ -253,7 +269,14 @@ export default function FlashSales() {
       flash_sale_starts_at: null,
       flash_sale_ends_at: null,
     }),
-    onSuccess: () => {
+    onSuccess: (_, product) => {
+      updateSaleListImmediately(product._saleType, product.id, {
+        is_featured: false,
+        flash_sale_price: null,
+        flash_sale_max_order_qty: null,
+        flash_sale_starts_at: null,
+        flash_sale_ends_at: null,
+      })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
       queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
