@@ -3,19 +3,22 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { 
   X, ChevronRight, LogIn, Mail, Lock, Eye, EyeOff, 
-  Loader2, User, Send, Sparkles, CheckCircle2, AlertCircle,
+  Loader2, User, Send, Sparkles, Gift, CheckCircle2, AlertCircle,
   LockKeyhole, MailCheck, ArrowLeft, Camera, UserRound, Phone, UsersRound,
   MapPin, ChevronDown
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import useAuthStore from '@/store/authStore'
 import toast from 'react-hot-toast'
+import { showWelcomeToast } from '@/components/customer/WelcomeToast'
+import GoogleSignInButton from '@/components/customer/GoogleSignInButton'
 import { authApi } from '@/api/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
 import { openBlankTelegramAuthWindow, openTelegramLoginPopup } from '@/utils/telegramLogin'
+import { socialProfileStep } from '@/utils/profileCompletion'
 import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
 const EMPTY_CAMBODIA_ADMIN = {
@@ -373,6 +376,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const fileInputRef = useRef(null)
+  const registerPasswordRef = useRef(null)
+  const registerConfirmRef = useRef(null)
 
   // Address Step States
   const [addressForm, setAddressForm] = useState({ 
@@ -416,9 +421,36 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Telegram widget / Google: close auth and shop immediately.
-  // Phone is required later on Address Book / Checkout, not at login.
-  const checkProfileCompletion = useCallback((_loggedInUser) => false, [])
+  // Google / Telegram: after sign-in, collect profile then address in this modal.
+  const startSocialCompletion = useCallback((loggedInUser) => {
+    const step = socialProfileStep(loggedInUser)
+    if (!step) return false
+    const fullName = [loggedInUser?.first_name, loggedInUser?.last_name].filter(Boolean).join(' ').trim()
+      || loggedInUser?.full_name
+      || ''
+    const safeName = ['google', 'telegram'].includes(fullName.toLowerCase()) ? '' : fullName
+    setProfileForm({
+      full_name: safeName,
+      email: loggedInUser?.email || '',
+      phone: normalizeCambodiaPhone(loggedInUser?.phone || ''),
+      gender: loggedInUser?.gender || '',
+      friend_referral_code: rf.referral_code || '',
+    })
+    setAvatarPreview(
+      loggedInUser?.avatar_url
+      || loggedInUser?.avatar
+      || loggedInUser?.google_picture_url
+      || loggedInUser?.telegram_photo_url
+      || ''
+    )
+    setAddressForm((form) => ({
+      ...form,
+      full_name: safeName,
+      phone: normalizeCambodiaPhone(loggedInUser?.phone || ''),
+    }))
+    setView(step)
+    return true
+  }, [rf.referral_code])
 
   const { data: telegramConfig } = useQuery({
     queryKey: ['telegram-login-config'],
@@ -443,8 +475,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
+      const continuing = user ? startSocialCompletion(user) : false
       if (user) {
-        if (!checkProfileCompletion(user)) onClose()
+        if (!continuing) onClose()
       } else if (type === 'register') setView('register')
       else if (type === 'login') setView('login')
       else setView('login')
@@ -453,7 +486,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       setShowLocationPicker(false)
       setLf({ username: '', password: '' })
       setAvatarFile(null)
-      setAvatarPreview(user?.avatar || '')
+      if (!continuing) setAvatarPreview(user?.avatar || '')
       setNotice(null)
       setRegisterErrors({})
       setProfileErrors({})
@@ -507,8 +540,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         referral_code: rf.referral_code 
       })
       if (loggedInUser) {
-        toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username || 'Google' }))
-        if (!checkProfileCompletion(loggedInUser)) {
+        showWelcomeToast()
+        if (!startSocialCompletion(loggedInUser)) {
           onClose()
         }
       }
@@ -518,7 +551,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     } finally {
       setGoogleLoading(false)
     }
-  }, [googleLogin, t, rf.referral_code, onClose, checkProfileCompletion])
+  }, [googleLogin, t, rf.referral_code, onClose, startSocialCompletion])
 
   const initializeGoogleIdentity = useCallback(async () => {
     await loadGoogleIdentityScript()
@@ -528,6 +561,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       client_id: googleClientId,
       callback: handleGoogleCredential,
       auto_select: false,
+      cancel_on_tap_outside: true,
+      itp_support: true,
+      use_fedcm_for_prompt: false,
     })
   }, [googleClientId, handleGoogleCredential])
 
@@ -549,17 +585,12 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     setGoogleLoading(true)
     try {
       await initializeGoogleIdentity()
-      window.google.accounts.id.prompt((notification) => {
-        if (notification.isDismissedMoment?.() && notification.getDismissedReason?.() !== 'credential_returned') {
-          setGoogleLoading(false)
-        }
-        if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
-          setGoogleFallback(true)
-          setGoogleLoading(false)
-        }
-      })
+      window.google.accounts.id.cancel?.()
+      await triggerGoogleButtonFallback()
+      window.setTimeout(() => setGoogleLoading(false), 8000)
     } catch {
       setGoogleLoading(false)
+      setGoogleFallback(true)
       setNotice({ type: 'error', message: t('auth.googleLoadFailed') })
     }
   }
@@ -605,8 +636,8 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               }),
         referral_code: rf.referral_code,
       })
-      toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
-      if (!checkProfileCompletion(loggedInUser)) {
+      showWelcomeToast()
+      if (!startSocialCompletion(loggedInUser)) {
         onClose()
       }
     } catch (err) {
@@ -632,19 +663,37 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     setLoading(true)
     try {
       const u = await login({ ...lf, username: lf.username.trim() })
-      toast.success(t('auth.welcomeBackUser', { name: u.first_name || u.username }))
-      if (!checkProfileCompletion(u)) {
-        onClose()
-      }
+      showWelcomeToast({ returning: true })
+      onClose()
     } catch (err) {
       setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.invalidCredentials') })
     } finally { setLoading(false) }
   }
 
+  const readRegisterPasswords = () => ({
+    password: registerPasswordRef.current?.value ?? rf.password,
+    confirm_password: registerConfirmRef.current?.value ?? rf.confirm_password,
+  })
+
+  const updateRegisterPassword = (field, value) => {
+    const current = readRegisterPasswords()
+    const next = { ...current, [field]: value }
+    setRf((form) => ({ ...form, password: next.password, confirm_password: next.confirm_password }))
+    setRegisterErrors((errors) => {
+      if (!errors.password && !errors.confirm_password) return errors
+      const nextErrors = { ...errors }
+      if (next.password) delete nextErrors.password
+      if (next.password === next.confirm_password) delete nextErrors.confirm_password
+      return nextErrors
+    })
+  }
+
   const handleRegister = async (e) => {
     e.preventDefault()
     if (loading || googleLoading || telegramLoading) return
-    const { full_name, email, password, confirm_password, terms } = rf
+    const { full_name, email } = rf
+    const { password, confirm_password } = readRegisterPasswords()
+    setRf((form) => ({ ...form, password, confirm_password }))
     const errors = {}
     if (!full_name.trim()) errors.full_name = t('auth.validationNameRequired')
     if (!email.trim()) errors.email = t('auth.validationEmailRequired')
@@ -663,7 +712,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         last_name: rest.join(' '), 
         password, 
         confirm_password,
-        referral_code: rf.referral_code 
       })
       toast.success(t('auth.verificationCodeSent'))
       setDigits(['', '', '', ''])
@@ -720,7 +768,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     try {
       const result = await verifyEmailCode({ email: rf.email.trim().toLowerCase(), code })
       
-      toast.success(t('auth.welcomeUser', { name: result.user.first_name || result.user.username }))
+      showWelcomeToast()
       
       // Initialize profile form with what we know
       setProfileForm({
@@ -809,6 +857,10 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       if (data.has_address === true || user?.has_address === true) onClose()
       else setView('address')
     } catch (error) {
+      const referralError = flattenApiError(error.response?.data?.friend_referral_code)
+      if (referralError) {
+        setProfileErrors({ friend_referral_code: referralError })
+      }
       const message = translateAuthError(error.response?.data, t, 'completeProfile.completeFailed')
       setNotice({ type: 'error', message })
       toast.error(message)
@@ -1010,13 +1062,18 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-5">
-              {googleFallback ? <div className="flex min-w-0 items-center justify-center overflow-hidden" ref={googleFallbackRef} /> : <button 
-                onClick={openGoogleLogin} 
-                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+              {googleFallback ? <div className="flex min-w-0 items-center justify-center overflow-hidden" ref={googleFallbackRef} /> : (
+              <GoogleSignInButton
+                clientId={googleLoginEnabled ? googleClientId : ''}
+                onCredential={handleGoogleCredential}
+                onClick={openGoogleLogin}
+                disabled={googleLoading}
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
               >
                 {googleLoading ? <Loader2 size={20} className="animate-spin text-slate-400" /> : <GoogleMark size={20} />}
                 {t('auth.google')}
-              </button>}
+              </GoogleSignInButton>
+              )}
               <button 
                 type="button"
                 onClick={openTelegramLogin}
@@ -1096,24 +1153,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </div>
 
               <div>
-                <label htmlFor="shop-register-referral" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">
-                  {t('completeProfile.referralCodeOptional')}
-                </label>
-                <input
-                  type="text"
-                  id="shop-register-referral"
-                  value={rf.referral_code}
-                  onChange={(e) => setRf((f) => ({ ...f, referral_code: e.target.value.toUpperCase() }))}
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                  maxLength={20}
-                  placeholder={t('completeProfile.referralCodePlaceholder')}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-5 text-[15px] font-medium text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-pink-300 focus:bg-white focus:ring-4 focus:ring-pink-50"
-                />
-                <p className="mt-1.5 px-1 text-xs font-medium text-slate-400">{t('completeProfile.referralCodeHelper')}</p>
-              </div>
-
-              <div>
                 <label htmlFor="shop-register-password" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
                 <div className={cn(
                   "flex h-12 items-center gap-3 rounded-xl border bg-slate-50/50 px-5 transition-all duration-300",
@@ -1121,13 +1160,15 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 )}>
                   <Lock size={20} className="text-slate-400" />
                   <input 
+                    ref={registerPasswordRef}
                     type={showPass ? 'text' : 'password'} 
                     value={rf.password} 
                     id="shop-register-password"
                     name="new-password"
                     autoComplete="new-password"
                     aria-invalid={Boolean(registerErrors.password)}
-                    onChange={(e) => setRf(f => ({ ...f, password: e.target.value }))}
+                    onChange={(e) => updateRegisterPassword('password', e.target.value)}
+                    onInput={(e) => updateRegisterPassword('password', e.target.value)}
                     placeholder={t('auth.passwordPlaceholder')}
                     className="flex-1 min-w-0 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
@@ -1150,13 +1191,15 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 )}>
                   <Lock size={20} className="text-slate-400" />
                   <input 
+                    ref={registerConfirmRef}
                     type={showConfirm ? 'text' : 'password'} 
                     value={rf.confirm_password} 
                     id="shop-register-confirm"
                     name="confirm-password"
                     autoComplete="new-password"
                     aria-invalid={Boolean(registerErrors.confirm_password)}
-                    onChange={(e) => setRf(f => ({ ...f, confirm_password: e.target.value }))}
+                    onChange={(e) => updateRegisterPassword('confirm_password', e.target.value)}
+                    onInput={(e) => updateRegisterPassword('confirm_password', e.target.value)}
                     placeholder={t('auth.confirmPassword')}
                     className="flex-1 min-w-0 bg-transparent text-[15px] font-medium text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium"
                   />
@@ -1187,13 +1230,18 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-5">
-              {googleFallback ? <div className="flex min-w-0 items-center justify-center overflow-hidden" ref={googleFallbackRef} /> : <button 
-                onClick={openGoogleLogin} 
-                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
+              {googleFallback ? <div className="flex min-w-0 items-center justify-center overflow-hidden" ref={googleFallbackRef} /> : (
+              <GoogleSignInButton
+                clientId={googleLoginEnabled ? googleClientId : ''}
+                onCredential={handleGoogleCredential}
+                onClick={openGoogleLogin}
+                disabled={googleLoading}
+                className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm"
               >
                 {googleLoading ? <Loader2 size={20} className="animate-spin text-slate-400" /> : <GoogleMark size={20} />}
                 {t('auth.google')}
-              </button>}
+              </GoogleSignInButton>
+              )}
               <button 
                 type="button"
                 onClick={openTelegramLogin}
@@ -1466,23 +1514,45 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     )}
                   </div>
 
-                  <div>
-                    <label htmlFor="shop-profile-referral" className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                      {t('completeProfile.referralCodeOptional')}
-                    </label>
-                    <div className="flex h-14 items-center gap-4 rounded-[20px] border border-slate-200 bg-slate-50/50 px-5 transition-all duration-300 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50">
-                      <Sparkles size={20} className="text-slate-400" />
-                      <input 
-                        value={profileForm.friend_referral_code}
+                  {user?.referred_by ? (
+                    <div className="flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                      <CheckCircle2 size={17} />
+                      {t('rewardsPage.referral.friendCodeAlreadySaved')}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 to-white p-4 shadow-sm shadow-rose-100/50">
+                      <div className="mb-3 flex items-center gap-3 text-left">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#EC197A] shadow-sm ring-1 ring-rose-100">
+                          <Gift size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[14px] font-bold text-slate-800">{t('completeProfile.referralCardTitle')}</p>
+                          <p className="mt-0.5 text-[12px] font-medium leading-relaxed text-slate-500">{t('completeProfile.referralCardSubtitle')}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">{t('completeProfile.optional')}</span>
+                      </div>
+                      <input
                         id="shop-profile-referral"
+                        value={profileForm.friend_referral_code}
                         autoCapitalize="characters"
                         spellCheck={false}
-                        onChange={(e) => setProfileForm(f => ({ ...f, friend_referral_code: e.target.value.toUpperCase() }))}
-                        placeholder="CODE"
-                        className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+                        maxLength={20}
+                        aria-invalid={Boolean(profileErrors.friend_referral_code)}
+                        onChange={(e) => {
+                          setProfileForm(f => ({ ...f, friend_referral_code: e.target.value.toUpperCase() }))
+                          setProfileErrors(errors => ({ ...errors, friend_referral_code: '' }))
+                        }}
+                        placeholder={t('completeProfile.referralCodePlaceholder')}
+                        className={cn(
+                          "h-12 w-full rounded-xl border bg-white px-4 text-[15px] font-semibold uppercase tracking-wide text-slate-800 outline-none transition placeholder:font-medium placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-pink-300 focus:ring-4 focus:ring-pink-50",
+                          profileErrors.friend_referral_code ? "border-red-300" : "border-rose-100"
+                        )}
                       />
+                      {profileErrors.friend_referral_code && (
+                        <p className="mt-1.5 px-1 text-[12px] font-semibold text-red-500">{profileErrors.friend_referral_code}</p>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 

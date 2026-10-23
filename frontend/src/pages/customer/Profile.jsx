@@ -21,6 +21,11 @@ import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import './ProfileEditor.css'
 
+function firstApiMessage(value) {
+  if (Array.isArray(value)) return value.find((item) => typeof item === 'string' && item.trim()) || ''
+  return typeof value === 'string' ? value : ''
+}
+
 const ACCOUNT_MENU_ITEMS = [
   { icon: User, labelKey: 'profile.menuProfile', descKey: 'profile.menuProfileDesc', view: 'profile' },
   { icon: Package, labelKey: 'profile.myOrders', descKey: 'profile.menuOrdersDesc', view: 'orders', path: '/my-orders' },
@@ -154,7 +159,13 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.friend_referral_code?.[0] || body?.username?.[0] || body?.email?.[0] || body?.phone?.[0] || body?.gender?.[0] || body?.detail || t('profile.updateProfileFailed')
+      const message = firstApiMessage(body?.friend_referral_code)
+        || firstApiMessage(body?.username)
+        || firstApiMessage(body?.email)
+        || firstApiMessage(body?.phone)
+        || firstApiMessage(body?.gender)
+        || firstApiMessage(body?.detail)
+        || t('profile.updateProfileFailed')
       toast.error(message)
     },
   })
@@ -1616,8 +1627,9 @@ function FriendReferralCodeEditor({ t }) {
       toast.success(t('rewardsPage.referral.friendCodeSaved'))
     },
     onError: (error) => {
-      const message = error.response?.data?.friend_referral_code?.[0]
-        || error.response?.data?.detail
+      const body = error.response?.data
+      const message = firstApiMessage(body?.friend_referral_code)
+        || firstApiMessage(body?.detail)
         || t('rewardsPage.referral.friendCodeSaveFailed')
       toast.error(message)
     },

@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { showWelcomeToast } from '@/components/customer/WelcomeToast'
 import { useTranslation } from 'react-i18next'
 import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
@@ -108,8 +109,12 @@ export default function VerifyEmail() {
         setPendingWelcomeBonus(signupBonusPoints)
       }
 
-      toast.success(t('auth.welcomeUser', { name: result.user.first_name || result.user.username }))
-      navigate('/profile/complete', { replace: true, state: { from: location.state?.from || '/' } })
+      showWelcomeToast()
+      const referralCode = String(location.state?.referral_code || '').trim()
+      navigate(referralCode ? `/profile/complete?ref=${encodeURIComponent(referralCode)}` : '/profile/complete', {
+        replace: true,
+        state: { from: location.state?.from || '/' },
+      })
     } catch (error) {
       setNotice({
         type: 'error',

@@ -265,7 +265,7 @@
     "telegramLoginFailed": "Telegram login failed",
     "googleLoadFailed": "Could not load Google login.",
     "signedOut": "You have been signed out.",
-    "welcomeUser": "Welcome, {{name}}!",
+    "welcomeUser": "Welcome to Shadow Shop",
     "welcomeBonusTitle": "Welcome to Shadow Shop!",
     "welcomeBonusSubtitle": "You have earned bonus points for creating your new account.",
     "bonusPointsEarned": "Bonus Points Earned",
@@ -284,7 +284,7 @@
     "validationPasswordMismatch": "Passwords do not match.",
     "validationTermsRequired": "Please agree with Terms & Condition.",
     "pleaseFillAllFields": "Please fill in all fields",
-    "welcomeBackUser": "Welcome back, {{name}}!",
+    "welcomeBackUser": "Welcome back",
     "invalidCredentials": "Invalid credentials",
     "verificationCodeSent": "Verification code sent to your email",
     "registrationFailed": "Registration failed",
@@ -473,6 +473,7 @@
     "viewAllOrders": "View All Orders",
     "noOrdersYet": "No orders yet",
     "rewards": "Rewards",
+    "referralFriend": "Referral Friend",
     "rewardsAndPoints": "Rewards & Points",
     "coupons": "Coupons",
     "reviews": "Reviews",
@@ -680,8 +681,11 @@
     "enterName": "Please enter your name.",
     "enterPhone": "Please enter your phone number.",
     "selectGenderError": "Please select gender.",
-    "referralCodeOptional": "Referral Code (Optional)",
-    "referralCodePlaceholder": "Enter friend's referral code",
+    "referralCardTitle": "Were you invited by a friend?",
+    "referralCardSubtitle": "Enter their invite code to get your referral reward.",
+    "optional": "OPTIONAL",
+    "referralCodeOptional": "Friend's Invite Code",
+    "referralCodePlaceholder": "Enter invite code",
     "referralCodeHelper": "If a friend invited you, enter their code here to earn rewards.",
     "passwordMin": "Password is required.",
     "passwordMismatch": "Passwords do not match.",
@@ -863,6 +867,10 @@
   },
   "rewardsPage": {
     "pts": "pts",
+    "checkin": {
+      "successTitle": "Check-in Successful!",
+      "successDesc": "You have earned points for today."
+    },
     "viewAll": "View All",
     "redeemBtn": "Redeem",
     "exchangeBtn": "Exchange",
@@ -925,10 +933,11 @@
       "couponApplied": "{{code}} applied",
       "checkinSuccess": "Daily check-in points added",
       "checkinFailed": "Could not check in",
-      "linkCopied": "Store link copied"
+      "linkCopied": "Store link copied",
+      "copyFailed": "Could not copy"
     },
     "main": {
-      "title": "Shadow Rewards",
+      "title": "Rewards",
       "subtitle": "Earn points and redeem rewards.",
       "earnPoints": "Earn Points",
       "earnPointsDesc": "See how to earn",
@@ -1008,7 +1017,7 @@
       "promoDesc": "The more points you earn, the more you save."
     },
     "referral": {
-      "subtitle": "Invite friends to discover Shadow Shop and earn rewards together.",
+      "subtitle": "Invite friends and earn points.",
       "heroTitle": "Refer a Friend",
       "heroDesc": "Invite your friends, grow our community, and earn rewards together.",
       "shareLove": "SHARE THE LOVE",
@@ -1027,6 +1036,7 @@
       "friendCodeRequired": "Enter your friend's referral code.",
       "friendCodeSaveFailed": "Could not save the referral code.",
       "copy": "Copy",
+      "copied": "Copied",
       "shareTelegram": "Share on Telegram",
       "shareWhatsApp": "Share on WhatsApp",
       "shareLink": "Share Link",
@@ -1110,7 +1120,8 @@
     "blog": "Blog",
     "sitemap": "Shop All Products",
     "downloadApp": "Download App",
-    "downloadAppText": "Get our mobile app for a better shopping experience."
+    "downloadAppText": "Get our mobile app for a better shopping experience.",
+    "comingSoon": "Coming soon"
   },
   "verifyEmail": {
     "createFirst": "Please create your account first.",

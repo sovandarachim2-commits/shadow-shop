@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'shadow-shop-v7'
+const CACHE_VERSION = 'shadow-shop-v8'
 const APP_SHELL = [
   '/manifest.webmanifest',
   '/app-icon.svg',
@@ -55,6 +55,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+    return
+  }
+
+  // Vite serves these unhashed. A cached copy breaks new exports after a reload.
+  if (
+    url.pathname.startsWith('/src/')
+    || url.pathname.startsWith('/@')
+    || url.pathname.startsWith('/node_modules/')
+  ) {
     return
   }
 

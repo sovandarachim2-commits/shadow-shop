@@ -265,7 +265,7 @@
     "telegramLoginFailed": "ចូលតាម Telegram មិនបានជោគជ័យ",
     "googleLoadFailed": "មិនអាចផ្ទុកការចូលតាម Google បានទេ។",
     "signedOut": "អ្នកបានចាកចេញពីគណនីហើយ។",
-    "welcomeUser": "សូមស្វាគមន៍ {{name}}!",
+    "welcomeUser": "សូមស្វាគមន៍មកកាន់ Shadow Shop",
     "welcomeBonusTitle": "សូមស្វាគមន៍មកកាន់ Shadow Shop!",
     "welcomeBonusSubtitle": "អ្នកបានទទួលពិន្ទុបន្ថែមសម្រាប់ការបង្កើតគណនីថ្មី។",
     "bonusPointsEarned": "ពិន្ទុបន្ថែមដែលទទួលបាន",
@@ -284,7 +284,7 @@
     "validationPasswordMismatch": "ពាក្យសម្ងាត់មិនដូចគ្នាទេ។",
     "validationTermsRequired": "សូមយល់ព្រមជាមួយលក្ខខណ្ឌប្រើប្រាស់។",
     "pleaseFillAllFields": "សូមបំពេញព័ត៌មានទាំងអស់។",
-    "welcomeBackUser": "សូមស្វាគមន៍មកវិញ {{name}}!",
+    "welcomeBackUser": "សូមស្វាគមន៍មកវិញ",
     "invalidCredentials": "ព័ត៌មានចូលគណនីមិនត្រឹមត្រូវ។",
     "verificationCodeSent": "លេខកូដផ្ទៀងផ្ទាត់បានផ្ញើទៅអ៊ីមែលរបស់អ្នក។",
     "registrationFailed": "ចុះឈ្មោះមិនបានជោគជ័យ។",
@@ -473,6 +473,7 @@
     "viewAllOrders": "មើលការបញ្ជាទិញទាំងអស់",
     "noOrdersYet": "មិនទាន់មានការបញ្ជាទិញ",
     "rewards": "រង្វាន់",
+    "referralFriend": "ណែនាំមិត្តភក្តិ",
     "rewardsAndPoints": "រង្វាន់ & ពិន្ទុ",
     "coupons": "គូប៉ុង",
     "reviews": "មតិ",
@@ -679,8 +680,11 @@
     "enterName": "សូមបញ្ចូលឈ្មោះរបស់អ្នក។",
     "enterPhone": "សូមបញ្ចូលលេខទូរស័ព្ទរបស់អ្នក។",
     "selectGenderError": "សូមជ្រើសរើសភេទ។",
-    "referralCodeOptional": "លេខកូដណែនាំ (ជម្រើស)",
-    "referralCodePlaceholder": "បញ្ចូលលេខកូដណែនាំរបស់មិត្តភក្តិ",
+    "referralCardTitle": "មានមិត្តភក្តិណែនាំអ្នកមែនទេ?",
+    "referralCardSubtitle": "បញ្ចូលលេខកូដរបស់ពួកគេ ដើម្បីទទួលបានរង្វាន់ណែនាំ។",
+    "optional": "ស្រេចចិត្ត",
+    "referralCodeOptional": "លេខកូដណែនាំរបស់មិត្តភក្តិ",
+    "referralCodePlaceholder": "បញ្ចូលលេខកូដណែនាំ",
     "referralCodeHelper": "ប្រសិនបើមិត្តភក្តិបានណែនាំអ្នក សូមបញ្ចូលលេខកូដរបស់ពួកគេនៅទីនេះដើម្បីទទួលបានរង្វាន់។",
     "passwordMin": "ត្រូវបញ្ចូលពាក្យសម្ងាត់។",
     "passwordMismatch": "ពាក្យសម្ងាត់មិនដូចគ្នា។",
@@ -862,6 +866,10 @@
   },
   "rewardsPage": {
     "pts": "ពិន្ទុ",
+    "checkin": {
+      "successTitle": "ការចុះឈ្មោះបានជោគជ័យ!",
+      "successDesc": "អ្នកទទួលបានពិន្ទុសម្រាប់ថ្ងៃនេះ។"
+    },
     "viewAll": "មើលទាំងអស់",
     "redeemBtn": "ប្ដូររង្វាន់",
     "exchangeBtn": "ប្ដូរ",
@@ -924,10 +932,11 @@
       "couponApplied": "បានអនុវត្ត {{code}}",
       "checkinSuccess": "បានបន្ថែមពិន្ទុចុះឈ្មោះប្រចាំថ្ងៃ",
       "checkinFailed": "មិនអាចចុះឈ្មោះបានទេ",
-      "linkCopied": "បានចម្លងតំណភ្ជាប់ហាង"
+      "linkCopied": "បានចម្លងតំណភ្ជាប់ហាង",
+      "copyFailed": "មិនអាចចម្លងបានទេ"
     },
     "main": {
-      "title": "រង្វាន់ Shadow",
+      "title": "រង្វាន់",
       "subtitle": "រកពិន្ទុ និងប្ដូររង្វាន់។",
       "earnPoints": "រកពិន្ទុ",
       "earnPointsDesc": "មើលវិធីរកពិន្ទុ",
@@ -1007,7 +1016,7 @@
       "promoDesc": "ពិន្ទុច្រើន សន្សំច្រើន។"
     },
     "referral": {
-      "subtitle": "អញ្ជើញមិត្តភក្តិមកស្វែងយល់ពី Shadow Shop និងទទួលបានរង្វាន់ជាមួយគ្នា។",
+      "subtitle": "អញ្ជើញមិត្តភក្តិ និងទទួលបានពិន្ទុ។",
       "heroTitle": "ណែនាំមិត្តភក្តិ",
       "heroDesc": "អញ្ជើញមិត្តភក្តិរបស់អ្នក ពង្រីកសហគមន៍របស់យើង និងទទួលបានរង្វាន់ជាមួយគ្នា។",
       "shareLove": "ចែករំលែកក្តីស្រឡាញ់",
@@ -1026,6 +1035,7 @@
       "friendCodeRequired": "សូមបញ្ចូលលេខកូដណែនាំរបស់មិត្តភក្តិ។",
       "friendCodeSaveFailed": "មិនអាចរក្សាទុកលេខកូដណែនាំបានទេ។",
       "copy": "ចម្លង",
+      "copied": "បានចម្លង",
       "shareTelegram": "ចែករំលែកតាម Telegram",
       "shareWhatsApp": "ចែករំលែកតាម WhatsApp",
       "shareLink": "ចែករំលែកតំណភ្ជាប់",
@@ -1109,7 +1119,8 @@
     "blog": "ប្លក់",
     "sitemap": "ទិញផលិតផលទាំងអស់",
     "downloadApp": "ទាញយកកម្មវិធី",
-    "downloadAppText": "ទទួលបានកម្មវិធីទូរស័ព្ទរបស់យើងសម្រាប់បទពិសោធន៍ទិញទំនិញប្រសើរជាងនេះ។"
+    "downloadAppText": "ទទួលបានកម្មវិធីទូរស័ព្ទរបស់យើងសម្រាប់បទពិសោធន៍ទិញទំនិញប្រសើរជាងនេះ។",
+    "comingSoon": "មកដល់ឆាប់ៗ"
   },
   "verifyEmail": {
     "createFirst": "សូមបង្កើតគណនីរបស់អ្នកជាមុនសិន។",

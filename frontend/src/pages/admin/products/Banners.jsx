@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ImageIcon, Pencil, Plus, Trash2, ToggleLeft, ToggleRight, GripVertical } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
+import { authApi } from '@/api/auth'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import PageHeader from '@/components/shared/PageHeader'
 
@@ -168,6 +169,117 @@ function BannerForm({ banner, onClose, onSaved }) {
   )
 }
 
+function CardBackgroundField({ label, hint, imageUrl, fieldName, clearName, gradientClass }) {
+  const qc = useQueryClient()
+  const fileRef = useRef(null)
+  const [preview, setPreview] = useState(imageUrl || '')
+  const [file, setFile] = useState(null)
+  const [compressing, setCompressing] = useState(false)
+
+  useEffect(() => {
+    if (!file) setPreview(imageUrl || '')
+  }, [imageUrl, file])
+
+  const saveMutation = useMutation({
+    mutationFn: (fd) => authApi.siteSettings.update(fd),
+    onSuccess: () => {
+      setFile(null)
+      qc.invalidateQueries({ queryKey: ['site-settings'] })
+      qc.invalidateQueries({ queryKey: ['home-feed'] })
+      toast.success(`${label} background saved`)
+    },
+    onError: () => toast.error('Could not save the background'),
+  })
+
+  const handleFile = async (event) => {
+    const next = event.target.files?.[0]
+    if (!next) return
+    setPreview(URL.createObjectURL(next))
+    setCompressing(true)
+    try {
+      setFile(await compressBannerImage(next, 1200, 0.86))
+    } finally {
+      setCompressing(false)
+    }
+  }
+
+  const save = () => {
+    if (!file) return
+    const fd = new FormData()
+    fd.append(fieldName, file)
+    saveMutation.mutate(fd)
+  }
+
+  const remove = () => {
+    const fd = new FormData()
+    fd.append(clearName, '1')
+    setPreview('')
+    setFile(null)
+    saveMutation.mutate(fd)
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <p className="text-sm font-black text-gray-950">{label}</p>
+      <p className="mt-1 text-xs font-medium text-gray-500">{hint}</p>
+      <p className="mt-1 text-xs font-semibold text-gray-400">Recommended 800×640 (5:4)</p>
+      <button
+        type="button"
+        onClick={() => !compressing && fileRef.current?.click()}
+        className={`relative mt-3 flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/40 ${gradientClass}`}
+      >
+        {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" /> : null}
+        <span className="relative z-10 rounded-full bg-black/35 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm">
+          {compressing ? 'Compressing...' : preview ? 'Change background' : 'Add background'}
+        </span>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      </button>
+      <div className="mt-3 flex gap-2">
+        <button type="button" onClick={save} disabled={!file || compressing || saveMutation.isPending} className="btn-primary disabled:opacity-50">
+          {saveMutation.isPending ? 'Saving...' : 'Save'}
+        </button>
+        {(preview || imageUrl) && (
+          <button type="button" onClick={remove} disabled={saveMutation.isPending} className="btn-secondary">
+            Remove
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function HomeCardBackgrounds() {
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => authApi.siteSettings.get().then((response) => response.data),
+  })
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-base font-black text-gray-950">Side card backgrounds</h2>
+      <p className="mt-1 text-sm text-gray-500">The photo sits behind the text on the two home page cards. Recommended size is 800×640 (5:4).</p>
+      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        <CardBackgroundField
+          label="Flash Sale"
+          hint="Limited Time Offers card"
+          imageUrl={settings?.flash_card_background_url}
+          fieldName="flash_card_background"
+          clearName="clear_flash_card_background"
+          gradientClass="bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700"
+        />
+        <CardBackgroundField
+          label="VIP Rewards"
+          hint="VIP Rewards & Points card"
+          imageUrl={settings?.rewards_card_background_url}
+          fieldName="rewards_card_background"
+          clearName="clear_rewards_card_background"
+          gradientClass="bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900"
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function Banners() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
@@ -208,6 +320,8 @@ export default function Banners() {
           </button>
         }
       />
+
+      <HomeCardBackgrounds />
 
       {isLoading ? (
         <div className="space-y-3">

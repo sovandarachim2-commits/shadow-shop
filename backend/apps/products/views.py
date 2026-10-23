@@ -483,12 +483,24 @@ class HomeFeedView(generics.GenericAPIView):
             ),
         )
 
+        from apps.accounts.models import SiteSettings
+        site = SiteSettings.get_solo()
+
+        def card_background(image):
+            if not image:
+                return None
+            return request.build_absolute_uri(image.url)
+
         payload = {
             'banners': BannerSerializer(
                 Banner.objects.filter(is_active=True),
                 many=True,
                 context=ctx,
             ).data,
+            'side_cards': {
+                'flash_sale_background': card_background(site.flash_card_background),
+                'rewards_background': card_background(site.rewards_card_background),
+            },
             'categories': CategorySerializer(categories, many=True, context=ctx).data,
             'brands': BrandSerializer(brands, many=True, context=ctx).data,
             'best_sellers': ProductListSerializer(best_sellers, many=True, context=ctx).data,

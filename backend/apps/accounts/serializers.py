@@ -396,19 +396,25 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
     login_logo_url = serializers.SerializerMethodField()
     splash_logo_url = serializers.SerializerMethodField()
     print_logo_url = serializers.SerializerMethodField()
+    flash_card_background_url = serializers.SerializerMethodField()
+    rewards_card_background_url = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteSettings
         fields = ['id', 'store_name', 'store_phone', 'store_email', 'store_address',
                   'logo', 'favicon', 'login_logo', 'splash_logo', 'print_logo',
+                  'flash_card_background', 'rewards_card_background',
                   'logo_url', 'favicon_url', 'login_logo_url', 'splash_logo_url', 'print_logo_url',
+                  'flash_card_background_url', 'rewards_card_background_url',
                   'splash_enabled', 'splash_duration_ms', 'print_logo_size', 'print_qr_size', 'currency', 'timezone',
                   'delivery_fees', 'payment_methods', 'footer_menus']
         extra_kwargs = {'logo': {'write_only': True, 'required': False},
                         'favicon': {'write_only': True, 'required': False},
                         'login_logo': {'write_only': True, 'required': False},
                         'splash_logo': {'write_only': True, 'required': False},
-                        'print_logo': {'write_only': True, 'required': False}}
+                        'print_logo': {'write_only': True, 'required': False},
+                        'flash_card_background': {'write_only': True, 'required': False},
+                        'rewards_card_background': {'write_only': True, 'required': False}}
 
     def get_logo_url(self, obj):
         if obj.logo:
@@ -439,6 +445,35 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             return request.build_absolute_uri(obj.print_logo.url) if request else obj.print_logo.url
         return None
+
+    def _image_url(self, image):
+        if not image:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(image.url) if request else image.url
+
+    def get_flash_card_background_url(self, obj):
+        return self._image_url(obj.flash_card_background)
+
+    def get_rewards_card_background_url(self, obj):
+        return self._image_url(obj.rewards_card_background)
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        raw = request.data if request is not None else {}
+        for field_name, flag in (
+            ('flash_card_background', 'clear_flash_card_background'),
+            ('rewards_card_background', 'clear_rewards_card_background'),
+        ):
+            if field_name in validated_data:
+                continue
+            if str(raw.get(flag, '')).lower() not in {'1', 'true', 'yes'}:
+                continue
+            current = getattr(instance, field_name)
+            if current:
+                current.delete(save=False)
+            validated_data[field_name] = None
+        return super().update(instance, validated_data)
 
     def validate_payment_methods(self, value):
         if isinstance(value, str):

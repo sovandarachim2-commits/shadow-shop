@@ -7,6 +7,7 @@ import {
   User,
   Heart,
   Gift,
+  Users,
   MapPin,
   Percent,
   Star,
@@ -710,6 +711,14 @@ export default function CustomerLayout() {
                             <span>{t('profile.rewards')}</span>
                           </Link>
                           <Link
+                            to="/profile/rewards/referral"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
+                          >
+                            <Users size={18} />
+                            <span>{t('profile.referralFriend')}</span>
+                          </Link>
+                          <Link
                             to="/profile?view=coupons"
                             onClick={() => setIsProfileDropdownOpen(false)}
                             className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 hover:text-pink-600"
@@ -971,9 +980,13 @@ export default function CustomerLayout() {
           <div>
             <h4 className="font-bold">{t('footer.downloadApp')}</h4>
             <p className="mt-4 text-sm text-slate-300">{t('footer.downloadAppText')}</p>
-            <div className="mt-5 flex gap-3">
-              <div className="rounded-xl border border-white/10 bg-white px-4 py-2 text-xs font-bold text-gray-950">App Store</div>
-              <div className="rounded-xl border border-white/10 bg-white px-4 py-2 text-xs font-bold text-gray-950">Google Play</div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {['App Store', 'Google Play'].map((store) => (
+                <div key={store} className="rounded-xl border border-white/10 bg-white px-4 py-2 text-gray-950">
+                  <p className="text-xs font-bold leading-4">{store}</p>
+                  <p className="mt-0.5 text-[10px] font-semibold leading-4 text-pink-600">{t('footer.comingSoon')}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

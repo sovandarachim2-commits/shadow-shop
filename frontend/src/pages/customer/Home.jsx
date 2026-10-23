@@ -333,6 +333,16 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
 
 // ─── Flash sale card ──────────────────────────────────────────────────────────
 // ─── Home ─────────────────────────────────────────────────────────────────────
+function CardBackdrop({ imageUrl, tintClass }) {
+  if (!imageUrl) return null
+  return (
+    <>
+      <img src={imageUrl} alt="" className="absolute inset-0 z-0 h-full w-full object-cover" />
+      <div className={`absolute inset-0 z-[1] ${tintClass}`} />
+    </>
+  )
+}
+
 export default function Home() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -398,6 +408,7 @@ export default function Home() {
   const showFlashSkeleton = (homeLoading && !flashData) || directFlashLoading
   const showNewSkeleton = homeLoading && !newArrivalData
   const banners = useMemo(() => bannersData || [], [bannersData])
+  const sideCards = homeData?.side_cards || {}
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => (brandsData && brandsData.length > 0 ? brandsData : DEFAULT_BRANDS), [brandsData])
   const marqueeBrands = useMemo(() => {
@@ -789,10 +800,11 @@ export default function Home() {
                   {/* Card 1: Live Flash Deals */}
                   <Link
                     to="/shop?filter=flash_sale"
-                    className="group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700 p-5 text-white shadow-lg shadow-pink-200/50 transition hover:shadow-xl hover:shadow-pink-300/60 active:scale-[0.99]"
+                    className={`group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-lg shadow-pink-200/50 transition hover:shadow-xl hover:shadow-pink-300/60 active:scale-[0.99] ${sideCards.flash_sale_background ? 'bg-pink-700' : 'bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700'}`}
                   >
-                    <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/10 blur-xl transition group-hover:scale-125" />
-                    <div>
+                    <CardBackdrop imageUrl={sideCards.flash_sale_background} tintClass="bg-gradient-to-t from-pink-950/70 via-rose-900/25 to-pink-950/20" />
+                    <div className="absolute -right-4 -top-4 z-[2] h-24 w-24 rounded-full bg-white/10 blur-xl transition group-hover:scale-125" />
+                    <div className="relative z-10">
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
                           <Zap size={13} className="fill-yellow-300 text-yellow-300" />
@@ -804,7 +816,7 @@ export default function Home() {
                       <p className="mt-1 text-xs text-pink-100">Save up to 50% on top cosmetics brands</p>
                     </div>
 
-                    <div className="mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+                    <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
                       <span className="text-xs font-bold text-white/90">Shop Deals</span>
                       <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm transition group-hover:bg-pink-50">
                         Explore →
@@ -815,10 +827,11 @@ export default function Home() {
                   {/* Card 2: VIP Rewards & Point Exchange */}
                   <Link
                     to="/profile/rewards"
-                    className="group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900 p-5 text-white shadow-lg shadow-indigo-200/50 transition hover:shadow-xl hover:shadow-indigo-300/60 active:scale-[0.99]"
+                    className={`group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-lg shadow-indigo-200/50 transition hover:shadow-xl hover:shadow-indigo-300/60 active:scale-[0.99] ${sideCards.rewards_background ? 'bg-indigo-950' : 'bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900'}`}
                   >
-                    <div className="absolute -right-4 -bottom-4 h-24 w-24 rounded-full bg-purple-500/20 blur-xl transition group-hover:scale-125" />
-                    <div>
+                    <CardBackdrop imageUrl={sideCards.rewards_background} tintClass="bg-gradient-to-t from-slate-950/75 via-indigo-950/30 to-indigo-950/15" />
+                    <div className="absolute -right-4 -bottom-4 z-[2] h-24 w-24 rounded-full bg-purple-500/20 blur-xl transition group-hover:scale-125" />
+                    <div className="relative z-10">
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
                           <Gift size={13} className="text-pink-300" />
@@ -830,7 +843,7 @@ export default function Home() {
                       <p className="mt-1 text-xs text-indigo-200">Redeem points for exclusive cosmetics & vouchers</p>
                     </div>
 
-                    <div className="mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+                    <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
                       <span className="text-xs font-bold text-white/90">Claim Rewards</span>
                       <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-indigo-900 shadow-sm transition group-hover:bg-indigo-50">
                         Redeem Now →

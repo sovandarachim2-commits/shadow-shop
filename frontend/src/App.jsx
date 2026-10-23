@@ -3,12 +3,13 @@ import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import toast, { Toaster } from 'react-hot-toast'
-import { ClipboardList, Lock } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClipboardList, Lock, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
+import { showWelcomeToast } from '@/components/customer/WelcomeToast'
 
 // Auth-critical first paint only. Layouts/home are lazy so /login stays light.
 import Login from '@/pages/Login'
@@ -443,7 +444,6 @@ function RequireStorefront({ children }) {
 }
 
 function AuthBootstrap() {
-  const { t } = useTranslation()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const clearSession = useAuthStore((s) => s.clearSession)
   const fetchMe = useAuthStore((s) => s.fetchMe)
@@ -483,7 +483,10 @@ function AuthBootstrap() {
     if (referralCode) body.referral_code = referralCode
     telegramLogin(body)
       .then((user) => {
-        toast.success(t('auth.welcomeUser', { name: user?.first_name || user?.username || '' }))
+        showWelcomeToast()
+        if (isSocialProfileIncomplete(user)) {
+          useUiStore.getState().openAuthModal('complete')
+        }
       })
       .catch(() => {})
   }, [])
@@ -522,6 +525,25 @@ function ScrollToTop() {
   }, [pathname, search])
 
   return null
+}
+
+function resolveToastMessage(toastItem) {
+  const message = toastItem?.message
+  return typeof message === 'function' ? message(toastItem) : message
+}
+
+function ToastMessage({ message }) {
+  if (typeof message !== 'string') return message ?? null
+  const lines = message.split('\n').map((line) => line.trim()).filter(Boolean)
+  if (lines.length < 2) {
+    return <p className="text-[15px] font-semibold leading-7 text-slate-800">{message}</p>
+  }
+  return (
+    <div className="py-0.5">
+      <p className="text-[13px] font-semibold leading-6 text-slate-500">{lines[0]}</p>
+      <p className="text-[16px] font-bold leading-7 text-slate-900">{lines.slice(1).join(' ')}</p>
+    </div>
+  )
 }
 
 function AppIconSync() {
@@ -850,6 +872,7 @@ export default function App() {
 
           <Toaster
             position="top-right"
+            gutter={10}
             containerStyle={{
               top: 'max(1rem, calc(env(safe-area-inset-top) + 1rem))',
               right: '0.75rem',
@@ -857,26 +880,29 @@ export default function App() {
               justifyContent: 'flex-end',
               padding: '0 0.75rem',
             }}
-            toastOptions={{
-              duration: 1800,
-              className: '',
-              style: {
-                borderRadius: '12px',
-                background: '#1e1b4b',
-                color: '#fff',
-                fontSize: '14px',
-                maxWidth: 'min(92vw, 420px)',
-              },
-              success: {
-                duration: 1600,
-                style: { background: '#059669', color: '#fff' },
-                iconTheme: { primary: '#fff', secondary: '#059669' },
-              },
-              error: {
-                duration: 2000,
-                style: { background: '#dc2626', color: '#fff' },
-                iconTheme: { primary: '#fff', secondary: '#dc2626' },
-              },
+            toastOptions={{ duration: 3500, className: '' }}
+            children={(toastItem) => {
+              const resolvedMessage = resolveToastMessage(toastItem)
+              if (toastItem.type === 'custom') return resolvedMessage
+              const isError = toastItem.type === 'error'
+              const Icon = isError ? AlertCircle : CheckCircle2
+              return (
+                <div
+                  role={isError ? 'alert' : 'status'}
+                  className={`flex w-fit min-w-[220px] max-w-[min(92vw,380px)] items-center gap-3 rounded-2xl border bg-white px-3.5 py-3 text-slate-800 shadow-[0_12px_32px_rgba(15,23,42,0.12)] ${isError ? 'border-red-100' : 'border-emerald-100'}`}
+                  style={{ opacity: toastItem.visible ? 1 : 0, transform: toastItem.visible ? 'translateY(0)' : 'translateY(-8px)', transition: 'all 180ms ease' }}
+                >
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isError ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    <Icon size={20} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <ToastMessage message={resolvedMessage} />
+                  </div>
+                  <button type="button" onClick={() => toast.dismiss(toastItem.id)} aria-label="Dismiss message" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    <X size={16} />
+                  </button>
+                </div>
+              )
             }}
           />
         </BrowserRouter>

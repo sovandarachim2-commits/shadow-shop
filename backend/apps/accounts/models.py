@@ -296,6 +296,8 @@ class SiteSettings(models.Model):
     splash_enabled = models.BooleanField(default=True)
     splash_duration_ms = models.PositiveIntegerField(default=3000)
     print_logo = models.ImageField(upload_to='site/print/', null=True, blank=True)
+    flash_card_background = models.ImageField(upload_to='site/home_cards/', null=True, blank=True)
+    rewards_card_background = models.ImageField(upload_to='site/home_cards/', null=True, blank=True)
     print_logo_size = models.PositiveIntegerField(default=64)
     print_qr_size = models.PositiveIntegerField(default=68)
     currency = models.CharField(max_length=10, default='USD')

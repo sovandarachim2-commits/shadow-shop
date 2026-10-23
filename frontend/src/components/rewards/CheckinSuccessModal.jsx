@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Star, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { KHMER_FONT_FAMILY } from '@/utils/constants'
+import { KHMER_FONT_FAMILY, KHMER_TEXT_STYLE } from '@/utils/constants'
 import { cn } from '@/utils/helpers'
 
 export default function CheckinSuccessModal({ isOpen, onClose, points }) {
@@ -70,22 +70,22 @@ export default function CheckinSuccessModal({ isOpen, onClose, points }) {
           "transition-all duration-500 delay-500 ease-out",
           showContent ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         )}>
-          <h2 className="text-2xl font-black text-gray-950 mb-2">
+          <h2 className="mb-2 text-2xl leading-9 text-gray-950" style={{ ...KHMER_TEXT_STYLE, fontWeight: 700 }}>
             {t('rewardsPage.checkin.successTitle', 'Check-in Successful!')}
           </h2>
-          <p className="text-gray-500 font-semibold mb-6">
+          <p className="mb-6 font-medium leading-7 text-gray-500" style={KHMER_TEXT_STYLE}>
             {t('rewardsPage.checkin.successDesc', 'You have earned points for today.')}
           </p>
 
-          <div className="inline-flex items-center gap-3 rounded-2xl bg-pink-50 px-6 py-4 mb-8">
+          <div className="mb-8 inline-flex items-center gap-3 rounded-2xl bg-pink-50 px-6 py-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-white shadow-lg shadow-amber-200">
               <Star size={20} fill="currentColor" />
             </div>
             <div className="text-left">
-              <div className="text-[24px] font-black text-pink-600 leading-none">
+              <div className="text-[24px] font-black leading-none text-pink-600">
                 +{points}
               </div>
-              <div className="text-[10px] font-black text-pink-400 uppercase tracking-wider">
+              <div className="text-sm font-bold leading-5 text-pink-400" style={KHMER_TEXT_STYLE}>
                 {t('rewardsPage.pts', 'Points')}
               </div>
             </div>
@@ -93,7 +93,8 @@ export default function CheckinSuccessModal({ isOpen, onClose, points }) {
 
           <button
             onClick={onClose}
-            className="w-full rounded-2xl bg-gray-950 py-4 text-sm font-black text-white transition-all hover:bg-gray-800 active:scale-95 shadow-xl shadow-gray-200"
+            className="w-full rounded-2xl bg-[#EC197A] py-4 text-base text-white shadow-xl shadow-pink-200 transition-all hover:bg-[#D9166F] active:scale-95"
+            style={{ ...KHMER_TEXT_STYLE, fontWeight: 700 }}
           >
             {t('common.great', 'Great!')}
           </button>

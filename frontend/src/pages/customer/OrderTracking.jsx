@@ -16,6 +16,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { formatFullAddressKhmer } from '@/utils/addressHelpers'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
@@ -155,6 +156,8 @@ export default function OrderTracking() {
   const statusLabel = t(STATUS_LABEL_KEYS[order.status] || 'orders.status.unknown', { status: order.status })
   const statusStyle = STATUS_STYLES[order.status] || 'bg-gray-100 text-gray-500'
   const customer = order.customer_detail || {}
+  const deliveryAddress = formatFullAddressKhmer(customer)
+  const deliveryAddressText = deliveryAddress && deliveryAddress !== '-' ? deliveryAddress : t('orders.noAddress')
   const paymentLabel = {
     aba: 'ABA Pay',
     bakong: 'Bakong KHQR',
@@ -212,10 +215,7 @@ export default function OrderTracking() {
       </section>
 
       <div className="mt-4 space-y-4">
-        <Card
-          title={t('orders.deliveryAddress')}
-          action={<button className="rounded-xl border border-pink-100 bg-pink-50 px-3 py-1.5 text-xs font-black text-pink-600">{t('common.edit')}</button>}
-        >
+        <Card title={t('orders.deliveryAddress')}>
           <div className="space-y-4">
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500"><User size={18} /></div>
@@ -226,7 +226,12 @@ export default function OrderTracking() {
             </div>
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500"><MapPin size={18} /></div>
-              <p className="pt-1 text-xs font-semibold leading-5 text-gray-600">{customer.address || t('orders.noAddress')}</p>
+              <p
+                className="min-w-0 pt-1.5 text-sm leading-7 text-gray-700"
+                style={{ fontFamily: "'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer OS', sans-serif", fontWeight: 400, fontSynthesis: 'none' }}
+              >
+                {deliveryAddressText}
+              </p>
             </div>
           </div>
         </Card>

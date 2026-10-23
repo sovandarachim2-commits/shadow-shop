@@ -1651,7 +1651,8 @@ class SiteSettingsAppIconView(generics.GenericAPIView):
             image = Image.new('RGBA', (size, size), (233, 30, 99, 255))
 
         image = ImageOps.exif_transpose(image)
-        image.thumbnail((int(size * 0.82), int(size * 0.82)), Image.Resampling.LANCZOS)
+        # Fill the favicon canvas so the logo remains recognizable at small sizes.
+        image.thumbnail((size, size), Image.Resampling.LANCZOS)
 
         canvas = Image.new('RGBA', (size, size), (255, 255, 255, 255))
         x = (size - image.width) // 2

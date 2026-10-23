@@ -7,7 +7,7 @@ import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { formatFullAddressKhmer } from '@/utils/addressHelpers'
-import { KHMER_FONT_FAMILY } from '@/utils/constants'
+import { KHMER_TEXT_STYLE } from '@/utils/constants'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
@@ -176,7 +176,7 @@ function ReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
           <span>Phone:</span>
           <span className="min-w-0 break-words">{customer.phone || order.customer_phone || '-'}</span>
           <span>Address:</span>
-          <span className="min-w-0 break-words" style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</span>
+          <span className="min-w-0 break-words text-[15px] leading-7" style={KHMER_TEXT_STYLE}>{customerAddress}</span>
         </div>
       </section>
 
@@ -311,9 +311,11 @@ function CleanReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
       {customerAddress && (
         <section className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
           <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Delivery Address</p>
-          <p className="mt-1 text-sm font-semibold leading-6 text-gray-700" style={{ fontFamily: KHMER_FONT_FAMILY }}>
-            {customerAddress}
-          </p>
+          <div className="mt-1.5 space-y-0.5 text-[15px] leading-7 text-gray-800" style={KHMER_TEXT_STYLE}>
+            {customerAddress.split(',').map((part) => part.trim()).filter(Boolean).map((line, index) => (
+              <p key={`${line}-${index}`}>{line}</p>
+            ))}
+          </div>
         </section>
       )}
 
@@ -373,13 +375,13 @@ function CleanReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
           </div>
           <div className="mt-1 flex justify-between gap-3 text-xs font-bold text-gray-500">
             <span>KHR Total</span>
-            <span>{formatRiel(grandTotal * USD_TO_KHR_RATE)}</span>
+            <span style={KHMER_TEXT_STYLE}>{formatRiel(grandTotal * USD_TO_KHR_RATE)}</span>
           </div>
         </div>
       </section>
 
       <footer className="mt-5 border-t border-dashed border-gray-300 pt-4 text-center text-xs font-semibold leading-5 text-gray-500">
-        <p>Exchange rate: 1 USD = {formatRiel(USD_TO_KHR_RATE)}</p>
+        <p>Exchange rate: 1 USD = <span style={KHMER_TEXT_STYLE}>{formatRiel(USD_TO_KHR_RATE)}</span></p>
         <p>Thank you for shopping with Shadow Shop.</p>
         <p className="mt-2 text-[11px] uppercase tracking-widest text-gray-400">Powered by One Night Solution</p>
       </footer>
@@ -545,7 +547,7 @@ export default function MyOrders() {
                 <ChevronLeft size={22} />
               </button>
               <div className="min-w-0 text-center sm:text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-pink-600">{t('common.receipt')}</p>
+                <p className="text-sm font-bold text-pink-600" style={KHMER_TEXT_STYLE}>{t('common.receipt')}</p>
                 <h3 className="truncate text-base font-black text-gray-950">
                   {receiptOrder?.order_number ? `#${receiptOrder.order_number}` : t('common.loadingReceipt')}
                 </h3>

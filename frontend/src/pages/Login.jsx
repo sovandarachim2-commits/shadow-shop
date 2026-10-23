@@ -9,6 +9,8 @@ import {
   ShoppingBag, Box, Zap, X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { showWelcomeToast } from '@/components/customer/WelcomeToast'
+import GoogleSignInButton from '@/components/customer/GoogleSignInButton'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '@/store/authStore'
@@ -478,7 +480,7 @@ export default function Login() {
         showError(t('auth.googleLoginFailed'))
         return
       }
-      toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username || 'Google' }))
+      showWelcomeToast()
     } catch (err) {
       const message = translateAuthError(err?.response?.data || err?.message, t, 'auth.googleLoginFailed')
       showError(message || t('auth.googleLoginFailed'))
@@ -504,7 +506,7 @@ export default function Login() {
       auto_select: false,
       cancel_on_tap_outside: true,
       itp_support: true,
-      use_fedcm_for_prompt: true,
+      use_fedcm_for_prompt: false,
     })
     googleIdentityInitRef.current = { clientId: googleClientId, callback: handleGoogleCredential }
   }, [googleClientId, handleGoogleCredential])
@@ -580,7 +582,7 @@ export default function Login() {
     setLoading(true)
     try {
       const u = await login(lf)
-      toast.success(t('auth.welcomeBackUser', { name: u.first_name || u.username }))
+      showWelcomeToast({ returning: true })
     } catch (err) {
       showError(translateAuthError(err.response?.data, t, 'auth.invalidCredentials'))
     } finally { setLoading(false) }
@@ -607,10 +609,15 @@ export default function Login() {
         last_name: rest.join(' '), 
         password, 
         confirm_password,
-        referral_code: rf.referral_code 
       })
       toast.success(t('auth.verificationCodeSent'))
-      navigate('/verify-email', { state: { email: cleanEmail, from: location.state?.from || '/' } })
+      navigate('/verify-email', {
+        state: {
+          email: cleanEmail,
+          from: location.state?.from || '/',
+          referral_code: rf.referral_code,
+        },
+      })
     } catch (err) {
       const d = err.response?.data
       showError(translateAuthError(d, t, 'auth.registrationFailed'))
@@ -639,41 +646,9 @@ export default function Login() {
     setGoogleLoading(true)
     try {
       await initializeGoogleIdentity()
-
-      let settled = false
-      const finishIfIdle = () => {
-        if (settled) return
-        settled = true
-        setGoogleLoading(false)
-      }
-
-      window.google.accounts.id.prompt(async (notification) => {
-        const dismissedReason = notification.getDismissedReason?.() || ''
-        if (notification.isDismissedMoment?.() && dismissedReason === 'credential_returned') {
-          // Credential is delivered via callback — keep loading until login finishes
-          return
-        }
-
-        if (notification.isDismissedMoment?.()) {
-          // User closed One Tap — no error
-          finishIfIdle()
-          return
-        }
-
-        const blocked = notification.isNotDisplayed?.() || notification.isSkippedMoment?.()
-        if (!blocked) return
-
-        try {
-          await triggerGoogleButtonFallback()
-          // Keep spinner briefly; callback or user cancel will clear it
-          window.setTimeout(() => {
-            if (!settled) finishIfIdle()
-          }, 8000)
-        } catch {
-          finishIfIdle()
-          showError(t('auth.googleLoadFailed'))
-        }
-      })
+      window.google.accounts.id.cancel?.()
+      await triggerGoogleButtonFallback()
+      window.setTimeout(() => setGoogleLoading(false), 8000)
     } catch {
       setGoogleLoading(false)
       showError(t('auth.googleLoadFailed'))
@@ -721,7 +696,7 @@ export default function Login() {
               }),
         referral_code: rf.referral_code,
       })
-      toast.success(t('auth.welcomeUser', { name: loggedInUser.first_name || loggedInUser.username }))
+      showWelcomeToast()
     } catch (err) {
       const message = err?.response
         ? translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed')
@@ -845,15 +820,16 @@ export default function Login() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
+                      <GoogleSignInButton
+                        clientId={googleLoginEnabled ? googleClientId : ''}
+                        onCredential={handleGoogleCredential}
                         onClick={openGoogleLogin}
                         disabled={googleLoading || googleConfigLoading || (Boolean(googleConfig) && !googleLoginEnabled)}
-                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-100 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-gray-50 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
+                        className="flex h-12 w-full items-center justify-center gap-2 rounded-[18px] border border-gray-100 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-gray-50 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
                       >
                         {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
                         {t('auth.google')}
-                      </button>
+                      </GoogleSignInButton>
 
                       <button type="button"
                         onClick={openTelegramLogin}
@@ -911,24 +887,6 @@ export default function Login() {
                       {registerErrors.email && <p id="register-email-error" className="mt-1.5 text-xs font-bold text-red-500">{registerErrors.email}</p>}
                     </div>
 
-                    <div>
-                      <label htmlFor="register-referral-code" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">
-                        {t('completeProfile.referralCodeOptional')}
-                      </label>
-                      <input
-                        id="register-referral-code"
-                        type="text"
-                        value={rf.referral_code}
-                        onChange={(e) => sr('referral_code', e.target.value.toUpperCase())}
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        maxLength={20}
-                        placeholder={t('completeProfile.referralCodePlaceholder')}
-                        className="input-field"
-                      />
-                      <p className="mt-1 text-xs font-medium text-gray-400">{t('completeProfile.referralCodeHelper')}</p>
-                    </div>
-
                     {/* Password Fields */}
                     <div className="space-y-4">
                       <div>
@@ -982,15 +940,16 @@ export default function Login() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
+                      <GoogleSignInButton
+                        clientId={googleLoginEnabled ? googleClientId : ''}
+                        onCredential={handleGoogleCredential}
                         onClick={openGoogleLogin}
                         disabled={googleLoading || googleConfigLoading || (Boolean(googleConfig) && !googleLoginEnabled)}
-                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-200 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-gray-50 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
+                        className="flex h-12 w-full items-center justify-center gap-2 rounded-[18px] border border-gray-200 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-gray-50 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:opacity-60"
                       >
                         {googleLoading ? <Loader2 size={18} className="animate-spin text-gray-500" /> : <GoogleMark size={18} />}
                         {t('auth.google')}
-                      </button>
+                      </GoogleSignInButton>
 
                       <button type="button"
                         onClick={openTelegramLogin}

@@ -54,7 +54,7 @@ function buildInitialForm(user, refParam) {
     email: user?.email || '',
     password: '',
     confirm_password: '',
-    friend_referral_code: refParam || '',
+    friend_referral_code: String(refParam || '').trim().toUpperCase(),
   }
 }
 
@@ -141,7 +141,9 @@ export default function CompleteProfile() {
     },
     onError: (error) => {
       const body = error.response?.data
-      const message = body?.email?.[0] || body?.phone?.[0] || body?.first_name?.[0] || body?.gender?.[0] || body?.detail || t('completeProfile.completeFailed')
+      const referralError = body?.friend_referral_code?.[0] || (typeof body?.friend_referral_code === 'string' ? body.friend_referral_code : '')
+      if (referralError) setErrors((current) => ({ ...current, friend_referral_code: referralError }))
+      const message = referralError || body?.email?.[0] || body?.phone?.[0] || body?.first_name?.[0] || body?.gender?.[0] || body?.detail || t('completeProfile.completeFailed')
       toast.error(message)
     },
   })
@@ -535,16 +537,33 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
         />
 
         {!hasReferrer && (
-          <CompleteProfileField
-            label={t('completeProfile.referralCodeOptional')}
-            optional
-            icon={Gift}
-            placeholder={t('completeProfile.referralCodePlaceholder')}
-            value={form.friend_referral_code}
-            onChange={(value) => set('friend_referral_code', value)}
-            error={errors.friend_referral_code}
-            helper={t('completeProfile.referralCodeHelper')}
-          />
+          <div className="rounded-2xl border border-rose-100 bg-rose-50/70 p-4">
+            <div className="mb-3 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#EC197A] shadow-sm">
+                <Gift size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-slate-900">{t('completeProfile.referralCodeOptional')}</p>
+                <p className="mt-0.5 text-xs font-semibold leading-relaxed text-slate-500">{t('completeProfile.referralCodeHelper')}</p>
+              </div>
+            </div>
+            <input
+              value={form.friend_referral_code}
+              onChange={(event) => set('friend_referral_code', event.target.value.toUpperCase())}
+              placeholder={t('completeProfile.referralCodePlaceholder')}
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={20}
+              aria-invalid={Boolean(errors.friend_referral_code)}
+              className={cn(
+                'h-12 w-full rounded-xl border bg-white px-4 text-sm font-bold uppercase tracking-wide text-slate-900 outline-none transition placeholder:font-semibold placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-[#EC4D97] focus:ring-4 focus:ring-pink-100',
+                errors.friend_referral_code ? 'border-[#EC4D97]' : 'border-rose-100'
+              )}
+            />
+            {errors.friend_referral_code && (
+              <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{errors.friend_referral_code}</p>
+            )}
+          </div>
         )}
       </div>
 
