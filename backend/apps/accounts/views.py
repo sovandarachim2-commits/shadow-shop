@@ -687,26 +687,53 @@ class TelegramLoginView(generics.GenericAPIView):
                 last_error = 'Telegram login could not be confirmed.'
         raise ValueError(last_error)
 
-    def _jwks_client(self):
-        client = getattr(self.__class__, '_telegram_jwks_client', None)
-        if client is not None:
-            return client
-        from jwt import PyJWKClient
-        try:
-            client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True, lifespan=6 * 60 * 60, timeout=4)
-        except TypeError:
-            client = PyJWKClient(self.TELEGRAM_JWKS_URL, cache_keys=True)
-        self.__class__._telegram_jwks_client = client
-        return client
+    def _load_telegram_jwks(self, force=False):
+        import time
+        from jwt import PyJWK
+
+        cached = getattr(self.__class__, '_telegram_jwk_cache', None)
+        now = time.time()
+        if cached and not force and now - cached['fetched_at'] < 10 * 60:
+            return cached['keys']
+
+        response = requests.get(
+            self.TELEGRAM_JWKS_URL,
+            timeout=8,
+            headers={'Accept': 'application/json', 'Accept-Encoding': 'gzip'},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        keys = []
+        for item in payload.get('keys') or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                keys.append(PyJWK.from_dict(item))
+            except Exception:
+                continue
+        if not keys:
+            raise ValueError('Telegram login keys could not be loaded.')
+        self.__class__._telegram_jwk_cache = {'fetched_at': now, 'keys': keys}
+        return keys
 
     def _telegram_signing_keys(self, id_token):
         import jwt
 
         header = jwt.get_unverified_header(id_token)
-        jwks_client = self._jwks_client()
-        if header.get('kid'):
-            return [jwks_client.get_signing_key_from_jwt(id_token).key]
-        return [jwk.key for jwk in jwks_client.get_jwk_set().keys]
+        kid = str(header.get('kid') or '')
+        keys = self._matching_jwk_keys(self._load_telegram_jwks(), kid)
+        if not keys:
+            keys = self._matching_jwk_keys(self._load_telegram_jwks(force=True), kid)
+        if not keys:
+            raise ValueError('Telegram login token is invalid.')
+        return [jwk.key for jwk in keys]
+
+    @staticmethod
+    def _matching_jwk_keys(keys, kid):
+        if not kid:
+            return list(keys)
+        matched = [jwk for jwk in keys if str(getattr(jwk, 'key_id', '') or '') == kid]
+        return matched or list(keys)
 
     def _verify_telegram_id_token(self, id_token, bot_id):
         if not bot_id:

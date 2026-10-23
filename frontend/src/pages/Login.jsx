@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
-import { openBlankTelegramAuthWindow, openTelegramLoginPopup } from '@/utils/telegramLogin'
+import { openTelegramLoginPopup } from '@/utils/telegramLogin'
 import { cn } from '@/utils/cn'
 
 function GoogleMark({ size = 18 }) {
@@ -662,18 +662,11 @@ export default function Login() {
       return
     }
     if (telegramLoading || googleLoading || loading) return
-    // Open NEW tab/window in the same click tick (keeps cart in this tab).
-    const popup = openBlankTelegramAuthWindow()
-    if (!popup) {
-      showError(t('auth.telegramPopupBlocked') || 'Allow popups to continue with Telegram.')
-      return
-    }
     setTelegramLoading(true)
     try {
       const data = await openTelegramLoginPopup({
         clientId: telegramClientId,
         lang: isKhmer ? 'km' : 'en',
-        popup,
       })
       if (data?.handedOff) return
       const loggedInUser = await telegramLogin({

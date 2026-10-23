@@ -18,20 +18,17 @@ function decodeJwtPayload(token) {
 }
 
 /**
- * MUST be called synchronously inside the click handler (before await/setState),
- * otherwise the browser opens Telegram auth in the current tab.
- * No size features: Chrome then uses a full browser tab, not a small popup.
+ * Opens Telegram itself on the first navigation so an existing Telegram
+ * session is sent with the request. A blank page first drops that session
+ * and makes Telegram ask for a login every time.
+ * No size features: the browser uses a normal tab, and the shop tab stays open.
  */
-export function openBlankTelegramAuthWindow() {
-  const popup = window.open('about:blank', '_blank')
-  if (popup) {
-    try {
-      popup.document.write('<!doctype html><title>Telegram</title><body style="font-family:sans-serif;padding:24px;color:#64748b">Opening Telegram…</body>')
-      popup.document.close()
-      popup.focus()
-    } catch {
-      /* cross-origin write may fail later; ignore */
-    }
+function openTelegramAuthWindow(authUrl) {
+  const popup = window.open(authUrl, 'shadow-shop-telegram')
+  try {
+    popup?.focus()
+  } catch {
+    /* ignore */
   }
   return popup
 }
@@ -206,7 +203,6 @@ function buildAuthUrl({ clientId, lang = 'en' }) {
     `${OIDC_AUTH_URL}?response_type=post_message` +
     `&client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&origin=${encodeURIComponent(window.location.origin)}` +
     `&scope=${encodeURIComponent('openid profile')}` +
     `&nonce=${encodeURIComponent(nonce)}`
   if (lang) authUrl += `&lang=${encodeURIComponent(lang)}`
@@ -215,35 +211,26 @@ function buildAuthUrl({ clientId, lang = 'en' }) {
 
 /**
  * Opens Telegram login in a NEW tab/window (keeps cart/checkout in the current tab).
- * Pass a popup from openBlankTelegramAuthWindow() opened in the same click.
+ * Call this directly from the click handler, before any await.
  */
 export async function openTelegramLoginPopup({
   clientId,
   lang = 'en',
-  popup: existingPopup = null,
 } = {}) {
   const id = String(clientId || '').trim()
   if (!id) {
     throw new Error('Telegram client id is not configured')
   }
 
-  // Prefer pre-opened window from the click handler so Chrome/Edge use a new tab.
-  const popup = existingPopup || openBlankTelegramAuthWindow()
+  const { authUrl, redirectUri, nonce } = buildAuthUrl({ clientId: id, lang })
+  const popup = openTelegramAuthWindow(authUrl)
   if (!popup) {
     throw new Error('Telegram login popup was blocked. Allow popups for this site.')
   }
-
-  const { authUrl, redirectUri, nonce } = buildAuthUrl({ clientId: id, lang })
   const returnPath = `${window.location.pathname}${window.location.search}`
   sessionStorage.setItem(STATE_KEY, JSON.stringify({ nonce, redirectUri, returnPath }))
   if (returnPath.startsWith('/') && !returnPath.startsWith('//') && !returnPath.startsWith('/auth/telegram/callback')) {
     localStorage.setItem('shadow-shop-telegram-return', returnPath)
-  }
-
-  try {
-    popup.location.href = authUrl
-  } catch {
-    window.open(authUrl, '_blank')
   }
 
   return new Promise((resolve, reject) => {
