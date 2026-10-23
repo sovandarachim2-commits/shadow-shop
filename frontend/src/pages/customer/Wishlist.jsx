@@ -103,7 +103,7 @@ export default function Wishlist() {
 
                     <div className="min-w-0">
                       <button type="button" onClick={() => navigate(productPath)} className="block w-full text-left">
-                        <p className="line-clamp-2 text-sm font-black leading-tight text-gray-950 md:text-base">{product.name}</p>
+                        <p className="khmer-title line-clamp-2 text-sm text-gray-950 md:text-base">{product.name}</p>
                         <p className="mt-1 text-xs font-semibold text-gray-400">
                           {product.item_type === 'set' ? 'Product Set' : product.category_name || t('product.cosmetics')}
                         </p>

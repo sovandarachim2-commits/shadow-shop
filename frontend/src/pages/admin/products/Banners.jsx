@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImageIcon, Pencil, Plus, Trash2, ToggleLeft, ToggleRight, GripVertical } from 'lucide-react'
+import { ImageIcon, ImagePlus, Pencil, Plus, Trash2, GripVertical } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { authApi } from '@/api/auth'
@@ -229,18 +229,19 @@ function CardBackgroundField({ label, hint, imageUrl, fieldName, clearName, grad
         className={`relative mt-3 flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/40 ${gradientClass}`}
       >
         {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" /> : null}
-        <span className="relative z-10 rounded-full bg-black/35 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm">
+        <span className="relative z-10 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md">
+          <ImagePlus size={16} className="text-purple-600" />
           {compressing ? 'Compressing...' : preview ? 'Change background' : 'Add background'}
         </span>
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
       </button>
-      <div className="mt-3 flex gap-2">
-        <button type="button" onClick={save} disabled={!file || compressing || saveMutation.isPending} className="btn-primary disabled:opacity-50">
-          {saveMutation.isPending ? 'Saving...' : 'Save'}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={save} disabled={!file || compressing || saveMutation.isPending} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+          {saveMutation.isPending ? 'Saving...' : 'Save background'}
         </button>
         {(preview || imageUrl) && (
-          <button type="button" onClick={remove} disabled={saveMutation.isPending} className="btn-secondary">
-            Remove
+          <button type="button" onClick={remove} disabled={saveMutation.isPending} className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50">
+            <Trash2 size={15} /> Remove
           </button>
         )}
       </div>
@@ -358,22 +359,28 @@ export default function Banners() {
                 </p>
               </div>
               {/* Actions */}
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                 <button
+                  type="button"
+                  role="switch"
+                  aria-checked={banner.is_active}
+                  aria-label={banner.is_active ? 'Turn banner off' : 'Turn banner on'}
                   onClick={() => toggleMutation.mutate({ id: banner.id, is_active: !banner.is_active })}
-                  className={`rounded-xl p-2 transition ${banner.is_active ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                  title={banner.is_active ? 'Deactivate' : 'Activate'}
+                  disabled={toggleMutation.isPending}
+                  className={`relative inline-flex h-9 w-[76px] shrink-0 items-center rounded-full px-2.5 text-[11px] font-black tracking-wide text-white transition disabled:opacity-60 ${banner.is_active ? 'bg-[#22c55e]' : 'bg-gray-300'}`}
                 >
-                  {banner.is_active ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                  <span className={banner.is_active ? '' : 'ml-auto'}>{banner.is_active ? 'ON' : 'OFF'}</span>
+                  <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition-all ${banner.is_active ? 'right-1' : 'left-1'}`} />
                 </button>
-                <button onClick={() => openEdit(banner)} className="rounded-xl p-2 text-gray-500 transition hover:bg-purple-50 hover:text-purple-600">
-                  <Pencil size={16} />
+                <button onClick={() => openEdit(banner)} className="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-100">
+                  <Pencil size={14} /> Edit
                 </button>
                 <button
                   onClick={async () => { if (await confirm('Delete this banner?', 'This action cannot be undone.')) deleteMutation.mutate(banner.id) }}
-                  className="rounded-xl p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                  disabled={deleteMutation.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={14} /> Delete
                 </button>
               </div>
             </div>

@@ -210,7 +210,7 @@ class ProductImage(models.Model):
 
     class Meta:
         db_table = 'product_images'
-        ordering = ['order']
+        ordering = ['-is_primary', 'order', 'id']
 
     def __str__(self):
         return f"{self.product.name} - Image {self.order}"
@@ -303,7 +303,7 @@ class ProductSetImage(models.Model):
 
     class Meta:
         db_table = 'product_set_images'
-        ordering = ['order']
+        ordering = ['-is_primary', 'order', 'id']
 
     def __str__(self):
         return f"{self.product_set.name} - Image {self.order}"

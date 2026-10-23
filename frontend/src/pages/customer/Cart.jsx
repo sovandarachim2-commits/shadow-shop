@@ -276,7 +276,7 @@ export default function Cart() {
                 <div className="min-w-0 flex-1">
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <p className="line-clamp-2 text-sm font-black leading-tight text-gray-950 md:text-base">{item.product.name}</p>
+                      <p className="khmer-title line-clamp-2 text-sm text-gray-950 md:text-base">{item.product.name}</p>
                       <p className="mt-1 text-xs font-semibold text-gray-400">{item.product.item_type === 'set' ? 'Product Set' : item.product.category_name || item.product.code || t('product.cosmetics')}</p>
                     </div>
                   </div>

@@ -9,7 +9,7 @@ import useAuthStore from '@/store/authStore'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, getUserContactDefaults } from '@/utils/helpers'
-import { formatAddressLocationKhmer } from '@/utils/addressHelpers'
+import { formatAddressLocationKhmer, formatHomeDeliveryNote } from '@/utils/addressHelpers'
 import { KHMER_FONT_FAMILY } from '@/utils/constants'
 import { useCartPriceSync } from '@/utils/cartPriceSync'
 import { CAMBODIA_PROVINCE_LABELS, toProvinceKey } from '@/utils/cambodiaProvinces'
@@ -452,7 +452,11 @@ export default function Checkout() {
     payment_status: 'unpaid',
     delivery_fee: deliveryFee,
     coupon_code: appliedCoupon?.coupon_code || '',
-    notes: `Home Delivery. ${info.district ? `${info.district}, ${province.label}` : province.label}`,
+    notes: formatHomeDeliveryNote({
+      district: info.district,
+      provinceKey: province?.value || info.province,
+      provinceLabel: province?.label,
+    }),
     items: checkoutItems.map((i) => ({
       product: i.product.item_type === 'set' ? undefined : i.product.id,
       product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
@@ -718,7 +722,7 @@ export default function Checkout() {
                     <CheckoutItemImage product={item.product} priority={index < 2} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-black text-gray-950">{item.product.name}</p>
+                    <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
                     <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
                   </div>
                   <p className="text-sm font-black text-gray-950">{formatCurrency(item.product.retail_price * item.quantity)}</p>
@@ -737,7 +741,7 @@ export default function Checkout() {
                   <CheckoutItemImage product={item.product} priority={index < 2} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-gray-950">{item.product.name}</p>
+                  <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
                   <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
                 </div>
                 <p className="text-sm font-black text-gray-950">{formatCurrency(item.product.retail_price * item.quantity)}</p>

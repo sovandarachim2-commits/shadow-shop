@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Shield, Eye, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Edit, Shield, Eye, Trash2, Loader2, KeyRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
@@ -113,7 +113,7 @@ function UserProfileModal({ user, roleConfig, onClose }) {
   )
 }
 
-function UserForm({ user, roles, onSave, onClose, isSaving }) {
+function UserForm({ user, roles, onSave, onResetPassword, onClose, isSaving, isResetting }) {
   const [form, setForm] = useState({
     first_name: user?.first_name || '',
     last_name: user?.last_name || '',
@@ -147,7 +147,7 @@ function UserForm({ user, roles, onSave, onClose, isSaving }) {
         </div>
         <div>
           <label className="label">Username</label>
-          <input className="input-field font-mono" value={usernamePreview} disabled />
+          <input className="input-field font-mono" value={usernamePreview} onChange={(e) => set('username', e.target.value)} disabled={!isEdit} />
           {!isEdit && <p className="mt-1 text-xs font-semibold text-gray-400">Auto-generated like dsok1048</p>}
         </div>
         <div>
@@ -177,6 +177,27 @@ function UserForm({ user, roles, onSave, onClose, isSaving }) {
           </>
         )}
       </div>
+      {isEdit && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <KeyRound size={17} className="text-amber-600" />
+            <p className="font-bold text-gray-900">Reset Password</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input type="password" className="input-field" placeholder="New password" value={form.password} onChange={(e) => set('password', e.target.value)} />
+            <input type="password" className="input-field" placeholder="Confirm password" value={form.confirm_password} onChange={(e) => set('confirm_password', e.target.value)} />
+          </div>
+          <button
+            type="button"
+            onClick={() => onResetPassword(form)}
+            disabled={isResetting || !form.password || !form.confirm_password}
+            className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isResetting && <Loader2 size={15} className="animate-spin" />}
+            {isResetting ? 'Resetting...' : 'Reset Password'}
+          </button>
+        </div>
+      )}
       <div className="flex gap-3 pt-2">
         <button
           onClick={() => onSave(form)}
@@ -229,6 +250,12 @@ export default function Users() {
     onError: (e) => toast.error(getApiError(e, 'Failed to update user')),
   })
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ id, password }) => authApi.users.resetPassword(id, { password }),
+    onSuccess: () => { toast.success('Password reset successfully!') },
+    onError: (e) => toast.error(getApiError(e, 'Failed to reset password')),
+  })
+
   const toggleMutation = useMutation({
     mutationFn: authApi.users.toggleActive,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); toast.success('Status toggled!') },
@@ -248,12 +275,20 @@ export default function Users() {
 
   const handleSave = (form) => {
     if (editUser) {
-      const { password, confirm_password, username, ...updateData } = form
+      const { password, confirm_password, ...updateData } = form
       updateMutation.mutate({ id: editUser.id, data: updateData })
     } else {
       const { username, ...createData } = form
       createMutation.mutate(createData)
     }
+  }
+
+  const handleResetPassword = (form) => {
+    if (form.password !== form.confirm_password) {
+      toast.error('Passwords do not match.')
+      return
+    }
+    resetPasswordMutation.mutate({ id: editUser.id, password: form.password })
   }
 
   const handleDelete = async (userToDelete) => {
@@ -381,8 +416,10 @@ export default function Users() {
           user={editUser}
           roles={rolesData}
           onSave={handleSave}
+          onResetPassword={handleResetPassword}
           onClose={closeUserModal}
           isSaving={createMutation.isPending || updateMutation.isPending}
+          isResetting={resetPasswordMutation.isPending}
         />
       </Modal>
       {ConfirmDialog}

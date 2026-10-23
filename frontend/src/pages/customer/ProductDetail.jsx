@@ -113,7 +113,7 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
         </div>
-        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{product.name}</h3>
+        <h3 className="khmer-title mt-1 line-clamp-2 min-h-[48px] text-sm text-gray-950">{product.name}</h3>
         <div className="mt-2 flex items-center gap-1">
           <Star size={13} className="fill-yellow-400 text-yellow-400" />
           <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
@@ -498,7 +498,7 @@ export default function ProductDetail() {
             {product.brand_name || product.category_name || t('product.cosmetics')}
           </p>
 
-          <h1 className="mt-1 line-clamp-2 text-[22px] font-semibold leading-tight tracking-tight text-gray-950 md:line-clamp-none md:text-4xl md:font-black lg:text-5xl">
+          <h1 className="khmer-title mt-1 line-clamp-2 text-[22px] text-gray-950 md:line-clamp-none md:text-4xl lg:text-5xl">
             {product.name}
           </h1>
 

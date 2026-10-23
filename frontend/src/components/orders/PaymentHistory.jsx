@@ -188,6 +188,7 @@ export function PaymentHistoryModal({ order, onClose }) {
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-gray-400">Current Payment</p>
                 <p className="mt-1 text-sm font-black text-gray-950">{paymentMethodLabel(order.payment_method)}</p>
+                <p className="mt-1 text-xs font-semibold text-gray-500">{formatDateTime(history[0]?.created_at || order.payment_at || order.created_at)}</p>
               </div>
               <PaymentStatusBadge status={order.payment_status} />
             </div>

@@ -12,6 +12,8 @@ import { productsApi } from '@/api/products'
 import useAuthStore from '@/store/authStore'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
+import { localizeOrderNote, provinceKhmerLabel } from '@/utils/addressHelpers'
+import { KHMER_TEXT_STYLE } from '@/utils/constants'
 import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton } from '@/components/orders/PaymentHistory'
 import ContactSalesReceiptModal from '@/components/orders/ContactSalesReceiptModal'
 
@@ -42,7 +44,7 @@ const SELLER_ORDER_STATUS_OPTIONS = ORDER_STATUS_OPTIONS.filter((status) => SELL
 
 const isPrintedOrder = (order) => Boolean(order?.printed_at || order?.status === 'printed')
 
-const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: p.label }))
+const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: provinceKhmerLabel(p.key) }))
 
 function readableApiError(value) {
   if (!value) return ''
@@ -94,7 +96,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       transaction_reference: '',
       delivery_fee: order.delivery_fee || 0,
       discount: order.discount || 0,
-      notes: order.notes || '',
+      notes: localizeOrderNote(order.notes || ''),
       is_draft: !!order.is_draft,
     })
     setItems((order.items || []).map((item, index) => ({
@@ -149,9 +151,10 @@ export function EditOrderModal({ order, onClose, onSaved }) {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () => ordersApi.orders.adminUpdate(order.id, {
+    mutationFn: (statusNote = '') => ordersApi.orders.adminUpdate(order.id, {
       customer_info: customer,
       ...orderForm,
+      status_note: statusNote,
       delivery_fee: Number(orderForm.delivery_fee || 0),
       discount: Number(orderForm.discount || 0),
       items: items.map((item) => {
@@ -180,8 +183,16 @@ export function EditOrderModal({ order, onClose, onSaved }) {
   })
 
   const handleSave = async () => {
+    if (!customer.name.trim() || !customer.phone.trim()) {
+      toast.error('Customer name and phone are required')
+      return
+    }
+    if (items.length === 0) {
+      toast.error('Add at least one product')
+      return
+    }
     if (orderForm.status === 'cancelled' && order.status !== 'cancelled') {
-      const ok = await confirm(
+      const reason = await confirm(
         'Cancel this order?',
         `Order #${order.order_number} will be marked as cancelled.`,
         {
@@ -189,11 +200,16 @@ export function EditOrderModal({ order, onClose, onSaved }) {
           cancelText: 'Keep Order',
           tone: 'danger',
           icon: 'warning',
+          reasonLabel: 'Reason',
+          reasonPlaceholder: 'Why is this order cancelled?',
+          reasonRequired: true,
         },
       )
-      if (!ok) return
+      if (!reason) return
+      saveMutation.mutate(reason)
+      return
     }
-    saveMutation.mutate()
+    saveMutation.mutate('')
   }
 
   return (
@@ -215,20 +231,20 @@ export function EditOrderModal({ order, onClose, onSaved }) {
               <h3 className="section-title mb-4">Customer</h3>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="label">Name</label>
+                  <label className="label">Name <span className="text-red-500">*</span></label>
                   <input className="input-field" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="label">Phone</label>
+                  <label className="label">Phone <span className="text-red-500">*</span></label>
                   <input className="input-field" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
                 </div>
                 <div className="md:col-span-2">
                   <label className="label">Address</label>
-                  <textarea className="input-field resize-none" rows={2} value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })} />
+                  <textarea className="input-field resize-none" rows={2} style={KHMER_TEXT_STYLE} value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })} />
                 </div>
                 <div>
-                  <label className="label">Province</label>
-                  <select className="select-field" value={customer.province} onChange={(e) => setCustomer({ ...customer, province: e.target.value })}>
+                  <label className="label" style={KHMER_TEXT_STYLE}>ខេត្ត</label>
+                  <select className="select-field" style={KHMER_TEXT_STYLE} value={customer.province} onChange={(e) => setCustomer({ ...customer, province: e.target.value })}>
                     {PROVINCES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </div>
@@ -301,7 +317,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                   })}
                 </div>
                 <div className="flex items-center justify-between pt-2">
-                  <h3 className="section-title">Order Items</h3>
+                  <h3 className="section-title">Order Items <span className="text-red-500">*</span></h3>
                   <span className="text-xs font-black uppercase tracking-wide text-gray-400">{items.length} items</span>
                 </div>
                 {items.map((item) => (
@@ -390,7 +406,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                 </div>
                 <div>
                   <label className="label">Order Notes</label>
-                  <textarea className="input-field resize-none" rows={3} value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} />
+                  <textarea className="input-field resize-none" rows={3} style={KHMER_TEXT_STYLE} value={orderForm.notes} onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} />
                 </div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-600">
                   <input type="checkbox" checked={orderForm.is_draft} onChange={(e) => setOrderForm({ ...orderForm, is_draft: e.target.checked })} />
@@ -462,7 +478,7 @@ export default function OrderDetail() {
   })
 
   const handleCancelOrder = async () => {
-    const ok = await confirm(
+    const reason = await confirm(
       'Cancel this order?',
       `Order #${order.order_number} will be marked as cancelled.`,
       {
@@ -470,10 +486,13 @@ export default function OrderDetail() {
         cancelText: 'Keep Order',
         tone: 'danger',
         icon: 'warning',
+        reasonLabel: 'Reason',
+        reasonPlaceholder: 'Why is this order cancelled?',
+        reasonRequired: true,
       },
     )
-    if (!ok) return
-    updateStatusMutation.mutate({ status: 'cancelled' })
+    if (!reason) return
+    updateStatusMutation.mutate({ status: 'cancelled', note: reason })
   }
 
   if (isLoading) {
@@ -634,7 +653,7 @@ export default function OrderDetail() {
               <div><span className="font-medium">{order.customer_detail?.name}</span></div>
               <div className="text-gray-500">{order.customer_detail?.phone}</div>
               <div className="text-gray-500 text-xs">{order.customer_detail?.address}</div>
-              <div className="text-gray-500 capitalize text-xs">{order.customer_detail?.province?.replace('_', ' ')}</div>
+              <div className="text-gray-500 text-xs" style={KHMER_TEXT_STYLE}>{provinceKhmerLabel(order.customer_detail?.province)}</div>
             </div>
           </div>
 
@@ -678,7 +697,7 @@ export default function OrderDetail() {
               {order.notes && (
                 <div>
                   <span className="text-gray-500">Notes</span>
-                  <p className="text-xs mt-1 text-gray-600 bg-gray-50 p-2 rounded-lg">{order.notes}</p>
+                  <p className="text-xs mt-1 text-gray-600 bg-gray-50 p-2 rounded-lg" style={KHMER_TEXT_STYLE}>{localizeOrderNote(order.notes)}</p>
                 </div>
               )}
             </div>

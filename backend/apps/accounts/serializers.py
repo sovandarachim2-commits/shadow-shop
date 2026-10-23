@@ -72,6 +72,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             object_id=self.user.pk,
             object_type='User',
         )
+        if self.user.role != 'customer':
+            from apps.notifications.services import TelegramService
+            TelegramService.notify_staff_login_async(self.user.pk, self.context.get('request'))
         return data
 
     @classmethod

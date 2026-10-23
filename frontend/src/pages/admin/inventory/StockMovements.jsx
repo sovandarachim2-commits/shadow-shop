@@ -6,14 +6,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Filter,
-  MoreVertical,
   PackagePlus,
   RefreshCcw,
   Search,
   SlidersHorizontal,
   TrendingDown,
-  TrendingUp,
 } from 'lucide-react'
 import { inventoryApi } from '@/api/inventory'
 import { productsApi } from '@/api/products'
@@ -22,13 +19,13 @@ import { getListResults } from '@/utils/apiData'
 import PageHeader from '@/components/shared/PageHeader'
 
 const TYPE_STYLES = {
-  stock_in: 'bg-green-50 text-green-700 ring-green-100',
-  stock_out: 'bg-red-50 text-red-700 ring-red-100',
-  transfer: 'bg-blue-50 text-blue-700 ring-blue-100',
-  adjustment: 'bg-amber-50 text-amber-700 ring-amber-100',
-  damaged: 'bg-orange-50 text-orange-700 ring-orange-100',
-  offline_team: 'bg-purple-50 text-purple-700 ring-purple-100',
-  return: 'bg-teal-50 text-teal-700 ring-teal-100',
+  stock_in: 'bg-green-50 text-green-700',
+  stock_out: 'bg-red-50 text-red-700',
+  transfer: 'bg-blue-50 text-blue-700',
+  adjustment: 'bg-amber-50 text-amber-700',
+  damaged: 'bg-orange-50 text-orange-700',
+  offline_team: 'bg-purple-50 text-purple-700',
+  return: 'bg-teal-50 text-teal-700',
 }
 
 const TYPE_LABELS = {
@@ -58,19 +55,22 @@ function formatDateOnly(value) {
 
 function StatCard({ icon: Icon, iconClass, label, value, meta }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-card">
-      <div className="flex items-center gap-5">
-        <div className={cn('flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1', iconClass)}>
-          <Icon size={23} />
-        </div>
-        <div>
-          <p className="text-sm font-black text-gray-500">{label}</p>
-          <p className="mt-1 text-2xl font-black leading-none text-gray-950">{value}</p>
-          <p className="mt-1 text-xs font-bold text-gray-400">{meta}</p>
-        </div>
+    <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3.5">
+      <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', iconClass)}>
+        <Icon size={18} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-gray-500">{label}</p>
+        <p className="mt-0.5 text-xl font-semibold leading-none text-gray-950">{value}</p>
+        <p className="mt-1 text-[11px] text-gray-400">{meta}</p>
       </div>
     </div>
   )
+}
+
+function pageNumbers(current, total) {
+  const pages = new Set([1, total, current - 1, current, current + 1])
+  return [...pages].filter((page) => page >= 1 && page <= total).sort((a, b) => a - b)
 }
 
 function FilterSelect({ children, className, ...props }) {
@@ -133,7 +133,7 @@ export default function StockMovements() {
   const safePage = Math.min(page, totalPages)
   const startIndex = (safePage - 1) * pageSize
   const visibleMovements = filteredMovements.slice(startIndex, startIndex + pageSize)
-  const activeFilterCount = [type, product, date].filter(Boolean).length
+  const hasFilters = Boolean(search.trim() || type || product || date)
 
   const resetFilters = () => {
     setSearch('')
@@ -145,11 +145,13 @@ export default function StockMovements() {
 
   const exportCsv = () => {
     const rows = [
-      ['Date', 'Product', 'SKU', 'Type', 'Qty', 'Before', 'After', 'Reference', 'Created By'],
-      ...filteredMovements.map((m) => [
+      ['No', 'Date', 'Product', 'SKU', 'Inventory', 'Type', 'Qty', 'Before', 'After', 'Reference', 'Created By'],
+      ...filteredMovements.map((m, index) => [
+        index + 1,
         m.created_at || '',
         m.product_name || '',
         m.product_code || '',
+        (m.inventories || []).map((place) => `${place.name} (${place.quantity})`).join(', '),
         TYPE_LABELS[m.type] || m.type || '',
         m.quantity ?? '',
         m.before_qty ?? '',
@@ -174,24 +176,13 @@ export default function StockMovements() {
         title="Stock Movements"
         subtitle="Track and monitor all inventory changes in your store"
         actions={(
-          <>
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="inline-flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 shadow-sm transition hover:bg-gray-50"
-            >
-              <Download size={17} /> Export
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-purple-700 px-4 text-sm font-black text-white shadow-lg shadow-purple-200 transition hover:bg-purple-800"
-            >
-              <Filter size={17} /> Filters
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs text-purple-700">
-                {activeFilterCount}
-              </span>
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            <Download size={16} /> Export
+          </button>
         )}
       />
 
@@ -226,195 +217,171 @@ export default function StockMovements() {
         />
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-card md:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-[260px] flex-1">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="rounded-2xl border border-gray-100 bg-white p-4">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="relative min-w-[220px] flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-11 pr-4 text-sm font-semibold text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-purple-300 focus:ring-4 focus:ring-purple-100"
-              placeholder="Search product..."
+              className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-purple-300"
+              placeholder="Search product, SKU, or reference"
               value={search}
               onChange={(event) => { setSearch(event.target.value); setPage(1) }}
             />
           </div>
-          <FilterSelect value={type} onChange={(event) => { setType(event.target.value); setPage(1) }} className="lg:w-44">
+          <FilterSelect value={type} onChange={(event) => { setType(event.target.value); setPage(1) }} className="h-10 font-medium lg:w-40">
             <option value="">All Types</option>
             {Object.entries(TYPE_LABELS).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
             ))}
           </FilterSelect>
-          <FilterSelect value={product} onChange={(event) => { setProduct(event.target.value); setPage(1) }} className="lg:w-56">
+          <FilterSelect value={product} onChange={(event) => { setProduct(event.target.value); setPage(1) }} className="h-10 font-medium lg:w-52">
             <option value="">All Products</option>
             {products.map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </FilterSelect>
-          <div className="relative lg:w-52">
-            <Calendar size={17} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="relative lg:w-44">
+            <Calendar size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="date"
               value={date}
               onChange={(event) => { setDate(event.target.value); setPage(1) }}
-              className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 pr-10 text-sm font-bold text-gray-700 outline-none transition focus:border-purple-300 focus:ring-4 focus:ring-purple-100"
+              className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 pr-9 text-sm text-gray-700 outline-none transition focus:border-purple-300"
             />
           </div>
-          <button
-            type="button"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-gray-700 transition hover:bg-gray-50"
-          >
-            <Filter size={16} /> More Filters
-          </button>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="ml-auto inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-purple-600 transition hover:bg-purple-50"
-          >
-            <RefreshCcw size={16} /> Reset
-          </button>
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-medium text-purple-600 transition hover:bg-purple-50"
+            >
+              <RefreshCcw size={14} /> Reset
+            </button>
+          )}
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-2xl border border-gray-100">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-white text-left text-xs font-black text-gray-500">
-                  <th className="px-5 py-4">Date</th>
-                  <th className="px-5 py-4">Product</th>
-                  <th className="px-5 py-4">Type</th>
-                  <th className="px-5 py-4 text-right">Qty</th>
-                  <th className="px-5 py-4 text-right">Before</th>
-                  <th className="px-5 py-4 text-right">After</th>
-                  <th className="px-5 py-4">Reference</th>
-                  <th className="px-5 py-4">Created By</th>
-                  <th className="px-5 py-4 text-right">Actions</th>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="w-14 px-3 py-3">No</th>
+                <th className="px-3 py-3">Date</th>
+                <th className="px-3 py-3">Product</th>
+                <th className="px-3 py-3">Inventory</th>
+                <th className="px-3 py-3">Type</th>
+                <th className="px-3 py-3 text-right">Qty</th>
+                <th className="px-3 py-3 text-right">Before</th>
+                <th className="px-3 py-3 text-right">After</th>
+                <th className="px-3 py-3">Reference</th>
+                <th className="px-3 py-3">Created By</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {isLoading && Array.from({ length: pageSize }).map((_, index) => (
+                <tr key={index}>
+                  <td colSpan={10} className="px-3 py-3">
+                    <div className="h-10 animate-pulse rounded-lg bg-gray-100" />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {isLoading && Array.from({ length: pageSize }).map((_, index) => (
-                  <tr key={index}>
-                    <td colSpan={9} className="px-5 py-4">
-                      <div className="h-12 animate-pulse rounded-xl bg-gray-100" />
+              ))}
+
+              {!isLoading && visibleMovements.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-3 py-14 text-center text-gray-400">
+                    <ArrowLeftRight size={32} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm font-medium text-gray-500">No stock movements found</p>
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && visibleMovements.map((movement, index) => {
+                const qty = Number(movement.quantity || 0)
+                const isPositive = qty > 0
+
+                return (
+                  <tr key={movement.id} className="transition hover:bg-gray-50/80">
+                    <td className="px-3 py-3 text-sm text-gray-500">{startIndex + index + 1}</td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      <p className="font-medium text-gray-800">{formatDateOnly(movement.created_at)}</p>
+                      <p className="text-xs text-gray-400">{formatTime(movement.created_at)}</p>
                     </td>
-                  </tr>
-                ))}
-
-                {!isLoading && visibleMovements.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="px-5 py-16 text-center text-gray-400">
-                      <ArrowLeftRight size={42} className="mx-auto mb-3 opacity-30" />
-                      <p className="font-black text-gray-600">No stock movements found</p>
+                    <td className="px-3 py-3">
+                      <p className="font-medium text-gray-900">{movement.product_name || movement.product || '-'}</p>
+                      <p className="text-xs text-gray-400">{movement.product_code || '-'}</p>
                     </td>
-                  </tr>
-                )}
-
-                {!isLoading && visibleMovements.map((movement) => {
-                  const qty = Number(movement.quantity || 0)
-                  const isPositive = qty > 0
-                  const initials = (movement.created_by_name || 'System').trim().slice(0, 1).toUpperCase()
-
-                  return (
-                    <tr key={movement.id} className="bg-white transition hover:bg-gray-50/70">
-                      <td className="px-5 py-4">
-                        <p className="font-black text-gray-700">{formatDateOnly(movement.created_at)}</p>
-                        <p className="mt-0.5 text-xs font-semibold text-gray-400">{formatTime(movement.created_at)}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <p className="font-black text-gray-900">{movement.product_name || movement.product || '-'}</p>
-                        <p className="mt-0.5 text-xs font-semibold text-gray-400">SKU: {movement.product_code || '-'}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={cn('inline-flex rounded-lg px-3 py-1 text-xs font-black ring-1', TYPE_STYLES[movement.type] || 'bg-gray-50 text-gray-600 ring-gray-100')}>
-                          {TYPE_LABELS[movement.type] || movement.type || '-'}
-                        </span>
-                      </td>
-                      <td className={cn('px-5 py-4 text-right font-black', isPositive ? 'text-green-600' : 'text-red-500')}>
-                        <span className="inline-flex items-center justify-end gap-1">
-                          {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                          {isPositive ? '+' : ''}{qty}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right font-black text-gray-600">{movement.before_qty}</td>
-                      <td className="px-5 py-4 text-right font-black text-gray-900">{movement.after_qty}</td>
-                      <td className="px-5 py-4 font-bold text-gray-500">{movement.reference || '-'}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-xs font-black text-white">
-                            {initials}
-                          </span>
-                          <span className="font-bold text-gray-600">{movement.created_by_name || 'System'}</span>
+                    <td className="px-3 py-3">
+                      {movement.inventories?.length ? (
+                        <div className="space-y-0.5">
+                          {movement.inventories.map((place) => (
+                            <p key={place.name} className="whitespace-nowrap text-sm text-gray-700">
+                              {place.name} <span className="text-gray-400">· {place.quantity}</span>
+                            </p>
+                          ))}
                         </div>
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <button className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition hover:bg-gray-50">
-                          <MoreVertical size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-medium', TYPE_STYLES[movement.type] || 'bg-gray-50 text-gray-600')}>
+                        {TYPE_LABELS[movement.type] || movement.type || '-'}
+                      </span>
+                    </td>
+                    <td className={cn('whitespace-nowrap px-3 py-3 text-right font-semibold', isPositive ? 'text-green-600' : 'text-red-500')}>
+                      {isPositive ? '+' : ''}{qty}
+                    </td>
+                    <td className="px-3 py-3 text-right text-gray-500">{movement.before_qty}</td>
+                    <td className="px-3 py-3 text-right font-medium text-gray-900">{movement.after_qty}</td>
+                    <td className="px-3 py-3 text-gray-500">{movement.reference || '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-gray-600">{movement.created_by_name || 'System'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 text-sm font-semibold text-gray-500 md:flex-row md:items-center md:justify-between">
+        <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 text-sm text-gray-500 md:flex-row md:items-center md:justify-between">
           <p>
-            Showing {filteredMovements.length === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + pageSize, filteredMovements.length)} of {filteredMovements.length.toLocaleString()} results
+            Showing {filteredMovements.length === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + pageSize, filteredMovements.length)} of {filteredMovements.length.toLocaleString()}
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <FilterSelect
               value={pageSize}
               onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1) }}
-              className="w-36"
+              className="h-9 w-32 font-medium"
             >
               {PAGE_SIZE_OPTIONS.map((option) => (
-                <option key={option} value={option}>{option} per page</option>
+                <option key={option} value={option}>{option} / page</option>
               ))}
             </FilterSelect>
             <button
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={safePage === 1}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 disabled:opacity-40"
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={16} />
             </button>
-            {Array.from({ length: Math.min(3, totalPages) }).map((_, index) => {
-              const pageNumber = index + 1
-              return (
+            {pageNumbers(safePage, totalPages).map((pageNumber, index, pages) => (
+              <span key={pageNumber} className="flex items-center gap-2">
+                {index > 0 && pageNumber - pages[index - 1] > 1 && <span className="text-gray-300">…</span>}
                 <button
-                  key={pageNumber}
                   onClick={() => setPage(pageNumber)}
                   className={cn(
-                    'flex h-10 min-w-10 items-center justify-center rounded-xl border px-3 text-sm font-black',
-                    safePage === pageNumber
-                      ? 'border-purple-700 bg-purple-700 text-white shadow-lg shadow-purple-200'
-                      : 'border-gray-200 bg-white text-gray-600'
+                    'flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-sm font-medium',
+                    safePage === pageNumber ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                   )}
                 >
                   {pageNumber}
                 </button>
-              )
-            })}
-            {totalPages > 3 && <span className="px-1 text-gray-400">...</span>}
-            {totalPages > 3 && (
-              <button
-                onClick={() => setPage(totalPages)}
-                className={cn(
-                  'flex h-10 min-w-10 items-center justify-center rounded-xl border px-3 text-sm font-black',
-                  safePage === totalPages
-                    ? 'border-purple-700 bg-purple-700 text-white shadow-lg shadow-purple-200'
-                    : 'border-gray-200 bg-white text-gray-600'
-                )}
-              >
-                {totalPages}
-              </button>
-            )}
+              </span>
+            ))}
             <button
               onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
               disabled={safePage === totalPages}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 disabled:opacity-40"
             >
-              <ChevronRight size={18} />
+              <ChevronRight size={16} />
             </button>
           </div>
         </div>

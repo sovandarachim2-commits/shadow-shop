@@ -5,9 +5,10 @@ import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
+import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { productsApi } from '@/api/products'
 import { getListResults } from '@/utils/apiData'
-import { formatCurrency } from '@/utils/helpers'
+import { formatCurrency, formatDateTime } from '@/utils/helpers'
 
 function toDatetimeLocal(value) {
   if (!value) return ''
@@ -329,139 +330,98 @@ export default function FlashSales() {
           <p className="text-xs font-semibold text-gray-400">Select product, set sale price, max order qty, and choose start/end time.</p>
         </div>
 
-        {isLoading || setsLoading ? (
-          <div className="divide-y divide-gray-100">
-            {[...Array(6)].map((_, index) => (
-              <div key={index} className="grid gap-4 px-5 py-4 md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px]">
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-12 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-              </div>
-            ))}
-          </div>
-        ) : flashProducts.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">
-            <Flame size={42} className="mx-auto mb-3 text-pink-200" />
-            <p className="font-black text-gray-700">No flash sale products or sets</p>
-            <p className="mt-1 text-sm">Create a flash sale by selecting a product or product set.</p>
-            <button onClick={openCreate} className="btn-primary mx-auto mt-4">
-              <Plus size={15} /> Create Flash Sale
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-hidden">
-            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px] md:items-center md:gap-4">
-              <div>No</div>
-              <div>Product</div>
-              <div>Retail</div>
-              <div>Flash Price</div>
-              <div>Max Qty</div>
-              <div>Orders</div>
-              <div>Schedule</div>
-              <div>Status</div>
-              <div className="text-right">Actions</div>
-            </div>
-
-            {flashProducts.map((product, index) => (
-              <div
-                key={`${product._saleType}-${product.id}`}
-                className="grid gap-3 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[60px_minmax(240px,1.4fr)_100px_110px_100px_100px_minmax(220px,1fr)_120px_150px] md:items-center md:gap-4"
-              >
-                <div className="hidden text-sm font-black text-gray-500 md:block">{index + 1}</div>
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-100">
-                    {product.primary_image ? (
-                      <img src={product.primary_image} alt="" className="h-full w-full object-contain p-1" />
-                    ) : (
-                      <Flame size={20} className="text-pink-500" />
-                    )}
+        <Table>
+          <Thead>
+            <tr>
+              <Th>No</Th>
+              <Th>Product</Th>
+              <Th>Retail</Th>
+              <Th>Flash Price</Th>
+              <Th>Max Qty</Th>
+              <Th>Orders</Th>
+              <Th>Schedule</Th>
+              <Th>Status</Th>
+              <Th>Actions</Th>
+            </tr>
+          </Thead>
+          <Tbody>
+            {(isLoading || setsLoading) && <LoadingRows cols={9} />}
+            {!isLoading && !setsLoading && flashProducts.length === 0 && (
+              <tr>
+                <td colSpan={9}>
+                  <EmptyState message="No flash sale products or sets" icon={Flame} />
+                  <div className="pb-8 text-center">
+                    <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
+                      <Plus size={15} /> Create Flash Sale
+                    </button>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-gray-900">{product.name}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-400">
-                      <span>{product.code}</span>
-                      {product._saleType === 'set' && <Badge variant="info">Product Set</Badge>}
-                      {product.brand_name && <span>{product.brand_name}</span>}
-                      {product.category_name && <span>{product.category_name}</span>}
+                </td>
+              </tr>
+            )}
+            {!isLoading && !setsLoading && flashProducts.map((product, index) => {
+              const schedule = flashSaleScheduleLabel(product)
+              return (
+                <Tr key={`${product._saleType}-${product.id}`}>
+                  <Td><span className="text-sm font-semibold text-gray-500">{index + 1}</span></Td>
+                  <Td>
+                    <div className="flex min-w-[220px] items-center gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-50 ring-1 ring-gray-100">
+                        {product.primary_image ? (
+                          <img src={product.primary_image} alt="" className="h-full w-full object-contain p-1" />
+                        ) : (
+                          <Flame size={18} className="text-pink-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">{product.name}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+                          <span>{product.code}</span>
+                          {product._saleType === 'set' && <Badge variant="info">Set</Badge>}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
-                  <span className="text-xs font-bold uppercase text-gray-400 md:hidden">Retail</span>
-                  <span className="text-sm font-black text-gray-600 line-through">{formatCurrency(product.retail_price)}</span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-pink-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
-                  <span className="text-xs font-bold uppercase text-pink-500 md:hidden">Flash</span>
-                  <span className="text-sm font-black text-pink-600">{formatCurrency(product.flash_sale_price)}</span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-orange-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
-                  <span className="text-xs font-bold uppercase text-orange-500 md:hidden">Max Qty</span>
-                  <span className="text-sm font-black text-orange-600">{product.flash_sale_max_order_qty || 'No limit'}</span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-purple-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
-                  <span className="text-xs font-bold uppercase text-purple-500 md:hidden">Orders</span>
-                  <div>
-                    <p className="text-sm font-black text-purple-700">{product._saleType === 'set' ? '—' : product.flash_sale_order_count || 0}</p>
-                    <p className="text-[11px] font-semibold text-gray-400">{product._saleType === 'set' ? 'Set' : `${product.flash_sale_quantity_sold || 0} qty`}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 md:bg-transparent md:px-0 md:py-0">
-                  <p>
-                    <span className="font-black text-gray-400">Start:</span>{' '}
-                    {product.flash_sale_starts_at ? new Date(product.flash_sale_starts_at).toLocaleString() : 'Now'}
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-black text-gray-400">End:</span>{' '}
-                    {product.flash_sale_ends_at ? new Date(product.flash_sale_ends_at).toLocaleString() : 'No end date'}
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <select
-                    value={product.is_featured ? 'active' : 'inactive'}
-                    disabled={statusMutation.isPending}
-                    onChange={(event) => statusMutation.mutate({ product, status: event.target.value })}
-                    className="h-9 w-full rounded-xl border border-gray-200 bg-white px-2 text-xs font-black text-gray-700 outline-none focus:border-pink-300 disabled:opacity-60"
-                    aria-label={`Status for ${product.name}`}
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                  <Badge variant={flashSaleScheduleLabel(product).variant}>
-                    {flashSaleScheduleLabel(product).label}
-                  </Badge>
-                </div>
-
-                <div className="flex gap-2 md:justify-end">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(product)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-100 md:flex-none"
-                  >
-                    <Edit size={13} /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(product)}
-                    disabled={removeMutation.isPending}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-100 disabled:opacity-60 md:flex-none"
-                  >
-                    <Trash2 size={13} /> Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  </Td>
+                  <Td><span className="text-sm text-gray-400 line-through">{formatCurrency(product.retail_price)}</span></Td>
+                  <Td><span className="text-sm font-semibold text-pink-600">{formatCurrency(product.flash_sale_price)}</span></Td>
+                  <Td><span className="text-sm font-semibold text-gray-800">{product.flash_sale_max_order_qty || 'No limit'}</span></Td>
+                  <Td>
+                    <p className="text-sm font-semibold text-gray-900">{product._saleType === 'set' ? '—' : product.flash_sale_order_count || 0}</p>
+                    <p className="text-[11px] text-gray-400">{product._saleType === 'set' ? 'Set' : `${product.flash_sale_quantity_sold || 0} qty`}</p>
+                  </Td>
+                  <Td>
+                    <p className="whitespace-nowrap text-xs text-gray-600">{product.flash_sale_starts_at ? formatDateTime(product.flash_sale_starts_at) : 'Starts now'}</p>
+                    <p className="mt-0.5 whitespace-nowrap text-xs text-gray-400">{product.flash_sale_ends_at ? formatDateTime(product.flash_sale_ends_at) : 'No end date'}</p>
+                  </Td>
+                  <Td>
+                    <div className="flex min-w-[140px] flex-col items-start gap-1.5">
+                      <select
+                        value={product.is_featured ? 'active' : 'inactive'}
+                        disabled={statusMutation.isPending}
+                        onChange={(event) => statusMutation.mutate({ product, status: event.target.value })}
+                        className="h-9 w-full rounded-xl border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-700 outline-none focus:border-pink-300 disabled:opacity-60"
+                        aria-label={`Status for ${product.name}`}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                      <Badge variant={schedule.variant}>{schedule.label}</Badge>
+                    </div>
+                  </Td>
+                  <Td>
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => openEdit(product)} title="Edit" className="rounded-lg p-1.5 text-blue-500 transition-colors hover:bg-blue-50">
+                        <Edit size={14} />
+                      </button>
+                      <button type="button" onClick={() => handleRemove(product)} disabled={removeMutation.isPending} title="Remove" className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 disabled:opacity-60">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </Td>
+                </Tr>
+              )
+            })}
+          </Tbody>
+        </Table>
       </div>
 
       <Modal

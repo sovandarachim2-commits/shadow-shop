@@ -1,9 +1,12 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { PackageCheck, Tag, Plus, Edit, Trash2, Star, X, Minus, Image, Upload, Images } from 'lucide-react'
+import { PackageCheck, Tag, Plus, Edit, Trash2, Star, X, Minus, Image, Upload, Images, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Modal } from '@/components/ui/Modal'
+import { Badge } from '@/components/ui/Badge'
+import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 
@@ -335,10 +338,55 @@ function SetForm({ set, onSave, onClose, saving }) {
   )
 }
 
+function SetImageLightbox({ images, index, onChange, onClose }) {
+  const img = images[index]
+  const hasPrev = index > 0
+  const hasNext = index < images.length - 1
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft' && hasPrev) onChange(index - 1)
+      if (e.key === 'ArrowRight' && hasNext) onChange(index + 1)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [index, hasPrev, hasNext, onChange, onClose])
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={onClose}>
+      <button onClick={onClose} className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
+        <X size={20} />
+      </button>
+      <div className="absolute left-4 top-4 flex items-center gap-2">
+        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">{index + 1} / {images.length}</span>
+        {img.is_primary && (
+          <span className="flex items-center gap-1 rounded-full bg-purple-600 px-3 py-1 text-xs font-black text-white">
+            <Star size={10} className="fill-white" /> Primary
+          </span>
+        )}
+      </div>
+      {hasPrev && (
+        <button onClick={(e) => { e.stopPropagation(); onChange(index - 1) }} className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25">
+          <ChevronLeft size={22} />
+        </button>
+      )}
+      <img src={img.image} alt="" onClick={(e) => e.stopPropagation()} className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl" />
+      {hasNext && (
+        <button onClick={(e) => { e.stopPropagation(); onChange(index + 1) }} className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/25">
+          <ChevronRight size={22} />
+        </button>
+      )}
+    </div>
+  )
+}
+
 function SetImageManagerModal({ productSet, onClose }) {
   const qc = useQueryClient()
   const fileRef = useRef(null)
   const [uploading, setUploading] = useState(false)
+  const [lightboxIdx, setLightboxIdx] = useState(null)
+  const [confirmImg, ConfirmImgDialog] = useConfirm()
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ['product-set-images', productSet.id],
@@ -373,6 +421,20 @@ function SetImageManagerModal({ productSet, onClose }) {
     }
   }
 
+  const moveImage = async (index, direction) => {
+    const nextIndex = index + direction
+    if (nextIndex < 0 || nextIndex >= images.length) return
+    const next = images.map((img) => img.id)
+    const [moved] = next.splice(index, 1)
+    next.splice(nextIndex, 0, moved)
+    try {
+      await productsApi.sets.reorderImages(productSet.id, next)
+      refreshImages()
+    } catch {
+      toast.error('Could not change image order')
+    }
+  }
+
   const setPrimary = async (imageId) => {
     try {
       await productsApi.sets.setPrimaryImage(productSet.id, imageId)
@@ -383,7 +445,7 @@ function SetImageManagerModal({ productSet, onClose }) {
   }
 
   const deleteImage = async (imageId) => {
-    if (!window.confirm('Delete this image?')) return
+    if (!await confirmImg('Delete this image?')) return
     try {
       await productsApi.sets.deleteImage(productSet.id, imageId)
       refreshImages()
@@ -423,10 +485,11 @@ function SetImageManagerModal({ productSet, onClose }) {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {images.map((img) => (
+              {images.map((img, idx) => (
                 <div
                   key={img.id}
-                  className="group relative aspect-square overflow-hidden rounded-2xl border-2 bg-white transition hover:shadow-lg"
+                  onClick={() => setLightboxIdx(idx)}
+                  className="group relative aspect-square cursor-zoom-in overflow-hidden rounded-2xl border-2 bg-white transition hover:shadow-lg"
                   style={{ borderColor: img.is_primary ? '#9333ea' : '#f3f4f6' }}
                 >
                   <img src={img.image} alt="" className="h-full w-full object-contain p-2" />
@@ -437,17 +500,37 @@ function SetImageManagerModal({ productSet, onClose }) {
                     </div>
                   )}
 
+                  <div className="absolute inset-x-1 bottom-1 z-10 flex items-center justify-between">
+                    <button
+                      type="button"
+                      aria-label="Move image earlier"
+                      disabled={idx === 0}
+                      onClick={(e) => { e.stopPropagation(); moveImage(idx, -1) }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow disabled:opacity-30"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Move image later"
+                      disabled={idx === images.length - 1}
+                      onClick={(e) => { e.stopPropagation(); moveImage(idx, 1) }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow disabled:opacity-30"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
                     {!img.is_primary && (
                       <button
-                        onClick={() => setPrimary(img.id)}
+                        onClick={(e) => { e.stopPropagation(); setPrimary(img.id) }}
                         className="flex items-center gap-1 rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-black text-white shadow hover:bg-purple-700"
                       >
                         <Star size={11} /> Set Primary
                       </button>
                     )}
                     <button
-                      onClick={() => deleteImage(img.id)}
+                      onClick={(e) => { e.stopPropagation(); deleteImage(img.id) }}
                       className="flex items-center gap-1 rounded-xl bg-red-500 px-3 py-1.5 text-xs font-black text-white shadow hover:bg-red-600"
                     >
                       <Trash2 size={11} /> Delete
@@ -476,16 +559,26 @@ function SetImageManagerModal({ productSet, onClose }) {
 
         <div className="border-t border-gray-100 px-6 py-4">
           <p className="text-xs text-gray-400">
-            {images.length} image{images.length !== 1 ? 's' : ''} - Hover to set primary or delete
+            {images.length} image{images.length !== 1 ? 's' : ''} · Click image to preview · Primary is shown first · Use the arrows to change the display order
           </p>
         </div>
       </div>
+      {lightboxIdx !== null && images[lightboxIdx] && (
+        <SetImageLightbox
+          images={images}
+          index={lightboxIdx}
+          onChange={setLightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+      {ConfirmImgDialog}
     </div>
   )
 }
 
 export default function ProductSets() {
   const qc = useQueryClient()
+  const [confirm, ConfirmDialog] = useConfirm()
   const [showModal, setShowModal] = useState(false)
   const [editSet, setEditSet] = useState(null)
   const [imageSet, setImageSet] = useState(null)
@@ -548,7 +641,7 @@ export default function ProductSets() {
   }
 
   const handleDelete = async (s) => {
-    if (!window.confirm(`Delete "${s.name}"? This cannot be undone.`)) return
+    if (!await confirm(`Delete "${s.name}"?`, 'This cannot be undone.')) return
     try {
       await productsApi.sets.delete(s.id)
       qc.invalidateQueries({ queryKey: ['product-sets'] })
@@ -582,159 +675,108 @@ export default function ProductSets() {
       />
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
-        {isLoading ? (
-          <div className="divide-y divide-gray-100">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_230px]">
-                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
-                <div className="h-14 animate-pulse rounded-xl bg-gray-100" />
-              </div>
-            ))}
-          </div>
-        ) : sets.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">
-            <PackageCheck size={40} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">No product sets yet</p>
-            <p className="mt-1 text-sm">Create bundled sets to offer special pricing to customers.</p>
-            <button onClick={openCreate} className="btn-primary mx-auto mt-4">
-              <Plus size={15} /> Create First Set
-            </button>
-          </div>
-        ) : (
-          <div>
-            <div className="hidden border-b border-gray-100 bg-gray-50 px-5 py-3 text-[11px] font-black uppercase tracking-wide text-gray-500 md:grid md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_230px] md:items-center md:gap-4">
-              <div>Set Name</div>
-              <div>Products In Set</div>
-              <div>Price</div>
-              <div>Status</div>
-              <div className="text-right">Actions</div>
-            </div>
-
-            {sets.map((s) => (
-              <div
-                key={s.id}
-                className="grid gap-4 border-b border-gray-100 px-5 py-4 last:border-b-0 hover:bg-gray-50/70 md:grid-cols-[minmax(220px,1fr)_minmax(320px,1.6fr)_130px_100px_230px] md:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-2">
+        <Table>
+          <Thead>
+            <tr>
+              <Th>No</Th>
+              <Th>Set</Th>
+              <Th>Products In Set</Th>
+              <Th>Price</Th>
+              <Th>Status</Th>
+              <Th>Actions</Th>
+            </tr>
+          </Thead>
+          <Tbody>
+            {isLoading && <LoadingRows cols={6} />}
+            {!isLoading && sets.length === 0 && (
+              <tr>
+                <td colSpan={6}>
+                  <EmptyState message="No product sets yet" icon={PackageCheck} />
+                  <div className="pb-8 text-center">
+                    <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
+                      <Plus size={15} /> Create First Set
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!isLoading && sets.map((s, index) => (
+              <Tr key={s.id}>
+                <Td><span className="text-sm font-semibold text-gray-500">{index + 1}</span></Td>
+                <Td>
+                  <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-purple-50 text-purple-700">
                       {s.image_url ? (
-                        <img src={s.image_url} alt={s.name} className="h-full w-full object-contain bg-white p-1" />
+                        <img src={s.image_url} alt={s.name} className="h-full w-full bg-white object-contain p-1" />
                       ) : (
                         <PackageCheck size={18} />
                       )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        {s.is_featured && (
-                          <Star size={13} className="shrink-0 fill-yellow-400 text-yellow-500" />
-                        )}
-                        <h3 className="truncate text-sm font-black text-gray-900">{s.name}</h3>
+                        {s.is_featured && <Star size={13} className="shrink-0 fill-yellow-400 text-yellow-500" />}
+                        <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
                       </div>
-                      <p className="mt-0.5 text-xs font-semibold text-gray-400">
-                        {s.items?.length ?? 0} product{s.items?.length === 1 ? '' : 's'}
-                      </p>
+                      <p className="mt-0.5 text-xs text-gray-400">{s.items?.length ?? 0} product{s.items?.length === 1 ? '' : 's'}</p>
                     </div>
                   </div>
-                  {s.description && (
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-500">{s.description}</p>
-                  )}
-                </div>
-
-                <div>
+                </Td>
+                <Td>
                   {s.items?.length > 0 ? (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex max-w-sm flex-col gap-1.5">
                       {s.items.slice(0, 3).map((item) => (
-                        <div key={item.id} className="flex min-w-0 items-center gap-2 rounded-xl bg-gray-50 px-2.5 py-2">
-                          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white">
+                        <div key={item.id} className="flex min-w-0 items-center gap-2">
+                          <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white">
                             {item.product_image ? (
                               <img src={item.product_image} alt={item.product_name} className="h-full w-full object-contain p-0.5" />
                             ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <Tag size={12} className="text-gray-300" />
-                              </div>
+                              <div className="flex h-full w-full items-center justify-center"><Tag size={12} className="text-gray-300" /></div>
                             )}
-                            <span className="absolute bottom-0 right-0 rounded-tl bg-black/70 px-1 text-[9px] font-black text-white">
-                              x{item.quantity}
-                            </span>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-black text-gray-900">{item.product_name}</p>
-                            <p className="text-[11px] font-semibold text-gray-400">{item.product_code}</p>
-                          </div>
+                          <p className="truncate text-xs font-semibold text-gray-800">{item.product_name} <span className="text-gray-400">x{item.quantity}</span></p>
                         </div>
                       ))}
-                      {s.items.length > 3 && (
-                        <div className="rounded-xl bg-purple-50 px-2.5 py-2 text-xs font-black text-purple-700">
-                          +{s.items.length - 3} more product{s.items.length - 3 === 1 ? '' : 's'}
-                        </div>
-                      )}
+                      {s.items.length > 3 && <p className="text-xs font-semibold text-purple-600">+{s.items.length - 3} more</p>}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-center text-xs font-semibold text-gray-400">
-                      No products added
+                    <span className="text-xs text-gray-400">No products added</span>
+                  )}
+                </Td>
+                <Td>
+                  {s.discount_price ? (
+                    <div>
+                      <p className="text-xs text-gray-400 line-through">{formatCurrency(s.price)}</p>
+                      <p className="text-sm font-semibold text-purple-600">{formatCurrency(s.discount_price)}</p>
                     </div>
+                  ) : (
+                    <span className="text-sm font-semibold">{formatCurrency(s.price)}</span>
                   )}
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 md:block md:bg-transparent md:px-0 md:py-0">
-                  <span className="text-xs font-bold uppercase text-gray-400 md:hidden">Price</span>
-                  <div className="text-right md:text-left">
-                    {s.discount_price ? (
-                      <>
-                        <p className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(s.price)}</p>
-                        <p className="text-sm font-black text-purple-600">{formatCurrency(s.discount_price)}</p>
-                      </>
-                    ) : (
-                      <p className="text-sm font-black text-gray-900">{formatCurrency(s.price)}</p>
-                    )}
+                </Td>
+                <Td>
+                  <div className="flex flex-col items-start gap-1">
+                    <Badge variant={s.is_active ? 'success' : 'default'}>{s.is_active ? 'Active' : 'Inactive'}</Badge>
+                    {s.is_featured && <Badge variant="warning">Featured</Badge>}
                   </div>
-                </div>
-
-                <div>
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${
-                      s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {s.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                  {s.is_featured && (
-                    <span className="mt-1 inline-flex rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-black text-yellow-700 md:block md:w-fit">
-                      Featured
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex gap-2 md:justify-end">
-                  <button
-                    onClick={() => setImageSet(s)}
-                    title="Manage Images"
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-50 px-3 py-2 text-xs font-bold text-purple-600 transition-colors hover:bg-purple-100 md:flex-none"
-                  >
-                    <Images size={13} /> Images
-                  </button>
-                  <button
-                    onClick={() => openEdit(s)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-100 md:flex-none"
-                  >
-                    <Edit size={13} /> Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(s)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-500 transition-colors hover:bg-red-100 md:flex-none"
-                  >
-                    <Trash2 size={13} /> Delete
-                  </button>
-                </div>
-              </div>
+                </Td>
+                <Td>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setImageSet(s)} title="Manage Images" className="rounded-lg p-1.5 text-purple-500 transition-colors hover:bg-purple-50">
+                      <Images size={14} />
+                    </button>
+                    <button onClick={() => openEdit(s)} title="Edit" className="rounded-lg p-1.5 text-blue-500 transition-colors hover:bg-blue-50">
+                      <Edit size={14} />
+                    </button>
+                    <button onClick={() => handleDelete(s)} title="Delete" className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </Td>
+              </Tr>
             ))}
-          </div>
-        )}
+          </Tbody>
+        </Table>
       </div>
+      {ConfirmDialog}
 
       <Modal
         isOpen={showModal}

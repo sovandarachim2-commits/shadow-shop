@@ -493,7 +493,7 @@ export default function CustomerLayout() {
                                   )}
                                 </div>
                                 <div className="mt-2 flex flex-1 flex-col">
-                                  <p className="line-clamp-2 text-[11px] font-bold leading-tight text-gray-950 group-hover:text-pink-600">{product.name}</p>
+                                  <p className="khmer-title line-clamp-2 text-[11px] text-gray-950 group-hover:text-pink-600">{product.name}</p>
                                   <div className="mt-auto pt-1.5 flex items-center justify-between">
                                     <span className="text-xs font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
                                     {product.brand_name && (

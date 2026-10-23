@@ -12,6 +12,8 @@ import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import useAuthStore from '@/store/authStore'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
+import { localizeOrderNote, provinceKhmerLabel } from '@/utils/addressHelpers'
+import { KHMER_TEXT_STYLE } from '@/utils/constants'
 import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton, paymentMethodLabel } from '@/components/orders/PaymentHistory'
 import ContactSalesReceiptModal from '@/components/orders/ContactSalesReceiptModal'
 import NewOrder from './NewOrder'
@@ -138,7 +140,7 @@ export default function OrderList() {
   )
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }) => ordersApi.orders.updateStatus(id, { status }),
+    mutationFn: ({ id, status, note }) => ordersApi.orders.updateStatus(id, { status, note }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['order', variables.id] })
       refetch()
@@ -163,7 +165,7 @@ export default function OrderList() {
   })
 
   const handleCancelOrder = async (order) => {
-    const ok = await confirm(
+    const reason = await confirm(
       'Cancel this order?',
       `Order #${order.order_number} will be marked as cancelled.`,
       {
@@ -171,10 +173,13 @@ export default function OrderList() {
         cancelText: 'Keep Order',
         tone: 'danger',
         icon: 'warning',
+        reasonLabel: 'Reason',
+        reasonPlaceholder: 'Why is this order cancelled?',
+        reasonRequired: true,
       },
     )
-    if (!ok) return
-    updateStatusMutation.mutate({ id: order.id, status: 'cancelled' })
+    if (!reason) return
+    updateStatusMutation.mutate({ id: order.id, status: 'cancelled', note: reason })
   }
 
   return (
@@ -537,7 +542,7 @@ export default function OrderList() {
                         <p className="font-semibold text-gray-900">{popupOrder.customer_detail?.name || popupOrder.customer_name || '-'}</p>
                         <p className="text-gray-500">{popupOrder.customer_detail?.phone || popupOrder.customer_phone || '-'}</p>
                         <p className="text-xs text-gray-500">{popupOrder.customer_detail?.address || '-'}</p>
-                        <p className="text-xs capitalize text-gray-500">{popupOrder.customer_detail?.province?.replace('_', ' ') || '-'}</p>
+                        <p className="text-xs text-gray-500" style={KHMER_TEXT_STYLE}>{provinceKhmerLabel(popupOrder.customer_detail?.province) || '-'}</p>
                       </div>
                     </div>
 
@@ -565,7 +570,7 @@ export default function OrderList() {
                         {popupOrder.notes && (
                           <div>
                             <span className="text-gray-500">Notes</span>
-                            <p className="mt-1 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">{popupOrder.notes}</p>
+                            <p className="mt-1 rounded-lg bg-gray-50 p-2 text-xs text-gray-600" style={KHMER_TEXT_STYLE}>{localizeOrderNote(popupOrder.notes)}</p>
                           </div>
                         )}
                       </div>

@@ -35,6 +35,7 @@ export const productsApi = {
       timeout: 90000,
     }),
     setPrimaryImage: (id, imageId) => client.post(`/products/items/${id}/set_primary_image/`, { image_id: imageId }),
+    reorderImages: (id, imageIds) => client.post(`/products/items/${id}/reorder_images/`, { image_ids: imageIds }),
     deleteImage: (id, imageId) => client.delete(`/products/items/${id}/delete_image/${imageId}/`),
     searchByCode: (code) => client.get('/products/items/search_by_code/', { params: { code } }),
   },
@@ -60,6 +61,7 @@ export const productsApi = {
       timeout: 90000,
     }),
     setPrimaryImage: (id, imageId) => client.post(`/products/sets/${id}/set_primary_image/`, { image_id: imageId }),
+    reorderImages: (id, imageIds) => client.post(`/products/sets/${id}/reorder_images/`, { image_ids: imageIds }),
     deleteImage: (id, imageId) => client.delete(`/products/sets/${id}/delete_image/${imageId}/`),
   },
   promotions: {

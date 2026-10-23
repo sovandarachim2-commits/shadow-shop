@@ -46,6 +46,13 @@ html[lang="km"] textarea {
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
   }
+  .khmer-title {
+    font-family: 'Noto Sans Khmer', 'Inter', sans-serif;
+    font-synthesis: none;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.7;
+  }
 }
 
 @layer components {

@@ -23,7 +23,7 @@ export const authApi = {
   }),
   changePassword: (data) => client.put('/auth/change-password/', data),
   setInitialPassword: (data) => client.post('/auth/set-initial-password/', data),
-  dashboardStats: () => client.get('/auth/dashboard/stats/'),
+  dashboardStats: (params) => client.get('/auth/dashboard/stats/', { params }),
   users: {
     list: (params) => client.get('/auth/users/', { params }),
     get: (id) => client.get(`/auth/users/${id}/`),

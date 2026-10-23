@@ -1477,30 +1477,115 @@ class DashboardStatsView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from django.db.models import Count, Sum
         from django.utils import timezone
         from apps.orders.models import Order
         from apps.inventory.models import Stock
         import datetime
 
         today = timezone.now().date()
+        period = request.query_params.get('period', 'week')
+        start, end = today - datetime.timedelta(days=6), today
+        if period == 'today':
+            start = end = today
+        elif period == 'month':
+            start = today.replace(day=1)
+        elif period == 'year':
+            start = today.replace(month=1, day=1)
+        elif period == 'custom':
+            try:
+                custom_start = datetime.date.fromisoformat(request.query_params.get('date_from') or '')
+                custom_end = datetime.date.fromisoformat(request.query_params.get('date_to') or '')
+            except ValueError:
+                custom_start = custom_end = None
+            if custom_start and custom_end:
+                start, end = (custom_start, custom_end) if custom_start <= custom_end else (custom_end, custom_start)
+                period = 'custom'
+            else:
+                period = 'week'
 
-        today_orders = Order.objects.filter(created_at__date=today)
-        today_sales = sum(o.grand_total for o in today_orders.filter(payment_status='paid'))
-        today_profit = sum(o.profit for o in today_orders.filter(payment_status='paid'))
+        period_orders = Order.objects.filter(created_at__date__gte=start, created_at__date__lte=end)
+        paid_orders = list(period_orders.filter(payment_status='paid').prefetch_related('items'))
+        period_sales = sum(order.grand_total for order in paid_orders)
+        period_profit = sum(order.profit for order in paid_orders)
 
         low_stock = Stock.objects.filter(quantity__gt=0, quantity__lte=5).count()
         out_of_stock = Stock.objects.filter(quantity__lte=0).count()
 
+        paid_by_day = {
+            row['created_at__date']: row
+            for row in (
+                period_orders.filter(payment_status='paid')
+                .values('created_at__date')
+                .annotate(revenue=Sum('grand_total'), orders=Count('id'))
+            )
+        }
+        span_days = (end - start).days
+        sales_series = []
+        if span_days <= 31:
+            day = start
+            while day <= end:
+                row = paid_by_day.get(day) or {}
+                sales_series.append({
+                    'day': 'Today' if span_days == 0 else (day.strftime('%a') if span_days <= 7 else day.strftime('%d %b')),
+                    'revenue': float(row.get('revenue') or 0),
+                    'orders': row.get('orders') or 0,
+                })
+                day += datetime.timedelta(days=1)
+        else:
+            month_cursor = start.replace(day=1)
+            while month_cursor <= end:
+                next_month = (month_cursor.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
+                revenue = 0
+                orders = 0
+                day = max(month_cursor, start)
+                month_end = min(next_month - datetime.timedelta(days=1), end)
+                while day <= month_end:
+                    row = paid_by_day.get(day) or {}
+                    revenue += float(row.get('revenue') or 0)
+                    orders += row.get('orders') or 0
+                    day += datetime.timedelta(days=1)
+                sales_series.append({
+                    'day': month_cursor.strftime('%b'),
+                    'revenue': revenue,
+                    'orders': orders,
+                })
+                month_cursor = next_month
+
+        status_totals = {
+            row['status']: row['total']
+            for row in period_orders.values('status').annotate(total=Count('id'))
+        }
+        status_labels = [
+            ('new', 'New', '#3b82f6'),
+            ('confirmed', 'Confirmed', '#6366f1'),
+            ('printed', 'Printed', '#8b5cf6'),
+            ('preparing', 'Preparing', '#f59e0b'),
+            ('packed', 'Packed', '#f97316'),
+            ('shipped', 'Shipped', '#06b6d4'),
+            ('completed', 'Completed', '#10b981'),
+            ('cancelled', 'Cancelled', '#ef4444'),
+        ]
+        order_status = [
+            {'name': label, 'value': status_totals.get(key, 0), 'color': color}
+            for key, label, color in status_labels
+        ]
+
         return Response({
-            'today_orders': today_orders.count(),
-            'pending_orders': Order.objects.filter(status__in=['new', 'confirmed']).count(),
-            'packing_orders': Order.objects.filter(status='preparing').count(),
-            'ready_to_ship': Order.objects.filter(status='packed').count(),
-            'today_sales': float(today_sales),
-            'today_profit': float(today_profit),
+            'period': period,
+            'date_from': start.isoformat(),
+            'date_to': end.isoformat(),
+            'today_orders': period_orders.count(),
+            'pending_orders': period_orders.filter(status__in=['new', 'confirmed']).count(),
+            'packing_orders': period_orders.filter(status='preparing').count(),
+            'ready_to_ship': period_orders.filter(status='packed').count(),
+            'today_sales': float(period_sales),
+            'today_profit': float(period_profit),
             'low_stock': low_stock,
             'out_of_stock': out_of_stock,
             'total_customers': request.user.__class__.objects.filter(role='customer').count(),
+            'sales_week': sales_series,
+            'order_status': order_status,
         })
 
 

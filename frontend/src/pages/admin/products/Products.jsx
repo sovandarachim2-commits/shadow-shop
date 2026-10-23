@@ -425,9 +425,30 @@ function ImageManagerModal({ product, onClose }) {
 
   const setPrimaryMutation = useMutation({
     mutationFn: (imageId) => productsApi.products.setPrimaryImage(product.id, imageId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['product-images', product.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-images', product.id] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+    },
     onError: () => toast.error('Failed to set primary'),
   })
+
+  const reorderMutation = useMutation({
+    mutationFn: (imageIds) => productsApi.products.reorderImages(product.id, imageIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['product-images', product.id] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+    },
+    onError: () => toast.error('Could not change image order'),
+  })
+
+  const moveImage = (index, direction) => {
+    const nextIndex = index + direction
+    if (nextIndex < 0 || nextIndex >= images.length) return
+    const next = images.map((img) => img.id)
+    const [moved] = next.splice(index, 1)
+    next.splice(nextIndex, 0, moved)
+    reorderMutation.mutate(next)
+  }
 
   const deleteMutation = useMutation({
     mutationFn: (imageId) => productsApi.products.deleteImage(product.id, imageId),
@@ -501,6 +522,26 @@ function ImageManagerModal({ product, onClose }) {
                     </div>
                   )}
 
+                  <div className="absolute inset-x-1 bottom-1 z-10 flex items-center justify-between">
+                    <button
+                      type="button"
+                      aria-label="Move image earlier"
+                      disabled={idx === 0 || reorderMutation.isPending}
+                      onClick={(e) => { e.stopPropagation(); moveImage(idx, -1) }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow disabled:opacity-30"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Move image later"
+                      disabled={idx === images.length - 1 || reorderMutation.isPending}
+                      onClick={(e) => { e.stopPropagation(); moveImage(idx, 1) }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow disabled:opacity-30"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
                     {!img.is_primary && (
                       <button
@@ -542,7 +583,7 @@ function ImageManagerModal({ product, onClose }) {
 
         <div className="border-t border-gray-100 px-6 py-4">
           <p className="text-xs text-gray-400">
-            {images.length} image{images.length !== 1 ? 's' : ''} · Click image to preview · Hover to set primary or delete
+            {images.length} image{images.length !== 1 ? 's' : ''} · Primary is shown first · Use the arrows to change the display order
           </p>
         </div>
       </div>

@@ -100,6 +100,7 @@ const Banners = lazyWithReload(() => import('@/pages/admin/products/Banners'))
 const StockDashboard = lazyWithReload(() => import('@/pages/admin/inventory/StockDashboard'))
 const StockMovements = lazyWithReload(() => import('@/pages/admin/inventory/StockMovements'))
 const StockTransfers = lazyWithReload(() => import('@/pages/admin/inventory/StockTransfers'))
+const InventoryStorage = lazyWithReload(() => import('@/pages/admin/inventory/InventoryStorage'))
 const PrintCenter = lazyWithReload(() => import('@/pages/admin/operations/PrintCenter'))
 const PrintHistory = lazyNamedWithReload(() => import('@/pages/admin/operations/PrintCenter'), 'PrintHistory')
 const PrintPreviewPage = lazyNamedWithReload(() => import('@/pages/admin/operations/PrintCenter'), 'PrintPreviewPage')
@@ -590,6 +591,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'product_banners', path: '/admin/products/banners' },
   { module: 'inventory', path: '/admin/inventory' },
   { module: 'inventory_movements', path: '/admin/inventory/movements' },
+  { module: 'inventory_storage', path: '/admin/inventory/storage' },
   { module: 'inventory_transfers', path: '/admin/inventory/transfers' },
   { module: 'print', path: '/admin/print' },
   { module: 'print_history', path: '/admin/print/history' },
@@ -810,6 +812,7 @@ export default function App() {
             {/* Inventory */}
             <Route path="inventory" element={<LazyPage><StockDashboard /></LazyPage>} />
             <Route path="inventory/movements" element={<LazyPage><StockMovements /></LazyPage>} />
+            <Route path="inventory/storage" element={<LazyPage><InventoryStorage /></LazyPage>} />
             <Route path="inventory/transfers" element={<LazyPage><StockTransfers /></LazyPage>} />
 
             {/* Customer Scanner */}

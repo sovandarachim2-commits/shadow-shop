@@ -32,6 +32,7 @@ const PAGE_GROUPS = [
     children: [
       { module: 'inventory', label: 'Stock Dashboard' },
       { module: 'inventory_movements', label: 'Stock Movement' },
+      { module: 'inventory_storage', label: 'Inventory Storage' },
       { module: 'inventory_transfers', label: 'Stock Transfers' },
     ],
   },

@@ -4,8 +4,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db import transaction
 from django.db.models import Sum, Count, Q
+from django.db.models.functions import Coalesce
 from .models import Stock, StockMovement, Warehouse, StockTransfer
+from .services import apply_transfer_to_storage
 from .serializers import (
     StockSerializer, StockMovementSerializer, StockMovementCreateSerializer,
     WarehouseSerializer, StockTransferSerializer,
@@ -14,7 +17,10 @@ from utils.permissions import IsAdminOrSuperAdmin, IsWarehouse, IsStaff
 
 
 class StockViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Stock.objects.all().select_related('product__category').prefetch_related('product__images')
+    queryset = Stock.objects.all().select_related('product__category').prefetch_related(
+        'product__images',
+        'product__warehouse_stocks__warehouse',
+    )
     serializer_class = StockSerializer
     permission_classes = [IsAuthenticated, IsStaff]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -46,13 +52,13 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
-        stocks = Stock.objects.filter(quantity__gt=0, quantity__lte=5).select_related('product')
+        stocks = Stock.objects.filter(quantity__gt=0, quantity__lte=5).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images')
         serializer = self.get_serializer(stocks, many=True, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def out_of_stock(self, request):
-        stocks = Stock.objects.filter(quantity__lte=0).select_related('product')
+        stocks = Stock.objects.filter(quantity__lte=0).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images')
         serializer = self.get_serializer(stocks, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -89,7 +95,9 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class StockMovementViewSet(viewsets.ModelViewSet):
-    queryset = StockMovement.objects.all().select_related('product', 'created_by')
+    queryset = StockMovement.objects.all().select_related('product', 'created_by').prefetch_related(
+        'product__warehouse_stocks__warehouse',
+    )
     permission_classes = [IsAuthenticated, IsStaff]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['type', 'product']
@@ -106,7 +114,10 @@ class StockMovementViewSet(viewsets.ModelViewSet):
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
-    queryset = Warehouse.objects.all()
+    queryset = Warehouse.objects.prefetch_related('stocks').annotate(
+        product_count=Count('stocks', filter=Q(stocks__quantity__gt=0), distinct=True),
+        total_quantity=Coalesce(Sum('stocks__quantity', filter=Q(stocks__quantity__gt=0)), 0),
+    )
     serializer_class = WarehouseSerializer
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
 
@@ -129,11 +140,17 @@ class StockTransferViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         transfer = self.get_object()
+        if transfer.status == 'completed':
+            return Response({'detail': 'Transfer is already completed.'}, status=400)
+        if transfer.status == 'cancelled':
+            return Response({'detail': 'Cancelled transfers cannot be completed.'}, status=400)
         from django.utils import timezone
-        transfer.status = 'completed'
-        transfer.completed_at = timezone.now()
-        transfer.approved_by = request.user
-        transfer.save()
+        with transaction.atomic():
+            apply_transfer_to_storage(transfer)
+            transfer.status = 'completed'
+            transfer.completed_at = timezone.now()
+            transfer.approved_by = request.user
+            transfer.save()
         return Response({'status': 'completed'})
 
     @action(detail=True, methods=['post'])

@@ -7,7 +7,7 @@ import { authApi } from '@/api/auth'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
   LayoutDashboard, ShoppingCart, Package, Warehouse, Printer,
-  Scan, Truck, DollarSign, BarChart3, Users, Settings,
+  Scan, Truck, DollarSign, BarChart3, Users, Settings, Archive,
   ChevronDown, ChevronRight, LogOut, Store, FileText,
   TrendingUp, ArrowLeftRight, ScanLine, PackageCheck,
   UserCircle, Bell, Shield, Sliders, MessageCircle,
@@ -51,6 +51,7 @@ const navItems = [
     children: [
       { label: 'Stock Dashboard', path: '/admin/inventory',           icon: LayoutDashboard, module: 'inventory' },
       { label: 'Stock Movement',  path: '/admin/inventory/movements', icon: ArrowLeftRight,  module: 'inventory_movements' },
+      { label: 'Inventory Storage', path: '/admin/inventory/storage', icon: Archive,         module: 'inventory_storage' },
       { label: 'Stock Transfers', path: '/admin/inventory/transfers', icon: Truck,           module: 'inventory_transfers' },
     ],
   },

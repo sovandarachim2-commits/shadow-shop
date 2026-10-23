@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Package, AlertTriangle, XCircle, DollarSign, Boxes, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -14,6 +14,7 @@ import { formatCurrency } from '@/utils/helpers'
 function AddStockModal({ onClose }) {
   const queryClient = useQueryClient()
   const [productId, setProductId] = useState('')
+  const [warehouseId, setWarehouseId] = useState('')
   const [qty, setQty] = useState(1)
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
@@ -23,6 +24,17 @@ function AddStockModal({ onClose }) {
     queryFn: () => productsApi.products.list({ page_size: 200 }).then((r) => r.data.results || r.data),
   })
 
+  const { data: storages = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: () => inventoryApi.warehouses.list().then((r) => r.data?.results ?? r.data ?? []),
+  })
+
+  useEffect(() => {
+    if (warehouseId || storages.length === 0) return
+    const preferred = storages.find((storage) => storage.is_default) || storages[0]
+    setWarehouseId(String(preferred.id))
+  }, [storages, warehouseId])
+
   const addMutation = useMutation({
     mutationFn: () => inventoryApi.movements.create({
       type: 'stock_in',
@@ -30,18 +42,20 @@ function AddStockModal({ onClose }) {
       quantity: qty,
       reference,
       notes,
+      warehouse: warehouseId ? Number(warehouseId) : null,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock'] })
       queryClient.invalidateQueries({ queryKey: ['stock-dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['stock-movements'] })
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] })
       toast.success('Stock added!')
       onClose()
     },
     onError: () => toast.error('Add stock failed'),
   })
 
-  const canSubmit = productId && qty > 0 && !addMutation.isLoading
+  const canSubmit = productId && qty > 0 && warehouseId && !addMutation.isPending
 
   return (
     <div className="p-6 space-y-4">
@@ -57,6 +71,21 @@ function AddStockModal({ onClose }) {
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} {p.code ? `(${p.code})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="label">Inventory *</label>
+        <select
+          className="select-field"
+          value={warehouseId}
+          onChange={(e) => setWarehouseId(e.target.value)}
+        >
+          <option value="">Select inventory</option>
+          {storages.map((storage) => (
+            <option key={storage.id} value={storage.id}>
+              {storage.name}{storage.is_default ? ' (Print default)' : ''}
             </option>
           ))}
         </select>
@@ -90,15 +119,15 @@ function AddStockModal({ onClose }) {
           placeholder="Optional receiving notes..."
         />
       </div>
-      <div className="flex gap-3">
+      <div className="flex justify-end gap-3">
+        <button onClick={onClose} className="btn-secondary">Cancel</button>
         <button
           onClick={() => addMutation.mutate()}
           disabled={!canSubmit}
-          className="btn-primary flex-1 justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           Add Stock
         </button>
-        <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
       </div>
     </div>
   )
@@ -142,11 +171,11 @@ function AdjustStockModal({ stock, onClose }) {
         <label className="label">Notes</label>
         <textarea className="input-field resize-none" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Reason for adjustment..." />
       </div>
-      <div className="flex gap-3">
-        <button onClick={() => adjustMutation.mutate()} className="btn-primary flex-1 justify-center">
+      <div className="flex justify-end gap-3">
+        <button onClick={onClose} className="btn-secondary">Cancel</button>
+        <button onClick={() => adjustMutation.mutate()} className="btn-primary">
           Confirm Adjustment
         </button>
-        <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
       </div>
     </div>
   )
@@ -225,8 +254,10 @@ export default function StockDashboard() {
         <Table>
           <Thead>
             <tr>
+              <Th>No</Th>
               <Th>Product</Th>
               <Th>Code</Th>
+              <Th>Inventory</Th>
               <Th>Current Stock</Th>
               <Th>Min Stock</Th>
               <Th>Status</Th>
@@ -235,9 +266,10 @@ export default function StockDashboard() {
             </tr>
           </Thead>
           <Tbody>
-            {stockLoading && <LoadingRows cols={7} />}
-            {!stockLoading && stocks.map((s) => (
+            {stockLoading && <LoadingRows cols={9} />}
+            {!stockLoading && stocks.map((s, index) => (
               <Tr key={s.id}>
+                <Td><span className="text-sm text-gray-500">{index + 1}</span></Td>
                 <Td>
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-gray-100 rounded-xl overflow-hidden shrink-0">
@@ -253,6 +285,19 @@ export default function StockDashboard() {
                   </div>
                 </Td>
                 <Td><span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{s.product_code}</span></Td>
+                <Td>
+                  {s.inventories?.length ? (
+                    <div className="space-y-0.5">
+                      {s.inventories.map((place) => (
+                        <p key={place.name} className="text-sm text-gray-700">
+                          {place.name} <span className="text-gray-400">· {place.quantity}</span>
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400">—</span>
+                  )}
+                </Td>
                 <Td>
                   <span className={`font-bold text-lg ${s.quantity <= 0 ? 'text-red-500' : s.is_low_stock ? 'text-yellow-500' : 'text-green-600'}`}>
                     {s.quantity}

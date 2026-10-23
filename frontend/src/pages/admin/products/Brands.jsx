@@ -4,6 +4,7 @@ import { Award, ImageIcon, Pencil, Plus, Trash2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { Badge } from '@/components/ui/Badge'
+import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import PageHeader from '@/components/shared/PageHeader'
 
@@ -214,59 +215,81 @@ export default function Brands() {
         />
       )}
 
-      <div className="form-card mt-6">
-        {isLoading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />)}
-          </div>
-        ) : brands.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">
-            <Award size={42} className="mx-auto mb-3 opacity-30" />
-            <p>No brands yet</p>
-            <button onClick={openNew} className="btn-primary mt-4 inline-flex items-center gap-2">
-              <Plus size={16} /> Add Brand
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {brands.map((brand) => (
-              <div key={brand.id} className="group flex items-center justify-between rounded-xl p-3 hover:bg-gray-50">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-purple-50">
+      <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
+        <Table>
+          <Thead>
+            <tr>
+              <Th>No</Th>
+              <Th>Logo</Th>
+              <Th>Brand</Th>
+              <Th>Description</Th>
+              <Th>Products</Th>
+              <Th>Order</Th>
+              <Th>Status</Th>
+              <Th>Actions</Th>
+            </tr>
+          </Thead>
+          <Tbody>
+            {isLoading && <LoadingRows cols={8} />}
+            {!isLoading && brands.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <EmptyState message="No brands yet" icon={Award} />
+                  <div className="pb-8 text-center">
+                    <button onClick={openNew} className="btn-primary inline-flex items-center gap-2">
+                      <Plus size={16} /> Add Brand
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!isLoading && brands.map((brand, index) => (
+              <Tr key={brand.id}>
+                <Td><span className="text-sm font-semibold text-gray-500">{index + 1}</span></Td>
+                <Td>
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-purple-50">
                     {brand.logo_url || brand.logo ? (
                       <img src={brand.logo_url || brand.logo} alt={brand.name} className="h-full w-full object-contain p-1.5" />
                     ) : (
                       <Award size={17} className="text-purple-600" />
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-gray-900">{brand.name}</p>
-                      <Badge variant={brand.is_active ? 'success' : 'default'}>
-                        {brand.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-400">
-                      {brand.products_count || 0} products
-                      {brand.description ? ` - ${brand.description}` : ''}
-                    </p>
+                </Td>
+                <Td><span className="font-semibold text-gray-900">{brand.name}</span></Td>
+                <Td><span className="line-clamp-2 max-w-xs text-sm text-gray-500">{brand.description || '—'}</span></Td>
+                <Td><span className="font-semibold">{brand.products_count || 0}</span></Td>
+                <Td><span className="text-sm text-gray-600">{brand.order ?? 0}</span></Td>
+                <Td>
+                  <Badge variant={brand.is_active ? 'success' : 'default'}>
+                    {brand.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </Td>
+                <Td>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      title="Edit"
+                      aria-label="Edit brand"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
+                      onClick={() => openEdit(brand)}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete"
+                      aria-label="Delete brand"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                      onClick={async () => { if (await confirm('Delete this brand?', 'This action cannot be undone.')) deleteMutation.mutate(brand.id) }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
-                </div>
-                <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button className="p-1.5 text-gray-400 hover:text-purple-600" onClick={() => openEdit(brand)}>
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    className="p-1.5 text-gray-400 hover:text-red-500"
-                    onClick={async () => { if (await confirm('Delete this brand?', 'This action cannot be undone.')) deleteMutation.mutate(brand.id) }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
+                </Td>
+              </Tr>
             ))}
-          </div>
-        )}
+          </Tbody>
+        </Table>
       </div>
       {ConfirmDialog}
     </div>

@@ -68,6 +68,7 @@ class Permission(models.Model):
         ('product_banners', 'Product Banners'),
         ('inventory', 'Inventory'),
         ('inventory_movements', 'Inventory Movements'),
+        ('inventory_storage', 'Inventory Storage'),
         ('inventory_transfers', 'Inventory Transfers'),
         ('delivery', 'Delivery'),
         ('finance', 'Finance'),

@@ -146,3 +146,29 @@ class NewOrderPaymentMethodFilterTests(TestCase):
             if call.args[0].endswith('/sendMessage')
         ]
         self.assertEqual(chat_ids, ['all-chat'])
+
+    @patch('apps.notifications.services.requests.post')
+    def test_payment_received_uses_its_own_method_filter(self, requests_post):
+        response = Mock(status_code=200, content=b'{}')
+        response.json.return_value = {'ok': True, 'result': {'message_id': 9}}
+        requests_post.return_value = response
+
+        self.sales_config.payment_received_methods = ['aba']
+        self.sales_config.save(update_fields=['payment_received_methods'])
+        self.warehouse_config.payment_received_methods = ['cod']
+        self.warehouse_config.save(update_fields=['payment_received_methods'])
+
+        order = self.create_order('aba')
+        order.payment_status = 'paid'
+        order.save(update_fields=['payment_status'])
+        sent = TelegramService().notify_payment_received(order)
+
+        self.assertTrue(sent)
+        chat_ids = [
+            call.kwargs['json']['chat_id']
+            for call in requests_post.call_args_list
+            if call.args[0].endswith('/sendMessage')
+        ]
+        self.assertIn('sales-chat', chat_ids)
+        self.assertNotIn('all-chat', chat_ids)
+        self.assertNotIn('warehouse-chat', chat_ids)

@@ -7,7 +7,7 @@ MODULES = [
     'orders', 'customers',
     'products', 'product_brands', 'product_categories',
     'product_sets', 'product_flash_sale', 'product_banners',
-    'inventory', 'inventory_movements', 'inventory_transfers',
+    'inventory', 'inventory_movements', 'inventory_storage', 'inventory_transfers',
     'delivery',
     'finance', 'finance_expenses', 'finance_profit',
     'reports', 'reports_products', 'reports_inventory',

@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Boxes, Plus, Pencil, Trash2, ChevronRight, Upload, X } from 'lucide-react'
+import { Boxes, Plus, Pencil, Trash2, Upload, X } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import toast from 'react-hot-toast'
+import { Badge } from '@/components/ui/Badge'
+import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 function CategoryModal({ open, editing, onClose, onSave, saving }) {
@@ -159,6 +161,18 @@ export default function Categories() {
 
   const categories = data ?? []
   const topLevel = categories.filter((c) => !c.parent)
+  const rows = topLevel.flatMap((cat) => {
+    const children = categories.filter((item) => item.parent === cat.id)
+    return [
+      { ...cat, parentName: '—' },
+      ...children.map((child) => ({ ...child, parentName: cat.name })),
+    ]
+  })
+  const listedIds = new Set(rows.map((row) => row.id))
+  categories.filter((cat) => !listedIds.has(cat.id)).forEach((cat) => {
+    const parent = categories.find((item) => item.id === cat.parent)
+    rows.push({ ...cat, parentName: parent?.name || '—' })
+  })
 
   const openAdd = () => { setEditing(null); setShowModal(true) }
   const openEdit = (cat) => { setEditing(cat); setShowModal(true) }
@@ -185,90 +199,86 @@ export default function Categories() {
         saving={saveMutation.isPending}
       />
 
-      <div className="form-card mt-6">
-        {isLoading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
-          </div>
-        ) : categories.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <Boxes size={40} className="mx-auto mb-3 opacity-30" />
-            <p>No categories yet</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {topLevel.map((cat) => {
-              const children = categories.filter((c) => c.parent === cat.id)
-              return (
-                <div key={cat.id}>
-                  <div className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-purple-50 border border-gray-100 flex items-center justify-center">
-                        {cat.image_url ? (
-                          <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Boxes size={16} className="text-purple-400" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{cat.name}</p>
-                        {cat.description && <p className="text-xs text-gray-400">{cat.description}</p>}
-                      </div>
-                      {children.length > 0 ? (
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                          Main category - {children.length} sub
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-pink-50 px-2 py-0.5 text-xs font-bold text-pink-500">
-                          Main category
-                        </span>
-                      )}
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${cat.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                        {cat.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-gray-400 hover:text-purple-600" onClick={() => openEdit(cat)}>
-                        <Pencil size={14} />
-                      </button>
-                      <button className="p-1.5 text-gray-400 hover:text-red-500"
-                        onClick={async () => { if (await confirm('Delete this category?', 'This action cannot be undone.')) deleteMutation.mutate(cat.id) }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+      <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
+        <Table>
+          <Thead>
+            <tr>
+              <Th>No</Th>
+              <Th>Image</Th>
+              <Th>Category</Th>
+              <Th>Type</Th>
+              <Th>Parent</Th>
+              <Th>Description</Th>
+              <Th>Products</Th>
+              <Th>Order</Th>
+              <Th>Status</Th>
+              <Th>Actions</Th>
+            </tr>
+          </Thead>
+          <Tbody>
+            {isLoading && <LoadingRows cols={10} />}
+            {!isLoading && rows.length === 0 && (
+              <tr>
+                <td colSpan={10}>
+                  <EmptyState message="No categories yet" icon={Boxes} />
+                </td>
+              </tr>
+            )}
+            {!isLoading && rows.map((cat, index) => (
+              <Tr key={cat.id}>
+                <Td><span className="text-sm font-semibold text-gray-500">{index + 1}</span></Td>
+                <Td>
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-purple-50">
+                    {cat.image_url ? (
+                      <img src={cat.image_url} alt={cat.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <Boxes size={17} className="text-purple-400" />
+                    )}
                   </div>
-                  {children.map((child) => (
-                    <div key={child.id} className="flex items-center justify-between p-3 pl-10 rounded-xl hover:bg-gray-50 group">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <ChevronRight size={13} className="text-gray-300" />
-                        <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-50 border border-gray-100 flex items-center justify-center">
-                          {child.image_url ? (
-                            <img src={child.image_url} alt={child.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <Boxes size={12} className="text-gray-300" />
-                          )}
-                        </div>
-                        <span className="text-sm">{child.name}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${child.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                          {child.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 text-gray-400 hover:text-purple-600" onClick={() => openEdit(child)}>
-                          <Pencil size={14} />
-                        </button>
-                        <button className="p-1.5 text-gray-400 hover:text-red-500"
-                          onClick={async () => { if (await confirm('Delete this category?', 'This action cannot be undone.')) deleteMutation.mutate(child.id) }}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-        )}
+                </Td>
+                <Td>
+                  <span className={`font-semibold text-gray-900 ${cat.parent ? 'pl-4' : ''}`}>{cat.name}</span>
+                </Td>
+                <Td>
+                  <Badge variant={cat.parent ? 'default' : 'pink'}>
+                    {cat.parent ? 'Sub category' : 'Main category'}
+                  </Badge>
+                </Td>
+                <Td><span className="text-sm text-gray-600">{cat.parentName}</span></Td>
+                <Td><span className="line-clamp-2 max-w-xs text-sm text-gray-500">{cat.description || '—'}</span></Td>
+                <Td><span className="font-semibold">{cat.products_count || 0}</span></Td>
+                <Td><span className="text-sm text-gray-600">{cat.order ?? 0}</span></Td>
+                <Td>
+                  <Badge variant={cat.is_active ? 'success' : 'default'}>
+                    {cat.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </Td>
+                <Td>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      title="Edit"
+                      aria-label="Edit category"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
+                      onClick={() => openEdit(cat)}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete"
+                      aria-label="Delete category"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                      onClick={async () => { if (await confirm('Delete this category?', 'This action cannot be undone.')) deleteMutation.mutate(cat.id) }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
       </div>
       {ConfirmDialog}
     </div>

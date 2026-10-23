@@ -19,6 +19,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/orders', 'Orders'],
   ['/admin/customers', 'Customers'],
   ['/admin/inventory/movements', 'Stock Movements'],
+  ['/admin/inventory/storage', 'Inventory Storage'],
   ['/admin/inventory/transfers', 'Stock Transfers'],
   ['/admin/inventory', 'Stock Dashboard'],
   ['/admin/customer-scanner/delivery-config', 'Delivery Configuration'],

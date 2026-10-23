@@ -9,6 +9,8 @@ import { ordersApi } from '@/api/orders'
 import { formatCurrency } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
+import { provinceKhmerLabel } from '@/utils/addressHelpers'
+import { KHMER_TEXT_STYLE } from '@/utils/constants'
 
 export default function NewOrder({ embedded = false, onCreated }) {
   const navigate = useNavigate()
@@ -21,7 +23,8 @@ export default function NewOrder({ embedded = false, onCreated }) {
   const [delivery_fee, setDeliveryFee] = useState(0)
   const [discount, setDiscount] = useState(0)
   const [payment_status, setPaymentStatus] = useState('unpaid')
-  const [payment_method, setPaymentMethod] = useState('cod')
+  const [payment_method, setPaymentMethod] = useState('')
+  const [transactionNote, setTransactionNote] = useState('')
 
   const { data: products, isLoading: loadingProducts } = useQuery({
     queryKey: ['products-search', searchQuery],
@@ -111,13 +114,18 @@ export default function NewOrder({ embedded = false, onCreated }) {
       toast.error('Add at least one product')
       return
     }
+    if (!isDraft && !payment_method) {
+      toast.error('Select a payment method')
+      return
+    }
 
     const customerPayload = { ...customerInfo, phone }
 
     const payload = {
       customer: null,
       payment_status,
-      payment_method,
+      ...(payment_method ? { payment_method } : {}),
+      transaction_reference: transactionNote.trim(),
       delivery_fee: parseFloat(delivery_fee || 0),
       discount: parseFloat(discount || 0),
       notes: customerInfo.notes,
@@ -139,7 +147,7 @@ export default function NewOrder({ embedded = false, onCreated }) {
     })
   }
 
-  const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: p.label }))
+  const PROVINCES = CAMBODIA_PROVINCES.map((p) => ({ value: p.key, label: provinceKhmerLabel(p.key) }))
 
   return (
     <div className={embedded ? '' : 'animate-fade-in'}>
@@ -192,8 +200,8 @@ export default function NewOrder({ embedded = false, onCreated }) {
                   onChange={(e) => setCustomerInfo({ ...customerInfo, address: e.target.value })} />
               </div>
               <div>
-                <label className="label">Province</label>
-                <select className="select-field" value={customerInfo.province}
+                <label className="label" style={KHMER_TEXT_STYLE}>ខេត្ត</label>
+                <select className="select-field" style={KHMER_TEXT_STYLE} value={customerInfo.province}
                   onChange={(e) => setCustomerInfo({ ...customerInfo, province: e.target.value })}>
                   {PROVINCES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
@@ -453,19 +461,31 @@ export default function NewOrder({ embedded = false, onCreated }) {
                   ))}
                 </div>
               </div>
-              {payment_status === 'paid' && (
-                <div>
-                  <label className="label">Payment Method</label>
-                  <select className="select-field" value={payment_method} onChange={(e) => setPaymentMethod(e.target.value)}>
-                    <option value="aba">ABA Bank</option>
-                    <option value="bakong">Bakong KHQR</option>
-                    <option value="acleda">ACLEDA Bank</option>
-                    <option value="wing">Wing</option>
-                    <option value="cod">Cash on Delivery</option>
-                    <option value="cash">Cash</option>
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="label">Payment Method <span className="text-red-500">*</span></label>
+                <select className="select-field" value={payment_method} onChange={(e) => setPaymentMethod(e.target.value)}>
+                  <option value="">Select payment method</option>
+                  <option value="aba">ABA Bank</option>
+                  <option value="bakong">Bakong KHQR</option>
+                  <option value="acleda">ACLEDA Bank</option>
+                  <option value="wing">Wing</option>
+                  <option value="cod">Cash on Delivery</option>
+                  <option value="cash">Cash</option>
+                  <option value="contact_sales">Contact Sales</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Transaction Note <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  className="input-field"
+                  type="text"
+                  maxLength={100}
+                  value={transactionNote}
+                  onChange={(e) => setTransactionNote(e.target.value)}
+                  placeholder="Bank transaction or receipt reference"
+                />
+              </div>
             </div>
 
             {/* Actions */}

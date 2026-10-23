@@ -31,8 +31,8 @@ class TelegramService:
         return TelegramConfig.objects.filter(is_active=True).first()
 
     @staticmethod
-    def config_allows_payment_method(config, payment_method: str) -> bool:
-        methods = getattr(config, 'new_order_payment_methods', None) or []
+    def config_allows_payment_method(config, payment_method: str, field_name: str = 'new_order_payment_methods') -> bool:
+        methods = getattr(config, field_name, None) or []
         if not isinstance(methods, (list, tuple)):
             return True
         clean = [str(method).strip() for method in methods if str(method).strip()]
@@ -40,11 +40,11 @@ class TelegramService:
             return True
         return str(payment_method or '').strip() in clean
 
-    def get_new_order_configs(self, payment_method: str = ''):
-        configs = list(self.get_configs_for('notify_new_order'))
+    def get_configs_for_payment_method(self, flag: str, field_name: str, payment_method: str = ''):
+        configs = list(self.get_configs_for(flag))
         allowed = [
             config for config in configs
-            if self.config_allows_payment_method(config, payment_method)
+            if self.config_allows_payment_method(config, payment_method, field_name)
         ]
         method = str(payment_method or '').strip()
         if not method:
@@ -54,13 +54,27 @@ class TelegramService:
         # Prevents "All methods" groups from also getting Contact Sales / COD, etc.
         explicit = []
         for config in allowed:
-            methods = getattr(config, 'new_order_payment_methods', None) or []
+            methods = getattr(config, field_name, None) or []
             if not isinstance(methods, (list, tuple)):
                 continue
             clean = {str(item).strip() for item in methods if str(item).strip()}
             if method in clean:
                 explicit.append(config)
         return explicit or allowed
+
+    def get_new_order_configs(self, payment_method: str = ''):
+        return self.get_configs_for_payment_method(
+            'notify_new_order',
+            'new_order_payment_methods',
+            payment_method,
+        )
+
+    def get_payment_received_configs(self, payment_method: str = ''):
+        return self.get_configs_for_payment_method(
+            'notify_payment',
+            'payment_received_methods',
+            payment_method,
+        )
 
     @staticmethod
     def is_placeholder(value: str) -> bool:
@@ -399,8 +413,8 @@ class TelegramService:
         return self.send_to_configs(configs, message, 'low_stock')
 
     def notify_payment_received(self, order) -> bool:
-        configs = self.get_configs_for('notify_payment')
-        if not configs.exists():
+        configs = self.get_payment_received_configs(order.payment_method)
+        if not configs:
             return False
 
         if NotificationLog.objects.filter(
@@ -872,6 +886,8 @@ class TelegramService:
         return self.send_to_configs(configs, message, 'delivery')
 
     def notify_staff_login(self, user, request=None) -> bool:
+        if getattr(user, 'role', 'customer') == 'customer':
+            return False
         configs = self.get_configs_for('notify_staff_login')
         if not configs.exists():
             return False

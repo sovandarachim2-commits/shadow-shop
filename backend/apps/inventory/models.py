@@ -80,6 +80,8 @@ class Warehouse(models.Model):
         on_delete=models.SET_NULL, null=True, blank=True
     )
     is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    capacity = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -87,6 +89,24 @@ class Warehouse(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            Warehouse.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+
+
+class WarehouseStock(models.Model):
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stocks')
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='warehouse_stocks')
+    quantity = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'warehouse_stocks'
+        unique_together = ['warehouse', 'product']
+
+    def __str__(self):
+        return f'{self.warehouse.name} - {self.product.name}: {self.quantity}'
 
 
 class StockTransfer(models.Model):

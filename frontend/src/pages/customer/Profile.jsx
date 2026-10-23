@@ -1182,7 +1182,7 @@ export default function Profile() {
                           : <div className="flex h-full w-full items-center justify-center"><ShoppingBag size={24} className="text-pink-200" /></div>}
                       </div>
                       <div className="p-3">
-                        <p className="line-clamp-2 text-xs font-black leading-tight text-gray-900">{product.name}</p>
+                        <p className="khmer-title line-clamp-2 text-xs text-gray-900">{product.name}</p>
                         <p className="mt-1.5 text-sm font-black text-pink-600">{formatCurrency(product.retail_price)}</p>
                       </div>
                     </button>

@@ -29,6 +29,27 @@ from utils.storefront_cache import (
 )
 
 
+def apply_image_display_order(images, ordered_ids):
+    by_id = {image.id: image for image in images}
+    ordered = []
+    seen = set()
+    for raw_id in ordered_ids:
+        try:
+            image_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        image = by_id.get(image_id)
+        if image and image.id not in seen:
+            ordered.append(image)
+            seen.add(image.id)
+    ordered.extend(image for image in images if image.id not in seen)
+    for index, image in enumerate(ordered):
+        image.order = index
+        image.is_primary = index == 0
+        image.save(update_fields=['order', 'is_primary'])
+    return ordered
+
+
 class StorefrontRevisionView(APIView):
     """Tiny public counter. Shop pages watch it and reload the moment admin saves."""
     authentication_classes = []
@@ -269,9 +290,22 @@ class ProductViewSet(viewsets.ModelViewSet):
     def set_primary_image(self, request, pk=None):
         product = self.get_object()
         image_id = request.data.get('image_id')
-        product.images.update(is_primary=False)
-        product.images.filter(id=image_id).update(is_primary=True)
+        images = list(product.images.all())
+        target = next((image for image in images if str(image.id) == str(image_id)), None)
+        if not target:
+            return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
+        rest = [image.id for image in images if image.id != target.id]
+        apply_image_display_order(images, [target.id, *rest])
         return Response({'detail': 'Primary image updated.'})
+
+    @action(detail=True, methods=['post'])
+    def reorder_images(self, request, pk=None):
+        product = self.get_object()
+        image_ids = request.data.get('image_ids') or []
+        if not isinstance(image_ids, list) or not image_ids:
+            return Response({'detail': 'Choose the image order.'}, status=status.HTTP_400_BAD_REQUEST)
+        apply_image_display_order(list(product.images.all()), image_ids)
+        return Response({'detail': 'Image order updated.'})
 
     @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
     def delete_image(self, request, pk=None, image_id=None):
@@ -387,9 +421,22 @@ class ProductSetViewSet(viewsets.ModelViewSet):
     def set_primary_image(self, request, pk=None):
         product_set = self.get_object()
         image_id = request.data.get('image_id')
-        product_set.images.update(is_primary=False)
-        product_set.images.filter(id=image_id).update(is_primary=True)
+        images = list(product_set.images.all())
+        target = next((image for image in images if str(image.id) == str(image_id)), None)
+        if not target:
+            return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
+        rest = [image.id for image in images if image.id != target.id]
+        apply_image_display_order(images, [target.id, *rest])
         return Response({'detail': 'Primary image updated.'})
+
+    @action(detail=True, methods=['post'])
+    def reorder_images(self, request, pk=None):
+        product_set = self.get_object()
+        image_ids = request.data.get('image_ids') or []
+        if not isinstance(image_ids, list) or not image_ids:
+            return Response({'detail': 'Choose the image order.'}, status=status.HTTP_400_BAD_REQUEST)
+        apply_image_display_order(list(product_set.images.all()), image_ids)
+        return Response({'detail': 'Image order updated.'})
 
     @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
     def delete_image(self, request, pk=None, image_id=None):

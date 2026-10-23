@@ -10,7 +10,12 @@ function ConfirmDialogUI({
   cancelText = 'Cancel',
   tone = 'danger',
   icon = 'delete',
+  reasonLabel = '',
+  reasonPlaceholder = 'Enter the reason',
+  reasonRequired = false,
 }) {
+  const [reason, setReason] = useState('')
+  const [reasonError, setReasonError] = useState('')
   const Icon = icon === 'logout' ? LogOut : icon === 'warning' ? AlertTriangle : Trash2
   const toneClass = tone === 'danger'
     ? {
@@ -36,6 +41,24 @@ function ConfirmDialogUI({
           {description && (
             <p className="mt-1.5 text-sm text-gray-500">{description}</p>
           )}
+          {reasonLabel && (
+            <div className="mt-4 w-full text-left">
+              <label className="mb-1.5 block text-xs font-bold text-gray-700">
+                {reasonLabel} {reasonRequired && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                className="input-field resize-none"
+                rows={3}
+                value={reason}
+                placeholder={reasonPlaceholder}
+                onChange={(e) => {
+                  setReason(e.target.value)
+                  if (reasonError) setReasonError('')
+                }}
+              />
+              {reasonError && <p className="mt-1 text-xs font-semibold text-red-500">{reasonError}</p>}
+            </div>
+          )}
           <div className="mt-5 flex w-full gap-3">
             <button
               onClick={onCancel}
@@ -44,7 +67,14 @@ function ConfirmDialogUI({
               {cancelText}
             </button>
             <button
-              onClick={onConfirm}
+              onClick={() => {
+                const trimmed = reason.trim()
+                if (reasonRequired && !trimmed) {
+                  setReasonError('Enter a reason')
+                  return
+                }
+                onConfirm(trimmed)
+              }}
               className={`flex-1 rounded-xl py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] ${toneClass.button}`}
             >
               {confirmText}
@@ -64,8 +94,8 @@ export function useConfirm() {
       setState({ message, description, resolve, ...options })
     })
 
-  const handleConfirm = () => {
-    state?.resolve(true)
+  const handleConfirm = (reason = '') => {
+    state?.resolve(state?.reasonLabel ? reason : true)
     setState(null)
   }
 
@@ -82,6 +112,9 @@ export function useConfirm() {
       cancelText={state.cancelText}
       tone={state.tone}
       icon={state.icon}
+      reasonLabel={state.reasonLabel}
+      reasonPlaceholder={state.reasonPlaceholder}
+      reasonRequired={state.reasonRequired}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />

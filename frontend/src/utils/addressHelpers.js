@@ -68,6 +68,14 @@ const ORDER_PROVINCE_KEYS = {
   tboung_khmum: 'Tboung Khmum',
 }
 
+export function provinceKhmerLabel(keyOrName) {
+  const raw = String(keyOrName || '').trim()
+  if (!raw) return ''
+  const english = ORDER_PROVINCE_KEYS[raw] || ORDER_PROVINCE_KEYS[raw.toLowerCase()] || raw
+  const normalized = normalizeLocationName(english)
+  return PROVINCE_KHMER_LABELS[normalized] || PROVINCE_KHMER_LABELS[english] || raw
+}
+
 const LOCATION_ALIASES = {
   'Sen Sok': 'Saensokh',
   'Siem Reap': 'Siemreap',
@@ -213,6 +221,43 @@ export function formatAddressRecordKhmer(addr) {
   })
 
   return [addr.address_line1, location].filter(Boolean).join(', ')
+}
+
+const HOME_DELIVERY_NOTE = 'ដឹកជញ្ជូនដល់ផ្ទះ'
+
+function isSamePlace(left, right) {
+  if (!left || !right) return false
+  return normalizeLocationName(left).toLowerCase() === normalizeLocationName(right).toLowerCase()
+}
+
+export function formatHomeDeliveryNote({ district = '', provinceKey = '', provinceLabel = '' } = {}) {
+  const provinceName = ORDER_PROVINCE_KEYS[provinceKey] || provinceLabel || ''
+  const districtName = String(district || '').trim()
+  const districtKhmer = districtName && !isSamePlace(districtName, provinceName)
+    ? getLocationLabel(districtName, provinceName ? [provinceName] : [])
+    : ''
+  const provinceKhmer = provinceName ? getLocationLabel(provinceName) : ''
+  const place = [districtKhmer, provinceKhmer].filter(Boolean).join(', ')
+  return place ? `${HOME_DELIVERY_NOTE}. ${place}` : HOME_DELIVERY_NOTE
+}
+
+export function localizeOrderNote(note) {
+  const raw = String(note || '').trim()
+  const match = raw.match(/^home delivery\.\s*(.*)$/i)
+  if (!match) return raw
+
+  const parts = match[1].split(',').map((part) => part.trim()).filter(Boolean)
+  if (!parts.length) return `${HOME_DELIVERY_NOTE}.`
+
+  const last = parts[parts.length - 1]
+  const provinceName = PROVINCE_KHMER_LABELS[normalizeLocationName(last)] || PROVINCE_SET.has(normalizeLocationName(last))
+    ? normalizeLocationName(last)
+    : ''
+  const locationParts = provinceName ? parts.slice(0, -1) : parts
+  const locationKhmer = locationParts.map((part) => getLocationLabel(part, provinceName ? [provinceName] : []))
+  const provinceKhmer = provinceName ? getLocationLabel(provinceName) : ''
+  const place = [...locationKhmer, provinceKhmer].filter(Boolean).join(', ')
+  return place ? `${HOME_DELIVERY_NOTE}. ${place}` : HOME_DELIVERY_NOTE
 }
 
 export function formatFullAddressKhmer(customer) {

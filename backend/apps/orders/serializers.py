@@ -367,6 +367,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     seller_name = serializers.SerializerMethodField()
     profit = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
+    payment_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -374,6 +375,16 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_seller_name(self, obj):
         return display_seller_name(obj)
+
+    def get_payment_at(self, obj):
+        for name in ('bakong_payment', 'aba_payment'):
+            if not hasattr(obj, name):
+                continue
+            payment = getattr(obj, name)
+            paid_at = getattr(payment, 'paid_at', None)
+            if paid_at:
+                return paid_at
+        return obj.created_at
 
     def get_profit(self, obj):
         return float(obj.profit)
@@ -418,12 +429,13 @@ class OutRecordSerializer(serializers.ModelSerializer):
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemWriteSerializer(many=True)
+    transaction_reference = serializers.CharField(required=False, allow_blank=True, max_length=100, write_only=True)
 
     class Meta:
         model = Order
         fields = [
             'customer', 'payment_method', 'payment_status', 'delivery_fee',
-            'discount', 'notes', 'is_draft', 'items',
+            'discount', 'notes', 'is_draft', 'items', 'transaction_reference',
         ]
 
     def validate(self, attrs):
@@ -433,6 +445,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        transaction_reference = validated_data.pop('transaction_reference', '').strip()
         request = self.context['request']
         validated_data['seller'] = request.user
         order = Order.objects.create(**validated_data)
@@ -447,12 +460,28 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order.grand_total = subtotal + order.delivery_fee - order.discount
         order.save()
 
+        history_note = 'Order created'
+        if transaction_reference:
+            history_note += f'; transaction reference: {transaction_reference}'
         OrderStatusHistory.objects.create(
             order=order,
             status=order.status,
             changed_by=request.user,
-            note='Order created',
+            note=history_note,
         )
+        if transaction_reference and order.payment_status == 'paid':
+            from django.utils import timezone
+            from apps.finance.models import Revenue
+            Revenue.objects.get_or_create(
+                order=order,
+                defaults={
+                    'amount': order.grand_total,
+                    'payment_method': order.payment_method or 'cash',
+                    'reference': transaction_reference,
+                    'received_at': timezone.now(),
+                    'received_by': request.user,
+                },
+            )
 
         from django.db import transaction
         from apps.notifications.services import TelegramService
@@ -480,6 +509,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
     delivery_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     discount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     notes = serializers.CharField(required=False, allow_blank=True)
+    status_note = serializers.CharField(required=False, allow_blank=True)
     is_draft = serializers.BooleanField(required=False)
     items = OrderItemWriteSerializer(many=True, required=False)
 
@@ -529,6 +559,8 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                 notes=f'Stock adjusted for edited Order #{order.order_number}',
                 created_by=user,
             )
+            from apps.inventory.services import adjust_default_storage
+            adjust_default_storage(product, movement_qty)
 
     def update(self, order, validated_data):
         from django.db import transaction
@@ -537,6 +569,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         items_data = validated_data.pop('items', None)
         customer_info = validated_data.pop('customer_info', None)
         transaction_reference = validated_data.pop('transaction_reference', '').strip()
+        status_note = validated_data.pop('status_note', '').strip()
 
         with transaction.atomic():
             old_status = order.status
@@ -619,7 +652,10 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
                     order=order,
                     status=order.status,
                     changed_by=request.user,
-                    note=f'Status updated: {old_status or "-"} -> {order.status or "-"}',
+                    note=(
+                        f'Status updated: {old_status or "-"} -> {order.status or "-"}'
+                        + (f'. Reason: {status_note}' if status_note else '')
+                    ),
                 )
             if contact_sales_confirmed_on_update:
                 OrderStatusHistory.objects.create(

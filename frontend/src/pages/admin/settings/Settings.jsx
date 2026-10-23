@@ -734,7 +734,7 @@ export default function Settings({ tab = 'general' }) {
     ['notify_low_stock', 'Low Stock Alert'],
     ['notify_delivery', 'Delivery Updates'],
     ['notify_daily_summary', 'Daily Summary'],
-    ['notify_staff_login', 'Staff Login Alerts'],
+    ['notify_staff_login', 'Staff Login Alerts (every role except customer)'],
   ]
   const emptyTelegramForm = {
     name: '', bot_username: '', bot_token: '', chat_id: '', topic_id: '', is_active: true,
@@ -742,6 +742,7 @@ export default function Settings({ tab = 'general' }) {
     notify_low_stock: true, notify_delivery: true,
     notify_daily_summary: true, notify_staff_login: true,
     new_order_payment_methods: [],
+    payment_received_methods: [],
   }
   const [telegramForm, setTelegramForm] = useState(emptyTelegramForm)
   const [telegramModal, setTelegramModal] = useState(null)
@@ -753,6 +754,9 @@ export default function Settings({ tab = 'general' }) {
       topic_id: config.topic_id || '',
       new_order_payment_methods: Array.isArray(config.new_order_payment_methods)
         ? config.new_order_payment_methods
+        : [],
+      payment_received_methods: Array.isArray(config.payment_received_methods)
+        ? config.payment_received_methods
         : [],
     } : { ...emptyTelegramForm, name: 'Default' })
     setTelegramModal(config ? 'edit' : 'add')
@@ -767,14 +771,17 @@ export default function Settings({ tab = 'general' }) {
     new_order_payment_methods: Array.isArray(data.new_order_payment_methods)
       ? data.new_order_payment_methods.filter(Boolean)
       : [],
+    payment_received_methods: Array.isArray(data.payment_received_methods)
+      ? data.payment_received_methods.filter(Boolean)
+      : [],
   })
 
-  const summarizeNewOrderMethods = (config) => {
-    if (!config.notify_new_order) return null
-    const methods = Array.isArray(config.new_order_payment_methods) ? config.new_order_payment_methods : []
-    if (methods.length === 0) return 'New orders: all methods'
+  const summarizePaymentMethods = (config, enabled, field, label) => {
+    if (!config[enabled]) return null
+    const methods = Array.isArray(config[field]) ? config[field] : []
+    if (methods.length === 0) return `${label}: all methods`
     const labels = methods.map((key) => TELEGRAM_PAYMENT_LABELS[key] || key)
-    return `New orders: ${labels.join(', ')}`
+    return `${label}: ${labels.join(', ')}`
   }
 
   const { data: telegramConfigs } = useQuery({
@@ -998,11 +1005,14 @@ export default function Settings({ tab = 'general' }) {
                           </span>
                         ))}
                       </div>
-                      {summarizeNewOrderMethods(config) && (
-                        <p className="mt-2 text-xs font-medium text-gray-500">
-                          {summarizeNewOrderMethods(config)}
+                      {[
+                        summarizePaymentMethods(config, 'notify_new_order', 'new_order_payment_methods', 'New orders'),
+                        summarizePaymentMethods(config, 'notify_payment', 'payment_received_methods', 'Payment received'),
+                      ].filter(Boolean).map((line) => (
+                        <p key={line} className="mt-2 text-xs font-medium text-gray-500">
+                          {line}
                         </p>
-                      )}
+                      ))}
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -1153,6 +1163,27 @@ export default function Settings({ tab = 'general' }) {
                               onChange={(methods) => setTelegramForm((f) => ({
                                 ...f,
                                 new_order_payment_methods: methods,
+                              }))}
+                              emptySummary="All payment methods"
+                              allSelectedSummary="All payment methods selected"
+                              searchPlaceholder="Search payment method..."
+                              icon={CreditCard}
+                            />
+                          </div>
+                        )}
+                        {key === 'notify_payment' && telegramForm.notify_payment !== false && (
+                          <div className="mt-3 border-t border-gray-200 pt-3">
+                            <p className="mb-1 text-xs font-semibold text-gray-700">Send payment received by payment method</p>
+                            <p className="mb-2 text-xs text-gray-400">
+                              Choose which paid methods this group should hear about. Leave empty to receive every method.
+                              If another group already selects a method, that method goes only there.
+                            </p>
+                            <PaymentZonePicker
+                              zones={TELEGRAM_PAYMENT_METHOD_OPTIONS}
+                              selectedKeys={telegramForm.payment_received_methods || []}
+                              onChange={(methods) => setTelegramForm((f) => ({
+                                ...f,
+                                payment_received_methods: methods,
                               }))}
                               emptySummary="All payment methods"
                               allSelectedSummary="All payment methods selected"
