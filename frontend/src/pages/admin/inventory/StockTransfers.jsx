@@ -5,6 +5,7 @@ import { Truck, ArrowRight, Plus, Check, X, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Modal } from '@/components/ui/Modal'
+import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/Table'
 import { inventoryApi } from '@/api/inventory'
 import { productsApi } from '@/api/products'
 import { getListResults } from '@/utils/apiData'
@@ -15,6 +16,15 @@ const STATUS_COLORS = {
   in_transit: 'bg-blue-100 text-blue-700',
   completed:  'bg-green-100 text-green-700',
   cancelled:  'bg-red-100 text-red-700',
+}
+
+function transferErrorMessage(data) {
+  if (!data) return 'Failed to create transfer'
+  if (typeof data === 'string') return data
+  if (typeof data.detail === 'string') return data.detail
+  if (Array.isArray(data.detail) && typeof data.detail[0] === 'string') return data.detail[0]
+  const first = Object.values(data).flat().find((value) => typeof value === 'string')
+  return first || 'Failed to create transfer'
 }
 
 function emptyTransferItem() {
@@ -130,13 +140,20 @@ function TransferForm({ onSave, onClose }) {
             <Plus size={14} /> Add product
           </button>
         </div>
-        <div className="space-y-3">
+        <div className="overflow-hidden rounded-xl border border-gray-100">
+          <div className="grid grid-cols-[40px_1fr_80px_40px] gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500">
+            <span>No</span>
+            <span>Product</span>
+            <span>Qty</span>
+            <span />
+          </div>
+          <div className="space-y-2 p-3">
           {items.map((item, index) => {
             const selected = products.find((product) => String(product.id) === String(item.product))
             const matches = matchesFor(item)
             return (
-              <div key={item.key} className="rounded-xl border border-gray-100 p-3">
-                <div className="flex items-start gap-2">
+              <div key={item.key} className="grid grid-cols-[40px_1fr_80px_40px] items-start gap-2">
+                <span className="pt-2 text-center text-sm font-semibold text-gray-500">{index + 1}</span>
                   <div className="min-w-0 flex-1">
                     <input
                       className="input-field"
@@ -205,20 +222,20 @@ function TransferForm({ onSave, onClose }) {
                     <Trash2 size={15} />
                   </button>
                 </div>
-              </div>
             )
           })}
+        </div>
         </div>
       </div>
       <div>
         <label className="label">Notes</label>
         <textarea className="input-field resize-none" rows={3} value={form.notes} onChange={(e) => f('notes', e.target.value)} placeholder="Transfer reason or instructions..." />
       </div>
-      <div className="flex gap-3 pt-2">
-        <button onClick={handleSubmit} className="btn-primary flex-1 justify-center">
+      <div className="flex justify-end gap-3 pt-2">
+        <button onClick={onClose} className="btn-secondary px-6 justify-center">Cancel</button>
+        <button onClick={handleSubmit} className="btn-primary px-6 justify-center">
           <Truck size={15} /> Create Transfer
         </button>
-        <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancel</button>
       </div>
     </div>
   )
@@ -247,9 +264,7 @@ export default function StockTransfers() {
     mutationFn: inventoryApi.transfers.create,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['stock-transfers'] }); setShowModal(false); toast.success('Transfer created!') },
     onError: (e) => {
-      const detail = e?.response?.data?.detail
-      const message = Array.isArray(detail) ? detail[0] : detail
-      toast.error(typeof message === 'string' ? message : 'Failed to create transfer')
+      toast.error(transferErrorMessage(e?.response?.data))
     },
   })
 
@@ -316,73 +331,96 @@ export default function StockTransfers() {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
-            {transfers.map((t) => (
-              <div key={t.id} className="rounded-2xl border border-gray-100 p-4 transition-shadow hover:shadow-card">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
-                      <Truck size={18} className="text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900">#{t.transfer_number}</p>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-sm text-gray-500">
-                        <span className="max-w-[120px] truncate">{warehouseName(t.from_warehouse, t.from_warehouse_name)}</span>
-                        <ArrowRight size={12} className="shrink-0" />
-                        <span className="max-w-[120px] truncate">{warehouseName(t.to_warehouse, t.to_warehouse_name)}</span>
+          <Table>
+            <Thead>
+              <Tr>
+                <Th className="w-12">No</Th>
+                <Th>Transfer</Th>
+                <Th>From</Th>
+                <Th>To</Th>
+                <Th>Products</Th>
+                <Th className="text-right">Qty</Th>
+                <Th>Status</Th>
+                <Th>Date</Th>
+                <Th className="text-right">Actions</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {transfers.map((t, index) => (
+                <Tr key={t.id}>
+                  <Td className="font-semibold text-gray-500">{index + 1}</Td>
+                  <Td>
+                    <p className="font-semibold text-gray-950">#{t.transfer_number}</p>
+                    {t.notes && <p className="mt-0.5 max-w-[180px] truncate text-xs text-gray-400">{t.notes}</p>}
+                  </Td>
+                  <Td>{warehouseName(t.from_warehouse, t.from_warehouse_name)}</Td>
+                  <Td>
+                    <span className="inline-flex items-center gap-1.5">
+                      <ArrowRight size={12} className="text-gray-400" />
+                      {warehouseName(t.to_warehouse, t.to_warehouse_name)}
+                    </span>
+                  </Td>
+                  <Td>
+                    {t.items?.length > 0 ? (
+                      <div className="space-y-1">
+                        {t.items.map((item) => (
+                          <p key={item.id} className="text-sm text-gray-800">{item.product_name}</p>
+                        ))}
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-3">
+                    ) : '—'}
+                  </Td>
+                  <Td className="text-right">
+                    {t.items?.length > 0 ? (
+                      <div className="space-y-1">
+                        {t.items.map((item) => (
+                          <p key={item.id} className="font-semibold text-gray-950">{item.requested_qty}</p>
+                        ))}
+                      </div>
+                    ) : '—'}
+                  </Td>
+                  <Td>
                     <span className={cn('status-badge', STATUS_COLORS[t.status])}>
                       {t.status?.replace('_', ' ')}
                     </span>
-                    <span className="hidden text-xs text-gray-400 sm:block">{formatDate(t.created_at)}</span>
-                  </div>
-                </div>
-
-                {t.items?.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {t.items.map((item) => (
-                      <span key={item.id} className="rounded-lg bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
-                        {item.product_name} × {item.requested_qty}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {t.notes && <p className="mt-2 pl-1 text-xs text-gray-500">{t.notes}</p>}
-
-                {(t.status === 'pending' || t.status === 'in_transit') && (
-                  <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3">
-                    {t.status === 'pending' && (
-                      <button
-                        onClick={() => completeMutation.mutate(t.id)}
-                        className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-100"
-                      >
-                        <Check size={13} /> Complete
-                      </button>
+                  </Td>
+                  <Td className="whitespace-nowrap text-xs text-gray-500">{formatDate(t.created_at)}</Td>
+                  <Td>
+                    {(t.status === 'pending' || t.status === 'in_transit') ? (
+                      <div className="flex justify-end gap-1">
+                        {t.status === 'pending' && (
+                          <button
+                            onClick={() => completeMutation.mutate(t.id)}
+                            className="rounded-lg p-2 text-green-700 hover:bg-green-50"
+                            title="Complete"
+                          >
+                            <Check size={15} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { if (window.confirm('Cancel this transfer?')) cancelMutation.mutate(t.id) }}
+                          className="rounded-lg p-2 text-orange-600 hover:bg-orange-50"
+                          title="Cancel"
+                        >
+                          <X size={15} />
+                        </button>
+                        {t.status === 'pending' && (
+                          <button
+                            onClick={() => { if (window.confirm('Delete this transfer?')) deleteMutation.mutate(t.id) }}
+                            className="rounded-lg p-2 text-red-500 hover:bg-red-50"
+                            title="Delete"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="block text-right text-gray-300">—</span>
                     )}
-                    <button
-                      onClick={() => { if (window.confirm('Cancel this transfer?')) cancelMutation.mutate(t.id) }}
-                      className="flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-600 transition-colors hover:bg-orange-100"
-                    >
-                      <X size={13} /> Cancel
-                    </button>
-                    {t.status === 'pending' && (
-                      <button
-                        onClick={() => { if (window.confirm('Delete this transfer?')) deleteMutation.mutate(t.id) }}
-                        className="ml-auto flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-100"
-                      >
-                        <Trash2 size={13} /> Delete
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
         )}
       </div>
 

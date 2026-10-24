@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Html5Qrcode } from 'html5-qrcode'
 import {
   ArrowLeft, History, Camera, QrCode,
   Phone, Gift, Shield, Save, CheckCircle2, ScanLine,
@@ -11,6 +10,7 @@ import { ordersApi } from '@/api/orders'
 import { compressImageForUpload } from '@/utils/imageUpload'
 import { getListResults } from '@/utils/apiData'
 import FullscreenQrScanner, { fullscreenQrBox } from '@/components/scanner/FullscreenQrScanner'
+import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
 
 export default function PrepareItems() {
   const navigate = useNavigate()
@@ -39,8 +39,8 @@ export default function PrepareItems() {
 
   useEffect(() => {
     return () => {
-      html5QrRef.current?.stop().catch(() => {})
-      setQrRef.current?.stop().catch(() => {})
+      stopQrScanner(html5QrRef.current)
+      stopQrScanner(setQrRef.current)
     }
   }, [])
 
@@ -94,16 +94,11 @@ export default function PrepareItems() {
   const startScan = async () => {
     if (isScanning) return
     setIsScanning(true)
-    // Wait one tick so the #qr-scan-box div is visible in the DOM
-    await new Promise((r) => setTimeout(r, 50))
     try {
-      const qr = new Html5Qrcode('qr-scan-box')
-      html5QrRef.current = qr
-      await qr.start(
-        { facingMode: 'environment' },
-        { fps: 12, qrbox: fullscreenQrBox },
-        async (text) => {
-          await qr.stop().catch(() => {})
+      const qr = await startQrScanner('qr-scan-box', {
+        qrbox: fullscreenQrBox,
+        onScan: async (text) => {
+          await stopQrScanner(qr)
           html5QrRef.current = null
           setIsScanning(false)
           const found = await loadOrder(text, { silent: true })
@@ -112,16 +107,17 @@ export default function PrepareItems() {
             toast.error('This QR code is not in the system')
           }
         },
-        () => {}
-      )
-    } catch {
+      })
+      html5QrRef.current = qr
+    } catch (error) {
+      html5QrRef.current = null
       setIsScanning(false)
-      toast.error('Camera permission denied')
+      toast.error(cameraErrorMessage(error))
     }
   }
 
   const stopScan = async () => {
-    await html5QrRef.current?.stop().catch(() => {})
+    await stopQrScanner(html5QrRef.current)
     html5QrRef.current = null
     setIsScanning(false)
   }
@@ -177,30 +173,27 @@ export default function PrepareItems() {
   const startSetQrScan = async (rowId) => {
     if (scanningSetRowId) return
     setScanningSetRowId(rowId)
-    await new Promise((r) => setTimeout(r, 50))
     try {
-      const qr = new Html5Qrcode(`set-qr-scan-box-${rowId}`)
-      setQrRef.current = qr
-      await qr.start(
-        { facingMode: 'environment' },
-        { fps: 12, qrbox: fullscreenQrBox },
-        async (text) => {
+      const qr = await startQrScanner(`set-qr-scan-box-${rowId}`, {
+        qrbox: fullscreenQrBox,
+        onScan: async (text) => {
           updateSetQrRow(rowId, text.trim())
-          await qr.stop().catch(() => {})
+          await stopQrScanner(qr)
           setQrRef.current = null
           setScanningSetRowId(null)
           toast.success('Set QR scanned')
         },
-        () => {}
-      )
-    } catch {
+      })
+      setQrRef.current = qr
+    } catch (error) {
+      setQrRef.current = null
       setScanningSetRowId(null)
-      toast.error('Camera permission denied')
+      toast.error(cameraErrorMessage(error))
     }
   }
 
   const stopSetQrScan = async () => {
-    await setQrRef.current?.stop().catch(() => {})
+    await stopQrScanner(setQrRef.current)
     setQrRef.current = null
     setScanningSetRowId(null)
   }
@@ -401,9 +394,9 @@ export default function PrepareItems() {
       )}
 
       {/* Header */}
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white shadow-sm">
+      <div className="sticky top-0 z-10">
         <div
-          className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3"
+          className="mx-auto flex w-full max-w-4xl items-center justify-between border-b border-gray-100 bg-white px-4 py-3 shadow-sm"
           style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
         >
           <button
@@ -422,7 +415,7 @@ export default function PrepareItems() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-3 p-3 pb-24 sm:p-4">
+      <div className="mx-auto w-full max-w-4xl space-y-3 p-3 pb-24 sm:p-4">
         {/* QR Scanner Card */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-4">
           <div className="pointer-events-none absolute right-4 top-4 grid grid-cols-3 gap-1.5 opacity-20">
@@ -674,7 +667,7 @@ export default function PrepareItems() {
         className="fixed bottom-0 left-0 right-0 bg-white/80 p-3 backdrop-blur"
         style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
-        <div className="mx-auto w-full max-w-2xl">
+        <div className="mx-auto w-full max-w-4xl">
           <button
             onClick={handleSave}
             disabled={saving}

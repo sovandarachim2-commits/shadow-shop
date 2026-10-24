@@ -5,4 +5,5 @@ urlpatterns = [
     path('sales/', views.SalesReportView.as_view(), name='sales-report'),
     path('products/', views.ProductReportView.as_view(), name='product-report'),
     path('inventory/', views.InventoryReportView.as_view(), name='inventory-report'),
+    path('stock-sold/', views.StockSoldDetailView.as_view(), name='stock-sold-report'),
 ]

@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Html5Qrcode } from 'html5-qrcode'
 import { ArrowLeft, History, QrCode, Search, Truck, UserCheck, Shield, Save } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 import { ordersApi } from '@/api/orders'
+import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
 
 export default function DeliveryCustomer() {
   const navigate = useNavigate()
@@ -20,7 +20,7 @@ export default function DeliveryCustomer() {
   const deliveredAt = useRef(new Date().toLocaleString())
 
   useEffect(() => {
-    return () => { html5QrRef.current?.stop().catch(() => {}) }
+    return () => { stopQrScanner(html5QrRef.current) }
   }, [])
 
   const loadOrder = async (rawText) => {
@@ -43,29 +43,27 @@ export default function DeliveryCustomer() {
   const startScan = async () => {
     if (isScanning) return
     setIsScanning(true)
-    await new Promise((r) => setTimeout(r, 50))
     try {
-      const qr = new Html5Qrcode('dc-qr-scan-box')
-      html5QrRef.current = qr
-      await qr.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 160, height: 160 } },
-        async (text) => {
-          await qr.stop().catch(() => {})
+      const qr = await startQrScanner('dc-qr-scan-box', {
+        fps: 10,
+        qrbox: { width: 160, height: 160 },
+        onScan: async (text) => {
+          await stopQrScanner(qr)
           html5QrRef.current = null
           setIsScanning(false)
           await loadOrder(text)
         },
-        () => {}
-      )
-    } catch {
+      })
+      html5QrRef.current = qr
+    } catch (error) {
+      html5QrRef.current = null
       setIsScanning(false)
-      toast.error('Camera permission denied')
+      toast.error(cameraErrorMessage(error))
     }
   }
 
   const stopScan = async () => {
-    await html5QrRef.current?.stop().catch(() => {})
+    await stopQrScanner(html5QrRef.current)
     html5QrRef.current = null
     setIsScanning(false)
   }

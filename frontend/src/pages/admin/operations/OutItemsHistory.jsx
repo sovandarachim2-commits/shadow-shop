@@ -55,7 +55,6 @@ export default function OutItemsHistory() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [limit, setLimit] = useState(100)
-  const [showSearch, setShowSearch] = useState(false)
   const [previewImage, setPreviewImage] = useState(null)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -182,20 +181,16 @@ export default function OutItemsHistory() {
               disabled={isFetching}
               className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-40"
               title="Refresh"
-            >
-              <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
-            </button>
+          <div className="relative mb-3">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search barcode, phone, customer"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+            />
           </div>
-        </div>
-
-        <div>
-          {showSearch && (
-            <div className="mb-3 max-w-xl">
-              <div className="relative min-w-0">
-                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search barcode, phone, customer"
                   className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"

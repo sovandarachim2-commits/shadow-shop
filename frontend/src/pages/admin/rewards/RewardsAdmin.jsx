@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   AlertCircle,
   Award,
@@ -341,44 +342,56 @@ function PremiumChartCard({ title, subtitle, children }) {
   )
 }
 
-function MiniLineChart() {
-  const points = [
-    [0, 48],
-    [95, 94],
-    [190, 138],
-    [285, 92],
-    [380, 112],
-    [475, 70],
-    [570, 138],
-    [665, 174],
-    [760, 206],
-  ]
-  const line = points.map(([x, y]) => `${x},${250 - y}`).join(' ')
-  const area = `0,250 ${points.map(([x, y]) => `${x},${250 - y}`).join(' ')} 760,250`
+function getMonthlyPointsActivity(transactions) {
+  const now = new Date()
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    return { key, month: date.toLocaleDateString('en', { month: 'short' }), earned: 0, redeemed: 0 }
+  })
+  const byMonth = new Map(months.map((month) => [month.key, month]))
+
+  transactions.forEach((transaction) => {
+    const date = new Date(transaction.created_at)
+    if (Number.isNaN(date.getTime())) return
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const month = byMonth.get(key)
+    if (!month) return
+    const points = Number(transaction.points) || 0
+    if (points > 0) month.earned += points
+    if (points < 0) month.redeemed += Math.abs(points)
+  })
+  return months
+}
+
+function MiniLineChart({ rows }) {
+  const hasPoints = rows.some((row) => row.earned || row.redeemed)
   return (
-    <div className="h-[330px]">
-      <svg viewBox="0 0 820 290" className="h-full w-full overflow-visible">
-        <defs>
-          <linearGradient id="rewardLineFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#EC3F8F" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#EC3F8F" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {[0, 1, 2, 3, 4].map((lineIndex) => (
-          <g key={lineIndex}>
-            <text x="0" y={38 + lineIndex * 52} fill="#8A93A5" fontSize="14" fontWeight="700">{['100K', '80K', '60K', '40K', '20K'][lineIndex]}</text>
-            <line x1="54" x2="810" y1={34 + lineIndex * 52} y2={34 + lineIndex * 52} stroke="#EEF1F6" strokeWidth="1" />
-          </g>
-        ))}
-        <polygon points={area} fill="url(#rewardLineFill)" transform="translate(54 0)" />
-        <polyline points={line} fill="none" stroke="#EC3F8F" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" transform="translate(54 0)" />
-        {points.map(([x, y], index) => (
-          <circle key={index} cx={x + 54} cy={250 - y} r="6" fill="#fff" stroke="#EC3F8F" strokeWidth="4" />
-        ))}
-      </svg>
-      <div className="ml-12 grid grid-cols-6 text-center text-sm font-black text-gray-400">
-        {['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May'].map((month) => <span key={month}>{month}</span>)}
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-gray-500">
+        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#EC3F8F]" /> Earned</span>
+        <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-violet-500" /> Redeemed</span>
       </div>
+      {hasPoints ? (
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+            <CartesianGrid stroke="#EEF1F6" strokeDasharray="4 4" vertical={false} />
+            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#8A93A5', fontSize: 12, fontWeight: 700 }} dy={8} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8A93A5', fontSize: 11 }} width={42} tickFormatter={(value) => Number(value).toLocaleString()} />
+            <Tooltip
+              contentStyle={{ borderRadius: 12, border: '1px solid #EEF1F6', boxShadow: '0 8px 24px rgba(15,23,42,0.08)' }}
+              formatter={(value, name) => [Number(value).toLocaleString(), name === 'earned' ? 'Earned' : 'Redeemed']}
+              labelStyle={{ color: '#111827', fontWeight: 800 }}
+            />
+            <Line type="monotone" dataKey="earned" name="earned" stroke="#EC3F8F" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+            <Line type="monotone" dataKey="redeemed" name="redeemed" stroke="#8B5CF6" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="flex h-[280px] items-center justify-center rounded-xl bg-gray-50 text-sm font-semibold text-gray-400">
+          No points activity in the last 6 months
+        </div>
+      )}
     </div>
   )
 }
@@ -592,6 +605,7 @@ export default function RewardDashboardAdmin() {
   const rewards = unwrapList(rewardsRaw)
   const redemptions = unwrapList(redemptionsRaw)
   const transactions = unwrapList(transactionsRaw)
+  const pointsActivity = getMonthlyPointsActivity(transactions)
   const totalIssued = transactions.filter((item) => Number(item.points) > 0).reduce((sum, item) => sum + Number(item.points || 0), 0)
   const totalRedeemed = Math.abs(transactions.filter((item) => Number(item.points) < 0).reduce((sum, item) => sum + Number(item.points || 0), 0))
   const activeUsers = pointsData.filter((customer) => Number(customer.points || 0) > 0).length
@@ -664,7 +678,7 @@ export default function RewardDashboardAdmin() {
 
       <div className="grid gap-5 xl:grid-cols-[1.5fr_0.9fr]">
         <PremiumChartCard title="Points Activity" subtitle="Last 6 months">
-          <MiniLineChart />
+          <MiniLineChart rows={pointsActivity} />
         </PremiumChartCard>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">

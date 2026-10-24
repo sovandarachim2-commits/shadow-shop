@@ -114,7 +114,7 @@ export default function NewOrder({ embedded = false, onCreated }) {
       toast.error('Add at least one product')
       return
     }
-    if (!isDraft && !payment_method) {
+    if (!isDraft && payment_status === 'paid' && !payment_method) {
       toast.error('Select a payment method')
       return
     }
@@ -461,31 +461,35 @@ export default function NewOrder({ embedded = false, onCreated }) {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="label">Payment Method <span className="text-red-500">*</span></label>
-                <select className="select-field" value={payment_method} onChange={(e) => setPaymentMethod(e.target.value)}>
-                  <option value="">Select payment method</option>
-                  <option value="aba">ABA Bank</option>
-                  <option value="bakong">Bakong KHQR</option>
-                  <option value="acleda">ACLEDA Bank</option>
-                  <option value="wing">Wing</option>
-                  <option value="cod">Cash on Delivery</option>
-                  <option value="cash">Cash</option>
-                  <option value="contact_sales">Contact Sales</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Transaction Note <span className="font-normal text-gray-400">(optional)</span></label>
-                <input
-                  className="input-field"
-                  type="text"
-                  maxLength={100}
-                  value={transactionNote}
-                  onChange={(e) => setTransactionNote(e.target.value)}
-                  placeholder="Bank transaction or receipt reference"
-                />
-              </div>
+              {payment_status === 'paid' && (
+                <>
+                  <div>
+                    <label className="label">Payment Method <span className="text-red-500">*</span></label>
+                    <select className="select-field" value={payment_method} onChange={(e) => setPaymentMethod(e.target.value)}>
+                      <option value="">Select payment method</option>
+                      <option value="aba">ABA Bank</option>
+                      <option value="bakong">Bakong KHQR</option>
+                      <option value="acleda">ACLEDA Bank</option>
+                      <option value="wing">Wing</option>
+                      <option value="cod">Cash on Delivery</option>
+                      <option value="cash">Cash</option>
+                      <option value="contact_sales">Contact Sales</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Transaction Note <span className="font-normal text-gray-400">(optional)</span></label>
+                    <input
+                      className="input-field"
+                      type="text"
+                      maxLength={100}
+                      value={transactionNote}
+                      onChange={(e) => setTransactionNote(e.target.value)}
+                      placeholder="Bank transaction or receipt reference"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Actions */}

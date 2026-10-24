@@ -12,6 +12,21 @@ function formatDateTime(value) {
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString()
 }
 
+function staffName(value) {
+  const name = String(value || '').trim()
+  return name && name !== '-' ? name : ''
+}
+
+function DateWithUser({ value, userName }) {
+  const name = staffName(userName)
+  return (
+    <div>
+      <div className="whitespace-nowrap">{formatDateTime(value)}</div>
+      {name ? <div className="mt-1 text-xs font-semibold text-purple-200">{name}</div> : null}
+    </div>
+  )
+}
+
 function PhotoCell({ src, label, onPreview, missingText = '-' }) {
   if (!src) {
     return (
@@ -74,7 +89,9 @@ export default function ScannerOrders() {
         outFull: order.out_package_photo,
         deliveryBy: order.out_delivery_by || order.delivery_by || '',
         preparedAt: order.prepared_at,
+        preparedBy: staffName(order.prepared_by_name),
         outAt: order.out_at,
+        outBy: staffName(order.out_by_name),
       })
     })
 
@@ -92,6 +109,7 @@ export default function ScannerOrders() {
         prepareInvoice: current.prepareInvoice || record.invoice_photo,
         prepareFull: current.prepareFull || record.package_photo,
         preparedAt: current.preparedAt || record.created_at,
+        preparedBy: staffName(record.created_by_name) || current.preparedBy || '',
       })
     })
 
@@ -110,6 +128,7 @@ export default function ScannerOrders() {
         outFull: current.outFull || record.package_photo,
         deliveryBy: current.deliveryBy || record.delivery_by || '',
         outAt: current.outAt || record.created_at,
+        outBy: staffName(record.created_by_name) || current.outBy || '',
       })
     })
 
@@ -149,7 +168,7 @@ export default function ScannerOrders() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] animate-fade-in">
+    <div className="w-full animate-fade-in">
       {previewImage && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4" onClick={() => setPreviewImage(null)}>
           <div className="relative max-h-full w-full max-w-4xl" onClick={(event) => event.stopPropagation()}>
@@ -238,8 +257,8 @@ export default function ScannerOrders() {
                     <td className="px-3 py-3 text-center"><PhotoCell src={row.outInvoice} label={`Out invoice ${row.code}`} onPreview={setPreviewImage} missingText={isOut ? '-' : 'Not Out'} /></td>
                     <td className="px-3 py-3 text-center"><PhotoCell src={row.prepareFull} label={`Prepare full ${row.code}`} onPreview={setPreviewImage} /></td>
                     <td className="px-3 py-3 text-center"><PhotoCell src={row.outFull} label={`Out full ${row.code}`} onPreview={setPreviewImage} missingText={isOut ? '-' : 'Not Out'} /></td>
-                    <td className="whitespace-nowrap px-3 py-3">{formatDateTime(row.preparedAt)}</td>
-                    <td className="whitespace-nowrap px-3 py-3">{isOut ? formatDateTime(row.outAt) : <span className="font-semibold text-orange-300">Not Out</span>}</td>
+                    <td className="px-3 py-3"><DateWithUser value={row.preparedAt} userName={row.preparedBy} /></td>
+                    <td className="px-3 py-3">{isOut ? <DateWithUser value={row.outAt} userName={row.outBy} /> : <span className="font-semibold text-orange-300">Not Out</span>}</td>
                   </tr>
                 )
               })}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store, Search } from 'lucide-react'
+import { ArrowLeft, Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store } from 'lucide-react'
 import useAuthStore from '@/store/authStore'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -25,6 +25,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/customer-scanner/delivery-config', 'Delivery Configuration'],
   ['/admin/customer-scanner/delivery', 'Customer Delivery'],
   ['/admin/print/history', 'Print History'],
+  ['/admin/print/sessions', 'Print Session'],
   ['/admin/print', 'Print Center'],
   ['/admin/prepare-set/history', 'Prepare Set History'],
   ['/admin/prepare-set', 'Prepare Set'],
@@ -36,6 +37,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/scanner', 'Scanner'],
   ['/admin/delivery', 'Delivery Management'],
   ['/admin/finance/revenue', 'Revenue'],
+  ['/admin/finance/categories', 'Expense Categories'],
   ['/admin/finance/expenses', 'Expenses'],
   ['/admin/finance/profit', 'Profit Report'],
   ['/admin/rewards/transactions', 'Reward Transactions'],
@@ -48,6 +50,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/reports/sales', 'Sales Report'],
   ['/admin/reports/products', 'Product Report'],
   ['/admin/reports/inventory', 'Inventory Report'],
+  ['/admin/reports/stock-sold', 'Stock Sold Report'],
   ['/admin/profile', 'My Profile'],
   ['/admin/users', 'Users'],
   ['/admin/roles', 'Roles & Permissions'],
@@ -142,17 +145,6 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
             </button>
           )}
 
-          {!isOrderSearch && (
-            <Link
-              to="/admin/scanner/orders"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 active:bg-gray-100"
-              aria-label="Search orders"
-              title="Search orders"
-            >
-              <Search size={20} />
-            </Link>
-          )}
-
           {/* Avatar */}
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
@@ -224,17 +216,6 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
               <Bell size={20} />
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-pink-500" />
             </button>
-          )}
-
-          {!isOrderSearch && (
-            <Link
-              to="/admin/scanner/orders"
-              className="rounded-xl p-2 text-gray-500 transition-colors hover:bg-gray-100"
-              aria-label="Search orders"
-              title="Search orders"
-            >
-              <Search size={20} />
-            </Link>
           )}
 
           <div className="relative">

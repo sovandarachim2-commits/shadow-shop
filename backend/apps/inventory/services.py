@@ -155,7 +155,9 @@ def add_stock(product, quantity, movement_type, reference='', notes='', user=Non
 
 def apply_transfer_to_storage(transfer):
     """Move completed transfer quantities between storage locations."""
-    for item in transfer.items.all():
+    from_name = transfer.from_warehouse.name if transfer.from_warehouse_id else 'Storage'
+    to_name = transfer.to_warehouse.name if transfer.to_warehouse_id else 'Storage'
+    for item in transfer.items.select_related('product').all():
         qty = item.actual_qty or item.requested_qty or 0
         if qty <= 0:
             continue
@@ -175,3 +177,27 @@ def apply_transfer_to_storage(transfer):
             )
             destination.quantity += qty
             destination.save(update_fields=['quantity'])
+        record_transfer_movement(transfer, item, qty, from_name, to_name)
+
+
+def record_transfer_movement(transfer, item, qty, from_name, to_name):
+    """Add a transfer row to stock movements without changing shop stock."""
+    if StockMovement.objects.filter(
+        type=StockMovement.TYPE_TRANSFER,
+        product_id=item.product_id,
+        reference=transfer.transfer_number,
+    ).exists():
+        return
+    stock = Stock.objects.filter(product_id=item.product_id).first()
+    current = stock.quantity if stock else 0
+    StockMovement.objects.create(
+        type=StockMovement.TYPE_TRANSFER,
+        product_id=item.product_id,
+        quantity=qty,
+        before_qty=current,
+        after_qty=current,
+        reference=transfer.transfer_number,
+        reference_type='transfer',
+        notes=f'{from_name} -> {to_name}',
+        created_by=transfer.approved_by or transfer.created_by,
+    )

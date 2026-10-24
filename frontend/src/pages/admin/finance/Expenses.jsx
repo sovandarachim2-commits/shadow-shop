@@ -1,17 +1,21 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Receipt, Plus, Trash2, Search } from 'lucide-react'
+import { Receipt, Plus, Trash2, Search, Pencil } from 'lucide-react'
 import { financeApi } from '@/api/finance'
-import { formatCurrency, formatDate } from '@/utils/helpers'
+import { formatCurrency, formatDate, formatDateTime } from '@/utils/helpers'
 import toast from 'react-hot-toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { Modal } from '@/components/ui/Modal'
 
 export default function Expenses() {
   const qc = useQueryClient()
+  const emptyForm = { description: '', amount: '', date: new Date().toISOString().slice(0, 10), category: '', subcategory: '' }
   const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [search, setSearch] = useState('')
   const [confirm, ConfirmDialog] = useConfirm()
-  const [form, setForm] = useState({ description: '', amount: '', date: new Date().toISOString().slice(0, 10), category: '', notes: '' })
+  const [historyExpense, setHistoryExpense] = useState(null)
+  const [form, setForm] = useState(emptyForm)
 
   const { data: expenses, isLoading } = useQuery({
     queryKey: ['expenses', search],
@@ -21,19 +25,54 @@ export default function Expenses() {
 
   const { data: categories } = useQuery({
     queryKey: ['expense-categories'],
-    queryFn: () => financeApi.expenseCategories.list(),
+    queryFn: () => financeApi.expenseCategories.list({ page_size: 200 }),
     select: (r) => r.data?.results ?? r.data ?? [],
   })
 
-  const createMutation = useMutation({
-    mutationFn: (d) => financeApi.expenses.create(d),
+  const closeForm = () => {
+    setShowForm(false)
+    setEditing(null)
+    setForm(emptyForm)
+  }
+
+  const openCreate = () => {
+    setEditing(null)
+    setForm(emptyForm)
+    setShowForm(true)
+  }
+
+  const openEdit = (expense) => {
+    const selected = (categories ?? []).find((item) => String(item.id) === String(expense.category))
+    setEditing(expense)
+    setForm({
+      description: expense.description || '',
+      amount: expense.amount ?? '',
+      date: expense.date || '',
+      category: selected?.parent ? String(selected.parent) : (selected ? String(selected.id) : ''),
+      subcategory: selected?.parent ? String(selected.id) : '',
+    })
+    setShowForm(true)
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: (d) => {
+      const payload = {
+        description: d.description,
+        amount: d.amount,
+        date: d.date,
+        category: d.subcategory,
+      }
+      return editing
+        ? financeApi.expenses.update(editing.id, payload)
+        : financeApi.expenses.create(payload)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses'] })
-      toast.success('Expense recorded')
-      setShowForm(false)
-      setForm({ description: '', amount: '', date: new Date().toISOString().slice(0, 10), category: '', notes: '' })
+      qc.invalidateQueries({ queryKey: ['expense-history'] })
+      toast.success(editing ? 'Expense updated' : 'Expense recorded')
+      closeForm()
     },
-    onError: () => toast.error('Failed to save expense'),
+    onError: () => toast.error(editing ? 'Could not update expense' : 'Failed to save expense'),
   })
 
   const deleteMutation = useMutation({
@@ -41,6 +80,15 @@ export default function Expenses() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['expenses'] }); toast.success('Expense deleted') },
   })
 
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ['expense-history', historyExpense?.id],
+    queryFn: () => financeApi.expenses.history(historyExpense.id),
+    enabled: Boolean(historyExpense?.id),
+    select: (response) => response.data ?? [],
+  })
+
+  const mainCategories = (categories ?? []).filter((category) => !category.parent)
+  const subcategories = (categories ?? []).filter((category) => String(category.parent) === String(form.category))
   const total = (expenses ?? []).reduce((s, e) => s + parseFloat(e.amount || 0), 0)
 
   return (
@@ -50,7 +98,7 @@ export default function Expenses() {
           <h1 className="text-2xl font-bold text-navy-900">Expenses</h1>
           <p className="text-gray-500 text-sm mt-0.5">Track business expenses and costs</p>
         </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => setShowForm(true)}>
+        <button className="btn-primary flex items-center gap-2" onClick={openCreate}>
           <Plus size={16} /> Add Expense
         </button>
       </div>
@@ -69,49 +117,52 @@ export default function Expenses() {
         </div>
       </div>
 
-      {showForm && (
-        <div className="form-card mt-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Record Expense</h3>
-          <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(form) }} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="label">Description *</label>
-                <input className="input-field" required value={form.description}
-                  onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
-              </div>
-              <div>
-                <label className="label">Amount (USD) *</label>
-                <input className="input-field" type="number" step="0.01" min="0" required value={form.amount}
-                  onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
-              </div>
-              <div>
-                <label className="label">Date *</label>
-                <input className="input-field" type="date" required value={form.date}
-                  onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
-              </div>
-              <div>
-                <label className="label">Category</label>
-                <select className="select-field" value={form.category}
-                  onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}>
-                  <option value="">Select category</option>
-                  {(categories ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
+      <Modal isOpen={showForm} onClose={closeForm} title={editing ? 'Edit Expense' : 'Add Expense'} size="lg">
+        <form onSubmit={(e) => { e.preventDefault(); if (!form.category || !form.subcategory) return; saveMutation.mutate(form) }} className="space-y-4 p-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Amount (USD) *</label>
+              <input className="input-field" type="number" step="0.01" min="0" required value={form.amount} placeholder="0.00"
+                onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))} />
             </div>
             <div>
-              <label className="label">Notes</label>
-              <textarea className="input-field" rows={2} value={form.notes}
-                onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))} />
+              <label className="label">Date *</label>
+              <input className="input-field" type="date" required value={form.date}
+                onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
-            <div className="flex gap-3 pt-2">
-              <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Saving...' : 'Save Expense'}
-              </button>
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+            <div className="sm:col-span-2">
+              <label className="label">Main Category *</label>
+              <select className="select-field" required value={form.category}
+                onChange={(e) => setForm(f => ({ ...f, category: e.target.value, subcategory: '' }))}>
+                <option value="">Select main category</option>
+                {mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
-          </form>
-        </div>
-      )}
+            <div className="sm:col-span-2">
+              <label className="label">Subcategory *</label>
+              <select className="select-field" required value={form.subcategory} disabled={!form.category}
+                onChange={(e) => setForm(f => ({ ...f, subcategory: e.target.value }))}>
+                <option value="">{form.category ? 'Select subcategory' : 'Select a main category first'}</option>
+                {subcategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {form.category && subcategories.length === 0 && (
+                <p className="mt-1 text-xs font-semibold text-red-600">Add a subcategory for this main category first.</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Description *</label>
+              <textarea className="input-field" rows={3} required value={form.description} placeholder="What was this expense for?"
+                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
+            <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saveMutation.isPending || !form.category || !form.subcategory}>
+              {saveMutation.isPending ? 'Saving...' : 'Save Expense'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <div className="form-card mt-6">
         <div className="relative mb-4">
@@ -131,28 +182,56 @@ export default function Expenses() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Description</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Category</th>
-                  <th className="text-right py-3 px-4 text-gray-500 font-medium">Amount</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Date</th>
-                  <th className="py-3 px-4" />
+            <table className="w-full">
+              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="w-16 px-4 py-3">No</th>
+                  <th className="px-4 py-3">Main Category</th>
+                  <th className="px-4 py-3">Subcategory</th>
+                  <th className="px-4 py-3">Description</th>
+                  <th className="px-4 py-3 text-right">Amount</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Created by</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody>
-                {(expenses ?? []).map((e) => (
-                  <tr key={e.id} className="data-table-row">
-                    <td className="py-3 px-4 font-medium text-gray-900">{e.description}</td>
-                    <td className="py-3 px-4 text-gray-500">{e.category_name ?? '—'}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-red-600">{formatCurrency(e.amount)}</td>
-                    <td className="py-3 px-4 text-gray-400 text-xs">{formatDate(e.date)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <button className="text-gray-300 hover:text-red-500 transition-colors"
-                        onClick={async () => { if (await confirm('Delete expense?', 'This action cannot be undone.')) deleteMutation.mutate(e.id) }}>
-                        <Trash2 size={14} />
+              <tbody className="divide-y divide-gray-100">
+                {(expenses ?? []).map((e, index) => (
+                  <tr key={e.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-bold text-slate-400">{index + 1}</td>
+                    <td className={`px-4 py-3 text-sm font-semibold ${e.category_name ? 'text-indigo-700' : 'text-slate-300'}`}>{e.category_name || '—'}</td>
+                    <td className={`px-4 py-3 text-sm font-semibold ${e.subcategory_name ? 'text-sky-700' : 'text-slate-300'}`}>{e.subcategory_name || '—'}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{e.description}</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-red-600">{formatCurrency(e.amount)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">{formatDate(e.date)}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-purple-700 hover:underline"
+                        onClick={() => setHistoryExpense(e)}
+                      >
+                        {e.created_by_name || 'System'}
                       </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 hover:bg-indigo-50"
+                          aria-label={`Edit ${e.description}`}
+                          onClick={() => openEdit(e)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Delete ${e.description}`}
+                          onClick={async () => { if (await confirm('Delete expense?', 'This action cannot be undone.')) deleteMutation.mutate(e.id) }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -161,6 +240,44 @@ export default function Expenses() {
           </div>
         )}
       </div>
+      <Modal isOpen={Boolean(historyExpense)} onClose={() => setHistoryExpense(null)} title="Audit history" size="lg">
+        <div className="space-y-3 p-6">
+          <p className="text-sm font-semibold text-gray-700">{historyExpense?.description}</p>
+          {historyLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, index) => <div key={index} className="h-14 animate-pulse rounded-lg bg-gray-100" />)}
+            </div>
+          ) : (history ?? []).length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">No history yet</p>
+          ) : (
+            <div className="divide-y divide-gray-100 rounded-xl border border-gray-100">
+              {(history ?? []).map((item, index) => (
+                <div key={item.id ?? `created-${index}`} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {item.action === 'updated' ? 'Updated by' : 'Created by'}
+                      <span className="ml-2 font-semibold text-purple-700">{item.user_name || 'System'}</span>
+                    </p>
+                    <p className="whitespace-nowrap text-sm font-semibold text-gray-900">{formatDateTime(item.created_at)}</p>
+                  </div>
+                  {(item.changes ?? []).length > 0 && (
+                    <ul className="mt-2 space-y-1 text-sm text-gray-700">
+                      {item.changes.map((change) => (
+                        <li key={change.field}>
+                          <span className="font-semibold text-gray-900">{change.field}:</span>{' '}
+                          {change.from
+                            ? <><span className="text-red-600">{change.from}</span> → <span className="font-semibold text-green-700">{change.to || '—'}</span></>
+                            : <span className="font-semibold text-gray-900">{change.to || '—'}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
       {ConfirmDialog}
     </div>
   )

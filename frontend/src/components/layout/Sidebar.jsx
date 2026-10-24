@@ -7,7 +7,7 @@ import { authApi } from '@/api/auth'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
   LayoutDashboard, ShoppingCart, Package, Warehouse, Printer,
-  Scan, Truck, DollarSign, BarChart3, Users, Settings, Archive,
+  Scan, Search, Truck, DollarSign, BarChart3, Users, Settings, Archive,
   ChevronDown, ChevronRight, LogOut, Store, FileText,
   TrendingUp, ArrowLeftRight, ScanLine, PackageCheck,
   UserCircle, Bell, Shield, Sliders, MessageCircle,
@@ -59,9 +59,11 @@ const navItems = [
     label: 'Operations',
     icon: Printer,
     children: [
-      { label: 'Print Center',  path: '/admin/print',         icon: Printer,  module: 'print'    },
-      { label: 'Print History', path: '/admin/print/history', icon: FileText, module: 'print_history' },
-      { label: 'Scanner',       path: '/admin/scanner',       icon: ScanLine, module: 'scanner'  },
+      { label: 'Print Center',  path: '/admin/print',          icon: Printer,       module: 'print'    },
+      { label: 'Print Session', path: '/admin/print/sessions', icon: ClipboardList, module: 'print'    },
+      { label: 'Print History', path: '/admin/print/history',  icon: FileText,      module: 'print_history' },
+      { label: 'Scanner',       path: '/admin/scanner',        icon: ScanLine, module: 'scanner' },
+      { label: 'Order Search',  path: '/admin/scanner/orders', icon: Search,   module: 'scanner' },
       { label: 'Delivery',      path: '/admin/delivery',      icon: Truck,    module: 'delivery' },
     ],
   },
@@ -78,6 +80,7 @@ const navItems = [
     children: [
       { label: 'Revenue',      path: '/admin/finance/revenue',   icon: TrendingUp, module: 'finance' },
       { label: 'Expenses',     path: '/admin/finance/expenses',  icon: Receipt,    module: 'finance_expenses' },
+      { label: 'Expense Categories', path: '/admin/finance/categories', icon: Tag, module: 'finance_expenses' },
       { label: 'Profit Report',path: '/admin/finance/profit',    icon: PieChart,   module: 'finance_profit' },
     ],
   },
@@ -101,6 +104,7 @@ const navItems = [
       { label: 'Sales Report',     path: '/admin/reports/sales',     icon: BarChart3, module: 'reports' },
       { label: 'Product Report',   path: '/admin/reports/products',  icon: Package,   module: 'reports_products' },
       { label: 'Inventory Report', path: '/admin/reports/inventory', icon: Warehouse, module: 'reports_inventory' },
+      { label: 'Stock Sold Report',      path: '/admin/reports/stock-sold', icon: PackageCheck, module: 'reports_inventory' },
     ],
   },
   {

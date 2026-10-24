@@ -5,8 +5,26 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import transaction
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, IntegerField, Value
 from django.db.models.functions import Coalesce
+
+SOLD_ORDER_STATUSES = ['new', 'confirmed', 'printed', 'preparing', 'packed', 'shipped', 'completed']
+
+
+def with_sold_qty(queryset):
+    return queryset.annotate(
+        sold_qty=Coalesce(
+            Sum(
+                'product__order_items__quantity',
+                filter=Q(
+                    product__order_items__order__is_draft=False,
+                    product__order_items__order__status__in=SOLD_ORDER_STATUSES,
+                ),
+            ),
+            Value(0),
+            output_field=IntegerField(),
+        )
+    )
 from .models import Stock, StockMovement, Warehouse, StockTransfer
 from .services import apply_transfer_to_storage
 from .serializers import (
@@ -17,9 +35,11 @@ from utils.permissions import IsAdminOrSuperAdmin, IsWarehouse, IsStaff
 
 
 class StockViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Stock.objects.all().select_related('product__category').prefetch_related(
-        'product__images',
-        'product__warehouse_stocks__warehouse',
+    queryset = with_sold_qty(
+        Stock.objects.all().select_related('product__category').prefetch_related(
+            'product__images',
+            'product__warehouse_stocks__warehouse',
+        )
     )
     serializer_class = StockSerializer
     permission_classes = [IsAuthenticated, IsStaff]
@@ -52,13 +72,13 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
-        stocks = Stock.objects.filter(quantity__gt=0, quantity__lte=5).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images')
+        stocks = with_sold_qty(Stock.objects.filter(quantity__gt=0, quantity__lte=5).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images'))
         serializer = self.get_serializer(stocks, many=True, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def out_of_stock(self, request):
-        stocks = Stock.objects.filter(quantity__lte=0).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images')
+        stocks = with_sold_qty(Stock.objects.filter(quantity__lte=0).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images'))
         serializer = self.get_serializer(stocks, many=True, context={'request': request})
         return Response(serializer.data)
 

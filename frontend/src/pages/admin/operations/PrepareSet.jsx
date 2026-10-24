@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Html5Qrcode } from 'html5-qrcode'
 import {
   ArrowLeft, Camera, CheckCircle2, Gift, History,
   PackageCheck, QrCode, Save, ScanLine, Shield,
@@ -13,6 +12,7 @@ import useAuthStore from '@/store/authStore'
 import { compressImageForUpload } from '@/utils/imageUpload'
 import { getListResults } from '@/utils/apiData'
 import FullscreenQrScanner, { fullscreenQrBox } from '@/components/scanner/FullscreenQrScanner'
+import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
 
 function normalizeCode(value) {
   return value.replace('SS-ORDER:', '').trim()
@@ -49,7 +49,7 @@ export default function PrepareSet() {
 
   useEffect(() => {
     return () => {
-      scannerRef.current?.stop().catch(() => {})
+      stopQrScanner(scannerRef.current)
     }
   }, [])
 
@@ -77,15 +77,11 @@ export default function PrepareSet() {
   const startScan = async () => {
     if (isScanning) return
     setIsScanning(true)
-    await new Promise((resolve) => setTimeout(resolve, 50))
     try {
-      const qr = new Html5Qrcode('prepare-set-scan-box')
-      scannerRef.current = qr
-      await qr.start(
-        { facingMode: 'environment' },
-        { fps: 12, qrbox: fullscreenQrBox },
-        async (text) => {
-          await qr.stop().catch(() => {})
+      const qr = await startQrScanner('prepare-set-scan-box', {
+        qrbox: fullscreenQrBox,
+        onScan: async (text) => {
+          await stopQrScanner(qr)
           scannerRef.current = null
           setIsScanning(false)
           const found = await lookupOrder(text)
@@ -96,16 +92,17 @@ export default function PrepareSet() {
           }
           setCode(found.order_number)
         },
-        () => {}
-      )
-    } catch {
+      })
+      scannerRef.current = qr
+    } catch (error) {
+      scannerRef.current = null
       setIsScanning(false)
-      toast.error('Camera permission denied')
+      toast.error(cameraErrorMessage(error))
     }
   }
 
   const stopScan = async () => {
-    await scannerRef.current?.stop().catch(() => {})
+    await stopQrScanner(scannerRef.current)
     scannerRef.current = null
     setIsScanning(false)
   }
@@ -187,9 +184,9 @@ export default function PrepareSet() {
         </div>
       )}
 
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white shadow-sm">
+      <div className="sticky top-0 z-10">
         <div
-          className="mx-auto flex w-full max-w-[1500px] items-center justify-between px-4 py-3.5"
+          className="mx-auto flex w-full max-w-[1500px] items-center justify-between border-b border-gray-100 bg-white px-4 py-3.5 shadow-sm"
           style={{ paddingTop: 'max(0.875rem, env(safe-area-inset-top))' }}
         >
           <button
@@ -208,7 +205,7 @@ export default function PrepareSet() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-3 p-3 pb-24 sm:p-4">
+      <div className="mx-auto w-full max-w-[1500px] space-y-3 p-3 pb-24 sm:p-4">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 to-purple-900 p-4">
           <div className="pointer-events-none absolute right-4 top-4 grid grid-cols-3 gap-1.5 opacity-20">
             {[...Array(9)].map((_, i) => <div key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}

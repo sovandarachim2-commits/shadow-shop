@@ -198,19 +198,45 @@ export function PrintPreview({ order, type, printLogoUrl, printLogoSize, printQr
   )
 }
 
-function PaymentStatusStamp({ status }) {
+function PaymentStatusStamp({ status, method, compact = false }) {
   const paid = status === 'paid'
+  const stamp = (
+    <div
+      className={`inline-flex shrink-0 rounded-md border-2 font-semibold ${
+        compact
+          ? 'border-black px-2 py-0 text-[12px] leading-5 text-black'
+          : `px-4 py-0.5 text-[15px] leading-8 ${paid ? 'border-emerald-700 text-emerald-700' : 'border-red-600 text-red-600'}`
+      }`}
+    >
+      {paid ? 'បានបង់' : 'មិនទាន់បង់'}
+    </div>
+  )
+
+  if (compact) {
+    return (
+      <div style={{ fontFamily: KHMER_FONT_FAMILY, fontSynthesis: 'none' }}>
+        <p className="text-[12px] font-semibold leading-5">ការទូទាត់</p>
+        <div className="flex items-center justify-between gap-2 text-[12px] leading-5">
+          <p>
+            {method && <span>វិធីបង់ </span>}
+            {method && <span className="font-semibold">{paymentMethodLabel(method)}</span>}
+          </p>
+          {stamp}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <p className="mb-1 text-[12px] font-black">ការទូទាត់</p>
-      <div
-        className={`inline-flex rotate-[-4deg] rounded-md border-2 px-5 py-1 text-lg font-black tracking-wide ${
-          paid ? 'border-emerald-700 text-emerald-700' : 'border-red-600 text-red-600'
-        }`}
-      >
-        {paid ? 'បានបង់' : 'មិនទាន់បង់'}
-      </div>
+    <div className="py-0.5" style={{ fontFamily: KHMER_FONT_FAMILY, fontSynthesis: 'none' }}>
+      <p className="mb-1 text-[12px] font-semibold leading-7">ការទូទាត់</p>
+      {method && (
+        <p className="mb-2 text-[13px] leading-7">
+          <span className="text-gray-500">វិធីបង់ </span>
+          <span className="font-semibold">{paymentMethodLabel(method)}</span>
+        </p>
+      )}
+      <div className="-rotate-1">{stamp}</div>
     </div>
   )
 }
@@ -272,90 +298,108 @@ function ReceiptSlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) {
   const discount = Number(order.discount || 0)
   const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
   const grandTotalKhr = grandTotal * USD_TO_KHR_RATE
+  const transactionReference = order.transaction_reference || '-'
 
   return (
-    <div className="delivery-slip bg-white p-3 text-black">
+    <div
+      className="delivery-slip receipt-slip bg-white px-2.5 py-2 text-black"
+      style={{ fontFamily: KHMER_FONT_FAMILY, fontSynthesis: 'none', fontWeight: 700, lineHeight: 1.45, color: '#000000', WebkitTextFillColor: '#000000' }}
+    >
       <div className="text-center">
-        <PrintLogo printLogoUrl={printLogoUrl} size={printLogoSize} />
-        <div className="mt-2 text-sm font-black tracking-[0.14em]">RECEIPT</div>
+        <PrintLogo printLogoUrl={printLogoUrl} size={Math.min(printLogoSize || 48, 48)} />
+        <p className="mt-0.5 text-[13px] font-semibold leading-6">
+          បង្កាន់ដៃ
+          <span className="ml-1.5 text-[9px] font-semibold tracking-[0.12em] text-black">RECEIPT</span>
+        </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-[1fr_72px] items-start gap-2">
-        <div className="space-y-1 text-[11px] font-bold">
-          <p>Seller: {order.seller_name || 'Shadow Shop'}</p>
-          <p>Order Code: {order.order_number}</p>
+      <div className="mt-1 grid grid-cols-[1fr_58px] items-start gap-2 text-[12px]">
+        <div>
+          <p><span>អ្នកលក់ </span>{order.seller_name || 'Shadow Shop'}</p>
+          <p><span>លេខបញ្ជា </span>{order.order_number}</p>
         </div>
-        <PrintQr order={order} size={printQrSize} />
+        <PrintQr order={order} size={Math.min(printQrSize || 52, 52)} />
       </div>
 
-      <div className="my-3 border-t border-dashed border-black" />
+      <div className="my-1.5 border-t border-dashed border-black" />
 
-      <section>
-        <h3 className="mb-2 text-sm font-black tracking-[0.12em]">CUSTOMER</h3>
-        <div className="grid grid-cols-[72px_1fr] gap-y-1.5 text-[13px] font-bold">
-          <span>Name:</span>
-          <span>{customerName}</span>
-          <span>Phone:</span>
-          <span>{customerPhone}</span>
-          <span>Address:</span>
-          <span style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</span>
-        </div>
+      <section className="text-[12px]">
+        <h3 className="text-[12px] font-semibold leading-5">
+          អតិថិជន
+          <span className="ml-1.5 text-[9px] font-semibold tracking-[0.12em] text-black">CUSTOMER</span>
+        </h3>
+        <p className="flex items-start justify-between gap-3">
+          <span className="shrink-0">ឈ្មោះ</span>
+          <span className="text-right">{customerName}</span>
+        </p>
+        <p className="flex items-center justify-between gap-3">
+          <span className="shrink-0">លេខទូរស័ព្ទ</span>
+          <span className="inline-flex shrink-0 rounded-md border-2 border-black px-2 py-0 text-[12px] leading-5">{customerPhone}</span>
+        </p>
+        <p className="flex items-start justify-between gap-3">
+          <span className="shrink-0">ទីតាំង</span>
+          <span className="text-right">{customerAddress}</span>
+        </p>
       </section>
 
-      <div className="my-3 border-t border-dashed border-black" />
+      <div className="my-1.5 border-t border-dashed border-black" />
 
-      <PaymentStatusStamp status={order.payment_status} />
+      <PaymentStatusStamp status={order.payment_status} method={order.payment_method} compact />
+      <p className="mt-0.5 flex items-start justify-between gap-3 text-[12px] leading-5">
+        <span className="shrink-0">ប្រតិបត្តិការ</span>
+        <span className="text-right">{transactionReference}</span>
+      </p>
 
-      <div className="my-3 border-t border-dashed border-black" />
+      <div className="my-1.5 border-t border-dashed border-black" />
 
-      <table className="w-full border-collapse text-center text-[10px]">
+      <table className="w-full border-collapse text-center text-[11px]">
         <thead>
-          <tr className="bg-gray-300">
-            <th className="w-7 border border-black px-1 py-1.5">No</th>
-            <th className="border border-black px-1 py-1.5">Product</th>
-            <th className="w-8 border border-black px-1 py-1.5">Qty</th>
-            <th className="w-14 border border-black px-1 py-1.5">Price</th>
-            <th className="w-14 border border-black px-1 py-1.5">Amount</th>
+          <tr className="bg-white">
+            <th className="w-7 border border-black px-0.5 py-0.5 font-semibold leading-4">ល.រ</th>
+            <th className="border border-black px-1 py-0.5 font-semibold leading-4">ទំនិញ</th>
+            <th className="w-8 border border-black px-0.5 py-0.5 font-semibold leading-4">ចំនួន</th>
+            <th className="w-12 border border-black px-0.5 py-0.5 font-semibold leading-4">តម្លៃ</th>
+            <th className="w-14 border border-black px-0.5 py-0.5 font-semibold leading-4">ទឹកប្រាក់</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, index) => (
             <tr key={item.id || index}>
-              <td className="border border-black px-1 py-1.5">{index + 1}</td>
-              <td className="border border-black px-1.5 py-1.5 text-left">{formatProductQty(item)}</td>
-              <td className="border border-black px-1 py-1.5 font-bold">{item.quantity}</td>
-              <td className="border border-black px-1 py-1.5">{formatCurrency(item.unit_price || 0)}</td>
-              <td className="border border-black px-1 py-1.5 font-bold">{formatCurrency(item.total_price || 0)}</td>
+              <td className="border border-black px-0.5 py-0.5">{index + 1}</td>
+              <td className="border border-black px-1 py-0.5 text-left leading-5">{item.product_name || '-'}</td>
+              <td className="border border-black px-0.5 py-0.5 font-semibold">{item.quantity}</td>
+              <td className="border border-black px-0.5 py-0.5">{formatCurrency(item.unit_price || 0)}</td>
+              <td className="border border-black px-0.5 py-0.5 font-semibold">{formatCurrency(item.total_price || 0)}</td>
             </tr>
           ))}
           <tr>
-            <td className="border border-black px-1 py-1.5 text-right font-bold" colSpan={4}>Subtotal</td>
-            <td className="border border-black px-1 py-1.5 font-bold">{formatCurrency(subtotal)}</td>
+            <td className="border border-black px-1 py-0.5 text-right" colSpan={4}>Subtotal / សរុបរង</td>
+            <td className="border border-black px-0.5 py-0.5 font-semibold">{formatCurrency(subtotal)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-1 py-1.5 text-right font-bold" colSpan={4}>Delivery Fee</td>
-            <td className="border border-black px-1 py-1.5 font-bold">{formatCurrency(deliveryFee)}</td>
+            <td className="border border-black px-1 py-0.5 text-right" colSpan={4}>Delivery Fee / ថ្លៃដឹកជញ្ជូន</td>
+            <td className="border border-black px-0.5 py-0.5 font-semibold">{formatCurrency(deliveryFee)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-1 py-1.5 text-right font-bold" colSpan={4}>Discount</td>
-            <td className="border border-black px-1 py-1.5 font-bold">{formatCurrency(discount)}</td>
+            <td className="border border-black px-1 py-0.5 text-right" colSpan={4}>Discount / បញ្ចុះតម្លៃ</td>
+            <td className="border border-black px-0.5 py-0.5 font-semibold">-{formatCurrency(discount)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-1 py-2 text-right text-xs font-black" colSpan={4}>Grand Total</td>
-            <td className="border border-black px-1 py-2 text-xs font-black">{formatCurrency(grandTotal)}</td>
+            <td className="border border-black px-1 py-0.5 text-right font-semibold" colSpan={4}>Total / សរុបត្រូវបង់</td>
+            <td className="border border-black px-0.5 py-0.5 font-semibold">{formatCurrency(grandTotal)}</td>
           </tr>
           <tr>
-            <td className="border border-black px-1 py-2 text-right text-xs font-black" colSpan={4}>សរុបជារៀល</td>
-            <td className="border border-black px-1 py-2 text-xs font-black">{formatRiel(grandTotalKhr)}</td>
+            <td className="border border-black px-1 py-0.5 text-right font-semibold" colSpan={4}>សរុបជារៀល</td>
+            <td className="border border-black px-0.5 py-0.5 font-semibold">{formatRiel(grandTotalKhr)}</td>
           </tr>
         </tbody>
       </table>
 
-      <div className="my-3 border-t border-dashed border-black" />
-      <div className="text-[11px] font-bold">
+      <div className="my-1.5 border-t border-dashed border-black" />
+      <div className="text-[10px] leading-4 text-black">
         <p>អត្រាប្តូរប្រាក់: 1 USD = {formatRiel(USD_TO_KHR_RATE)}</p>
-        <p>Created: {formatDateTime(new Date().toISOString())}</p>
-        <p>Powered by : One Night Solution</p>
+        <p>Created: {formatDateTime(order.created_at || new Date().toISOString())}</p>
+        <p className="mt-1 text-center text-[12px] font-semibold leading-5">Powered by : One Night Solution</p>
       </div>
     </div>
   )
@@ -370,69 +414,85 @@ function DeliverySlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) 
     ? order.items
     : [{ id: 'preview', product_name: order.preview_name || '-', quantity: order.items_count || 1 }]
   const totalQty = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+  const transactionReference = order.transaction_reference || '-'
+  const slipStyle = { fontFamily: KHMER_FONT_FAMILY, fontSynthesis: 'none', fontWeight: 700, lineHeight: 1.45, color: '#000000', WebkitTextFillColor: '#000000' }
 
   return (
-    <div className="delivery-slip bg-white p-3 text-black">
+    <div className="delivery-slip note-slip bg-white px-2.5 py-2 text-black" style={slipStyle}>
       <div className="text-center">
-        <PrintLogo printLogoUrl={printLogoUrl} size={printLogoSize} />
-        <div className="mt-2 text-sm font-black tracking-[0.14em]">ប័ណ្ណដឹក / DELIVERY SLIP</div>
+        <PrintLogo printLogoUrl={printLogoUrl} size={Math.min(printLogoSize || 48, 48)} />
+        <p className="mt-0.5 text-[13px] font-semibold leading-6">
+          ប័ណ្ណដឹក
+          <span className="ml-1.5 text-[9px] font-semibold tracking-[0.12em]">DELIVERY SLIP</span>
+        </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-[1fr_72px] items-start gap-2">
-        <div className="space-y-1 text-[11px] font-bold">
-          <p>អ្នកលក់: {order.seller_name || 'Shadow Shop'}</p>
-          <p>លេខបញ្ជា: {order.order_number}</p>
+      <div className="mt-1 grid grid-cols-[1fr_58px] items-start gap-2 text-[12px]">
+        <div>
+          <p><span>អ្នកលក់ </span>{order.seller_name || 'Shadow Shop'}</p>
+          <p><span>លេខបញ្ជា </span>{order.order_number}</p>
         </div>
-        <PrintQr order={order} size={printQrSize} />
+        <PrintQr order={order} size={Math.min(printQrSize || 52, 52)} />
       </div>
 
-      <div className="my-3 border-t border-dashed border-black" />
+      <div className="my-1.5 border-t border-dashed border-black" />
 
-      <section>
-        <h3 className="mb-2 text-sm font-black tracking-[0.12em]">អតិថិជន / CUSTOMER</h3>
-        <div className="grid grid-cols-[72px_1fr] gap-y-1.5 text-[13px] font-bold">
-          <span>ឈ្មោះ:</span>
-          <span>{customerName}</span>
-          <span>លេខទូរស័ព្ទ</span>
-          <span>{customerPhone}</span>
-          <span>ទីតាំង</span>
-          <span style={{ fontFamily: KHMER_FONT_FAMILY }}>{customerAddress}</span>
-        </div>
+      <section className="text-[12px]">
+        <h3 className="text-[12px] font-semibold leading-5">
+          អតិថិជន
+          <span className="ml-1.5 text-[9px] font-semibold tracking-[0.12em]">CUSTOMER</span>
+        </h3>
+        <p className="flex items-start justify-between gap-3">
+          <span className="shrink-0">ឈ្មោះ</span>
+          <span className="text-right">{customerName}</span>
+        </p>
+        <p className="flex items-center justify-between gap-3">
+          <span className="shrink-0">លេខទូរស័ព្ទ</span>
+          <span className="inline-flex shrink-0 rounded-md border-2 border-black px-2 py-0 text-[12px] leading-5">{customerPhone}</span>
+        </p>
+        <p className="flex items-start justify-between gap-3">
+          <span className="shrink-0">ទីតាំង</span>
+          <span className="text-right">{customerAddress}</span>
+        </p>
       </section>
 
-      <div className="my-3 border-t border-dashed border-black" />
+      <div className="my-1.5 border-t border-dashed border-black" />
 
-      <PaymentStatusStamp status={order.payment_status} />
+      <PaymentStatusStamp status={order.payment_status} method={order.payment_method} compact />
+      <p className="mt-0.5 flex items-start justify-between gap-3 text-[12px] leading-5">
+        <span className="shrink-0">ប្រតិបត្តិការ</span>
+        <span className="text-right">{transactionReference}</span>
+      </p>
 
-      <div className="my-3 border-t border-dashed border-black" />
+      <div className="my-1.5 border-t border-dashed border-black" />
 
       <table className="w-full border-collapse text-center text-[11px]">
         <thead>
-          <tr className="bg-gray-300">
-            <th className="w-9 border border-black px-1 py-1.5">ល.រ<br />No</th>
-            <th className="border border-black px-1 py-1.5">ឈ្មោះទំនិញ<br />Product Name</th>
-            <th className="w-11 border border-black px-1 py-1.5">ចំនួន<br />Qty</th>
+          <tr className="bg-white">
+            <th className="w-7 border border-black px-0.5 py-0.5 font-semibold leading-4">ល.រ</th>
+            <th className="border border-black px-1 py-0.5 font-semibold leading-4">ទំនិញ</th>
+            <th className="w-8 border border-black px-0.5 py-0.5 font-semibold leading-4">ចំនួន</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item, index) => (
             <tr key={item.id || index}>
-              <td className="border border-black px-1 py-1.5">{index + 1}</td>
-              <td className="border border-black px-1.5 py-1.5 text-left">{formatProductQty(item)}</td>
-              <td className="border border-black px-1 py-1.5 font-bold">{item.quantity}</td>
+              <td className="border border-black px-0.5 py-0.5">{index + 1}</td>
+              <td className="border border-black px-1 py-0.5 text-left leading-5">{item.product_name || '-'}</td>
+              <td className="border border-black px-0.5 py-0.5 font-semibold">{item.quantity}</td>
             </tr>
           ))}
           <tr>
-            <td className="border border-black px-1 py-2 text-right font-black" colSpan={2}>សរុបចំនួន</td>
-            <td className="border border-black px-1 py-2 text-sm font-black">{totalQty}</td>
+            <td className="border border-black px-1 py-0.5 text-right" colSpan={2}>Total Qty / សរុបចំនួន</td>
+            <td className="border border-black px-0.5 py-0.5 font-semibold">{totalQty}</td>
           </tr>
         </tbody>
       </table>
 
-      <div className="my-3 border-t border-dashed border-black" />
-      <div className="text-[11px] font-bold">
-        <p>Created: {formatDateTime(new Date().toISOString())}</p>
-        <p>Powered by : One Night Solution</p>
+      <div className="my-1.5 border-t border-dashed border-black" />
+      <div className="text-[10px] leading-4">
+        <p>Created: {formatDateTime(order.created_at || new Date().toISOString())}</p>
+        <p className="mt-1 text-center text-[12px] font-semibold leading-5">Powered by : One Night Solution</p>
       </div>
     </div>
   )
@@ -501,6 +561,7 @@ export default function PrintCenter() {
     mutationFn: (orderIds) => ordersApi.orders.markPrinted(orderIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['print-orders'] })
+      queryClient.invalidateQueries({ queryKey: ['print-sessions'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['order-detail'] })
       setSelectedOrders([])
@@ -552,14 +613,24 @@ export default function PrintCenter() {
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-card">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="section-title">Print Type</h3>
-              <button
-                type="button"
-                onClick={() => navigate('/admin/print/history')}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-100 bg-purple-50 px-4 py-2 text-sm font-semibold text-purple-700 transition hover:border-purple-200 hover:bg-purple-100"
-              >
-                <FileText size={15} />
-                Print History
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/print/sessions')}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-100 bg-purple-50 px-4 py-2 text-sm font-semibold text-purple-700 transition hover:border-purple-200 hover:bg-purple-100"
+                >
+                  <FileText size={15} />
+                  Print Session
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/print/history')}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-100 bg-purple-50 px-4 py-2 text-sm font-semibold text-purple-700 transition hover:border-purple-200 hover:bg-purple-100"
+                >
+                  <FileText size={15} />
+                  Print History
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
               {PRINT_TYPES.map((t) => (

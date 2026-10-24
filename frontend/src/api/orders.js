@@ -33,6 +33,7 @@ export const ordersApi = {
     markPaid: (id, data) => client.post(`/orders/list/${id}/mark_paid/`, data),
     validatePrintStock: (orderIds) => client.post('/orders/list/validate_print_stock/', { order_ids: orderIds }),
     markPrinted: (orderIds) => client.post('/orders/list/mark_printed/', { order_ids: orderIds }),
+    printSessions: (params) => client.get('/orders/list/print_sessions/', { params }),
     generateQr: (id) => client.get(`/orders/list/${id}/generate_qr/`),
     today: () => client.get('/orders/list/today/'),
     kanban: () => client.get('/orders/list/kanban/'),

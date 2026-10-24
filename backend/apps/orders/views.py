@@ -601,6 +601,101 @@ class OrderViewSet(viewsets.ModelViewSet):
             'printed_order_ids': order_ids,
         })
 
+    @action(detail=False, methods=['get'])
+    def print_sessions(self, request):
+        search = (request.query_params.get('search') or '').strip()
+        try:
+            page = max(int(request.query_params.get('page') or 1), 1)
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(max(int(request.query_params.get('page_size') or 100), 1), 100)
+        except (TypeError, ValueError):
+            page_size = 100
+
+        base = Order.objects.filter(is_draft=False, printed_at__isnull=False)
+        if search:
+            matched_keys = (
+                base.filter(
+                    Q(order_number__icontains=search)
+                    | Q(printed_by__first_name__icontains=search)
+                    | Q(printed_by__last_name__icontains=search)
+                    | Q(printed_by__username__icontains=search)
+                    | Q(items__product_name__icontains=search)
+                )
+                .order_by()
+                .values_list('printed_at', 'printed_by_id')
+                .distinct()
+            )
+            key_filter = Q()
+            for printed_at, cashier_id in matched_keys:
+                key_filter |= Q(printed_at=printed_at, printed_by_id=cashier_id)
+            orders = base.filter(key_filter) if key_filter else base.none()
+        else:
+            orders = base
+
+        orders = orders.select_related('printed_by').prefetch_related('items').order_by('-printed_at', '-id')
+        sessions = []
+        session_by_key = {}
+        for order in orders:
+            key = (order.printed_at, order.printed_by_id)
+            session = session_by_key.get(key)
+            if session is None:
+                cashier = order.printed_by
+                cashier_name = '-'
+                if cashier:
+                    cashier_name = (cashier.get_full_name() or '').strip() or cashier.username
+                session = {
+                    'id': f'{order.printed_at.isoformat()}|{order.printed_by_id or 0}',
+                    'printed_at': order.printed_at,
+                    'cashier': cashier_name,
+                    'orders': 0,
+                    'items': 0,
+                    'order_numbers': [],
+                    'products': {},
+                }
+                session_by_key[key] = session
+                sessions.append(session)
+
+            session['orders'] += 1
+            session['order_numbers'].append(order.order_number)
+            for item in order.items.all():
+                quantity = int(item.quantity or 0)
+                session['items'] += quantity
+                product_key = (item.product_id or 0, item.product_set_id or 0, item.product_name, item.product_code)
+                product = session['products'].get(product_key)
+                if product is None:
+                    product = {
+                        'name': item.product_name or '-',
+                        'code': item.product_code or '',
+                        'quantity': 0,
+                    }
+                    session['products'][product_key] = product
+                product['quantity'] += quantity
+
+        total = len(sessions)
+        start = (page - 1) * page_size
+        page_rows = sessions[start:start + page_size]
+        results = []
+        for session in page_rows:
+            products = sorted(session['products'].values(), key=lambda row: (row['name'] or '').lower())
+            results.append({
+                'id': session['id'],
+                'printed_at': session['printed_at'],
+                'cashier': session['cashier'],
+                'orders': session['orders'],
+                'items': session['items'],
+                'order_numbers': session['order_numbers'],
+                'products': products,
+            })
+
+        return Response({
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+            'results': results,
+        })
+
     @action(detail=True, methods=['get'])
     def generate_qr(self, request, pk=None):
         import qrcode

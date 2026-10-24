@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Box,
-  ChevronRight,
   Gift,
   RotateCcw,
   Truck,
@@ -25,7 +24,6 @@ function ScannerAction({ icon: Icon, iconClass, title, onClick, disabled }) {
       <div className="min-w-0 flex-1">
         <p className="text-base font-black leading-tight text-gray-950 sm:text-sm">{title}</p>
       </div>
-      <ChevronRight size={18} className="shrink-0 text-gray-300" />
     </button>
   )
 }
@@ -51,7 +49,7 @@ export default function Scanner() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] animate-fade-in">
+    <div className="w-full animate-fade-in">
       <div className="space-y-7">
         <section className="rounded-lg bg-gradient-to-r from-purple-800 to-purple-600 p-3 shadow-sm sm:p-4">
           <div className="mb-3 flex items-center justify-between">

@@ -21,7 +21,7 @@ export function Badge({ children, variant = 'default', className, dot }) {
   )
 }
 
-export function OrderStatusBadge({ status }) {
+export function OrderStatusBadge({ status, className }) {
   const map = {
     new: { variant: 'info', label: 'New' },
     confirmed: { variant: 'primary', label: 'Confirmed' },
@@ -33,10 +33,10 @@ export function OrderStatusBadge({ status }) {
     cancelled: { variant: 'danger', label: 'Cancelled' },
   }
   const conf = map[status] || { variant: 'default', label: status }
-  return <Badge variant={conf.variant} dot>{conf.label}</Badge>
+  return <Badge variant={conf.variant} dot className={className}>{conf.label}</Badge>
 }
 
-export function PaymentStatusBadge({ status }) {
+export function PaymentStatusBadge({ status, className }) {
   const map = {
     paid: { variant: 'success', label: 'Paid' },
     unpaid: { variant: 'danger', label: 'Unpaid' },
@@ -44,5 +44,5 @@ export function PaymentStatusBadge({ status }) {
     refunded: { variant: 'default', label: 'Refunded' },
   }
   const conf = map[status] || { variant: 'default', label: status }
-  return <Badge variant={conf.variant}>{conf.label}</Badge>
+  return <Badge variant={conf.variant} className={className}>{conf.label}</Badge>
 }

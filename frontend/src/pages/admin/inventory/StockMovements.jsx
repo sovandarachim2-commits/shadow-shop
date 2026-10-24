@@ -38,7 +38,7 @@ const TYPE_LABELS = {
   return: 'Return',
 }
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50]
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 function formatTime(value) {
   if (!value) return '-'
@@ -93,7 +93,7 @@ export default function StockMovements() {
   const [product, setProduct] = useState('')
   const [date, setDate] = useState('')
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(100)
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-movements-layout'],

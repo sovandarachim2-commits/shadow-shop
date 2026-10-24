@@ -11,10 +11,28 @@ class StockSerializer(serializers.ModelSerializer):
     inventories = serializers.SerializerMethodField()
     is_low_stock = serializers.BooleanField(read_only=True)
     is_out_of_stock = serializers.BooleanField(read_only=True)
+    sold_qty = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Stock
         fields = '__all__'
+
+    def get_category_name(self, obj):
+        category = getattr(obj.product, 'category', None)
+        return category.name if category else ''
+
+    def get_sold_qty(self, obj):
+        annotated = obj.__dict__.get('sold_qty')
+        if annotated is not None:
+            return annotated
+        from apps.orders.models import OrderItem
+        total = OrderItem.objects.filter(
+            product_id=obj.product_id,
+            order__is_draft=False,
+            order__status__in=['new', 'confirmed', 'printed', 'preparing', 'packed', 'shipped', 'completed'],
+        ).aggregate(total=Sum('quantity'))['total']
+        return total or 0
 
     def get_product_image(self, obj):
         img = obj.product.images.filter(is_primary=True).first()
@@ -170,6 +188,15 @@ class StockTransferSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockTransfer
         fields = '__all__'
+        read_only_fields = [
+            'transfer_number',
+            'status',
+            'created_by',
+            'approved_by',
+            'completed_at',
+            'created_at',
+            'updated_at',
+        ]
 
     def get_created_by_name(self, obj):
         return obj.created_by.get_full_name() if obj.created_by else 'System'

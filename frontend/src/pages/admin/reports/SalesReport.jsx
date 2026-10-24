@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { BarChart3, CalendarDays, ChevronDown, Eye, FileSpreadsheet, Loader2, PackageCheck, Printer, Save, Search, ShoppingBag, DollarSign, X } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronDown, Eye, FileSpreadsheet, PackageCheck, Printer, Search, ShoppingBag, DollarSign, X } from 'lucide-react'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { productsApi } from '@/api/products'
@@ -103,7 +103,7 @@ function displayOrderStatus(value) {
 function SellerBadge({ name }) {
   const sellerName = name || 'Shadow Shop'
   return (
-    <Badge variant={sellerName === 'Shadow Shop' ? 'pink' : 'info'}>
+    <Badge variant={sellerName === 'Shadow Shop' ? 'pink' : 'info'} className="text-sm font-semibold">
       {sellerName}
     </Badge>
   )
@@ -120,12 +120,12 @@ function ProductPill({ value }) {
       {products.length ? products.map((product) => (
         <span
           key={product}
-          className="inline-flex max-w-full items-center rounded-lg bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700"
+          className="inline-flex max-w-full items-center rounded-lg bg-purple-50 px-2.5 py-1 text-sm font-semibold text-purple-700"
         >
           <span className="truncate">{product}</span>
         </span>
       )) : (
-        <span className="text-xs font-semibold text-gray-400">-</span>
+        <span className="text-sm font-semibold text-black">-</span>
       )}
     </div>
   )
@@ -134,7 +134,7 @@ function ProductPill({ value }) {
 function ItemsPill({ count }) {
   const label = count || 0
   return (
-    <Badge variant="indigo">{label}</Badge>
+    <Badge variant="indigo" className="text-sm font-semibold">{label}</Badge>
   )
 }
 
@@ -204,34 +204,36 @@ function StatusProcessModal({ order, onClose }) {
   )
 }
 
+const fieldClass = 'h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-800 outline-none focus:border-purple-500 focus:bg-white'
+
 function CheckboxDropdown({ label, options, selected, allLabel, emptyLabel, onToggle }) {
   const selectedText = selected.length
     ? options.filter((option) => selected.includes(String(option.value))).map((option) => option.label).join(', ')
     : allLabel
 
   return (
-    <div className="relative">
-      <span className="block text-xs font-medium text-gray-500 mb-1">{label}</span>
-      <details className="group">
-        <summary className="form-input flex h-11 cursor-pointer list-none items-center justify-between gap-2">
+    <div className="relative min-w-0">
+      <span className="mb-1 block text-xs font-semibold text-slate-500">{label}</span>
+      <details className="relative">
+        <summary className={`${fieldClass} flex cursor-pointer list-none items-center justify-between gap-2`}>
           <span className="truncate">{selectedText}</span>
-          <ChevronDown size={16} className="shrink-0 text-gray-400 transition group-open:rotate-180" />
+          <ChevronDown size={14} className="shrink-0 text-gray-400" />
         </summary>
-        <div className="absolute z-30 mt-2 max-h-64 w-full min-w-56 overflow-y-auto rounded-lg border border-gray-100 bg-white p-3 shadow-lg">
+        <div className="absolute left-0 top-12 z-50 max-h-72 w-60 overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
           {options.length === 0 ? (
-            <p className="text-sm text-gray-400">{emptyLabel}</p>
+            <p className="px-2 py-2 text-sm font-semibold text-gray-400">{emptyLabel}</p>
           ) : options.map((option) => {
             const value = String(option.value)
             return (
-              <label key={value} className="flex items-center gap-2 py-1.5 text-sm text-gray-700">
+              <label key={value} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-gray-50">
                 <input
                   type="checkbox"
                   checked={selected.length === 0 || selected.includes(value)}
                   onChange={() => onToggle(value)}
-                  className="h-4 w-4 rounded accent-purple-600"
+                  className="accent-purple-600"
                 />
-                <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+                <span className="min-w-0 flex-1 truncate font-semibold text-gray-800">{option.label}</span>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-400">
                   {option.count ?? 0}
                 </span>
               </label>
@@ -252,46 +254,46 @@ function DateDropdown({ value, dateFrom, dateTo, onPresetChange, onDateChange })
     : datePresets.find((preset) => preset.value === value)?.label
 
   return (
-    <div className="relative">
-      <span className="block text-xs font-medium text-gray-500 mb-1">Date</span>
-      <details className="group">
-        <summary className="form-input flex h-11 cursor-pointer list-none items-center justify-between gap-2">
+    <div className="relative min-w-0">
+      <span className="mb-1 block text-xs font-semibold text-slate-500">Order date (when order was created)</span>
+      <details className="relative">
+        <summary className={`${fieldClass} flex cursor-pointer list-none items-center justify-between gap-2`}>
           <span className="truncate">{selectedText}</span>
-          <ChevronDown size={16} className="shrink-0 text-gray-400 transition group-open:rotate-180" />
+          <ChevronDown size={14} className="shrink-0 text-gray-400" />
         </summary>
-        <div className="absolute z-30 mt-2 w-full min-w-60 rounded-lg border border-gray-100 bg-white p-3 shadow-lg">
-          <div className="space-y-2">
+        <div className="absolute left-0 top-12 z-50 w-64 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
+          <div className="space-y-1">
             {datePresets.map((preset) => (
-              <label key={preset.value} className="flex items-center gap-2 text-sm text-gray-700">
+              <label key={preset.value} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
                 <input
                   type="radio"
                   name="sales-report-date-preset"
                   checked={value === preset.value}
                   onChange={() => onPresetChange(preset.value)}
-                  className="h-4 w-4 accent-purple-600"
+                  className="accent-purple-600"
                 />
                 {preset.label}
               </label>
             ))}
           </div>
           {value === 'custom' && (
-            <div className="mt-3 grid grid-cols-1 gap-3">
+            <div className="mt-2 grid grid-cols-1 gap-2 border-t border-gray-100 px-2 pt-2">
               <label className="block">
-                <span className="block text-xs font-medium text-gray-500 mb-1">From</span>
+                <span className="mb-1 block text-xs font-semibold text-slate-500">From</span>
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => onDateChange('date_from', e.target.value)}
-                  className="form-input"
+                  className={fieldClass}
                 />
               </label>
               <label className="block">
-                <span className="block text-xs font-medium text-gray-500 mb-1">To</span>
+                <span className="mb-1 block text-xs font-semibold text-slate-500">To</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => onDateChange('date_to', e.target.value)}
-                  className="form-input"
+                  className={fieldClass}
                 />
               </label>
             </div>
@@ -553,7 +555,7 @@ export default function SalesReport() {
     })
   }
 
-  const reportRowsHtml = () => orderRows.map((row) => {
+  const reportRowsHtml = () => orderRows.map((row, index) => {
     const products = productLines(row.product_summary)
     const productHtml = products.length
       ? products.map((product) => escapeHtml(product)).join('<br>')
@@ -561,6 +563,7 @@ export default function SalesReport() {
 
     return `
       <tr>
+        <td>${index + 1}</td>
         <td>${formatDate(row.received_at, 'MMM dd, yyyy')}</td>
         <td>${escapeHtml(row.order_number || '-')}</td>
         <td>${escapeHtml(row.customer_name || '-')}</td>
@@ -606,9 +609,9 @@ export default function SalesReport() {
     <div><span>Avg Order Value</span><strong>${formatCurrency(avgOrderValue)}</strong></div>
   </div>
   <table>
-    <thead><tr><th>Date</th><th>Order Code</th><th>Customer</th><th>Phone</th><th>Seller</th><th>Product</th><th>Items</th><th class="right">Total Amount</th><th>Payment Status</th><th>Order Status</th></tr></thead>
+    <thead><tr><th>No</th><th>Order Date</th><th>Order Code</th><th>Customer</th><th>Phone</th><th>Seller</th><th>Product</th><th>Items</th><th class="right">Total Amount</th><th>Payment Status</th><th>Order Status</th></tr></thead>
     <tbody>${reportRowsHtml()}</tbody>
-    <tfoot><tr><td>Total</td><td class="right">${totals.total_orders} orders</td><td></td><td></td><td></td><td></td><td>${totals.total_items}</td><td class="right">${Number(totals.total_revenue).toFixed(2)}</td><td></td><td></td></tr></tfoot>
+    <tfoot><tr><td></td><td>Total</td><td class="right">${totals.total_orders} orders</td><td></td><td></td><td></td><td></td><td>${totals.total_items}</td><td class="right">${Number(totals.total_revenue).toFixed(2)}</td><td></td><td></td></tr></tfoot>
   </table>
 </body>
 </html>`
@@ -625,16 +628,6 @@ export default function SalesReport() {
       'application/vnd.ms-excel;charset=utf-8;',
     )
     toast.success('Sales report exported to Excel')
-  }
-
-  const saveReport = () => {
-    if (orderRows.length === 0) {
-      toast.error('No report data to save')
-      return
-    }
-
-    downloadFile(buildReportHtml(), `sales-report-${reportFileDate()}.html`, 'text/html;charset=utf-8;')
-    toast.success('Sales report saved')
   }
 
   const printReport = () => {
@@ -662,37 +655,37 @@ export default function SalesReport() {
   }
 
   return (
-    <div className={receiptOrderId ? '' : 'print-preview-window'}>
-      <div className="page-header no-print">
+    <div className={`${receiptOrderId ? '' : 'print-preview-window'} space-y-4`}>
+      <div className="page-header no-print mb-0">
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Sales Report</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Sales performance and order analytics</p>
+          <p className="mt-0.5 text-sm text-gray-500">Sales performance and order analytics</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: 'Total Amount', value: formatCurrency(totals.total_revenue), icon: DollarSign, color: 'text-green-600 bg-green-100' },
-          { label: 'Orders', value: totals.total_orders, icon: ShoppingBag, color: 'text-blue-600 bg-blue-100' },
-          { label: 'Items Sold', value: totals.total_items, icon: PackageCheck, color: 'text-purple-600 bg-purple-100' },
-          { label: 'Avg Order Value', value: formatCurrency(avgOrderValue), icon: BarChart3, color: 'text-pink-600 bg-pink-100' },
+          { label: 'Total Amount', value: formatCurrency(totals.total_revenue), icon: DollarSign, color: 'bg-green-100 text-green-600', valueColor: 'text-emerald-700' },
+          { label: 'Orders', value: totals.total_orders, icon: ShoppingBag, color: 'bg-sky-100 text-sky-600', valueColor: 'text-sky-700' },
+          { label: 'Items Sold', value: totals.total_items, icon: PackageCheck, color: 'bg-purple-100 text-purple-600', valueColor: 'text-purple-700' },
+          { label: 'Avg Order Value', value: formatCurrency(avgOrderValue), icon: BarChart3, color: 'bg-pink-100 text-pink-600', valueColor: 'text-pink-600' },
         ].map((k) => (
           <div key={k.label} className="kpi-card">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-gray-500">{k.label}</p>
-                <p className="text-xl font-bold text-gray-900 mt-1">{k.value}</p>
+                <p className="text-sm font-semibold text-gray-500">{k.label}</p>
+                <p className={`mt-1 text-2xl font-bold ${k.valueColor}`}>{k.value}</p>
               </div>
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${k.color}`}>
-                <k.icon size={20} />
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${k.color}`}>
+                <k.icon size={22} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="form-card mt-6 no-print">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+      <section className="relative z-20 rounded-2xl border border-gray-100 bg-white p-4 shadow-card no-print">
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-9">
           <DateDropdown
             value={filters.date_preset}
             dateFrom={filters.date_from}
@@ -748,15 +741,15 @@ export default function SalesReport() {
             emptyLabel="No payment methods found"
             onToggle={(value) => toggleMultiFilter('payment_methods', value, paymentMethods.map((option) => option.value))}
           />
-          <label className="block xl:col-span-1">
-            <span className="block text-xs font-medium text-gray-500 mb-1">Search</span>
+          <label className="min-w-0">
+            <span className="mb-1 block text-xs font-semibold text-slate-500">Search</span>
             <div className="relative">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="search"
                 value={filters.search}
                 onChange={(e) => updateFilter('search', e.target.value)}
-                className="form-input h-11 pl-9"
+                className={`${fieldClass} pl-9`}
                 placeholder="Order, customer, product"
               />
             </div>
@@ -765,17 +758,17 @@ export default function SalesReport() {
             <button
               type="button"
               onClick={resetFilters}
-              className="btn-secondary h-11 w-full"
+              className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               Reset
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {summaryRows.length > 0 && (
-        <div className="form-card mt-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Daily Sales Trend</h3>
+        <div className="form-card">
+          <h2 className="mb-4 text-sm font-semibold text-gray-900">Daily Sales Trend</h2>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={summaryRows}>
               <defs>
@@ -795,172 +788,156 @@ export default function SalesReport() {
         </div>
       )}
 
-      <div className="form-card mt-6">
-        <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h3 className="font-semibold text-gray-900">Sales Report List</h3>
-            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+      <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto border-b border-gray-100 px-3 py-2">
+          <div className="min-w-0 shrink-0">
+            <h2 className="text-sm font-semibold text-gray-900">Sales Report List</h2>
+            <div className="mt-0.5 flex items-center gap-2 text-xs font-semibold text-slate-400">
               <CalendarDays size={14} />
               <span>{orderRows.length} orders</span>
               <span className="hidden sm:inline">| {filterSummary}</span>
             </div>
           </div>
-          <div className="no-print grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <button type="button" onClick={exportExcel} disabled={isLoading || orderRows.length === 0} className="btn-secondary h-10 justify-center disabled:opacity-50">
-              <FileSpreadsheet size={16} />
+          <div className="no-print ml-auto flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={exportExcel} disabled={isLoading || orderRows.length === 0} className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 sm:h-9 sm:px-3 sm:text-sm">
+              <FileSpreadsheet size={15} />
               Excel
             </button>
-            <button type="button" onClick={printReport} disabled={isLoading || orderRows.length === 0} className="btn-secondary h-10 justify-center disabled:opacity-50">
-              <Printer size={16} />
+            <button type="button" onClick={printReport} disabled={isLoading || orderRows.length === 0} className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-purple-600 px-2 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50 sm:h-9 sm:px-3 sm:text-sm">
+              <Printer size={15} />
               Print
-            </button>
-            <button type="button" onClick={saveReport} disabled={isLoading || orderRows.length === 0} className="btn-primary h-10 justify-center disabled:opacity-50">
-              <Save size={16} />
-              Save
             </button>
           </div>
         </div>
         {isLoading ? (
-          <div className="space-y-3">
-            {[...Array(6)].map((_, i) => <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />)}
+          <div className="space-y-3 p-4">
+            {[...Array(6)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-gray-100" />)}
           </div>
         ) : orderRows.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <BarChart3 size={40} className="mx-auto mb-3 opacity-30" />
-            <p>No sales data available</p>
+          <div className="py-16 text-center text-gray-400">
+            <BarChart3 size={36} className="mx-auto mb-3 opacity-30" />
+            <p className="text-sm font-semibold">No sales data available</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Date</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Order Code</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Customer</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Phone</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Seller</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Product</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Items</th>
-                  <th className="text-right py-3 px-4 text-gray-500 font-medium">Total Amount</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Payment Status</th>
-                  <th className="text-left py-3 px-4 text-gray-500 font-medium">Order Status</th>
-                  <th className="no-print text-left py-3 px-4 text-gray-500 font-medium">View</th>
+            <table className="w-max min-w-full">
+              <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">No</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-left">Order Date</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-left">Order Code</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-left">Customer</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-left">Phone</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-left">Seller</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-left">Product</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">Items</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">Total Amount</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">Payment Status</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-center">Order Status</th>
+                  <th className="no-print whitespace-nowrap px-4 py-3 text-center">View</th>
                 </tr>
               </thead>
-              <tbody>
-                {orderRows.map((row) => (
-                  <tr key={row.id} className="data-table-row">
-                    <td className="py-3 px-4 whitespace-nowrap text-gray-600">
+              <tbody className="divide-y divide-gray-100">
+                {orderRows.map((row, index) => (
+                  <tr key={row.id} className="hover:bg-gray-50">
+                    <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-sm font-bold text-black">{index + 1}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-left align-middle text-sm font-semibold text-black">
                       {formatDate(row.received_at, 'MMM dd, yyyy')}
                     </td>
-                    <td className="py-3 px-4 font-mono font-medium text-purple-700 whitespace-nowrap">{row.order_number || '-'}</td>
-                    <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{row.customer_name || '-'}</td>
-                    <td className="py-3 px-4 text-gray-600 whitespace-nowrap">{row.customer_phone || '-'}</td>
-                    <td className="py-3 px-4 whitespace-nowrap"><SellerBadge name={row.seller_name} /></td>
-                    <td className="py-3 px-4 max-w-xs"><ProductPill value={row.product_summary} /></td>
-                    <td className="py-3 px-4 text-gray-600 max-w-sm">
+                    <td className="whitespace-nowrap px-4 py-3 text-left align-middle text-sm font-bold text-purple-700">{row.order_number || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-left align-middle text-sm font-semibold text-black">{row.customer_name || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-left align-middle text-sm font-semibold text-black">{row.customer_phone || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-left align-middle text-sm font-semibold"><SellerBadge name={row.seller_name} /></td>
+                    <td className="max-w-xs px-4 py-3 text-left align-middle text-sm"><ProductPill value={row.product_summary} /></td>
+                    <td className="px-4 py-3 text-center align-middle text-sm font-bold text-indigo-700">
                       <ItemsPill count={row.items_count} />
                     </td>
-                    <td className="py-3 px-4 text-right font-semibold text-green-700">{formatCurrency(row.amount)}</td>
-                    <td className="py-3 px-4 whitespace-nowrap"><PaymentStatusBadge status={row.payment_status} /></td>
-                    <td className="py-3 px-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-sm font-bold text-emerald-700">{formatCurrency(row.amount)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-sm"><PaymentStatusBadge status={row.payment_status} className="text-sm font-semibold" /></td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center align-middle text-sm">
                       <button
                         type="button"
                         onClick={() => setProcessOrder(row)}
                         className="inline-flex rounded-lg transition hover:ring-2 hover:ring-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-200"
                         title="View process date and time"
                       >
-                        <OrderStatusBadge status={row.order_status} />
+                        <OrderStatusBadge status={row.order_status} className="text-sm font-semibold" />
                       </button>
                     </td>
-                    <td className="no-print py-3 px-4 whitespace-nowrap">
+                    <td className="no-print whitespace-nowrap px-4 py-3 text-center align-middle">
                       {row.order_id ? (
                         <button
                           type="button"
                           onClick={() => setReceiptOrderId(row.order_id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
+                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700"
                         >
                           <Eye size={14} />
                           View
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-400">-</span>
+                        <span className="text-sm font-semibold text-black">-</span>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-gray-200 bg-gray-50 font-semibold">
-                  <td className="py-3 px-4 text-gray-900">Total</td>
-                  <td className="py-3 px-4 text-right text-gray-900">{totals.total_orders} orders</td>
-                  <td className="py-3 px-4" />
-                  <td className="py-3 px-4" />
-                  <td className="py-3 px-4" />
-                  <td className="py-3 px-4" />
-                  <td className="py-3 px-4 text-right text-gray-900">{totals.total_items} items</td>
-                  <td className="py-3 px-4 text-right text-green-700">{formatCurrency(totals.total_revenue)}</td>
-                  <td className="py-3 px-4" />
-                  <td className="py-3 px-4" />
-                  <td className="no-print py-3 px-4" />
+                <tr>
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-bold text-gray-900">Total</td>
+                  <td className="whitespace-nowrap border-t border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-bold text-gray-900">{totals.total_orders} orders</td>
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="whitespace-nowrap border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-sm font-bold text-indigo-700">{totals.total_items}</td>
+                  <td className="whitespace-nowrap border-t border-gray-200 bg-gray-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">{formatCurrency(totals.total_revenue)}</td>
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="border-t border-gray-200 bg-gray-50 px-4 py-3" />
+                  <td className="no-print border-t border-gray-200 bg-gray-50 px-4 py-3" />
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
-      </div>
+      </section>
       {receiptOrderId && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/55 p-3 backdrop-blur-sm sm:p-5"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/50 p-4 backdrop-blur-sm"
           onClick={closeReceipt}
         >
           <div
-            className="flex max-h-[92vh] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            className="max-h-[90vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="no-print flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3">
+            <div className="no-print flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-purple-600">Order Receipt</p>
-                <h3 className="text-base font-semibold text-gray-950">
-                  {receiptOrder?.order_number ? `#${receiptOrder.order_number}` : 'Loading receipt'}
-                </h3>
+                <h3 className="text-lg font-bold text-gray-900">Order Preview</h3>
+                <p className="text-xs capitalize text-gray-400">Receipt document</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  disabled={!receiptOrder}
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
-                >
-                  <Printer size={16} />
-                  Print
-                </button>
-                <button
-                  type="button"
-                  onClick={closeReceipt}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-600 transition hover:bg-gray-200"
-                  aria-label="Close receipt"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={closeReceipt}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-lg leading-none text-gray-500 hover:bg-gray-200"
+                aria-label="Close receipt"
+              >
+                ×
+              </button>
             </div>
-            <div className="print-preview-window min-h-0 flex-1 overflow-y-auto bg-gray-100 px-3 py-4 text-gray-950">
+            <div className="print-preview-window flex max-h-[calc(90vh-73px)] flex-col items-center overflow-auto bg-gray-50 p-4 text-gray-950">
               {isReceiptLoading || !receiptOrder ? (
-                <div className="flex min-h-[360px] items-center justify-center text-sm font-semibold text-gray-500">
-                  <Loader2 size={18} className="mr-2 animate-spin" />
-                  Loading receipt...
+                <div className="w-full rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center">
+                  <Printer size={28} className="mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm font-semibold text-gray-500">Loading preview...</p>
                 </div>
               ) : (
-                <div className="mx-auto w-full max-w-[420px] bg-white shadow-xl">
-                  <PrintPreview
-                    order={receiptOrder}
-                    type="receipt"
-                    printLogoUrl={siteSettings?.print_logo_url || null}
-                    printLogoSize={siteSettings?.print_logo_size || 64}
-                    printQrSize={siteSettings?.print_qr_size || 68}
-                  />
-                </div>
+                <PrintPreview
+                  order={receiptOrder}
+                  type="receipt"
+                  printLogoUrl={siteSettings?.print_logo_url || null}
+                  printLogoSize={siteSettings?.print_logo_size || 64}
+                  printQrSize={siteSettings?.print_qr_size || 68}
+                />
               )}
             </div>
           </div>

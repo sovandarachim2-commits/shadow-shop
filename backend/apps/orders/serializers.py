@@ -252,6 +252,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     status_changed_at = serializers.SerializerMethodField()
     prepared_at = serializers.SerializerMethodField()
     out_at = serializers.SerializerMethodField()
+    prepared_by_name = serializers.SerializerMethodField()
+    out_by_name = serializers.SerializerMethodField()
     delivery_by = serializers.SerializerMethodField()
 
     class Meta:
@@ -262,7 +264,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'grand_total', 'items_count', 'preview_image', 'preview_name',
             'items_preview', 'is_draft', 'printed_at', 'printed_by_name', 'created_at',
             'updated_at', 'status_changed_by_name', 'status_changed_at',
-            'prepared_at', 'out_at',
+            'prepared_at', 'out_at', 'prepared_by_name', 'out_by_name',
             'prepare_invoice_photo', 'prepare_package_photo',
             'out_invoice_photo', 'out_package_photo', 'out_delivery_by', 'delivery_by',
         ]
@@ -338,17 +340,30 @@ class OrderListSerializer(serializers.ModelSerializer):
         history = self._latest_current_status_history(obj)
         return history.created_at if history else obj.updated_at
 
-    def get_prepared_at(self, obj):
+    def _status_actor_name(self, history):
+        if not history or not history.changed_by:
+            return ''
+        return history.changed_by.get_full_name() or history.changed_by.username
+
+    def _latest_status_history(self, obj, status):
         for item in obj.status_history.all():
-            if item.status == Order.STATUS_PREPARING:
-                return item.created_at
+            if item.status == status:
+                return item
         return None
 
+    def get_prepared_at(self, obj):
+        history = self._latest_status_history(obj, Order.STATUS_PREPARING)
+        return history.created_at if history else None
+
     def get_out_at(self, obj):
-        for item in obj.status_history.all():
-            if item.status == Order.STATUS_SHIPPED:
-                return item.created_at
-        return None
+        history = self._latest_status_history(obj, Order.STATUS_SHIPPED)
+        return history.created_at if history else None
+
+    def get_prepared_by_name(self, obj):
+        return self._status_actor_name(self._latest_status_history(obj, Order.STATUS_PREPARING))
+
+    def get_out_by_name(self, obj):
+        return self._status_actor_name(self._latest_status_history(obj, Order.STATUS_SHIPPED))
 
     def get_delivery_by(self, obj):
         if obj.out_delivery_by:
@@ -368,6 +383,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     profit = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
     payment_at = serializers.SerializerMethodField()
+    transaction_reference = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -375,6 +391,18 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_seller_name(self, obj):
         return display_seller_name(obj)
+
+    def get_transaction_reference(self, obj):
+        revenue = getattr(obj, 'revenue', None)
+        if revenue and revenue.reference:
+            return revenue.reference
+        aba = getattr(obj, 'aba_payment', None)
+        if aba and (aba.apv or aba.tran_id):
+            return aba.apv or aba.tran_id
+        bakong = getattr(obj, 'bakong_payment', None)
+        if bakong and isinstance(bakong.response_data, dict):
+            return bakong.response_data.get('externalRef') or bakong.response_data.get('hash') or ''
+        return ''
 
     def get_payment_at(self, obj):
         for name in ('bakong_payment', 'aba_payment'):

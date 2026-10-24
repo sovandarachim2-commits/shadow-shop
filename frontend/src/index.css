@@ -223,6 +223,26 @@ html[lang="km"] textarea {
   }
 }
 
+.receipt-slip,
+.receipt-slip *,
+.note-slip,
+.note-slip *,
+.session-slip,
+.session-slip * {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  border-color: #000000 !important;
+  font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer OS', sans-serif !important;
+  font-synthesis: none !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+}
+
+.session-slip,
+.session-slip * {
+  text-align: center !important;
+}
+
 @media print {
   body * {
     visibility: hidden !important;
@@ -283,7 +303,33 @@ html[lang="km"] textarea {
   .delivery-slip {
     width: 80mm !important;
     min-height: auto;
-    font-family: Arial, 'Noto Sans Khmer', sans-serif;
+    font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer OS', Arial, sans-serif;
+    font-synthesis: none;
+    line-height: 1.7;
+  }
+  .receipt-slip,
+  .receipt-slip *,
+  .note-slip,
+  .note-slip *,
+  .session-slip,
+  .session-slip * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border-color: #000000 !important;
+    font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer OS', sans-serif !important;
+    font-synthesis: none !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+    line-height: 1.35;
+  }
+  .session-slip,
+  .session-slip * {
+    text-align: center !important;
+  }
+  .session-slip {
+    width: 80mm !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
   * {
     -webkit-print-color-adjust: exact !important;

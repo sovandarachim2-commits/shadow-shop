@@ -124,7 +124,6 @@ export default function PrepareSetHistory() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [limit, setLimit] = useState(100)
-  const [showSearch, setShowSearch] = useState(false)
   const [previewImage, setPreviewImage] = useState(null)
 
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -195,13 +194,6 @@ export default function PrepareSetHistory() {
           </h1>
           <div className="flex items-center justify-end gap-1">
             <button
-              onClick={() => setShowSearch((value) => !value)}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 ${showSearch ? 'bg-purple-50 text-purple-700' : ''}`}
-              title="Search"
-            >
-              <Search size={16} />
-            </button>
-            <button
               onClick={() => refetch()}
               disabled={isFetching}
               className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-40"
@@ -213,20 +205,16 @@ export default function PrepareSetHistory() {
         </div>
 
         <div>
-          {showSearch && (
-            <div className="mb-3 max-w-xl">
-              <div className="relative min-w-0">
-                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search INV, set name, user"
-                  className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
-                />
-              </div>
-            </div>
-          )}
+          <div className="relative mb-3">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search INV, set name, user"
+              className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+            />
+          </div>
 
           <div className="grid grid-cols-1 gap-3 text-sm sm:flex sm:flex-wrap sm:items-center">
             <div className="grid grid-cols-[4rem_1fr] items-center gap-2 sm:flex">

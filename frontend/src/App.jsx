@@ -104,10 +104,12 @@ const StockTransfers = lazyWithReload(() => import('@/pages/admin/inventory/Stoc
 const InventoryStorage = lazyWithReload(() => import('@/pages/admin/inventory/InventoryStorage'))
 const PrintCenter = lazyWithReload(() => import('@/pages/admin/operations/PrintCenter'))
 const PrintHistory = lazyNamedWithReload(() => import('@/pages/admin/operations/PrintCenter'), 'PrintHistory')
+const PrintSessions = lazyWithReload(() => import('@/pages/admin/operations/PrintSessions'))
 const PrintPreviewPage = lazyNamedWithReload(() => import('@/pages/admin/operations/PrintCenter'), 'PrintPreviewPage')
 const Delivery = lazyWithReload(() => import('@/pages/admin/operations/Delivery'))
 const Revenue = lazyWithReload(() => import('@/pages/admin/finance/Revenue'))
 const Expenses = lazyWithReload(() => import('@/pages/admin/finance/Expenses'))
+const ExpenseCategories = lazyWithReload(() => import('@/pages/admin/finance/ExpenseCategories'))
 const ProfitReport = lazyWithReload(() => import('@/pages/admin/finance/ProfitReport'))
 const RewardDashboardAdmin = lazyWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'))
 const RewardItemsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardItemsAdmin')
@@ -119,6 +121,7 @@ const RewardTransactionsAdmin = lazyNamedWithReload(() => import('@/pages/admin/
 const SalesReport = lazyWithReload(() => import('@/pages/admin/reports/SalesReport'))
 const ProductReport = lazyWithReload(() => import('@/pages/admin/reports/ProductReport'))
 const InventoryReport = lazyWithReload(() => import('@/pages/admin/reports/InventoryReport'))
+const StockSold = lazyWithReload(() => import('@/pages/admin/reports/StockSold'))
 const Users = lazyWithReload(() => import('@/pages/admin/users/Users'))
 const Roles = lazyWithReload(() => import('@/pages/admin/users/Roles'))
 const ActivityLogs = lazyWithReload(() => import('@/pages/admin/users/ActivityLogs'))
@@ -607,6 +610,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'delivery', path: '/admin/delivery' },
   { module: 'finance', path: '/admin/finance/revenue' },
   { module: 'finance_expenses', path: '/admin/finance/expenses' },
+  { module: 'finance_expenses', path: '/admin/finance/categories' },
   { module: 'finance_profit', path: '/admin/finance/profit' },
   { module: 'rewards', path: '/admin/rewards' },
   { module: 'rewards_products', path: '/admin/rewards/products' },
@@ -829,6 +833,7 @@ export default function App() {
 
             {/* Operations */}
             <Route path="print" element={<LazyPage><PrintCenter /></LazyPage>} />
+            <Route path="print/sessions" element={<LazyPage><PrintSessions /></LazyPage>} />
             <Route path="print/history" element={<LazyPage><PrintHistory /></LazyPage>} />
             <Route path="scanner" element={<LazyPage><Scanner /></LazyPage>} />
             <Route path="scanner/orders" element={<LazyPage><ScannerOrders /></LazyPage>} />
@@ -837,6 +842,7 @@ export default function App() {
             {/* Finance */}
             <Route path="finance/revenue" element={<LazyPage><Revenue /></LazyPage>} />
             <Route path="finance/expenses" element={<LazyPage><Expenses /></LazyPage>} />
+            <Route path="finance/categories" element={<LazyPage><ExpenseCategories /></LazyPage>} />
             <Route path="finance/profit" element={<LazyPage><ProfitReport /></LazyPage>} />
 
             {/* Rewards */}
@@ -859,6 +865,7 @@ export default function App() {
             <Route path="reports/sales" element={<LazyPage><SalesReport /></LazyPage>} />
             <Route path="reports/products" element={<LazyPage><ProductReport /></LazyPage>} />
             <Route path="reports/inventory" element={<LazyPage><InventoryReport /></LazyPage>} />
+            <Route path="reports/stock-sold" element={<LazyPage><StockSold /></LazyPage>} />
 
             {/* Administration */}
             <Route path="profile" element={<LazyPage><AdminProfile /></LazyPage>} />

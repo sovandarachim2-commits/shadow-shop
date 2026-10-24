@@ -140,6 +140,14 @@ Notes:
 - If Vite fails with `spawn EPERM` while loading `esbuild`, allow the dev server command to run because Windows is blocking `frontend\node_modules\@esbuild\win32-x64\esbuild.exe`.
 - The frontend proxies `/api` requests to the backend on `http://localhost:8001`.
 
+### Local scanner camera
+
+`npm run dev` now serves the app with HTTPS so Chrome can show the camera Allow prompt. Open `https://localhost:5175/`. If Chrome warns about the certificate, choose Advanced, then Continue. Click the scan icon and choose Allow.
+
+Do not test the camera on an `http://192.168...` address. The browser blocks the camera there. On a phone, use the `https://` Network URL printed by Vite, accept the certificate warning, then allow the camera.
+
+If the prompt never appears, click the lock icon in the address bar and set Camera to Allow. Also turn on camera access in Windows Settings, Privacy and security, Camera.
+
 ### Backend
 ```bash
 cd backend

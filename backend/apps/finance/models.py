@@ -5,6 +5,13 @@ from django.conf import settings
 class ExpenseCategory(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='children',
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -37,6 +44,31 @@ class Expense(models.Model):
 
     def __str__(self):
         return f"{self.category.name} - ${self.amount} ({self.date})"
+
+
+class ExpenseAudit(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+    ]
+
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='audits')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='expense_audits',
+    )
+    changes = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'expense_audits'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} expense {self.expense_id}"
 
 
 class Revenue(models.Model):

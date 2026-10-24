@@ -26,10 +26,12 @@ export default function FullscreenQrScanner({
 
   return (
     <div className="fixed inset-0 z-[100] overflow-hidden bg-black text-white">
-      <div
-        id={scannerId}
-        className="absolute inset-0 h-full w-full bg-black [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
-      />
+      <div className="absolute inset-0 -translate-y-12">
+        <div
+          id={scannerId}
+          className="absolute inset-0 h-full w-full bg-black [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+        />
+      </div>
 
       <div className="pointer-events-none absolute inset-0 bg-black/25" />
 
@@ -49,7 +51,7 @@ export default function FullscreenQrScanner({
         </button>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-8">
+      <div className="pointer-events-none absolute inset-0 z-10 flex -translate-y-12 items-center justify-center px-8">
         <div className="relative aspect-square w-[82vw] max-w-[360px]">
           <span className="absolute left-0 top-0 h-12 w-12 rounded-tl-lg border-l-[5px] border-t-[5px] border-orange-500" />
           <span className="absolute right-0 top-0 h-12 w-12 rounded-tr-lg border-r-[5px] border-t-[5px] border-orange-500" />
