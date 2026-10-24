@@ -52,6 +52,7 @@ export default function OutItemsHistory() {
   const navigate = useNavigate()
   const { allowed: canDeleteScanner } = useRolePermission('scanner', 'delete')
   const [search, setSearch] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [limit, setLimit] = useState(100)
@@ -159,46 +160,46 @@ export default function OutItemsHistory() {
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 p-4">
           <div className="mb-4 grid grid-cols-[auto_1fr_auto] items-center gap-3">
-          <button
-            onClick={() => navigate('/admin/out-items')}
-            className="flex h-10 items-center gap-1 rounded-lg pr-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
-          >
-            <ArrowLeft size={18} /> Back
-          </button>
-          <h1 className="min-w-0 text-center text-xl font-black text-gray-950">
-            Out Package History
-          </h1>
-          <div className="flex items-center justify-end gap-1">
             <button
-              onClick={() => setShowSearch((v) => !v)}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 ${showSearch ? 'bg-purple-50 text-purple-700' : ''}`}
-              title="Search"
+              type="button"
+              onClick={() => navigate('/admin/out-items')}
+              className="flex h-10 items-center gap-1 rounded-lg pr-2 text-sm font-semibold text-gray-500 hover:text-gray-900"
             >
-              <Search size={16} />
+              <ArrowLeft size={18} /> Back
             </button>
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-40"
-              title="Refresh"
-          <div className="relative mb-3">
-            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search barcode, phone, customer"
-              className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
-            />
+            <h1 className="min-w-0 text-center text-xl font-black text-gray-950">Out Package History</h1>
+            <div className="flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={() => setShowSearch((value) => !value)}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 ${showSearch ? 'bg-purple-50 text-purple-700' : ''}`}
+                title="Search"
+              >
+                <Search size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-40"
+                title="Refresh"
+              >
+                <RefreshCw size={16} className={isFetching ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search barcode, phone, customer"
-                  className="h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
-                />
-              </div>
+          {showSearch && (
+            <div className="relative mb-3">
+              <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search barcode, phone, customer"
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+              />
             </div>
           )}
-
           <div className="grid grid-cols-1 gap-3 text-sm sm:flex sm:flex-wrap sm:items-center">
             <div className="grid grid-cols-[4rem_1fr] items-center gap-2 sm:flex">
               <label className="font-bold text-gray-600">From:</label>
@@ -239,7 +240,7 @@ export default function OutItemsHistory() {
         <div className="mt-3 px-1 text-sm font-semibold text-gray-500">
           Out package records show orders marked as shipped/out.
         </div>
-        </div>
+
 
         {hasLoadError && (
           <div className="m-4 flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-semibold text-yellow-700">
