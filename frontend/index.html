@@ -109,16 +109,36 @@
           }
         }
         if (!payload) return
-        if (payload.code && !payload.error) {
+        var stateData = null
+        if (payload.state) {
           try {
-            var pendingRaw = sessionStorage.getItem('shadow-shop-telegram-oauth-state') || localStorage.getItem('shadow-shop-telegram-oauth-state')
-            var pending = pendingRaw ? JSON.parse(pendingRaw) : null
-            if (pending && (!pending.state || !payload.state || pending.state === payload.state)) {
-              if (pending.codeVerifier) payload.code_verifier = pending.codeVerifier
-              if (pending.redirectUri) payload.redirect_uri = pending.redirectUri
-              if (pending.referralCode) payload.referral_code = pending.referralCode
-            }
-          } catch (e) {}
+            var stateText = String(payload.state).replace(/-/g, '+').replace(/_/g, '/')
+            var statePad = stateText.length % 4
+            if (statePad) stateText += new Array(5 - statePad).join('=')
+            var stateBinary = atob(stateText)
+            var stateBytes = new Uint8Array(stateBinary.length)
+            for (var si = 0; si < stateBinary.length; si++) stateBytes[si] = stateBinary.charCodeAt(si)
+            stateData = JSON.parse(new TextDecoder().decode(stateBytes))
+          } catch (e) {
+            stateData = null
+          }
+        }
+        if (payload.code && !payload.error) {
+          if (stateData && stateData.v) {
+            payload.code_verifier = stateData.v
+            payload.redirect_uri = location.origin + '/auth/telegram/callback'
+            if (stateData.f) payload.referral_code = stateData.f
+          } else {
+            try {
+              var pendingRaw = sessionStorage.getItem('shadow-shop-telegram-oauth-state') || localStorage.getItem('shadow-shop-telegram-oauth-state')
+              var pending = pendingRaw ? JSON.parse(pendingRaw) : null
+              if (pending && (!pending.state || !payload.state || pending.state === payload.state)) {
+                if (pending.codeVerifier) payload.code_verifier = pending.codeVerifier
+                if (pending.redirectUri) payload.redirect_uri = pending.redirectUri
+                if (pending.referralCode) payload.referral_code = pending.referralCode
+              }
+            } catch (e) {}
+          }
           try {
             sessionStorage.removeItem('shadow-shop-telegram-oauth-state')
             localStorage.removeItem('shadow-shop-telegram-oauth-state')
@@ -141,11 +161,15 @@
           sessionStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
         } catch (e) {}
         var back = '/'
-        try {
-          var saved = localStorage.getItem('shadow-shop-telegram-return') || ''
-          if (saved.charAt(0) === '/' && saved.charAt(1) !== '/' && saved.indexOf('/auth/telegram/callback') !== 0) back = saved
-          localStorage.removeItem('shadow-shop-telegram-return')
-        } catch (e) {}
+        if (stateData && typeof stateData.r === 'string' && stateData.r.charAt(0) === '/' && stateData.r.charAt(1) !== '/' && stateData.r.indexOf('/auth/telegram/callback') !== 0) {
+          back = stateData.r
+        } else {
+          try {
+            var saved = localStorage.getItem('shadow-shop-telegram-return') || ''
+            if (saved.charAt(0) === '/' && saved.charAt(1) !== '/' && saved.indexOf('/auth/telegram/callback') !== 0) back = saved
+            localStorage.removeItem('shadow-shop-telegram-return')
+          } catch (e) {}
+        }
         window.__shadowTelegramCallbackDone = true
         location.replace(back)
       })()

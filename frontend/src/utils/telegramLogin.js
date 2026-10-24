@@ -1,5 +1,5 @@
-import { createPkcePair } from '@/utils/pkce'
-import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
+import { createPkcePair, encodeState } from '@/utils/pkce'
+import { isTelegramInAppBrowser, openExternalUrl } from '@/utils/inAppBrowser'
 
 const OIDC_ORIGIN = 'https://oauth.telegram.org'
 const OIDC_AUTH_URL = `${OIDC_ORIGIN}/auth`
@@ -196,30 +196,21 @@ export function completeTelegramLoginCallback() {
   return { mode: 'storage', payload }
 }
 
-async function redirectTelegramLogin({ clientId, lang = 'en', referralCode = '' }) {
+function safeReturnPath(path) {
+  const value = String(path || '')
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/auth/telegram/callback')) return '/'
+  return value.slice(0, 300)
+}
+
+async function redirectTelegramLogin({ clientId, lang = 'en', referralCode = '', returnPath = '/' }) {
   const { verifier, challenge } = await createPkcePair()
   const redirectUri = `${window.location.origin}/auth/telegram/callback`
-  const state = randomUrlSafe(16)
   const nonce = randomUrlSafe(24)
-  const returnPath = `${window.location.pathname}${window.location.search}`
-  const pending = {
-    nonce,
-    state,
-    redirectUri,
-    returnPath,
-    codeVerifier: verifier,
-    referralCode: String(referralCode || ''),
-  }
-  const encoded = JSON.stringify(pending)
-  sessionStorage.setItem(STATE_KEY, encoded)
-  try {
-    localStorage.setItem(STATE_KEY, encoded)
-  } catch {
-    /* ignore */
-  }
-  if (returnPath.startsWith('/') && !returnPath.startsWith('//') && !returnPath.startsWith('/auth/telegram/callback')) {
-    localStorage.setItem('shadow-shop-telegram-return', returnPath)
-  }
+  const state = encodeState({
+    v: verifier,
+    r: safeReturnPath(returnPath),
+    f: String(referralCode || '').slice(0, 64),
+  })
   const authUrl =
     `${OIDC_AUTH_URL}?response_type=code` +
     `&client_id=${encodeURIComponent(clientId)}` +
@@ -230,7 +221,7 @@ async function redirectTelegramLogin({ clientId, lang = 'en', referralCode = '' 
     `&code_challenge=${encodeURIComponent(challenge)}` +
     `&code_challenge_method=S256` +
     (lang ? `&lang=${encodeURIComponent(lang)}` : '')
-  window.location.assign(authUrl)
+  openExternalUrl(authUrl)
 }
 
 function buildAuthUrl({ clientId, lang = 'en' }) {
@@ -263,10 +254,15 @@ export async function openTelegramLoginPopup({
     throw new Error('Telegram client id is not configured')
   }
 
-  // Telegram's in-app browser blocks the login popup, so sign in on this same page.
+  // Telegram's browser cannot finish this login. Open Safari or Chrome instead.
   if (isTelegramInAppBrowser()) {
-    await redirectTelegramLogin({ clientId: id, lang, referralCode })
-    return new Promise(() => {})
+    await redirectTelegramLogin({
+      clientId: id,
+      lang,
+      referralCode,
+      returnPath: `${window.location.pathname}${window.location.search}`,
+    })
+    return { handedOff: true }
   }
 
   const { authUrl, redirectUri, nonce } = buildAuthUrl({ clientId: id, lang })

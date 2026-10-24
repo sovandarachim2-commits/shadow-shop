@@ -629,7 +629,10 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         lang: isKhmer ? 'km' : 'en',
         referralCode: rf.referral_code,
       })
-      if (data?.handedOff) return
+      if (data?.handedOff) {
+        setNotice({ type: 'success', message: t('auth.telegramOpenedBrowser') })
+        return
+      }
       setTelegramPhase('finish')
       const loggedInUser = await telegramLogin({
         ...(data.code

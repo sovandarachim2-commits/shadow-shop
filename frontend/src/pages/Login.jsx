@@ -690,7 +690,10 @@ export default function Login() {
         lang: isKhmer ? 'km' : 'en',
         referralCode: rf.referral_code,
       })
-      if (data?.handedOff) return
+      if (data?.handedOff) {
+        toast(t('auth.telegramOpenedBrowser'))
+        return
+      }
       setTelegramPhase('finish')
       const loggedInUser = await telegramLogin({
         ...(data.code
