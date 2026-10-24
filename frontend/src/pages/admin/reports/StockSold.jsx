@@ -880,7 +880,7 @@ export default function StockSold() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td className="max-lg:static lg:sticky left-0 z-10 border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-gray-900" colSpan={4}>Total</td>
+                  <td className="max-lg:static lg:sticky left-0 z-10 border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-gray-900" colSpan={3}>Total</td>
                   {products.map((product, productIndex) => {
                     const [headerClass, , , textClass] = productColor(productIndex)
                     return (
