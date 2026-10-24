@@ -129,7 +129,33 @@ export default function CompleteProfile() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: (data) => authApi.updateMe(data),
+    mutationFn: async (data) => {
+      try {
+        return await authApi.updateMe(data)
+      } catch (error) {
+        // A referral is optional. A duplicate/invalid referral must not prevent
+        // the customer's profile details from being saved.
+        const body = error.response?.data
+        const submittedReferral = data instanceof FormData
+          ? data.get('friend_referral_code')
+          : data.friend_referral_code
+        if (submittedReferral && body?.friend_referral_code) {
+          let profileData = data
+          if (data instanceof FormData) {
+            profileData = new FormData()
+            data.forEach((value, key) => {
+              if (key !== 'friend_referral_code') profileData.append(key, value)
+            })
+          } else {
+            const { friend_referral_code, ...rest } = data
+            profileData = rest
+          }
+          const result = await authApi.updateMe(profileData)
+          return { ...result, referralSaveError: true }
+        }
+        throw error
+      }
+    },
     onSuccess: ({ data }) => {
       updateUser(data)
       toast.success(t('completeProfile.profileSaved'))
@@ -205,7 +231,11 @@ export default function CompleteProfile() {
       phone: cleanPhone,
       gender: form.gender,
       email: cleanEmail,
-      friend_referral_code: form.friend_referral_code.trim(),
+    }
+    // Telegram sign-in may already have attached the code from ?ref=.
+    // Avoid submitting it again during profile completion.
+    if (!user?.referred_by && form.friend_referral_code.trim()) {
+      payload.friend_referral_code = form.friend_referral_code.trim().toUpperCase()
     }
 
     if (avatarFile) {

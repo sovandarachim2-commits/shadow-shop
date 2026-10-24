@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Truck, ArrowRight, Plus, Check, X, Trash2 } from 'lucide-react'
@@ -37,6 +37,16 @@ function TransferForm({ onSave, onClose }) {
   })
 
   const activeWarehouses = warehouses.filter((w) => w.is_active !== false)
+
+  useEffect(() => {
+    if (activeWarehouses.length === 0) return
+    setForm((current) => {
+      if (current.from_warehouse) return current
+      const preferred = activeWarehouses.find((warehouse) => warehouse.is_default) || activeWarehouses[0]
+      return { ...current, from_warehouse: String(preferred.id) }
+    })
+  }, [warehouses])
+
   const sourceWarehouse = activeWarehouses.find((warehouse) => String(warehouse.id) === String(form.from_warehouse))
   const sourceStock = new Map((sourceWarehouse?.stock_levels || []).map((row) => [String(row.product), Number(row.quantity || 0)]))
   const stockOf = (product) => sourceStock.get(String(product?.id)) || 0
@@ -56,9 +66,9 @@ function TransferForm({ onSave, onClose }) {
     const taken = new Set(items.filter((row) => row.key !== item.key && row.product).map((row) => String(row.product)))
     return products.filter((product) => {
       if (taken.has(String(product.id))) return false
-      if (!query) return true
+      if (!query) return stockOf(product) > 0
       return `${product.name || ''} ${product.code || ''}`.toLowerCase().includes(query)
-    }).slice(0, 8)
+    }).sort((a, b) => stockOf(b) - stockOf(a)).slice(0, 8)
   }
 
   const handleSubmit = () => {
@@ -145,7 +155,9 @@ function TransferForm({ onSave, onClose }) {
                     {item.open && (
                       <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50">
                         {matches.length === 0 && (
-                          <p className="px-3 py-2 text-sm text-gray-400">No matching products</p>
+                          <p className="px-3 py-2 text-sm text-gray-400">
+                            {form.from_warehouse ? 'No products with stock in this storage' : 'Select the source storage first'}
+                          </p>
                         )}
                         {matches.map((product) => (
                           <button
@@ -166,7 +178,7 @@ function TransferForm({ onSave, onClose }) {
                             className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-white"
                           >
                             <span className="truncate font-medium text-gray-900">{product.name}</span>
-                            <span className={`shrink-0 text-xs font-medium ${stockOf(product) > 0 ? 'text-gray-600' : 'text-red-500'}`}>
+                            <span className={`shrink-0 text-xs font-semibold ${stockOf(product) > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                               Stock {stockOf(product)}
                             </span>
                           </button>
