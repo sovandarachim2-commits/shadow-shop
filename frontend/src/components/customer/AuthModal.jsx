@@ -18,8 +18,6 @@ import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
 import { openTelegramLoginPopup } from '@/utils/telegramLogin'
-import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
-import { startGoogleLoginRedirect } from '@/utils/googleRedirect'
 import { socialProfileStep } from '@/utils/profileCompletion'
 import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
@@ -584,23 +582,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       return
     }
 
-    if (isTelegramInAppBrowser()) {
-      setGoogleLoading(true)
-      try {
-        await startGoogleLoginRedirect({
-          clientId: googleClientId,
-          referralCode: rf.referral_code,
-          returnPath: `${window.location.pathname}${window.location.search}`,
-        })
-        setNotice({ type: 'success', message: t('auth.googleOpenedBrowser') })
-      } catch {
-        setNotice({ type: 'error', message: t('auth.googleLoginFailed') })
-      } finally {
-        setGoogleLoading(false)
-      }
-      return
-    }
-
     setGoogleLoading(true)
     try {
       await initializeGoogleIdentity()
@@ -629,10 +610,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         lang: isKhmer ? 'km' : 'en',
         referralCode: rf.referral_code,
       })
-      if (data?.handedOff) {
-        setNotice({ type: 'success', message: t('auth.telegramOpenedBrowser') })
-        return
-      }
+      if (data?.handedOff) return
       setTelegramPhase('finish')
       const loggedInUser = await telegramLogin({
         ...(data.code

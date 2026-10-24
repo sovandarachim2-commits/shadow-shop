@@ -261,8 +261,6 @@
     "googleNotConfigured": "ការចូលតាម Google មិនទាន់បានកំណត់ទេ។",
     "googleCredentialMissing": "Google មិនបានផ្តល់ព័ត៌មានចូលគណនីទេ។",
     "googleLoginFailed": "ចូលតាម Google មិនបានជោគជ័យ",
-    "googleOpenedBrowser": "ការចូល Google បានបើកក្នុង Browser ទូរស័ព្ទ។ សូមបញ្ចប់នៅទីនោះ ដើម្បីចូលហាង។",
-    "telegramOpenedBrowser": "ការចូល Telegram បានបើកក្នុង Browser ទូរស័ព្ទ។ សូមបញ្ចប់នៅទីនោះ ដើម្បីចូលហាង។",
     "googleRedirectWorking": "កំពុងបញ្ចប់ការចូលតាម Google…",
     "telegramLogin": "បន្តជាមួយ Telegram",
     "telegramLoginFailed": "ចូលតាម Telegram មិនបានជោគជ័យ",

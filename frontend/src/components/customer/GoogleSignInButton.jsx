@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
 
 function loadGoogleIdentityScript() {
   if (window.google?.accounts?.id) return Promise.resolve()
@@ -61,10 +60,9 @@ export default function GoogleSignInButton({ clientId, onCredential, onClick, di
   const hostRef = useRef(null)
   const onCredentialRef = useRef(onCredential)
   onCredentialRef.current = onCredential
-  const inTelegramBrowser = isTelegramInAppBrowser()
 
   useEffect(() => {
-    if (inTelegramBrowser || !clientId || disabled) return undefined
+    if (!clientId || disabled) return undefined
     let cancelled = false
 
     const mount = async () => {
@@ -107,14 +105,14 @@ export default function GoogleSignInButton({ clientId, onCredential, onClick, di
     return () => {
       cancelled = true
     }
-  }, [clientId, disabled, inTelegramBrowser])
+  }, [clientId, disabled])
 
   return (
     <div className={`relative min-w-0 ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
       <button type="button" onClick={onClick} className={className}>
         {children}
       </button>
-      {clientId && !disabled && !inTelegramBrowser && (
+      {clientId && !disabled && (
         <div
           ref={hostRef}
           aria-hidden="true"

@@ -21,28 +21,6 @@ import useUiStore from '@/store/uiStore'
 import WelcomeBonusModal from '@/components/rewards/WelcomeBonusModal'
 
 // ─── Category config ──────────────────────────────────────────────────────────
-const CATEGORY_SHORTCUTS = [
-  { id: 'skincare',     name: 'Skincare',     keywords: ['skin', 'skincare'],               icon: Droplet,   bg: '#FFE4EC', color: '#E91E8C' },
-  { id: 'makeup',       name: 'Makeup',       keywords: ['makeup', 'make up'],              icon: Brush,     bg: '#FFE0E6', color: '#F43F5E' },
-  { id: 'body-care',    name: 'Body Care',    keywords: ['body'],                           icon: Droplet,   bg: '#FFE8D6', color: '#EA580C' },
-  { id: 'hair-care',    name: 'Hair Care',    keywords: ['hair'],                           icon: SprayCan,  bg: '#FFF3CD', color: '#D97706' },
-  { id: 'perfume',      name: 'Perfume',      keywords: ['perfume', 'fragrance'],           icon: SprayCan,  bg: '#F0E6FF', color: '#9333EA' },
-  { id: 'accessories',  name: 'Accessories',  keywords: ['accessory', 'accessories'],       icon: ShoppingBag, bg: '#E0F0FF', color: '#2563EB' },
-  { id: 'health',       name: 'Health',       keywords: ['health'],                         icon: Droplet,   bg: '#DCFCE7', color: '#16A34A' },
-  { id: 'tools',        name: 'Tools',        keywords: ['tool', 'tools'],                  icon: Brush,     bg: '#E8E0FF', color: '#7C3AED' },
-  { id: 'combo',        name: 'Combo',        keywords: ['combo', 'set', 'bundle'],         icon: Gift,      bg: '#D1FAE5', color: '#0D9488' },
-  { id: 'new-arrival',  name: 'New',          keywords: [],                                 icon: Gift,      bg: '#EC4899', color: '#FFFFFF', path: '/shop?filter=new_arrival', isNew: true },
-]
-
-const DEFAULT_BRANDS = [
-  { id: 'innisfree', name: 'Innisfree' },
-  { id: 'laneige',   name: 'Laneige' },
-  { id: 'cosrx',     name: 'COSRX' },
-  { id: 'romand',    name: 'Rom&nd' },
-  { id: 'anessa',    name: 'Anessa' },
-  { id: 'loreal',    name: "L'Oréal" },
-]
-
 const HOME_QUERY_OPTIONS = {
   ...STOREFRONT_LIVE_QUERY,
   gcTime: 45 * 60 * 1000,
@@ -410,7 +388,7 @@ export default function Home() {
   const banners = useMemo(() => bannersData || [], [bannersData])
   const sideCards = homeData?.side_cards || {}
   const categories = useMemo(() => categoriesData || [], [categoriesData])
-  const brands = useMemo(() => (brandsData && brandsData.length > 0 ? brandsData : DEFAULT_BRANDS), [brandsData])
+  const brands = useMemo(() => brandsData || [], [brandsData])
   const marqueeBrands = useMemo(() => {
     if (!brands.length) return []
     const repeats = Math.max(1, Math.ceil(12 / brands.length))
@@ -435,26 +413,17 @@ export default function Home() {
     [flashSaleSectionTimer],
   )
 
-  const categoryItems = useMemo(() => {
-    const realCategories = categories
-      .filter((cat) => !cat.parent)
-      .map((cat, index) => {
-        const shortcut = CATEGORY_SHORTCUTS.find((sc) =>
-          sc.keywords.some((kw) => (cat.name || '').toLowerCase().includes(kw))
-        ) || CATEGORY_SHORTCUTS[index % (CATEGORY_SHORTCUTS.length - 1)]
-        return {
-          ...shortcut,
-          id: cat.id,
-          name: cat.name,
-          path: `/shop?category=${cat.id}`,
-          imageUrl: cat.image_url || null,
-          icon: iconForCategory(cat.name),
-        }
-      })
-
-    const newShortcut = CATEGORY_SHORTCUTS.find((sc) => sc.isNew)
-    return newShortcut ? [...realCategories, newShortcut] : realCategories
-  }, [categories])
+  const categoryItems = useMemo(() => categories
+    .filter((cat) => !cat.parent)
+    .map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      path: `/shop?category=${cat.id}`,
+      imageUrl: cat.image_url || null,
+      icon: iconForCategory(cat.name),
+      bg: '#F3F4F6',
+      color: '#475569',
+    })), [categories])
 
   const categoryPages = Math.max(1, Math.ceil(categoryItems.length / 10))
 

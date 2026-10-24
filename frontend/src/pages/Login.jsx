@@ -17,8 +17,6 @@ import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 import { openTelegramLoginPopup } from '@/utils/telegramLogin'
-import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
-import { startGoogleLoginRedirect } from '@/utils/googleRedirect'
 import { cn } from '@/utils/cn'
 
 function GoogleMark({ size = 18 }) {
@@ -646,23 +644,6 @@ export default function Login() {
       return
     }
 
-    if (isTelegramInAppBrowser()) {
-      setGoogleLoading(true)
-      try {
-        await startGoogleLoginRedirect({
-          clientId: googleClientId,
-          referralCode: rf.referral_code,
-          returnPath: `${window.location.pathname}${window.location.search}`,
-        })
-        toast(t('auth.googleOpenedBrowser'))
-      } catch {
-        showError(t('auth.googleLoginFailed'))
-      } finally {
-        setGoogleLoading(false)
-      }
-      return
-    }
-
     setGoogleLoading(true)
     try {
       await initializeGoogleIdentity()
@@ -690,10 +671,7 @@ export default function Login() {
         lang: isKhmer ? 'km' : 'en',
         referralCode: rf.referral_code,
       })
-      if (data?.handedOff) {
-        toast(t('auth.telegramOpenedBrowser'))
-        return
-      }
+      if (data?.handedOff) return
       setTelegramPhase('finish')
       const loggedInUser = await telegramLogin({
         ...(data.code

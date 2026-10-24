@@ -261,8 +261,6 @@
     "googleNotConfigured": "Google login is not configured yet.",
     "googleCredentialMissing": "Google login did not return a credential.",
     "googleLoginFailed": "Google login failed",
-    "googleOpenedBrowser": "Google sign-in opened in your phone browser. Finish it there to enter the shop.",
-    "telegramOpenedBrowser": "Telegram sign-in opened in your phone browser. Finish it there to enter the shop.",
     "googleRedirectWorking": "Completing Google login…",
     "telegramLogin": "Continue with Telegram",
     "telegramLoginFailed": "Telegram login failed",
