@@ -17,6 +17,8 @@ import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
 import { openTelegramLoginPopup } from '@/utils/telegramLogin'
+import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
+import { startGoogleLoginRedirect } from '@/utils/googleRedirect'
 import { cn } from '@/utils/cn'
 
 function GoogleMark({ size = 18 }) {
@@ -404,6 +406,7 @@ export default function Login() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
+  const [telegramPhase, setTelegramPhase] = useState('')
   const [googleLoading, setGoogleLoading] = useState(false)
   const [lf, setLf] = useState({ username: '', password: '' })
   const [rf, setRf] = useState({ 
@@ -512,7 +515,7 @@ export default function Login() {
   }, [googleClientId, handleGoogleCredential])
 
   useEffect(() => {
-    const preconnectHosts = ['https://accounts.google.com', 'https://telegram.org']
+    const preconnectHosts = ['https://accounts.google.com', 'https://oauth.telegram.org']
     preconnectHosts.forEach((href) => {
       if (document.querySelector(`link[rel="preconnect"][href="${href}"]`)) return
       const link = document.createElement('link')
@@ -643,6 +646,23 @@ export default function Login() {
       return
     }
 
+    if (isTelegramInAppBrowser()) {
+      setGoogleLoading(true)
+      try {
+        await startGoogleLoginRedirect({
+          clientId: googleClientId,
+          referralCode: rf.referral_code,
+          returnPath: `${window.location.pathname}${window.location.search}`,
+        })
+        toast(t('auth.googleOpenedBrowser'))
+      } catch {
+        showError(t('auth.googleLoginFailed'))
+      } finally {
+        setGoogleLoading(false)
+      }
+      return
+    }
+
     setGoogleLoading(true)
     try {
       await initializeGoogleIdentity()
@@ -663,12 +683,15 @@ export default function Login() {
     }
     if (telegramLoading || googleLoading || loading) return
     setTelegramLoading(true)
+    setTelegramPhase('confirm')
     try {
       const data = await openTelegramLoginPopup({
         clientId: telegramClientId,
         lang: isKhmer ? 'km' : 'en',
+        referralCode: rf.referral_code,
       })
       if (data?.handedOff) return
+      setTelegramPhase('finish')
       const loggedInUser = await telegramLogin({
         ...(data.code
           ? {
@@ -699,6 +722,7 @@ export default function Login() {
       }
     } finally {
       setTelegramLoading(false)
+      setTelegramPhase('')
     }
   }
 
@@ -827,11 +851,24 @@ export default function Login() {
                       <button type="button"
                         onClick={openTelegramLogin}
                         disabled={telegramLoading}
-                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-100 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-sky-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:opacity-60">
-                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
+                        className={cn(
+                          "flex h-12 items-center justify-center gap-2 rounded-[18px] border bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:cursor-default",
+                          telegramPhase ? "border-sky-200 bg-sky-50/60" : "border-gray-100 hover:bg-sky-50/30 hover:shadow-sm"
+                        )}>
+                        {telegramPhase === 'finish'
+                          ? <Loader2 size={18} className="animate-spin text-sky-500" />
+                          : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
                         {t('auth.telegram')}
                       </button>
                     </div>
+                    {telegramPhase && (
+                      <p className="flex items-center justify-center gap-2 text-center text-[13px] font-medium text-[#2AABEE]">
+                        {telegramPhase === 'finish'
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2AABEE] animate-pulse" />}
+                        {t(telegramPhase === 'finish' ? 'auth.telegramFinishing' : 'auth.telegramWaiting')}
+                      </p>
+                    )}
 
                     <p className="pt-2 text-center text-sm font-medium text-[#94A3B8]">
                       {t('auth.noAccount')}{' '}
@@ -947,11 +984,24 @@ export default function Login() {
                       <button type="button"
                         onClick={openTelegramLogin}
                         disabled={telegramLoading}
-                        className="flex h-12 items-center justify-center gap-2 rounded-[18px] border border-gray-200 bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 hover:bg-sky-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:opacity-60">
-                        {telegramLoading ? <Loader2 size={18} className="animate-spin text-sky-500" /> : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
+                        className={cn(
+                          "flex h-12 items-center justify-center gap-2 rounded-[18px] border bg-white text-sm font-bold text-[#1A1A1A] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:cursor-default",
+                          telegramPhase ? "border-sky-200 bg-sky-50/60" : "border-gray-200 hover:bg-sky-50/30 hover:shadow-sm"
+                        )}>
+                        {telegramPhase === 'finish'
+                          ? <Loader2 size={18} className="animate-spin text-sky-500" />
+                          : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
                         {t('auth.telegram')}
                       </button>
                     </div>
+                    {telegramPhase && (
+                      <p className="flex items-center justify-center gap-2 text-center text-[13px] font-medium text-[#2AABEE]">
+                        {telegramPhase === 'finish'
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2AABEE] animate-pulse" />}
+                        {t(telegramPhase === 'finish' ? 'auth.telegramFinishing' : 'auth.telegramWaiting')}
+                      </p>
+                    )}
 
                     <p className="pt-2 text-center text-sm font-medium text-[#64748B]">
                       {t('auth.haveAccount')}{' '}

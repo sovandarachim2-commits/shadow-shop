@@ -718,14 +718,16 @@ export function EditProfilePage() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-sm px-5 pt-12 text-center">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-pink-50 text-pink-600">
-          <User size={36} />
+      <div className="flex min-h-[calc(100dvh-12.5rem)] items-center justify-center px-5 md:min-h-[calc(100dvh-8rem)]">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-pink-50 text-pink-600">
+            <User size={36} />
+          </div>
+          <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signInEditProfile')}</h2>
+          <button onClick={() => openAuthModal('login')} className="shop-btn-primary mt-6 px-10">
+            {t('auth.login')}
+          </button>
         </div>
-        <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signInEditProfile')}</h2>
-        <button onClick={() => openAuthModal('login')} className="shop-btn-primary mt-6 px-10">
-          {t('auth.login')}
-        </button>
       </div>
     )
   }
@@ -842,15 +844,17 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-sm pt-12 text-center">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-pink-50 text-pink-600">
-          <User size={36} />
+      <div className="flex min-h-[calc(100dvh-12.5rem)] items-center justify-center px-5 md:min-h-[calc(100dvh-8rem)]">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-pink-50 text-pink-600">
+            <User size={36} />
+          </div>
+          <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signIn')}</h2>
+          <p className="mt-2 text-sm text-gray-500">{t('profile.signInDesc')}</p>
+          <button onClick={() => openAuthModal('login')} className="shop-btn-primary mt-6 px-10">
+            {t('auth.login')}
+          </button>
         </div>
-        <h2 className="mt-5 text-xl font-black text-gray-950">{t('profile.signIn')}</h2>
-        <p className="mt-2 text-sm text-gray-500">{t('profile.signInDesc')}</p>
-        <button onClick={() => openAuthModal('login')} className="shop-btn-primary mt-6 px-10">
-          {t('auth.login')}
-        </button>
       </div>
     )
   }

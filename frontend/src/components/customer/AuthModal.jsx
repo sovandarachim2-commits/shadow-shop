@@ -18,6 +18,8 @@ import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
 import { openTelegramLoginPopup } from '@/utils/telegramLogin'
+import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
+import { startGoogleLoginRedirect } from '@/utils/googleRedirect'
 import { socialProfileStep } from '@/utils/profileCompletion'
 import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
@@ -356,6 +358,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [telegramLoading, setTelegramLoading] = useState(false)
+  const [telegramPhase, setTelegramPhase] = useState('')
   const [notice, setNotice] = useState(null)
   
   const [lf, setLf] = useState({ username: '', password: '' })
@@ -456,7 +459,6 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     queryKey: ['telegram-login-config'],
     queryFn: () => authApi.telegramConfig().then((r) => r.data),
     staleTime: 10 * 60 * 1000,
-    enabled: isOpen,
   })
 
   const { data: googleConfig, isLoading: googleConfigLoading, isError: googleConfigError, refetch: refetchGoogleConfig } = useQuery({
@@ -582,6 +584,23 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       return
     }
 
+    if (isTelegramInAppBrowser()) {
+      setGoogleLoading(true)
+      try {
+        await startGoogleLoginRedirect({
+          clientId: googleClientId,
+          referralCode: rf.referral_code,
+          returnPath: `${window.location.pathname}${window.location.search}`,
+        })
+        setNotice({ type: 'success', message: t('auth.googleOpenedBrowser') })
+      } catch {
+        setNotice({ type: 'error', message: t('auth.googleLoginFailed') })
+      } finally {
+        setGoogleLoading(false)
+      }
+      return
+    }
+
     setGoogleLoading(true)
     try {
       await initializeGoogleIdentity()
@@ -603,12 +622,15 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     }
     if (telegramLoading || googleLoading || loading) return
     setTelegramLoading(true)
+    setTelegramPhase('confirm')
     try {
       const data = await openTelegramLoginPopup({
         clientId: telegramClientId,
         lang: isKhmer ? 'km' : 'en',
+        referralCode: rf.referral_code,
       })
       if (data?.handedOff) return
+      setTelegramPhase('finish')
       const loggedInUser = await telegramLogin({
         ...(data.code
           ? {
@@ -643,6 +665,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
       })
     } finally {
       setTelegramLoading(false)
+      setTelegramPhase('')
     }
   }
 
@@ -951,7 +974,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         {/* Close Button */}
         <button 
           onClick={onClose}
-          disabled={loading || googleLoading || telegramLoading}
+          disabled={loading || googleLoading || telegramPhase === 'finish'}
           aria-label={t('common.cancel')}
           className="absolute right-4 top-4 z-10 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
         >
@@ -975,12 +998,23 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
           </div>
         )}
 
+        {telegramPhase && (
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-sky-100 bg-sky-50 px-3.5 py-3 text-[#2AABEE]">
+            {telegramPhase === 'finish'
+              ? <Loader2 size={16} className="shrink-0 animate-spin" />
+              : <span className="h-2 w-2 shrink-0 rounded-full bg-[#2AABEE] animate-pulse" />}
+            <p className="text-sm font-medium leading-relaxed">
+              {t(telegramPhase === 'finish' ? 'auth.telegramFinishing' : 'auth.telegramWaiting')}
+            </p>
+          </div>
+        )}
+
         {(view === 'login' || view === 'register') && (
           <div className="shop-auth-tabs" role="group" aria-label={t('auth.loginRequired')}>
-            <button type="button" aria-pressed={view === 'login'} disabled={loading || googleLoading || telegramLoading} onClick={() => setView('login')}>
+            <button type="button" aria-pressed={view === 'login'} disabled={loading || googleLoading || telegramPhase === 'finish'} onClick={() => setView('login')}>
               <LogIn size={18} />{t('auth.login')}
             </button>
-            <button type="button" aria-pressed={view === 'register'} disabled={loading || googleLoading || telegramLoading} onClick={() => setView('register')}>
+            <button type="button" aria-pressed={view === 'register'} disabled={loading || googleLoading || telegramPhase === 'finish'} onClick={() => setView('register')}>
               <User size={18} />{t('auth.register')}
             </button>
           </div>
@@ -1071,9 +1105,14 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 type="button"
                 onClick={openTelegramLogin}
                 disabled={telegramLoading}
-                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm disabled:opacity-60"
+                className={cn(
+                  "flex h-12 items-center justify-center gap-3 rounded-xl border bg-white text-[15px] font-medium text-slate-700 transition-all active:scale-[0.98] shadow-sm disabled:cursor-default",
+                  telegramPhase ? "border-sky-200 bg-sky-50/60" : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                )}
               >
-                {telegramLoading ? <Loader2 size={20} className="animate-spin text-sky-500" /> : <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />}
+                {telegramPhase === 'finish'
+                  ? <Loader2 size={20} className="animate-spin text-sky-500" />
+                  : <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />}
                 {t('auth.telegram')}
               </button>
             </div>
@@ -1239,9 +1278,14 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                 type="button"
                 onClick={openTelegramLogin}
                 disabled={telegramLoading}
-                className="flex h-12 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] shadow-sm disabled:opacity-60"
+                className={cn(
+                  "flex h-12 items-center justify-center gap-3 rounded-xl border bg-white text-[15px] font-medium text-slate-700 transition-all active:scale-[0.98] shadow-sm disabled:cursor-default",
+                  telegramPhase ? "border-sky-200 bg-sky-50/60" : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                )}
               >
-                {telegramLoading ? <Loader2 size={20} className="animate-spin text-sky-500" /> : <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />}
+                {telegramPhase === 'finish'
+                  ? <Loader2 size={20} className="animate-spin text-sky-500" />
+                  : <Send size={20} className="text-[#2AABEE]" fill="#2AABEE" />}
                 {t('auth.telegram')}
               </button>
             </div>
@@ -1577,7 +1621,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         <div className="mt-5 flex justify-center">
           <button
             onClick={() => {
-              if (loading || googleLoading || telegramLoading || resending) return
+              if (loading || googleLoading || telegramPhase === 'finish' || resending) return
               if (view === 'verify') setView('register')
               else onClose()
             }}

@@ -844,6 +844,7 @@ class TelegramLoginConfigView(generics.GenericAPIView):
         from apps.notifications.services import TelegramService
         from utils.storefront_cache import safe_cache_get, safe_cache_set
 
+        self._warm_telegram_keys()
         cache_key = 'auth:telegram_login_config:v2'
         cached = safe_cache_get(cache_key)
         if cached is not None:
@@ -862,6 +863,24 @@ class TelegramLoginConfigView(generics.GenericAPIView):
         }
         safe_cache_set(cache_key, payload, 120)
         return Response(payload)
+
+    @staticmethod
+    def _warm_telegram_keys():
+        """Load Telegram's signing keys before the customer presses Log in."""
+        import threading
+        import time
+
+        cached = getattr(TelegramLoginView, '_telegram_jwk_cache', None)
+        if cached and time.time() - cached.get('fetched_at', 0) < 10 * 60:
+            return
+
+        def run():
+            try:
+                TelegramLoginView()._load_telegram_jwks()
+            except Exception:
+                pass
+
+        threading.Thread(target=run, daemon=True).start()
 
 
 class GoogleLoginConfigView(generics.GenericAPIView):
@@ -923,6 +942,18 @@ class GoogleLoginView(generics.GenericAPIView):
 
         if not client_id:
             return Response({'detail': 'Google login is not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        code = str(request.data.get('code', '')).strip()
+        if code and not credential:
+            try:
+                credential = self._exchange_google_code(
+                    code,
+                    str(request.data.get('code_verifier', '')).strip(),
+                    str(request.data.get('redirect_uri', '')).strip(),
+                    client_id,
+                )
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         if not credential:
             return Response({'detail': 'Google login credential is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1005,6 +1036,46 @@ class GoogleLoginView(generics.GenericAPIView):
             request, 
             login_method='google',
         )
+
+    def _exchange_google_code(self, code, code_verifier, redirect_uri, client_id):
+        parsed = urlparse(redirect_uri)
+        if parsed.scheme not in ('http', 'https') or parsed.username or parsed.password:
+            raise ValueError('Google redirect is invalid.')
+        if parsed.path.rstrip('/') != '/auth/google/callback':
+            raise ValueError('Google redirect is invalid.')
+        if not code or not code_verifier:
+            raise ValueError('Google login could not be confirmed.')
+
+        token_data = {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'code_verifier': code_verifier,
+        }
+        secret = str(getattr(settings, 'GOOGLE_OAUTH_CLIENT_SECRET', '') or '').strip()
+        if secret:
+            token_data['client_secret'] = secret
+
+        try:
+            response = requests.post('https://oauth2.googleapis.com/token', data=token_data, timeout=10)
+        except requests.RequestException as exc:
+            raise ValueError('Google login could not be confirmed.') from exc
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        id_token = body.get('id_token') if isinstance(body, dict) else None
+        if response.status_code == 200 and id_token:
+            return id_token
+
+        import logging
+        logging.getLogger(__name__).warning(
+            'Google code exchange failed: %s',
+            body.get('error') if isinstance(body, dict) else response.status_code,
+        )
+        raise ValueError('Google login could not be confirmed.')
 
 
 class TelegramVerificationStartView(generics.GenericAPIView):

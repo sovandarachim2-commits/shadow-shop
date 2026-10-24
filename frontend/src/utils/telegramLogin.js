@@ -1,3 +1,6 @@
+import { createPkcePair } from '@/utils/pkce'
+import { isTelegramInAppBrowser } from '@/utils/inAppBrowser'
+
 const OIDC_ORIGIN = 'https://oauth.telegram.org'
 const OIDC_AUTH_URL = `${OIDC_ORIGIN}/auth`
 const RESULT_MESSAGE = 'shadow-shop:telegram-auth'
@@ -193,6 +196,43 @@ export function completeTelegramLoginCallback() {
   return { mode: 'storage', payload }
 }
 
+async function redirectTelegramLogin({ clientId, lang = 'en', referralCode = '' }) {
+  const { verifier, challenge } = await createPkcePair()
+  const redirectUri = `${window.location.origin}/auth/telegram/callback`
+  const state = randomUrlSafe(16)
+  const nonce = randomUrlSafe(24)
+  const returnPath = `${window.location.pathname}${window.location.search}`
+  const pending = {
+    nonce,
+    state,
+    redirectUri,
+    returnPath,
+    codeVerifier: verifier,
+    referralCode: String(referralCode || ''),
+  }
+  const encoded = JSON.stringify(pending)
+  sessionStorage.setItem(STATE_KEY, encoded)
+  try {
+    localStorage.setItem(STATE_KEY, encoded)
+  } catch {
+    /* ignore */
+  }
+  if (returnPath.startsWith('/') && !returnPath.startsWith('//') && !returnPath.startsWith('/auth/telegram/callback')) {
+    localStorage.setItem('shadow-shop-telegram-return', returnPath)
+  }
+  const authUrl =
+    `${OIDC_AUTH_URL}?response_type=code` +
+    `&client_id=${encodeURIComponent(clientId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&scope=${encodeURIComponent('openid profile')}` +
+    `&state=${encodeURIComponent(state)}` +
+    `&nonce=${encodeURIComponent(nonce)}` +
+    `&code_challenge=${encodeURIComponent(challenge)}` +
+    `&code_challenge_method=S256` +
+    (lang ? `&lang=${encodeURIComponent(lang)}` : '')
+  window.location.assign(authUrl)
+}
+
 function buildAuthUrl({ clientId, lang = 'en' }) {
   // Same shape as Telegram's own login script: the token is posted straight
   // back to this tab. No code exchange, so the shop does not wait on another
@@ -216,10 +256,17 @@ function buildAuthUrl({ clientId, lang = 'en' }) {
 export async function openTelegramLoginPopup({
   clientId,
   lang = 'en',
+  referralCode = '',
 } = {}) {
   const id = String(clientId || '').trim()
   if (!id) {
     throw new Error('Telegram client id is not configured')
+  }
+
+  // Telegram's in-app browser blocks the login popup, so sign in on this same page.
+  if (isTelegramInAppBrowser()) {
+    await redirectTelegramLogin({ clientId: id, lang, referralCode })
+    return new Promise(() => {})
   }
 
   const { authUrl, redirectUri, nonce } = buildAuthUrl({ clientId: id, lang })

@@ -40,6 +40,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://pub-fecb032bacad46159a072dd4c58a6e98.r2.dev" crossorigin />
     <link rel="dns-prefetch" href="https://pub-fecb032bacad46159a072dd4c58a6e98.r2.dev" />
+    <link rel="preconnect" href="https://oauth.telegram.org" crossorigin />
+    <link rel="dns-prefetch" href="https://oauth.telegram.org" />
     <!-- Non-blocking fonts; Inter + Khmer only (unused Dancing Script removed) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Khmer:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <noscript>
@@ -107,6 +109,21 @@
           }
         }
         if (!payload) return
+        if (payload.code && !payload.error) {
+          try {
+            var pendingRaw = sessionStorage.getItem('shadow-shop-telegram-oauth-state') || localStorage.getItem('shadow-shop-telegram-oauth-state')
+            var pending = pendingRaw ? JSON.parse(pendingRaw) : null
+            if (pending && (!pending.state || !payload.state || pending.state === payload.state)) {
+              if (pending.codeVerifier) payload.code_verifier = pending.codeVerifier
+              if (pending.redirectUri) payload.redirect_uri = pending.redirectUri
+              if (pending.referralCode) payload.referral_code = pending.referralCode
+            }
+          } catch (e) {}
+          try {
+            sessionStorage.removeItem('shadow-shop-telegram-oauth-state')
+            localStorage.removeItem('shadow-shop-telegram-oauth-state')
+          } catch (e) {}
+        }
         try {
           localStorage.setItem('shadow-shop-telegram-auth-result', JSON.stringify(payload))
         } catch (e) {}

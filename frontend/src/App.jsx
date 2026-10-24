@@ -14,6 +14,7 @@ import { showWelcomeToast } from '@/components/customer/WelcomeToast'
 // Auth-critical first paint only. Layouts/home are lazy so /login stays light.
 import Login from '@/pages/Login'
 import TelegramAuthCallback from '@/pages/TelegramAuthCallback'
+import GoogleAuthCallback from '@/pages/GoogleAuthCallback'
 
 async function clearFrontendCaches() {
   if (!('caches' in window)) return
@@ -290,7 +291,7 @@ function RequireAuth({ children, adminOnly = false }) {
     if (adminOnly) return <Navigate to="/admin/login" replace state={{ from: location.pathname }} />
 
     return (
-      <div className="flex min-h-[60vh] items-center justify-center bg-white px-5">
+      <div className="flex min-h-[calc(100dvh-12.5rem)] items-center justify-center bg-white px-5 md:min-h-[calc(100dvh-8rem)]">
         <div className="w-full max-w-sm text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC3F8F]">
             <Lock size={28} strokeWidth={2.4} />
@@ -334,7 +335,7 @@ function RequireRewardsAuth({ children }) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center bg-white px-4 py-10">
+      <div className="flex min-h-[calc(100dvh-12.5rem)] items-center justify-center bg-white px-4 md:min-h-[calc(100dvh-8rem)]">
         <div className="w-full max-w-md rounded-2xl border border-pink-100 bg-white p-6 text-center shadow-card">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-50 text-3xl">
             <span aria-hidden="true">★</span>
@@ -380,7 +381,7 @@ function RequireOrdersAuth({ children }) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-[48vh] items-start justify-center bg-white px-5 pb-8 pt-10">
+      <div className="flex min-h-[calc(100dvh-12.5rem)] items-center justify-center bg-white px-5 md:min-h-[calc(100dvh-8rem)]">
         <div className="w-full max-w-sm text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-50 text-[#EC3F8F]">
             <ClipboardList size={28} strokeWidth={2.4} />
@@ -445,6 +446,7 @@ function RequireStorefront({ children }) {
 }
 
 function AuthBootstrap() {
+  const { t } = useTranslation()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const clearSession = useAuthStore((s) => s.clearSession)
   const fetchMe = useAuthStore((s) => s.fetchMe)
@@ -462,8 +464,11 @@ function AuthBootstrap() {
     } catch {
       return
     }
-    if (!payload || payload.error) return
-    const referralCode = new URLSearchParams(window.location.search).get('ref') || ''
+    if (!payload || payload.error) {
+      if (payload?.error) toast.error(t('auth.telegramLoginFailed'))
+      return
+    }
+    const referralCode = payload.referral_code || new URLSearchParams(window.location.search).get('ref') || ''
     const body = payload.code
       ? {
           code: payload.code,
@@ -489,7 +494,9 @@ function AuthBootstrap() {
           useUiStore.getState().openAuthModal('complete')
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        toast.error(t('auth.telegramLoginFailed'))
+      })
   }, [])
 
   useEffect(() => {
@@ -659,6 +666,7 @@ export default function App() {
           {/* Auth */}
           <Route path="/login" element={<CustomerLoginRedirect />} />
           <Route path="/auth/telegram/callback" element={<TelegramAuthCallback />} />
+          <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
           <Route path="/admin/login" element={<Login />} />
           <Route path="/verify-email" element={<LazyPage><VerifyEmail /></LazyPage>} />
           <Route path="/forgot-password" element={<LazyPage><ForgotPassword /></LazyPage>} />
