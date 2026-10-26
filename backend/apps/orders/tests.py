@@ -756,6 +756,16 @@ class CustomerOrderFlowTests(TestCase):
 
         self.assertIn('pending_checkout', result)
         self.assertIn('aba_payment', result)
+        self.assertEqual(result['aba_payment']['mode'], 'popup')
+        self.assertIn('/payments/purchase', result['aba_payment']['endpoint'])
+        self.assertIn('/plugins/checkout2-0.js', result['aba_payment']['checkout_script'])
+        if 'checkout-sandbox' in result['aba_payment']['endpoint']:
+            self.assertIn('checkout-sandbox', result['aba_payment']['checkout_script'])
+        else:
+            self.assertNotIn('checkout-sandbox', result['aba_payment']['checkout_script'])
+        self.assertEqual(result['aba_payment']['params']['payment_option'], 'abapay_khqr')
+        self.assertEqual(result['aba_payment']['params']['view_type'], 'popup')
+        self.assertTrue(result['aba_payment']['params']['hash'])
         self.assertEqual(PendingCheckout.objects.count(), 1)
         self.assertEqual(Order.objects.count(), 0)
         telegram_service.notify_new_order_async.assert_not_called()

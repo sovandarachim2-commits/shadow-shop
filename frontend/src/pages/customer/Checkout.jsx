@@ -1,3 +1,5 @@
+/* global AbaPayway */
+
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -15,6 +17,7 @@ import { useCartPriceSync } from '@/utils/cartPriceSync'
 import { CAMBODIA_PROVINCE_LABELS, toProvinceKey } from '@/utils/cambodiaProvinces'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import OrderSuccessModal from '@/components/customer/OrderSuccessModal'
+import abaKhqrLogo from '@/assets/aba/ABA KHQR Logo.svg'
 
 const PAYMENT_METHOD_KEYS = ['bakong', 'aba', 'acleda', 'wing', 'cod', 'cash', 'contact_sales']
 
@@ -30,6 +33,14 @@ const getCartKey = (item) => item.product.cart_key || item.product.id
 const PROVINCE_LABELS = CAMBODIA_PROVINCE_LABELS
 const PENDING_PAYMENT_KEY = 'shadow-shop-pending-checkout-payment'
 const ONLINE_PAYMENT_METHODS = ['bakong', 'aba']
+
+function readPendingPayment() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || 'null')
+  } catch {
+    return null
+  }
+}
 
 function getCheckoutImageUrl(product) {
   return product?.primary_image || product?.image_url || product?.image || ''
@@ -134,19 +145,66 @@ function buildDeliveryInfo(addresses, user) {
   }
 }
 
-function submitAbaForm(endpoint, params) {
+const ABA_PAYWAY_SCRIPT_ID = 'aba-payway-checkout-script'
+const ABA_PAYWAY_PROD_SCRIPT = 'https://checkout.payway.com.kh/plugins/checkout2-0.js'
+
+function isAbaPaywayReady() {
+  return typeof AbaPayway !== 'undefined' && typeof AbaPayway.checkout === 'function'
+}
+
+function loadAbaPaywayScript() {
+  if (isAbaPaywayReady()) return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    let script = document.getElementById(ABA_PAYWAY_SCRIPT_ID)
+    if (!script) {
+      script = document.createElement('script')
+      script.id = ABA_PAYWAY_SCRIPT_ID
+      script.src = ABA_PAYWAY_PROD_SCRIPT
+      script.async = true
+      script.onerror = () => {
+        clearInterval(readinessPoll)
+        clearTimeout(timeout)
+        reject(new Error('ABA PayWay checkout script could not be downloaded. Check your connection and try again.'))
+      }
+      document.head.appendChild(script)
+    }
+
+    const readinessPoll = setInterval(() => {
+      if (!isAbaPaywayReady()) return
+      clearInterval(readinessPoll)
+      clearTimeout(timeout)
+      resolve()
+    }, 100)
+    const timeout = setTimeout(() => {
+      clearInterval(readinessPoll)
+      reject(new Error('ABA PayWay checkout did not become ready. Check your connection and try again.'))
+    }, 15000)
+  })
+}
+
+async function submitAbaForm(abaData) {
+  await loadAbaPaywayScript()
+
+  document.getElementById('aba_merchant_request')?.remove()
   const form = document.createElement('form')
+  form.id = 'aba_merchant_request'
   form.method = 'POST'
-  form.action = endpoint
-  Object.entries(params).forEach(([key, value]) => {
+  form.target = 'aba_webservice'
+  form.action = abaData.endpoint
+  Object.entries(abaData.params || {}).forEach(([key, value]) => {
     const input = document.createElement('input')
     input.type = 'hidden'
     input.name = key
     input.value = String(value)
     form.appendChild(input)
   })
+  form.addEventListener('submit', (event) => {
+    event.preventDefault()
+    AbaPayway.checkout()
+  }, { once: true })
   document.body.appendChild(form)
-  form.submit()
+  form.requestSubmit()
 }
 
 function abaQrImageSrc(payment) {
@@ -154,10 +212,6 @@ function abaQrImageSrc(payment) {
   if (!src) return ''
   if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) return src
   return `data:image/png;base64,${src}`
-}
-
-function isMobileDevice() {
-  return /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent || '')
 }
 
 function formatTimer(seconds) {
@@ -200,23 +254,20 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false)
   const [bakongOrder, setBakongOrder] = useState(null)
   const [bakongPayment, setBakongPayment] = useState(null)
-  const [abaPayment, setAbaPayment] = useState(null)
+  const [abaPayment, setAbaPayment] = useState(() => readPendingPayment()?.abaPayment || null)
   const [showBakongPopup, setShowBakongPopup] = useState(false)
-  const [showAbaPopup, setShowAbaPopup] = useState(false)
+  const [showAbaPopup, setShowAbaPopup] = useState(() => Boolean(readPendingPayment()?.abaPayment))
   const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showAbaFailureModal, setShowAbaFailureModal] = useState(false)
   const [showCodConfirm, setShowCodConfirm] = useState(false)
   const [showAbaConfirm, setShowAbaConfirm] = useState(false)
   const [abaConfirmSecondsLeft, setAbaConfirmSecondsLeft] = useState(600)
   const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(300)
   const [abaLoading, setAbaLoading] = useState(false)
+  const [checkingAbaPayment, setCheckingAbaPayment] = useState(false)
+  const [abaAwaitingConfirmation, setAbaAwaitingConfirmation] = useState(() => Boolean(readPendingPayment()?.abaAwaitingConfirmation))
   const [checkingBakong, setCheckingBakong] = useState(false)
-  const [pendingReturnPayment, setPendingReturnPayment] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || 'null')
-    } catch {
-      return null
-    }
-  })
+  const [pendingReturnPayment, setPendingReturnPayment] = useState(readPendingPayment)
 
   const { data: addresses = [], isLoading: addressesLoading } = useQuery({
     queryKey: ['my-addresses'],
@@ -309,10 +360,18 @@ export default function Checkout() {
 
     let stopped = false
     const checkOrderPayment = async () => {
+      setCheckingAbaPayment(true)
       try {
         if (reference) {
           const { data } = await ordersApi.orders.checkoutStatus(reference)
           if (stopped) return
+          if (['cancelled', 'expired'].includes(data.status)) {
+            localStorage.removeItem(PENDING_PAYMENT_KEY)
+            setPendingReturnPayment(null)
+            setShowAbaPopup(false)
+            setShowAbaFailureModal(true)
+            return
+          }
           if (data.order_id && data.order) {
             localStorage.removeItem(PENDING_PAYMENT_KEY)
             setPendingReturnPayment(null)
@@ -343,10 +402,9 @@ export default function Checkout() {
           })
         }
       } catch {
-        if (!stopped) {
-          localStorage.removeItem(PENDING_PAYMENT_KEY)
-          setPendingReturnPayment(null)
-        }
+        // Keep the pending payment and QR available during temporary network failures.
+      } finally {
+        if (!stopped) setCheckingAbaPayment(false)
       }
     }
 
@@ -543,19 +601,19 @@ export default function Checkout() {
             reference: pending.reference,
             paymentMethod: 'aba',
             createdAt: Date.now(),
+            abaPayment: abaData.mode === 'qr' ? abaData : null,
+            abaAwaitingConfirmation: false,
           }
+          setAbaAwaitingConfirmation(false)
           localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(pendingState))
           setPendingReturnPayment(pendingState)
           if (abaData.mode === 'qr') {
             setAbaPayment(abaData)
             setShowAbaPopup(true)
             toast.success(t('checkout.scanQrToast'))
-            if (abaData.deeplink && isMobileDevice()) {
-              window.location.href = abaData.deeplink
-            }
             return
           }
-          submitAbaForm(abaData.endpoint, abaData.params)
+          await submitAbaForm(abaData)
           return
         }
 
@@ -577,7 +635,7 @@ export default function Checkout() {
       })
     } catch (error) {
       if (salesWindow) salesWindow.close()
-      const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail
+      const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail || error?.message
       toast.error(Array.isArray(detail) ? detail[0] : detail || t('checkout.placeOrderFailed'))
     } finally {
       setSubmitting(false)
@@ -684,21 +742,23 @@ export default function Checkout() {
                   key={method.key}
                   onClick={() => setPaymentMethod(method.key)}
                   className={`flex items-center gap-3 rounded-2xl border-2 p-3 text-left transition ${
-                    paymentMethod === method.key ? 'border-pink-500 bg-pink-50' : 'border-gray-100 bg-white hover:border-pink-200'
+                    paymentMethod === method.key ? (method.key === 'aba' ? 'border-blue-600 bg-blue-50' : 'border-pink-500 bg-pink-50') : 'border-gray-100 bg-white hover:border-pink-200'
                   }`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100 text-xs font-bold text-gray-500">
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl ${method.key === 'aba' ? 'bg-white' : 'bg-gray-100'} text-xs font-bold text-gray-500`}>
                     {method.logoUrl ? (
                       <img src={method.logoUrl} alt="" className="h-full w-full object-cover" />
+                    ) : method.key === 'aba' ? (
+                      <img src={abaKhqrLogo} alt="ABA KHQR" className="h-full w-full object-contain" />
                     ) : (
                       method.badge
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-bold text-gray-950">{method.label}</span>
-                    <span className="text-xs text-gray-400">{method.desc}</span>
+                    <span className="block text-xs font-bold text-gray-950">{method.key === 'aba' ? 'ABA KHQR' : method.label}</span>
+                    <span className="text-xs text-gray-400">{method.key === 'aba' ? 'Scan to pay with ABA Mobile' : method.desc}</span>
                   </span>
-                  {paymentMethod === method.key && <Check className="shrink-0 text-pink-600" size={18} />}
+                  {paymentMethod === method.key && <Check className={`shrink-0 ${method.key === 'aba' ? 'text-blue-700' : 'text-pink-600'}`} size={18} />}
                 </button>
               ))}
             </div>
@@ -998,83 +1058,116 @@ export default function Checkout() {
       )}
 
       {abaPayment && showAbaPopup && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-gray-950/55 px-4 py-5 backdrop-blur-sm">
-          <div className="mx-auto w-full max-w-[340px] rounded-[1.5rem] bg-white p-4 shadow-2xl md:max-w-sm md:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-                  <QrCode size={19} />
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[#91a4bf]/85 px-4 py-6">
+          <div className="relative mx-auto grid w-full max-w-[800px] overflow-hidden rounded-xl bg-white shadow-2xl md:min-h-[560px] md:grid-cols-[1fr_1.25fr]">
+            <button
+              onClick={() => setShowAbaPopup(false)}
+              aria-label="Close ABA payment"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-cyan-600 transition hover:bg-cyan-50"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex flex-col border-b border-gray-100 md:border-b-0 md:border-r">
+              <div className="flex-1 px-7 pb-8 pt-8 md:px-9 md:pt-9">
+                <div className="flex flex-col items-center text-center">
+                  <img src={siteSettings?.logo_url || abaKhqrLogo} alt={siteSettings?.store_name || 'Shadow Shop'} className="h-12 w-12 rounded-xl object-contain" />
+                  <p className="mt-2 text-sm font-medium text-slate-700">{siteSettings?.store_name || 'Shadow Shop'}</p>
                 </div>
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-wide text-blue-700">ABA PAY</p>
-                  <h2 className="mt-0.5 text-xl font-black text-gray-950">Scan to pay</h2>
-                  <p className="mt-0.5 text-xs font-semibold text-gray-500">
-                    Payment ref {abaPayment.reference}
-                  </p>
-                </div>
+                <h2 className="mt-10 text-center text-lg font-bold italic text-slate-900">Scan. Pay. Done.</h2>
+                <ol className="mt-4 space-y-0 text-sm text-slate-700">
+                  {[
+                    'Open Bakong or any banking app that supports KHQR',
+                    'Scan the QR code',
+                    'Confirm payment to finish',
+                  ].map((step, index) => (
+                    <li key={step} className="flex gap-2.5 border-b border-gray-200 py-3 last:border-b-0">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-700 text-[11px] font-bold text-white">{index + 1}</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
               </div>
-              <button
-                onClick={() => setShowAbaPopup(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 text-gray-500"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="mt-4 rounded-[1.4rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-pink-50 p-3.5 text-center">
-              {abaQrImageSrc(abaPayment) ? (
-                <img
-                  src={abaQrImageSrc(abaPayment)}
-                  alt="ABA KHQR"
-                  className="mx-auto h-48 w-48 rounded-2xl bg-white p-2 shadow-xl shadow-blue-100"
-                />
-              ) : (
-                <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-2xl bg-white p-3 text-center text-xs font-bold text-gray-500 shadow-xl shadow-blue-100">
-                  QR image unavailable
+              <div className="bg-[#f6f6f6] px-7 py-5 text-sm md:px-9">
+                <div className="flex justify-between border-b border-dashed border-gray-300 pb-2 text-slate-600">
+                  <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
                 </div>
-              )}
-              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500">
-                <ShieldCheck size={14} className="text-blue-700" />
-                Secured by ABA PayWay
-              </div>
-            </div>
-
-            <div className="py-3.5 text-center">
-              <p className="text-xs font-bold text-gray-500">{t('checkout.totalAmount')}</p>
-              <p className="mt-0.5 text-3xl font-black text-blue-700">{formatCurrency(abaPayment.amount)}</p>
-            </div>
-
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-blue-700">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
-                  <Clock size={21} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-black">Waiting for payment</p>
-                  <p className="mt-1 text-xs font-semibold text-gray-500">Your order will be created after ABA confirms payment.</p>
+                <div className="mt-2 flex justify-between font-bold text-slate-900">
+                  <span>TOTAL</span><span>{formatCurrency(grandTotal)}</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-2">
-              {abaPayment.deeplink && (
-                <button
-                  onClick={() => { window.location.href = abaPayment.deeplink }}
-                  className="w-full rounded-full bg-blue-700 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-100"
-                >
-                  Open ABA Mobile
-                </button>
-              )}
-              <button
-                onClick={() => setShowAbaPopup(false)}
-                className="w-full rounded-full border border-gray-200 px-4 py-3 text-sm font-black text-gray-600"
-              >
-                {t('checkout.bakong.cancelPayment')}
-              </button>
+            <div className="flex items-center justify-center bg-white px-6 py-8 md:px-12 md:py-10">
+              <div className="w-full max-w-[312px] overflow-hidden rounded-[1.35rem] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.12)]">
+                <div className="relative flex h-[66px] items-center justify-center bg-[#ed171f] text-[27px] font-black tracking-wide text-white">
+                  KHQR
+                  <span className="absolute bottom-[-17px] right-0 h-0 w-0 border-b-[34px] border-l-[34px] border-b-white border-l-transparent" />
+                </div>
+                <div className="px-8 pb-5 pt-8">
+                  <p className="text-xs font-medium text-slate-700">{siteSettings?.store_name || 'Shadow Shop'}</p>
+                  <p className="mt-1 text-[34px] font-bold leading-tight tracking-tight text-black">{formatCurrency(abaPayment.amount)}</p>
+                </div>
+                <div className="border-t-2 border-dashed border-gray-400 px-7 py-7 text-center">
+                  {abaQrImageSrc(abaPayment) ? (
+                    <img src={abaQrImageSrc(abaPayment)} alt="ABA KHQR payment code" className="mx-auto h-[220px] w-[220px] max-w-full object-contain" />
+                  ) : (
+                    <div className="mx-auto flex h-[220px] w-[220px] max-w-full items-center justify-center text-sm font-semibold text-gray-500">QR image unavailable</div>
+                  )}
+                  {checkingAbaPayment && !abaAwaitingConfirmation && (
+                    <div role="status" aria-live="polite" className="mt-4 flex items-center justify-center gap-2 text-sm font-semibold text-slate-600">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-cyan-700" />
+                      <span>Checking payment status…</span>
+                    </div>
+                  )}
+                </div>
+                <div className="px-5 pb-6 text-center">
+                  {abaAwaitingConfirmation ? (
+                    <div role="status" aria-live="polite" className="flex items-center justify-center gap-2 rounded-xl bg-cyan-50 px-4 py-3 text-sm font-bold text-cyan-800">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-200 border-t-cyan-700" />
+                      <span>Payment received. Confirming with ABA…</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAbaAwaitingConfirmation(true)
+                        const pendingState = readPendingPayment()
+                        if (pendingState) {
+                          const updatedPendingState = { ...pendingState, abaAwaitingConfirmation: true }
+                          localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(updatedPendingState))
+                          setPendingReturnPayment(updatedPendingState)
+                        }
+                      }}
+                      className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-cyan-800"
+                    >
+                      I’ve paid — confirm payment
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
+
+            <p className="px-8 pb-6 text-center text-sm leading-6 text-gray-500 md:absolute md:bottom-2 md:left-1/2 md:w-[48%] md:translate-x-0 md:pl-6 md:pr-10">
+              Scan with Bakong App or Mobile Banking app that supports KHQR
+            </p>
           </div>
         </div>
       )}
+
+      <OrderSuccessModal
+        open={showAbaFailureModal}
+        variant="failed"
+        title="Payment not confirmed"
+        description="ABA marked this payment as cancelled or expired. You can try again or return to the shop."
+        trackLabel="Try payment again"
+        onTrack={() => {
+          setShowAbaFailureModal(false)
+          setAbaPayment(null)
+          setPaymentMethod('aba')
+        }}
+        onBack={() => navigate('/shop')}
+      />
 
       {successModal}
 

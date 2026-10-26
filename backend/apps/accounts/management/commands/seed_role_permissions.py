@@ -61,6 +61,9 @@ DEFAULTS = {
         ('inventory_movements', 'view'), ('inventory_movements', 'create'), ('inventory_movements', 'edit'), ('inventory_movements', 'delete'), ('inventory_movements', 'print'),
         ('inventory_transfers', 'view'), ('inventory_transfers', 'create'), ('inventory_transfers', 'edit'), ('inventory_transfers', 'delete'), ('inventory_transfers', 'print'),
         ('delivery',   'view'),
+        ('scanner',    'view'), ('scanner',    'create'), ('scanner',    'edit'), ('scanner',    'delete'), ('scanner',    'print'),
+        ('print',      'view'), ('print',      'print'),
+        ('print_history', 'view'), ('print_history', 'print'),
     ],
     'scanner': [
         ('dashboard', 'view'),

@@ -193,7 +193,7 @@ const PAYMENT_STATUS_LABELS = { paid: 'Paid', unpaid: 'Unpaid', partial: 'Partia
 const PAYMENT_STATUS_TW = { paid: 'bg-green-100 text-green-800', unpaid: 'bg-red-100 text-red-800', partial: 'bg-amber-100 text-amber-800', refunded: 'bg-indigo-100 text-indigo-800' }
 const paymentStatusCell = (status) => {
   const [background, color] = PAYMENT_STATUS_COLORS[status] || ['#f1f5f9', '#334155']
-  return `<td style="background:${background};color:${color};font-weight:700;text-align:center;">${escapeHtml(PAYMENT_STATUS_LABELS[status] || status || '—')}</td>`
+  return `<td style="background:${background};color:${color};font-weight:700;text-align:center;">${escapeHtml(PAYMENT_STATUS_LABELS[status] || status || 'ï¿½')}</td>`
 }
 const PAYMENT_METHOD_PRINT_COLORS = {
   bakong: ['#ede9fe', '#5b21b6'],
@@ -207,7 +207,7 @@ const PAYMENT_METHOD_PRINT_COLORS = {
 }
 const paymentMethodCell = (order) => {
   const [background, color] = PAYMENT_METHOD_PRINT_COLORS[order.payment_method] || ['#f1f5f9', '#334155']
-  return `<td style="background:${background};color:${color};font-weight:700;text-align:center;">${escapeHtml(order.payment_method_display || '—')}</td>`
+  return `<td style="background:${background};color:${color};font-weight:700;text-align:center;">${escapeHtml(order.payment_method_display || 'ï¿½')}</td>`
 }
 function ColumnGroup({ title, columns, selected, onChange, language, clearLabel, allLabel }) {
   const allOn = columns.length > 0 && columns.every((column) => selected.includes(column.id))
@@ -868,8 +868,8 @@ export default function StockSold() {
                         )
                       })}
                       <td className={`max-lg:static lg:sticky right-[870px] z-10 w-[100px] border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-orange-600 ${stripe}`}>{order.total_qty}</td>
-                      <td className={`max-lg:static lg:sticky right-[730px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold ${stripe}`}><span className={`inline-flex rounded-full px-2.5 py-1 ${PAYMENT_STATUS_TW[order.payment_status] || 'bg-slate-100 text-slate-700'}`}>{PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status || '—'}</span></td>
-                      <td className={`max-lg:static lg:sticky right-[590px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold ${stripe}`}><span className={`inline-flex rounded-full px-2.5 py-1 ${PAYMENT_METHOD_COLORS[order.payment_method] || 'bg-slate-100 text-slate-700'}`}>{order.payment_method_display || '—'}</span></td>
+                      <td className={`max-lg:static lg:sticky right-[730px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold ${stripe}`}><span className={`inline-flex rounded-full px-2.5 py-1 ${PAYMENT_STATUS_TW[order.payment_status] || 'bg-slate-100 text-slate-700'}`}>{PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status || 'ï¿½'}</span></td>
+                      <td className={`max-lg:static lg:sticky right-[590px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold ${stripe}`}><span className={`inline-flex rounded-full px-2.5 py-1 ${PAYMENT_METHOD_COLORS[order.payment_method] || 'bg-slate-100 text-slate-700'}`}>{order.payment_method_display || 'ï¿½'}</span></td>
                       <td className={`max-lg:static lg:sticky right-[450px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700 ${stripe}`}>{formatCurrency(order.total_amount)}</td>
                       <td className={`max-lg:static lg:sticky right-[310px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-rose-600 ${stripe}`}>{formatCurrency(order.sale_discount)}</td>
                       <td className={`max-lg:static lg:sticky right-[180px] z-10 w-[130px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-sky-700 ${stripe}`}>{formatCurrency(order.delivery_fee)}</td>

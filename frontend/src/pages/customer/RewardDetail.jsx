@@ -109,22 +109,21 @@ export default function RewardDetail() {
     <div className="mx-auto min-h-screen w-full max-w-[760px] bg-gray-50 pb-24 md:max-w-[1440px] md:px-6 md:pb-6 md:pt-6">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
       
-      <header className="sticky top-0 z-30 -mx-4 flex min-h-[60px] items-center gap-3 bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-6 md:min-h-0 md:bg-transparent md:px-0 md:pt-0">
+      <div className="-mx-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
         <button 
           type="button" 
           onClick={() => navigate('/profile/rewards')} 
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50 active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
         >
-          <ChevronLeft size={23} />
+          <ChevronLeft size={20} />
         </button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.detail.title')}</h1>
-          <p className="mt-0.5 text-xs font-semibold text-gray-500">{t('rewardsPage.detail.subtitle', 'Reward Details')}</p>
+        <div className="min-w-0 text-center md:text-left">
+          <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.detail.title')}</h1>
         </div>
-        <div className="flex shrink-0 items-center md:hidden">
+        <div className="flex justify-end">
           <HeaderActionIcons />
         </div>
-      </header>
+      </div>
 
       <div className="grid gap-7 px-4 md:px-0 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-3xl bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">

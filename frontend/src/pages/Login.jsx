@@ -481,7 +481,7 @@ export default function Login() {
         showError(t('auth.googleLoginFailed'))
         return
       }
-      showWelcomeToast()
+      showWelcomeToast({ user: loggedInUser })
     } catch (err) {
       const message = translateAuthError(err?.response?.data || err?.message, t, 'auth.googleLoginFailed')
       showError(message || t('auth.googleLoginFailed'))
@@ -583,7 +583,7 @@ export default function Login() {
     setLoading(true)
     try {
       const u = await login(lf)
-      showWelcomeToast({ returning: true })
+      showWelcomeToast({ returning: true, user: u })
     } catch (err) {
       showError(translateAuthError(err.response?.data, t, 'auth.invalidCredentials'))
     } finally { setLoading(false) }
@@ -693,7 +693,7 @@ export default function Login() {
               }),
         referral_code: rf.referral_code,
       })
-      showWelcomeToast()
+      showWelcomeToast({ user: loggedInUser })
     } catch (err) {
       const message = err?.response
         ? translateAuthError(err.response?.data, t, 'auth.telegramLoginFailed')

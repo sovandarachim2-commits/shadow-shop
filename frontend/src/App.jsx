@@ -492,7 +492,7 @@ function AuthBootstrap() {
     if (referralCode) body.referral_code = referralCode
     telegramLogin(body)
       .then((user) => {
-        showWelcomeToast()
+        showWelcomeToast({ user })
         if (isSocialProfileIncomplete(user)) {
           useUiStore.getState().openAuthModal('complete')
         }

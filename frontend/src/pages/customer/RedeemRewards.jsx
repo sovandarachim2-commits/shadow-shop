@@ -117,27 +117,32 @@ export default function RedeemRewards() {
     <div className="min-h-screen bg-gray-50 pb-8">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
       <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-5 flex min-h-[60px] items-center gap-3 bg-white/95 px-5 pt-[env(safe-area-inset-top)] backdrop-blur md:static md:mx-0 md:mb-6 md:min-h-0 md:bg-transparent md:px-0 md:pt-0">
+        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button 
             type="button" 
             onClick={() => navigate('/profile/rewards')} 
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50 active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
           >
-            <ChevronLeft size={23} />
+            <ChevronLeft size={20} />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-black text-gray-950 md:text-2xl">{t('rewardsPage.redeem.title')}</h1>
-            <p className="mt-0.5 text-xs font-semibold text-gray-500 md:block">{t('rewardsPage.redeem.subtitle')}</p>
+          <div className="min-w-0 text-center md:text-left">
+            <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.redeem.title')}</h1>
           </div>
-          <button type="button" onClick={() => navigate('/cart')} className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-950 shadow-sm transition hover:bg-gray-50">
-            <ShoppingCart size={22} />
-            {cartCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-black text-white">
-                {cartCount > 9 ? '9+' : cartCount}
-              </span>
-            )}
-          </button>
-        </header>
+          <div className="flex justify-end">
+            <button 
+              type="button" 
+              onClick={() => navigate('/cart')} 
+              className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
+            >
+              <ShoppingCart size={20} />
+              {cartCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-black text-white">
+                  {cartCount > 9 ? '9+' : cartCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
 
         <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] md:mb-4 md:mt-0 [&::-webkit-scrollbar]:hidden">
           {FILTER_KEYS.map((key) => (

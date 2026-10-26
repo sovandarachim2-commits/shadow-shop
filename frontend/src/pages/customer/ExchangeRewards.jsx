@@ -307,19 +307,19 @@ export default function ExchangeRewards() {
     <div className="min-h-screen bg-gray-50 pb-24 md:pb-6">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
       <div className="mx-auto flex w-full max-w-[1500px] flex-col px-5 pb-6 md:px-6 md:pt-6">
-        <header className="sticky top-0 z-30 -mx-5 mb-2 flex items-center gap-2.5 bg-gray-50/95 px-4 pb-2 pt-[max(0.4rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mb-6 md:gap-3 md:bg-transparent md:px-0 md:pb-0 md:pt-0 md:backdrop-blur-none">
+        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button 
             type="button" 
             onClick={() => navigate('/profile')} 
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 shadow-sm transition hover:bg-slate-50 active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-base font-black leading-5 text-slate-950 md:text-2xl md:leading-tight">{t('rewardsPage.main.title')}</h1>
-            <p className="text-[11px] font-semibold leading-4 text-slate-500 md:text-sm">{t('rewardsPage.main.subtitle')}</p>
+          <div className="min-w-0 text-center md:text-left">
+            <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.main.title')}</h1>
           </div>
-        </header>
+          <div className="md:hidden" />
+        </div>
 
         <section className="relative mt-2 overflow-hidden rounded-[22px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-4 md:rounded-[22px] md:p-5">
           <div className="absolute right-5 top-8 h-28 w-28 rotate-45 rounded-3xl bg-white/10" />

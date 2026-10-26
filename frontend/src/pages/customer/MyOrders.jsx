@@ -55,7 +55,7 @@ const PAYMENT_METHOD_LABELS = {
 }
 
 function formatRiel(amount) {
-  return `${Math.round(Number(amount || 0)).toLocaleString()}រៀល`
+  return `${Math.round(Number(amount || 0)).toLocaleString()} រៀល`
 }
 
 function getOrderItems(order) {
@@ -129,7 +129,7 @@ function ReceiptQr({ orderNumber }) {
   }, [orderNumber])
 
   return (
-    <div className="flex h-20 w-20 items-center justify-center border-[3px] border-black bg-white sm:h-[102px] sm:w-[102px] sm:border-4">
+    <div className="flex h-[76px] w-[76px] items-center justify-center border-[3px] border-black bg-white">
       {qr ? <img src={qr} alt={`QR ${orderNumber}`} className="h-full w-full object-contain" /> : <span className="text-xs font-black">QR</span>}
     </div>
   )
@@ -389,6 +389,88 @@ function CleanReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
   )
 }
 
+function CustomerReceiptPreview({ order, printLogoUrl, printLogoSize = 78 }) {
+  const customer = order.customer_detail || {}
+  const customerAddress = formatFullAddressKhmer(customer)
+  const items = order.items?.length ? order.items : [{
+    id: 'preview',
+    product_name: order.preview_name || 'Product',
+    quantity: order.items_count || 1,
+    unit_price: order.grand_total || 0,
+    total_price: order.grand_total || 0,
+  }]
+  const subtotal = Number(order.subtotal ?? items.reduce((sum, item) => sum + Number(item.total_price || 0), 0))
+  const deliveryFee = Number(order.delivery_fee || 0)
+  const discount = Number(order.discount || 0)
+  const grandTotal = Number(order.grand_total || subtotal + deliveryFee - discount)
+  const isPaid = order.payment_status === 'paid'
+
+  return (
+    <div className="receipt-paper mx-auto w-full max-w-[454px] bg-white px-4 py-5 text-black shadow-sm" style={KHMER_TEXT_STYLE}>
+      <header className="text-center">
+        <PrintLogo printLogoUrl={printLogoUrl} size={printLogoSize} />
+        <p className="mt-2 text-base font-black tracking-wide">បង្កាន់ដៃ <span className="text-sm tracking-[0.18em]">RECEIPT</span></p>
+      </header>
+      <section className="mt-3 grid grid-cols-[1fr_76px] items-start gap-3 text-sm font-black leading-6">
+        <div className="min-w-0">
+          <p className="break-words">ហាង៖ {order.seller_name || 'Shadow Shop'}</p>
+          <p className="break-words">លេខបញ្ជាទិញ {order.order_number}</p>
+        </div>
+        <ReceiptQr orderNumber={order.order_number} />
+      </section>
+      <div className="my-3 border-t border-dashed border-black" />
+      <section>
+        <h3 className="mb-2 text-sm font-black tracking-wide">អតិថិជន <span className="text-xs tracking-[0.16em]">CUSTOMER</span></h3>
+        <div className="grid grid-cols-[74px_1fr] gap-x-2 gap-y-1.5 text-sm font-bold leading-6">
+          <span>ឈ្មោះ៖</span><span className="min-w-0 break-words text-right">{customer.name || order.customer_name || '-'}</span>
+          <span>លេខទូរស័ព្ទ៖</span><span className="min-w-0 break-words text-right">{customer.phone || order.customer_phone || '-'}</span>
+          <span>ទីតាំង៖</span><span className="min-w-0 break-words text-right">{customerAddress || '-'}</span>
+        </div>
+      </section>
+      <div className="my-3 border-t border-dashed border-black" />
+      <section className="text-sm font-bold leading-6">
+        <h3 className="mb-1 font-black">ការទូទាត់</h3>
+        <div className="flex items-center justify-between gap-2">
+          <span>វិធីបង់ប្រាក់ {paymentMethodLabel(order.payment_method)}</span>
+          <span className={`shrink-0 rounded-full border-2 px-3 py-0.5 font-black ${isPaid ? 'border-black' : 'border-red-600 text-red-700'}`}>
+            {isPaid ? 'បានបង់' : 'មិនទាន់បង់'}
+          </span>
+        </div>
+        {order.transaction_reference && <p className="mt-1 break-all">លេខប្រតិបត្តិការ៖ {order.transaction_reference}</p>}
+      </section>
+      <div className="my-3 border-t border-dashed border-black" />
+      <table className="w-full table-fixed border-collapse text-center text-[11px] sm:text-xs">
+        <thead><tr>
+          <th className="w-8 border border-black px-1 py-1.5">ល.រ</th>
+          <th className="border border-black px-1 py-1.5">ទំនិញ</th>
+          <th className="w-9 border border-black px-1 py-1.5">ចំនួន</th>
+          <th className="w-[68px] border border-black px-1 py-1.5">តម្លៃ</th>
+          <th className="w-[72px] border border-black px-1 py-1.5">តម្លៃសរុប</th>
+        </tr></thead>
+        <tbody>
+          {items.map((item, index) => <tr key={item.id || index}>
+            <td className="border border-black px-1 py-1.5 font-bold">{index + 1}</td>
+            <td className="break-words border border-black px-1.5 py-1.5 text-left font-bold">{item.product_name || 'Product'}{(item.quantity || 1) > 1 ? ` ×${item.quantity}` : ''}</td>
+            <td className="border border-black px-1 py-1.5">{item.quantity || 1}</td>
+            <td className="border border-black px-1 py-1.5">{formatCurrency(item.unit_price || 0)}</td>
+            <td className="border border-black px-1 py-1.5 font-bold">{formatCurrency(item.total_price || item.subtotal || 0)}</td>
+          </tr>)}
+          <tr><td colSpan={4} className="border border-black px-2 py-1 text-right font-bold">Subtotal / សរុបរង</td><td className="border border-black px-1 py-1 font-bold">{formatCurrency(subtotal)}</td></tr>
+          <tr><td colSpan={4} className="border border-black px-2 py-1 text-right font-bold">Delivery Fee / ថ្លៃដឹកជញ្ជូន</td><td className="border border-black px-1 py-1 font-bold">{formatCurrency(deliveryFee)}</td></tr>
+          <tr><td colSpan={4} className="border border-black px-2 py-1 text-right font-bold">Discount / បញ្ចុះតម្លៃ</td><td className="border border-black px-1 py-1 font-bold">-{formatCurrency(discount)}</td></tr>
+          <tr><td colSpan={4} className="border border-black px-2 py-1 text-right font-black">Total / សរុបរួម</td><td className="border border-black px-1 py-1 font-black">{formatCurrency(grandTotal)}</td></tr>
+          <tr><td colSpan={4} className="border border-black px-2 py-1 text-right font-bold">សរុបជារៀល</td><td className="border border-black px-1 py-1 font-bold">{formatRiel(grandTotal * USD_TO_KHR_RATE)}</td></tr>
+        </tbody>
+      </table>
+      <footer className="mt-2 border-t border-dashed border-black pt-2 text-[11px] font-bold leading-5 sm:text-xs">
+        <p>អត្រាប្តូរប្រាក់៖ 1 USD = {formatRiel(USD_TO_KHR_RATE)}</p>
+        <p>Created: {formatDateTime(order.created_at)}</p>
+        <p className="mt-1 text-center text-sm font-black">Powered by : One Night Solution</p>
+      </footer>
+    </div>
+  )
+}
+
 export default function MyOrders() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -536,8 +618,8 @@ export default function MyOrders() {
 
       {receiptOrderId && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-white p-0 sm:bg-gray-950/55 sm:p-3 sm:backdrop-blur-sm">
-          <div className="flex h-full w-full max-w-[560px] flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[94vh] sm:rounded-3xl">
-            <div className="no-print grid grid-cols-[44px_1fr_44px] items-center gap-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:flex sm:justify-between sm:pt-3">
+          <div className="flex h-full w-full max-w-[760px] flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[94vh] sm:rounded-3xl">
+            <div className="no-print relative grid grid-cols-[44px_minmax(0,1fr)] items-center gap-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:flex sm:justify-between sm:pt-3">
               <button
                 type="button"
                 onClick={() => setReceiptOrderId(null)}
@@ -546,31 +628,20 @@ export default function MyOrders() {
               >
                 <ChevronLeft size={22} />
               </button>
-              <div className="min-w-0 text-center sm:text-left">
+              <div className="min-w-0 text-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
                 <p className="text-sm font-bold text-pink-600" style={KHMER_TEXT_STYLE}>{t('common.receipt')}</p>
                 <h3 className="truncate text-base font-black text-gray-950">
                   {receiptOrder?.order_number ? `#${receiptOrder.order_number}` : t('common.loadingReceipt')}
                 </h3>
               </div>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  disabled={!receiptOrder}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 text-pink-600 disabled:opacity-50"
-                  aria-label="Print receipt"
-                >
-                  <Printer size={18} />
-                </button>
-              </div>
             </div>
-            <div className="print-preview-window min-h-0 flex-1 overflow-y-auto bg-gray-100 px-2 py-3 sm:px-3 sm:py-4">
+            <div className="print-preview-window min-h-0 flex-1 overflow-y-auto bg-slate-100 px-2 py-3 sm:px-6 sm:py-6">
               {receiptLoading || !receiptOrder ? (
                 <div className="flex min-h-[420px] items-center justify-center">
                   <Loader2 size={34} className="animate-spin text-pink-500" />
                 </div>
               ) : (
-                <CleanReceiptPreview
+                <CustomerReceiptPreview
                   order={receiptOrder}
                   printLogoUrl={siteSettings?.print_logo_url}
                   printLogoSize={siteSettings?.print_logo_size || 78}

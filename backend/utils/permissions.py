@@ -51,7 +51,7 @@ class IsWarehouse(BasePermission):
 
 class IsScanner(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in [ROLE_SCANNER, ROLE_ADMIN, ROLE_SUPER_ADMIN]
+        return request.user.is_authenticated and request.user.role in [ROLE_SCANNER, ROLE_WAREHOUSE, ROLE_ADMIN, ROLE_SUPER_ADMIN]
 
 
 class IsDelivery(BasePermission):

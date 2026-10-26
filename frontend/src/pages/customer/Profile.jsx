@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
+import { formatAddressLocationKhmer, formatAddressRecordKhmer } from '@/utils/addressHelpers'
 import './ProfileEditor.css'
 
 function firstApiMessage(value) {
@@ -363,7 +364,9 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black uppercase tracking-wider text-gray-400">{t('profile.defaultAddress')}</p>
                 <p className="mt-2 text-[15px] font-black leading-relaxed text-gray-900">
-                  {defaultAddress ? [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state].filter(Boolean).join(', ') : t('profile.noDefaultAddress')}
+                  {defaultAddress ? (isKhmer
+                    ? formatAddressRecordKhmer(defaultAddress)
+                    : [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state].filter(Boolean).join(', ')) : t('profile.noDefaultAddress')}
                 </p>
               </div>
             </div>
@@ -1138,7 +1141,7 @@ export default function Profile() {
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 text-pink-500"><MapPin size={18} /></div>
                           <div>
-                            <p className="font-black capitalize text-gray-950">{addr.label || t('profile.home')}</p>
+                            <p className="font-black capitalize text-gray-950">{isKhmer && String(addr.label || '').toLowerCase() === 'home' ? t('profile.home') : addr.label || t('profile.home')}</p>
                             {addr.is_default && <span className="text-[11px] font-bold text-pink-500">{t('profile.default')}</span>}
                           </div>
                         </div>
@@ -1147,7 +1150,9 @@ export default function Profile() {
                       <div className="mt-3 space-y-0.5 text-sm leading-5 text-gray-500">
                         <p className="font-semibold text-gray-700">{addr.full_name}</p>
                         <p>{addr.address_line1}</p>
-                        <p>{[addr.city, addr.state].filter(Boolean).join(', ')}</p>
+                        <p>{isKhmer
+                          ? formatAddressLocationKhmer({ state: addr.state, city: addr.city, address_line2: addr.address_line2, postal_code: addr.postal_code })
+                          : [addr.address_line2, addr.city, addr.state, addr.postal_code].filter(Boolean).join(', ')}</p>
                         <p>{addr.phone}</p>
                       </div>
                     </div>
@@ -1426,7 +1431,9 @@ function DesktopProfileOverview({
   const completedOrders = orderCounts.completed || 0
   const completionRate = orderTotal > 0 ? Math.round((completedOrders / orderTotal) * 100) : progressPct
   const fullAddress = defaultAddress
-    ? [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state, defaultAddress.postal_code].filter(Boolean).join(', ')
+    ? (currentLanguage.code === 'km'
+      ? formatAddressRecordKhmer(defaultAddress)
+      : [defaultAddress.address_line1, defaultAddress.address_line2, defaultAddress.city, defaultAddress.state, defaultAddress.postal_code].filter(Boolean).join(', '))
     : t('profile.noDefaultAddress')
 
   const stats = [

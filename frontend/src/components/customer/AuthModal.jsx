@@ -540,7 +540,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
         referral_code: rf.referral_code 
       })
       if (loggedInUser) {
-        showWelcomeToast()
+        showWelcomeToast({ user: loggedInUser })
         if (!startSocialCompletion(loggedInUser)) {
           onClose()
         }
@@ -632,7 +632,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               }),
         referral_code: rf.referral_code,
       })
-      showWelcomeToast()
+      showWelcomeToast({ user: loggedInUser })
       if (!startSocialCompletion(loggedInUser)) {
         onClose()
       }
@@ -660,7 +660,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     setLoading(true)
     try {
       const u = await login({ ...lf, username: lf.username.trim() })
-      showWelcomeToast({ returning: true })
+      showWelcomeToast({ returning: true, user: u })
       onClose()
     } catch (err) {
       setNotice({ type: 'error', message: translateAuthError(err.response?.data, t, 'auth.invalidCredentials') })
@@ -765,7 +765,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
     try {
       const result = await verifyEmailCode({ email: rf.email.trim().toLowerCase(), code })
       
-      showWelcomeToast()
+      showWelcomeToast({ user: result?.user })
       
       // Initialize profile form with what we know
       setProfileForm({

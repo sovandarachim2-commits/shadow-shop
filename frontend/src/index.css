@@ -270,7 +270,7 @@ html[lang="km"] textarea {
     padding: 0 !important;
   }
   .print-preview-window .receipt-paper {
-    width: min(100%, 420px) !important;
+    width: min(100%, 454px) !important;
     margin: 0 auto !important;
     box-shadow: none !important;
     border-color: #e5e7eb !important;

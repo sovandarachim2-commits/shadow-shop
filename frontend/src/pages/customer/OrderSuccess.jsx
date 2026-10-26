@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Clock, QrCode } from 'lucide-react'
+import { Check, Clock, QrCode } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency } from '@/utils/helpers'
@@ -72,6 +72,7 @@ export default function OrderSuccess() {
   const isContactSales = order?.payment_method === 'contact_sales' || statePaymentMethod === 'contact_sales'
   const isCashOnDelivery = order?.payment_method === 'cod' || statePaymentMethod === 'cod'
   const isGatewayConfirmationPending = !!checkoutReference && !checkoutStatus?.order_id && !paid
+  const isGatewayPaymentFailed = ['cancelled', 'expired'].includes(checkoutStatus?.status)
   const isBakongPending = bakongPayment && bakongPayment.status !== 'paid' && !paid
   const isBakongExpired = bakongPayment?.status === 'expired'
   const trackPath = (order?.id || resolvedOrderId) ? `/my-orders/${order?.id || resolvedOrderId}` : '/my-orders'
@@ -160,10 +161,58 @@ export default function OrderSuccess() {
 
   if (paid) {
     return (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-gray-900/45 px-4 py-6 backdrop-blur-[2px]">
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-success-title"
+          className="w-full max-w-md rounded-3xl bg-white px-6 py-8 text-center shadow-2xl sm:px-10 sm:py-10"
+        >
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-50 text-green-600">
+            <Check size={32} strokeWidth={3} />
+          </div>
+          <h1 id="payment-success-title" className="mt-5 text-2xl font-black tracking-tight text-gray-950">
+            {t('orders.congratulations')}
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-gray-500">
+            {t('orders.orderPlaced')}
+          </p>
+          {resolvedOrderNumber && (
+            <p className="mt-4 text-sm font-bold text-gray-800">
+              {t('orders.orderNumber')}: {resolvedOrderNumber}
+            </p>
+          )}
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={() => navigate('/shop')}
+              className="rounded-xl border border-gray-200 px-6 py-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+            >
+              {t('orders.backToShop')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(trackPath)}
+              className="shop-btn-primary justify-center px-6"
+            >
+              {t('orders.trackYourOrder')}
+            </button>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
+  if (isGatewayPaymentFailed) {
+    return (
       <div className="min-h-[60vh] bg-gray-50">
         <OrderSuccessModal
           open
-          onTrack={() => navigate(trackPath)}
+          variant="failed"
+          title="Payment not confirmed"
+          description="ABA marked this payment as cancelled or expired. You can try again or return to the shop."
+          trackLabel="Try payment again"
+          onTrack={() => navigate('/checkout', { replace: true })}
           onBack={() => navigate('/shop')}
         />
       </div>

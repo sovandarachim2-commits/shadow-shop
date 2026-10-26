@@ -46,6 +46,7 @@ import InstallAppBanner from '@/components/customer/InstallAppBanner'
 import BottomNavigation from '@/components/BottomNavigation'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 import AuthModal from '@/components/customer/AuthModal'
+import abaKhqrAcceptedLogo from '@/assets/aba/ABA KHQR We Accept Logo.svg'
 
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
@@ -111,6 +112,36 @@ function TikTokIcon({ size = 17, className = '' }) {
     </svg>
   )
 }
+
+function AppleIcon({ size = 18, className = '' }) {
+  return (
+    <svg viewBox="0 0 384 512" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
+      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+    </svg>
+  )
+}
+
+function GooglePlayIcon({ size = 18, className = '' }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} className={className} aria-hidden="true">
+      <path fill="#4285F4" d="M3.6 1.4L13.8 12 3.6 22.6c-.4-.4-.6-1-.6-1.8V3.2c0-.8.2-1.4.6-1.8z" />
+      <path fill="#FBBC04" d="M17.2 8.6L13.8 12l3.4 3.4 3.9-2.2c1-.6 1-1.7 0-2.3l-3.9-2.3z" />
+      <path fill="#EA4335" d="M3.6 1.4l10.2 10.6 3.4-3.4L6.1.4c-.9-.6-1.9-.3-2.5 1z" />
+      <path fill="#34A853" d="M3.6 22.6l2.5 1c.6.4 1.6.4 2.5-.2l11.1-6.4-3.4-3.4-12.7 9z" />
+    </svg>
+  )
+}
+
+const APP_STORE_DOWNLOADS = [
+  {
+    name: 'App Store',
+    Icon: AppleIcon,
+  },
+  {
+    name: 'Google Play',
+    Icon: GooglePlayIcon,
+  },
+]
 
 const SOCIAL_ICON_MAP = {
   facebook: Facebook,
@@ -613,27 +644,25 @@ export default function CustomerLayout() {
                 </button>
 
                 {isProfileDropdownOpen && (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-[280px] overflow-hidden rounded-[24px] border border-gray-100 bg-white py-2 shadow-[0_18px_45px_rgba(15,23,42,0.16)]">
+                  <div className="absolute right-0 top-full z-50 mt-2 w-[320px] max-w-[calc(100vw-1rem)] overflow-hidden rounded-[22px] border border-slate-200 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.14)]">
                     {/* User Summary Section */}
-                    <div className="px-4 py-3">
+                    <div className="rounded-xl bg-slate-50/70 p-3">
                       <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-pink-100 ring-2 ring-pink-50">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-pink-50 text-pink-600 ring-1 ring-pink-100">
                           {user?.avatar_url ? (
                             <img src={user.avatar_url} alt={user.username} className="h-full w-full object-cover" />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-lg font-black text-pink-600">
-                              {(user?.full_name || user?.username || '?')[0].toUpperCase()}
-                            </div>
+                            user?.full_name || user?.username
+                              ? <span className="text-lg font-black">{(user.full_name || user.username)[0].toUpperCase()}</span>
+                              : <User size={20} />
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-black text-gray-950">{user?.full_name || user?.username || t('auth.guest')}</p>
-                          <p className="truncate text-xs font-semibold text-gray-400">{user?.email || t('profile.newMember')}</p>
+                          <p className="truncate text-xs font-medium text-slate-500">{user?.email || t('auth.loginSubtitle')}</p>
                         </div>
                       </div>
                     </div>
-
-                    <div className="my-1 h-px bg-gray-50" />
 
                     {isAuthenticated && rewardsSummary?.earning_rules?.daily_checkin_enabled && !rewardsSummary?.checked_in_today && (
                       <div className="px-2 py-2">
@@ -750,18 +779,18 @@ export default function CustomerLayout() {
                         </div>
                       </>
                     ) : (
-                      <div className="px-4 py-3">
+                      <div className="px-1 pb-1 pt-3">
                         <button
                           onClick={() => {
                             setIsProfileDropdownOpen(false)
                             openAuthModal('login')
                           }}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#EC197A] py-3.5 text-base font-black text-white shadow-lg shadow-pink-100 transition hover:bg-[#D9166F] active:scale-[0.98]"
+                          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#EC197A] text-[15px] font-semibold text-white shadow-md shadow-pink-100 transition hover:bg-[#D9166F] hover:shadow-[0_12px_30px_rgba(236,25,122,0.22)] active:scale-[0.98]"
                         >
                           <LogIn size={20} strokeWidth={2.5} />
                           {t('auth.login')}
                         </button>
-                        <p className="mt-4 text-center text-xs font-semibold text-gray-500">
+                        <p className="mt-4 border-t border-slate-100 pt-4 text-center text-xs font-medium text-slate-500">
                           {t('auth.noAccount')}{' '}
                           <button
                             onClick={() => {
@@ -981,13 +1010,28 @@ export default function CustomerLayout() {
             <h4 className="font-bold">{t('footer.downloadApp')}</h4>
             <p className="mt-4 text-sm text-slate-300">{t('footer.downloadAppText')}</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              {['App Store', 'Google Play'].map((store) => (
-                <div key={store} className="rounded-xl border border-white/10 bg-white px-4 py-2 text-gray-950">
-                  <p className="text-xs font-bold leading-4">{store}</p>
-                  <p className="mt-0.5 text-[10px] font-semibold leading-4 text-pink-600">{t('footer.comingSoon')}</p>
+              {APP_STORE_DOWNLOADS.map(({ name, Icon }) => (
+                <div
+                  key={name}
+                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm transition hover:border-white/20 hover:bg-white/[0.08]"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white">
+                    <Icon size={18} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold leading-tight tracking-tight text-white">{name}</span>
+                    <span className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-pink-500/25 bg-pink-500/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-pink-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-pink-400 animate-pulse" />
+                      {t('footer.comingSoon')}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
+          <div className="col-span-full flex flex-wrap items-center justify-end gap-3 border-t border-white/10 pt-5">
+            <span className="text-xs font-semibold text-slate-300">{t('footer.acceptPayments')}</span>
+            <img src={abaKhqrAcceptedLogo} alt="ABA KHQR accepted" className="h-6 w-auto" />
           </div>
         </div>
         <div className="border-t border-white/10 py-4 text-center text-xs text-slate-400">

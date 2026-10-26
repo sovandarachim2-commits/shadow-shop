@@ -143,27 +143,28 @@ export default function Referral() {
   return (
     <div className="min-h-screen max-w-full overflow-x-hidden bg-[#f6f7f9] pb-[calc(11rem+env(safe-area-inset-bottom))] md:pb-10">
       <div className="w-full min-w-0 max-w-full px-4 pb-8 md:px-6 md:pt-6">
-        <header className="mb-4 flex min-w-0 items-center gap-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:pt-0">
+        <div className="-mx-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:bg-slate-50 active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-black leading-6 text-slate-950">{t('rewardsPage.referral.heroTitle')}</h1>
-            <p className="mt-0.5 truncate text-sm font-medium leading-5 text-slate-500">{t('rewardsPage.referral.subtitle')}</p>
+          <div className="min-w-0 text-center md:text-left">
+            <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.referral.heroTitle')}</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowHowItWorks(true)}
-            aria-label={t('rewardsPage.referral.howItWorks')}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-pink-100 bg-pink-50 text-pink-600 shadow-sm transition hover:bg-pink-100 active:scale-95 lg:hidden"
-          >
-            <Info size={18} />
-          </button>
-        </header>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowHowItWorks(true)}
+              aria-label={t('rewardsPage.referral.howItWorks')}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white lg:hidden"
+            >
+              <Info size={20} />
+            </button>
+          </div>
+        </div>
 
         <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <section className="min-w-0 max-w-full rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80 md:p-5">

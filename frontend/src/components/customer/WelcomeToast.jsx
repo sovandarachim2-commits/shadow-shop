@@ -38,8 +38,18 @@ function WelcomeToastCard({ item, message }) {
   )
 }
 
-export function showWelcomeToast({ returning = false } = {}) {
-  const message = i18n.t(returning ? 'auth.welcomeBackUser' : 'auth.welcomeUser')
+export function showWelcomeToast({ returning = false, user = null } = {}) {
+  const name = String(
+    user?.full_name
+      || [user?.first_name, user?.last_name].filter(Boolean).join(' ')
+      || user?.username
+      || '',
+  ).trim()
+  const message = name
+    ? i18n.t(returning ? 'auth.welcomeBackUser' : 'auth.welcomeUser', { name })
+    : returning
+      ? i18n.t('auth.welcome')
+      : i18n.t('auth.welcomeTo', { storeName: 'Shadow Shop' })
 
   toast.custom((item) => (
     <WelcomeToastCard item={item} message={message} />

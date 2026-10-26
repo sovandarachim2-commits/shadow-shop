@@ -7,15 +7,17 @@ from django.core import signing
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from apps.finance.models import Revenue
 from apps.notifications.services import TelegramService
 from apps.orders.rewards import award_points_for_paid_order
 from .models import AbaPayment, PendingCheckout
 
-
 PAYWAY_SANDBOX_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase'
 PAYWAY_PROD_URL = 'https://checkout.payway.com.kh/api/payment-gateway/v1/payments/purchase'
+PAYWAY_SANDBOX_CHECKOUT_SCRIPT = 'https://checkout-sandbox.payway.com.kh/plugins/checkout2-0.js'
+PAYWAY_PROD_CHECKOUT_SCRIPT = 'https://checkout.payway.com.kh/plugins/checkout2-0.js'
 
 
 PAYWAY_HASH_FIELDS = [
@@ -45,7 +47,6 @@ PAYWAY_HASH_FIELDS = [
     'skip_success_page',
 ]
 
-
 def _aba_hash(fields: dict) -> str:
     payload = ''.join(str(fields.get(field, '')) for field in PAYWAY_HASH_FIELDS)
     key = settings.ABA_PAYWAY_API_KEY.encode('utf-8')
@@ -57,8 +58,12 @@ def get_payway_endpoint():
     return PAYWAY_SANDBOX_URL if settings.ABA_PAYWAY_IS_SANDBOX else PAYWAY_PROD_URL
 
 
+def get_payway_checkout_script():
+    return PAYWAY_SANDBOX_CHECKOUT_SCRIPT if settings.ABA_PAYWAY_IS_SANDBOX else PAYWAY_PROD_CHECKOUT_SCRIPT
+
+
 def get_payway_check_endpoint():
-    return get_payway_endpoint().rsplit('/', 1)[0] + '/check-transaction'
+    return get_payway_endpoint().rsplit('/', 1)[0] + '/check-transaction-2'
 
 
 def aba_check_response_is_paid(body):
@@ -138,7 +143,7 @@ def _checkout_items_for_aba(checkout_data):
     return items
 
 
-def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number=None):
+def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number=None, view_type='hosted_view'):
     merchant_id = settings.ABA_PAYWAY_MERCHANT_ID
     req_time = timezone.now().strftime('%Y%m%d%H%M%S')
     amount_text = f"{float(amount):.2f}"
@@ -193,7 +198,7 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
         'additional_params': '',
         'google_pay_token': '',
         'skip_success_page': '1',
-        'view_type': 'hosted_view',
+        'view_type': view_type,
         'payment_gate': '0',
     }
     params['hash'] = _aba_hash(params)
@@ -201,12 +206,9 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
 
 
 def build_aba_payment_params_for_pending(pending_checkout, request):
-    params = _build_aba_params(
-        pending_checkout.reference,
-        pending_checkout.amount,
-        pending_checkout.checkout_data,
-        request.user,
-    )
+    if not settings.ABA_PAYWAY_MERCHANT_ID or not settings.ABA_PAYWAY_API_KEY:
+        raise ValidationError({'payment_method': 'ABA PayWay is not configured.'})
+
     AbaPayment.objects.update_or_create(
         pending_checkout=pending_checkout,
         defaults={
@@ -220,8 +222,19 @@ def build_aba_payment_params_for_pending(pending_checkout, request):
             'order': None,
         },
     )
+    params = _build_aba_params(
+        pending_checkout.reference,
+        pending_checkout.amount,
+        pending_checkout.checkout_data,
+        request.user,
+        view_type='popup',
+    )
     return {
+        'mode': 'popup',
+        'reference': pending_checkout.reference,
+        'amount': str(pending_checkout.amount),
         'endpoint': get_payway_endpoint(),
+        'checkout_script': get_payway_checkout_script(),
         'params': params,
     }
 
@@ -270,13 +283,26 @@ def build_aba_payment_params(order):
 
     return {
         'endpoint': get_payway_endpoint(),
+        'checkout_script': get_payway_checkout_script(),
         'params': params,
     }
 
 
 def verify_callback_hash(payload: dict, received_hash: str) -> bool:
-    check_fields = {k: v for k, v in payload.items() if v not in (None, '')}
-    expected = _aba_hash(check_fields)
+    values = []
+    for key in sorted(payload):
+        value = payload[key]
+        if isinstance(value, (dict, list)):
+            value = json.dumps(value, separators=(',', ':'))
+        elif value is None:
+            value = ''
+        values.append(str(value))
+    digest = hmac.new(
+        settings.ABA_PAYWAY_API_KEY.encode('utf-8'),
+        ''.join(values).encode('utf-8'),
+        hashlib.sha512,
+    ).digest()
+    expected = base64.b64encode(digest).decode('utf-8')
     return hmac.compare_digest(expected, received_hash)
 
 
