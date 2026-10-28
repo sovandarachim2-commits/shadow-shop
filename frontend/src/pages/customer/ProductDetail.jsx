@@ -2,18 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ChevronLeft, ChevronRight, ChevronDown, Heart, ShoppingCart, Zap, Plus, Minus, Check,
+  ChevronLeft, ChevronRight, ChevronDown, Heart, ShoppingCart, Zap, Plus, Minus, Check, ShoppingBag,
   PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf, Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
+import { getFlashSaleTimerState } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { CosmeticArt } from '@/components/customer/CustomerUi'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import { showWishlistToast } from '@/components/customer/WishlistToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -34,6 +36,7 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [showImageLoader, setShowImageLoader] = useState(false)
   const wishlisted = isWishlisted(product.id)
   const cartItem = items.find((item) => item.product?.id === product.id)
   const qty = cartItem?.quantity || 0
@@ -42,6 +45,16 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
   const price = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
   const discountPct = oldPrice > price ? Math.round((1 - price / oldPrice) * 100) : null
+  const saleTimer = getFlashSaleTimerState(product, Date.now())
+
+  useEffect(() => {
+    setImageLoaded(false)
+    setImageFailed(false)
+    setShowImageLoader(false)
+    if (!product.primary_image) return undefined
+    const timer = setTimeout(() => setShowImageLoader(true), 350)
+    return () => clearTimeout(timer)
+  }, [product.primary_image])
 
   const handleAdd = (e) => {
     e.stopPropagation()
@@ -69,7 +82,7 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
   const handleWishlist = (e) => {
     e.stopPropagation()
     toggle(product)
-    toast.success(wishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
+    showWishlistToast(wishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'), !wishlisted)
   }
 
   return (
@@ -93,7 +106,7 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
       <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
           <>
-            {!imageLoaded && <CosmeticArt tone={product.tone} className="min-h-full" />}
+            {!imageLoaded && showImageLoader && <div className="absolute inset-0 animate-pulse bg-gray-100" />}
             <img
               src={product.primary_image}
               alt={product.name}
@@ -106,38 +119,40 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
             />
           </>
         ) : (
-          <CosmeticArt tone={product.tone} className="min-h-full bg-gray-50" />
+          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300"><ShoppingBag size={30} /></div>
         )}
       </div>
-      <div className="flex min-h-[166px] flex-col p-3">
-        <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
-          <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
+      <div className="flex min-h-0 flex-col p-3.5 sm:min-h-[166px] sm:p-3">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-gray-400 sm:text-xs">{product.brand_name || t('product.noBrand')}</span>
+          <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-500 sm:text-xs">
+            <Star size={14} className="fill-yellow-400 text-yellow-400" />
+            {product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
+          </span>
         </div>
-        <h3 className="khmer-title mt-1 line-clamp-2 min-h-[48px] text-sm text-gray-950">{product.name}</h3>
-        <div className="mt-2 flex items-center gap-1">
-          <Star size={13} className="fill-yellow-400 text-yellow-400" />
-          <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
-          <span className="text-xs text-gray-300">(126)</span>
+        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-base text-gray-950 sm:min-h-[48px] sm:text-sm">{product.name}</h3>
+          <div className="shrink-0 text-right">
+            <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
+            {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+          </div>
         </div>
-        <div className="mt-3 min-w-0">
-          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(price)}</span>
-          {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-        </div>
-        <div className="mt-auto pt-3">
+        {saleTimer?.value && <div className="mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 text-[11px] font-black leading-none text-pink-600"><Zap size={12} /><span>{saleTimer.label} {saleTimer.value}</span></div>}
+        <div className="mt-auto pt-3 sm:pt-4">
           {!available ? (
             <span className="flex h-10 w-full items-center justify-center rounded-xl bg-gray-100 text-xs font-black text-gray-400">{t('common.soldOut')}</span>
           ) : qty === 0 ? (
-            <button onClick={handleAdd} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-pink-600 px-3 text-xs font-black text-white shadow-sm shadow-pink-100 transition active:scale-95">
-              <ShoppingCart size={14} /> {t('common.addToCart')}
+            <button onClick={handleAdd} className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:text-sm">
+              <ShoppingCart size={17} /> <span className="sm:hidden">{t('common.add')}</span><span className="hidden sm:inline">{t('common.addToCart')}</span>
             </button>
           ) : (
-            <div onClick={(e) => e.stopPropagation()} className="grid h-10 grid-cols-[40px_1fr_40px] overflow-hidden rounded-xl bg-pink-600">
-              <button onClick={(e) => handleUpdateQty(e, qty - 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
-                {qty === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
+            <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
+              <button onClick={(e) => handleUpdateQty(e, qty - 1)} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+                {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
               </button>
-              <span className="flex items-center justify-center text-sm font-black text-white">{qty}</span>
-              <button onClick={(e) => handleUpdateQty(e, qty + 1)} className="flex items-center justify-center bg-white/10 text-white transition active:scale-95 hover:bg-white/20">
-                <Plus size={14} />
+              <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
+              <button onClick={(e) => handleUpdateQty(e, qty + 1)} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+                <Plus size={16} />
               </button>
             </div>
           )}
@@ -395,8 +410,9 @@ export default function ProductDetail() {
           <div className="relative overflow-hidden bg-gray-50 md:rounded-[24px] md:bg-white">
             <button
               onClick={() => {
-                setIsWishlisted(!isWishlisted)
-                toast.success(isWishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
+                const nextWishlisted = !isWishlisted
+                setIsWishlisted(nextWishlisted)
+                showWishlistToast(nextWishlisted ? t('product.addedToWishlist') : t('product.removedFromWishlist'), nextWishlisted)
               }}
               className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-pink-600 shadow-xl shadow-pink-100"
             >
@@ -532,8 +548,9 @@ export default function ProductDetail() {
             <button
               type="button"
               onClick={() => {
-                setIsWishlisted(!isWishlisted)
-                toast.success(isWishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
+                const nextWishlisted = !isWishlisted
+                setIsWishlisted(nextWishlisted)
+                showWishlistToast(nextWishlisted ? t('product.addedToWishlist') : t('product.removedFromWishlist'), nextWishlisted)
               }}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition ${
                 isWishlisted ? 'border-pink-200 bg-pink-50 text-pink-600' : 'border-gray-200 text-gray-600'

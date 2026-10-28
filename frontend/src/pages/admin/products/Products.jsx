@@ -143,6 +143,7 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
     cost_price: product?.cost_price || '',
     wholesale_price: product?.wholesale_price || '',
     retail_price: product?.retail_price || '',
+    compare_at_price: product?.compare_at_price || '',
     min_order_qty: product?.min_order_qty || 1,
     availability_status: product?.availability_status || 'auto',
     is_active: product?.is_active ?? true,
@@ -158,6 +159,9 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
     const nextErrors = {}
     if (!form.name.trim()) nextErrors.name = 'Product name is required'
     if (!String(form.retail_price).trim()) nextErrors.retail_price = 'Retail price is required'
+    if (String(form.compare_at_price).trim() && Number(form.compare_at_price) <= Number(form.retail_price)) {
+      nextErrors.compare_at_price = 'Old price must be higher than the retail price'
+    }
 
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
@@ -243,6 +247,12 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
           <label className="label">Retail Price ($)</label>
           <input type="number" step="0.01" className="input-field" value={form.retail_price} onChange={(e) => set('retail_price', e.target.value)} />
           {errors.retail_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.retail_price}</p>}
+        </div>
+        <div>
+          <label className="label">Old Price ($)</label>
+          <input type="number" step="0.01" min="0" className="input-field" value={form.compare_at_price} onChange={(e) => set('compare_at_price', e.target.value)} placeholder="Optional" />
+          <p className="mt-1 text-xs font-semibold text-gray-400">Shown crossed out when higher than the current price.</p>
+          {errors.compare_at_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.compare_at_price}</p>}
         </div>
         <div className="md:col-span-2">
           <label className="label">Description</label>
@@ -733,6 +743,7 @@ export default function Products() {
     cost_price: Number(form.cost_price) || 0,
     wholesale_price: Number(form.wholesale_price) || 0,
     retail_price: Number(form.retail_price) || 0,
+    compare_at_price: String(form.compare_at_price).trim() ? Number(form.compare_at_price) : null,
   })
 
   const handleSave = async (form, files) => {

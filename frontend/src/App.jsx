@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Component, lazy, Suspense, useEffect, useLayoutEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { Component, lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import toast, { Toaster } from 'react-hot-toast'
@@ -529,11 +529,33 @@ function LazyPage({ children }) {
 }
 
 function ScrollToTop() {
-  const { pathname, search } = useLocation()
+  const { pathname, search, key } = useLocation()
+  const navigationType = useNavigationType()
+  const scrollPositions = useRef(new Map())
+  const currentLocationKey = useRef(key)
 
   useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-  }, [pathname, search])
+    const previousRestoration = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    return () => {
+      window.history.scrollRestoration = previousRestoration
+    }
+  }, [])
+
+  useEffect(() => {
+    const saveScrollPosition = () => {
+      scrollPositions.current.set(currentLocationKey.current, window.scrollY)
+    }
+    window.addEventListener('scroll', saveScrollPosition, { passive: true })
+    return () => window.removeEventListener('scroll', saveScrollPosition)
+  }, [])
+
+  useLayoutEffect(() => {
+    const shouldRestoreHome = navigationType === 'POP' && pathname === '/'
+    const top = shouldRestoreHome ? scrollPositions.current.get(key) || 0 : 0
+    window.scrollTo({ top, left: 0, behavior: 'auto' })
+    currentLocationKey.current = key
+  }, [key, navigationType, pathname, search])
 
   return null
 }

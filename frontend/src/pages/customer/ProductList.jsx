@@ -14,19 +14,18 @@ import useWishlistStore from '@/store/wishlistStore'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
-import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 
 function FilterSelect({ children, ...props }) {
   return (
     <div className="relative min-w-0">
       <select
-        className="h-9 w-full appearance-none truncate rounded-2xl border border-gray-100 bg-gray-50 pl-2.5 pr-7 text-[11px] font-black text-gray-700 outline-none focus:border-pink-300 focus:bg-white focus:ring-2 focus:ring-pink-100 sm:h-10 sm:pl-3 sm:pr-9 sm:text-sm"
+        className="h-11 w-full appearance-none truncate rounded-2xl border border-gray-200 bg-white pl-3 pr-8 text-xs font-bold text-gray-800 shadow-sm outline-none transition focus:border-pink-300 focus:bg-white focus:ring-2 focus:ring-pink-100 sm:h-12 sm:pl-4 sm:pr-10 sm:text-sm"
         {...props}
       >
         {children}
       </select>
-      <ChevronDown size={14} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0 text-gray-400 sm:right-2.5 sm:size-4" />
+      <ChevronDown size={16} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 shrink-0 text-gray-500 sm:right-3 sm:size-4" />
     </div>
   )
 }
@@ -112,13 +111,11 @@ function FlashSaleTimer({ item, nowMs }) {
 function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
-  const { toggle, isWishlisted } = useWishlistStore()
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
-  const wishlisted = isWishlisted(product.id)
 
   const cartItem = items.find((i) => i.product?.id === product.id)
   const qty = cartItem?.quantity || 0
@@ -153,14 +150,10 @@ function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
     updateQuantity(product.id, qty - 1)
   }
 
-  const handleWishlist = (e) => {
-    e.stopPropagation()
-    toggle(product)
-    toast.success(isWishlisted(product.id) ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
-  }
-
-  const discountPct = product.old_price
-    ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
+  const currentPrice = Number(product.display_price || product.retail_price || 0)
+  const oldPrice = Number(product.old_price || 0)
+  const discountPct = oldPrice > currentPrice
+    ? Math.round((1 - currentPrice / oldPrice) * 100)
     : null
 
   useEffect(() => {
@@ -177,12 +170,6 @@ function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
       onClick={() => navigate(`/product/${product.id}`)}
     >
-      <button
-        onClick={handleWishlist}
-        className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-white/90 shadow-sm transition ${wishlisted ? 'border-pink-200 text-pink-600' : 'border-pink-100 text-gray-500 hover:text-pink-600'}`}
-      >
-        <Heart size={17} className={wishlisted ? 'fill-pink-500' : ''} />
-      </button>
       {discountPct && (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-3.5 py-1.5 text-xs font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">
           -{discountPct}%
@@ -207,22 +194,22 @@ function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
           <ProductImageFallback />
         )}
       </div>
-      <div className="flex min-h-[166px] flex-col p-3">
-        <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
-          <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
+      <div className="flex min-h-0 flex-col p-3 sm:min-h-[166px]">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
+          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
+            <Star size={13} className="fill-yellow-400 text-yellow-400" />{product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
+          </span>
         </div>
-        <h3 className="khmer-title mt-1 line-clamp-2 min-h-[48px] text-sm text-gray-950">{product.name}</h3>
-        <div className="mt-2 flex items-center gap-1">
-          <Star size={13} className="fill-yellow-400 text-yellow-400" />
-          <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
-          <span className="text-xs text-gray-300">(126)</span>
-        </div>
-        <div className="mt-3 min-w-0">
-          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
-          {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
+        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-sm text-gray-950">{product.name}</h3>
+          <div className="shrink-0 text-right">
+            <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
+            {oldPrice > currentPrice && <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span><span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">{t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}</span></span>}
+          </div>
         </div>
         <FlashSaleTimer item={product} nowMs={nowMs} />
-        <div className="mt-auto pt-3">
+        <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
           <ProductCardButton
             available={available}
             qty={qty}
@@ -333,23 +320,25 @@ function ProductSetCard({ productSet, nowMs, priority = false, onAuthRequired })
           {t('product.productSetBadge')}
         </span>
       </div>
-      <div className="flex min-h-[166px] flex-col p-3">
+      <div className="flex min-h-0 flex-col p-3 sm:min-h-[166px]">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{t('product.productSet')}</span>
         </div>
-        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
+        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+          <h3 className="line-clamp-2 min-w-0 flex-1 text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
+          <span className="shrink-0 text-right">
+            <span className="text-base font-black leading-none text-pink-600">{formatCurrency(price)}</span>
+            {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+          </span>
+        </div>
         <div className="mt-2 flex items-center gap-1">
-          <Gift size={13} className="text-pink-500" />
+          <Gift size={14} className="text-pink-500" />
           <span className="text-xs font-semibold text-gray-500">
             {setStock > 0 ? t('common.inStock') : t('common.soldOut')}
           </span>
         </div>
-        <div className="mt-3 min-w-0">
-          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(price)}</span>
-          {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-        </div>
         <FlashSaleTimer item={productSet} nowMs={nowMs} />
-        <div className="mt-auto pt-3">
+        <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
           <ProductCardButton
             available={setStock > 0}
             qty={qty}

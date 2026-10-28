@@ -139,7 +139,11 @@ class ProductListSerializer(serializers.ModelSerializer):
         return obj.active_price
 
     def get_old_price(self, obj):
-        return obj.retail_price if obj.is_flash_sale_active else None
+        if obj.is_flash_sale_active:
+            return obj.retail_price
+        if obj.compare_at_price and obj.compare_at_price > obj.active_price:
+            return obj.compare_at_price
+        return None
 
     def _flash_sale_items(self, obj):
         if not obj.flash_sale_price or not obj.is_flash_sale_active:
@@ -195,7 +199,11 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         return obj.active_price
 
     def get_old_price(self, obj):
-        return obj.retail_price if obj.is_flash_sale_active else None
+        if obj.is_flash_sale_active:
+            return obj.retail_price
+        if obj.compare_at_price and obj.compare_at_price > obj.active_price:
+            return obj.compare_at_price
+        return None
 
     def _flash_sale_items(self, obj):
         if not obj.flash_sale_price or not obj.is_flash_sale_active:
@@ -233,12 +241,20 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'code', 'barcode', 'name', 'category', 'brand', 'description', 'benefits',
             'ingredients', 'how_to_use', 'unit', 'weight', 'cost_price',
-            'wholesale_price', 'retail_price', 'flash_sale_price',
+            'wholesale_price', 'retail_price', 'compare_at_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
             'min_order_qty', 'availability_status', 'is_active',
             'is_featured', 'is_new_arrival', 'is_best_seller',
         ]
         read_only_fields = ['id']
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        compare_at_price = attrs.get('compare_at_price')
+        retail_price = attrs.get('retail_price', getattr(self.instance, 'retail_price', None))
+        if compare_at_price is not None and retail_price is not None and compare_at_price <= retail_price:
+            raise serializers.ValidationError({'compare_at_price': 'Old price must be higher than the retail price.'})
+        return attrs
 
     def _generate_product_code(self):
         next_number = (Product.objects.order_by('-id').values_list('id', flat=True).first() or 0) + 1

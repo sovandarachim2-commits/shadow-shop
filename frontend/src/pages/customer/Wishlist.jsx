@@ -5,6 +5,7 @@ import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { cn, formatCurrency } from '@/utils/helpers'
 import { ProductThumb } from '@/components/customer/CustomerUi'
+import { showWishlistToast } from '@/components/customer/WishlistToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -33,7 +34,7 @@ export default function Wishlist() {
 
   const handleRemove = (product) => {
     toggle(product)
-    toast.success(t('product.removedFromWishlist'))
+    showWishlistToast(t('product.removedFromWishlist'), false)
   }
 
   return (

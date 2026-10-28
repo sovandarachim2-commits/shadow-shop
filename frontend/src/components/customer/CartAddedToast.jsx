@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast'
-import { Check, ShoppingBag } from 'lucide-react'
+import { Check, ShoppingBag, X } from 'lucide-react'
 import { formatCurrency } from '@/utils/helpers'
 import i18n from '@/i18n'
 
@@ -42,6 +42,14 @@ export function showCartAddedToast(product, navigate, quantity = 1) {
         className="shrink-0 rounded-xl bg-pink-600 px-3.5 py-2 text-xs font-black text-white shadow-sm shadow-pink-100 transition active:scale-95 hover:bg-pink-700"
       >
         {i18n.t('common.viewCart')}
+      </button>
+      <button
+        type="button"
+        onClick={() => toast.dismiss(toastInstance.id)}
+        aria-label={i18n.t('common.closeMessage')}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 active:scale-95"
+      >
+        <X size={17} />
       </button>
     </div>
   ), { duration: 2600, position: 'top-center' })

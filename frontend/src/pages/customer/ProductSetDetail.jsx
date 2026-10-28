@@ -2,15 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Gift, Minus, PackageSearch, Plus, ShoppingCart, Trash2, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Gift, Heart, Minus, PackageSearch, Plus, ShoppingBag, ShoppingCart, Star, Trash2, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { ProductThumb } from '@/components/customer/CustomerUi'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import { showWishlistToast } from '@/components/customer/WishlistToast'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 
@@ -43,6 +45,7 @@ function RelatedSetCard({ item, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addItem, updateQuantity, items } = useCartStore()
+  const { toggle, isWishlisted } = useWishlistStore()
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const isSet = item.type === 'set'
   const cartProduct = isSet
@@ -53,11 +56,19 @@ function RelatedSetCard({ item, priority = false, onAuthRequired }) {
     ? entry.product?.cart_key === cartKey
     : entry.product?.id === item.id)
   const qty = cartItem?.quantity || 0
+  const [imageFailed, setImageFailed] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const wishlisted = !isSet && isWishlisted(item.id)
   const imageUrl = isSet ? (item.image_url || item.image) : item.primary_image
   const price = Number(isSet ? (item.display_price || item.discount_price || item.price || 0) : (item.display_price || item.retail_price || 0))
   const oldPrice = Number(isSet ? (item.old_price || item.price || 0) : (item.old_price || 0))
   const available = relatedProductAvailable(item)
   const path = isSet ? `/product-set/${item.id}` : `/product/${item.id}`
+
+  useEffect(() => {
+    setImageFailed(false)
+    setImageLoaded(false)
+  }, [imageUrl])
 
   const handleAdd = (e) => {
     e.stopPropagation()
@@ -83,55 +94,73 @@ function RelatedSetCard({ item, priority = false, onAuthRequired }) {
     updateQuantity(cartKey, qty - 1)
   }
 
+  const handleWishlist = (e) => {
+    e.stopPropagation()
+    toggle(item)
+    showWishlistToast(wishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'), !wishlisted)
+  }
+
   return (
     <article
       onClick={() => navigate(path)}
       className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
     >
-      <div className="relative h-44 overflow-hidden bg-white">
-        {imageUrl ? (
+      <div className="relative aspect-square overflow-hidden bg-gray-50">
+        {!isSet && (
+          <button type="button" onClick={handleWishlist} className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-white/90 shadow-sm transition ${wishlisted ? 'border-pink-200 text-pink-600' : 'border-pink-100 text-gray-500 hover:text-pink-600'}`} aria-label="Toggle wishlist">
+            <Heart size={17} className={wishlisted ? 'fill-pink-500' : ''} />
+          </button>
+        )}
+        {imageUrl && !imageFailed ? (
           <img
             src={imageUrl}
             alt={item.name}
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            decoding="async"
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageFailed(true)}
+            className={`absolute inset-0 h-full w-full ${isSet ? 'object-cover' : 'object-contain p-2'} transition duration-300 group-hover:scale-[1.03]`}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-pink-50">
-            <Gift size={44} className="text-pink-300" />
+          <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300">
+            {isSet ? <Gift size={44} className="text-pink-300" /> : <ShoppingBag size={30} />}
           </div>
         )}
+        {!imageLoaded && imageUrl && !imageFailed && <div className="pointer-events-none absolute inset-0 animate-pulse bg-gray-100" />}
         {isSet && (
           <span className="absolute left-3 top-3 rounded-full bg-pink-600 px-3 py-1.5 text-[11px] font-black text-white shadow-lg shadow-pink-100">
             {t('product.productSetBadge')}
           </span>
         )}
       </div>
-      <div className="p-3">
-        <p className="truncate text-xs font-semibold text-gray-400">
-          {isSet ? t('product.productSet') : (item.brand_name || item.category_name || t('product.cosmetics'))}
-        </p>
-        <h3 className="mt-1 line-clamp-2 min-h-[40px] text-sm font-black leading-tight text-gray-950">{item.name}</h3>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <span className="text-[15px] font-black text-pink-600 sm:text-base">{formatCurrency(price)}</span>
-            {oldPrice > price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+      <div className="flex min-h-0 flex-col p-3.5 sm:min-h-[230px] sm:p-3">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-gray-400 sm:text-xs">{isSet ? t('product.productSet') : (item.brand_name || item.category_name || t('product.cosmetics'))}</span>
+          {!isSet && <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-500 sm:text-xs"><Star size={14} className="fill-yellow-400 text-yellow-400" />{item.rating > 0 ? item.rating : '4.8'} <span className="text-gray-300">(126)</span></span>}
+        </div>
+        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-base text-gray-950 sm:text-sm">{item.name}</h3>
+          <div className="shrink-0 text-right">
+            <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
+            {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
           </div>
+        </div>
+        <div className="mt-auto pt-4">
           {!available ? (
-            <span className="shrink-0 rounded-2xl bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-400">{t('common.soldOut')}</span>
+            <span className="flex h-[42px] w-full items-center justify-center rounded-xl bg-gray-100 text-xs font-black text-gray-400 sm:h-12">{t('common.soldOut')}</span>
           ) : qty === 0 ? (
-            <button onClick={handleAdd} className="shrink-0 rounded-2xl bg-pink-600 px-3.5 py-2 text-[11px] font-black text-white shadow-sm shadow-pink-100 transition active:scale-95">
-              {t('common.add')}
+            <button onClick={handleAdd} className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:text-sm">
+              <ShoppingCart size={17} /> <span className="sm:hidden">{t('common.add')}</span><span className="hidden sm:inline">{t('common.addToCart')}</span>
             </button>
           ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex shrink-0 items-center gap-0.5 rounded-2xl bg-pink-600 px-1 py-1">
-              <button onClick={handleDecrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                {qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
+            <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
+              <button onClick={handleDecrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+                {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
               </button>
-              <span className="min-w-[22px] text-center text-sm font-black text-white">{qty}</span>
-              <button onClick={handleIncrease} className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-white transition active:scale-95 hover:bg-white/30">
-                <Plus size={12} />
+              <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
+              <button onClick={handleIncrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
+                <Plus size={16} />
               </button>
             </div>
           )}
@@ -164,6 +193,7 @@ export default function ProductSetDetail() {
   const openAuthModal = useUiStore((s) => s.openAuthModal)
   const [imageFailed, setImageFailed] = useState(false)
   const [activeImg, setActiveImg] = useState(0)
+  const [purchaseQty, setPurchaseQty] = useState(1)
   const galleryScrollRef = useRef(null)
   const galleryScrollRaf = useRef(0)
 
@@ -174,16 +204,6 @@ export default function ProductSetDetail() {
   const { data: productSet, isLoading, isError } = useQuery({
     queryKey: ['product-set-detail', id],
     queryFn: () => productsApi.sets.get(id).then((r) => r.data),
-    enabled: !!id,
-    ...STOREFRONT_LIVE_QUERY,
-  })
-  const { data: otherSetsData, isLoading: otherSetsLoading } = useQuery({
-    queryKey: ['product-set-related-sets', id],
-    queryFn: () => productsApi.sets.list({
-      is_active: true,
-      ordering: '-created_at',
-      page_size: 9,
-    }).then((r) => r.data),
     enabled: !!id,
     ...STOREFRONT_LIVE_QUERY,
   })
@@ -220,10 +240,6 @@ export default function ProductSetDetail() {
     return images
   }, [productSet])
   const isInStock = setStock > 0
-  const otherSets = (otherSetsData?.results || otherSetsData || [])
-    .filter((item) => String(item.id) !== String(productSet?.id))
-    .map((item) => ({ ...item, type: 'set' }))
-    .slice(0, 8)
   const productIdsInsideSet = new Set((productSet?.items || [])
     .map((item) => item.product || item.product_id)
     .filter(Boolean)
@@ -232,10 +248,8 @@ export default function ProductSetDetail() {
     .filter((item) => !productIdsInsideSet.has(String(item.id)))
     .map((item) => ({ ...item, type: 'product' }))
     .slice(0, 8)
-  const setSlots = otherSets.length > 0 ? Math.min(otherSets.length, 4) : 0
-  const productSlots = setSlots > 0 ? 8 - setSlots : 8
-  const relatedItems = [...otherSets.slice(0, setSlots), ...recommendedProducts.slice(0, productSlots)]
-  const relatedLoading = otherSetsLoading || recommendedLoading
+  const relatedItems = recommendedProducts
+  const relatedLoading = recommendedLoading
 
   useEffect(() => {
     setActiveImg(0)
@@ -277,6 +291,13 @@ export default function ProductSetDetail() {
     if (!cartProduct || !isInStock) return
     if (!loggedIn) return onAuthRequired('cart')
     addItem(cartProduct, 1)
+    toast.success(t('product.productSetAdded'))
+  }
+
+  const addSelectedSetToCart = () => {
+    if (!cartProduct || !isInStock) return
+    if (!loggedIn) return onAuthRequired('cart')
+    addItem(cartProduct, purchaseQty)
     toast.success(t('product.productSetAdded'))
   }
 
@@ -529,23 +550,36 @@ export default function ProductSetDetail() {
         </section>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] md:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-2 gap-3">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-[112px_1fr] items-center gap-3">
+          <div className="flex h-12 items-center justify-between rounded-full border border-gray-200 bg-white px-3">
+            <button
+              type="button"
+              onClick={() => setPurchaseQty((value) => Math.max(1, value - 1))}
+              disabled={purchaseQty <= 1}
+              aria-label="Decrease quantity"
+              className="flex h-8 w-8 items-center justify-center text-gray-800 transition active:scale-95 disabled:text-gray-300"
+            >
+              <Minus size={16} strokeWidth={2.5} />
+            </button>
+            <span className="min-w-6 text-center text-sm font-bold text-gray-950">{purchaseQty}</span>
+            <button
+              type="button"
+              onClick={() => setPurchaseQty((value) => Math.min(setStock, value + 1))}
+              disabled={!isInStock || purchaseQty >= setStock}
+              aria-label="Increase quantity"
+              className="flex h-8 w-8 items-center justify-center text-gray-950 transition active:scale-95 disabled:text-gray-300"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+            </button>
+          </div>
           <button
-            onClick={addSetToCart}
+            onClick={addSelectedSetToCart}
             disabled={!isInStock}
-            className="flex h-12 items-center justify-center gap-2 rounded-[1.35rem] border border-pink-500 bg-white text-sm font-semibold text-pink-600 transition active:scale-[0.98] disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+            className="flex h-12 items-center justify-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-bold text-white transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500"
           >
-            <ShoppingCart size={18} />
-            {t('common.addToCart')}
-          </button>
-          <button
-            onClick={buyNow}
-            disabled={!isInStock}
-            className="flex h-12 items-center justify-center gap-2 rounded-[1.35rem] bg-pink-600 text-sm font-semibold text-white shadow-lg shadow-pink-100 transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none"
-          >
-            <Zap size={18} />
-            {t('common.buyNow')}
+            <span>{isInStock ? t('common.addToCart') : t('common.outOfStock')}</span>
+            {isInStock && <span>{formatCurrency(price * purchaseQty)}</span>}
           </button>
         </div>
       </div>

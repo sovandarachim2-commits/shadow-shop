@@ -6,7 +6,6 @@ type BottomNavigationProps = {
   activeTab?: BottomNavigationTab
   defaultActiveTab?: BottomNavigationTab
   onChange?: (tab: BottomNavigationTab) => void
-  onHomeReselect?: () => void
   showOnDesktop?: boolean
   labels?: Partial<Record<BottomNavigationTab, string>>
   ariaLabels?: Partial<Record<BottomNavigationTab, string>>
@@ -32,7 +31,6 @@ export default function BottomNavigation({
   activeTab,
   defaultActiveTab = 'home',
   onChange,
-  onHomeReselect,
   showOnDesktop = false,
   labels = {},
   ariaLabels = {},
@@ -43,11 +41,6 @@ export default function BottomNavigation({
 
   const selectTab = (tab: BottomNavigationTab) => {
     if (tab === 'home' && selectedTab === 'home') {
-      if (typeof window !== 'undefined' && window.scrollY > 4) {
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      } else {
-        onHomeReselect?.()
-      }
       return
     }
     if (!isControlled) setInternalActiveTab(tab)

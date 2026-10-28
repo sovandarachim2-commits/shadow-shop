@@ -128,6 +128,7 @@ class Product(models.Model):
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     wholesale_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     retail_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    compare_at_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     flash_sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     flash_sale_starts_at = models.DateTimeField(null=True, blank=True)
     flash_sale_ends_at = models.DateTimeField(null=True, blank=True)

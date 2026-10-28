@@ -756,7 +756,7 @@ export default function Checkout() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold text-gray-950">{method.key === 'aba' ? 'ABA KHQR' : method.label}</span>
-                    <span className="text-xs text-gray-400">{method.key === 'aba' ? 'Scan to pay with ABA Mobile' : method.desc}</span>
+                    <span className="text-xs text-gray-400">{method.key === 'aba' ? 'Scan to pay with any banking app' : method.desc}</span>
                   </span>
                   {paymentMethod === method.key && <Check className={`shrink-0 ${method.key === 'aba' ? 'text-blue-700' : 'text-pink-600'}`} size={18} />}
                 </button>

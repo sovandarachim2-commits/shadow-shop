@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ChevronLeft, ChevronRight, Star, Heart, ShoppingBag,
+  ChevronLeft, ChevronRight, Star, ShoppingBag,
   Gift, Brush, Droplet, SprayCan, Trash2, Plus, Minus, RefreshCw, Zap, ShoppingCart,
   Sparkles, Clock3,
 } from 'lucide-react'
@@ -11,10 +11,8 @@ import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import { formatFlashSaleCountdown, getFlashSaleTimerState, hasFlashSaleTimer, isVisibleFlashSaleItem } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
-import useWishlistStore from '@/store/wishlistStore'
 import { BrandLogo } from '@/components/customer/CustomerUi'
 import { showCartAddedToast } from '@/components/customer/CartAddedToast'
-import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -46,6 +44,89 @@ function ProductImageFallback() {
   return (
     <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300">
       <ShoppingBag size={30} />
+    </div>
+  )
+}
+
+function ShopByBrandCarousel({ brands }) {
+  const carouselRef = useRef(null)
+  const pauseUntil = useRef(0)
+  const repeatedBrands = useMemo(() => {
+    if (!brands.length) return []
+    const repeats = Math.max(1, Math.ceil(12 / brands.length))
+    return Array.from({ length: repeats }, () => brands).flat()
+  }, [brands])
+
+  useEffect(() => {
+    const carousel = carouselRef.current
+    if (!carousel) return undefined
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const segmentWidth = () => carousel.scrollWidth / 3
+    const normalizePosition = () => {
+      const segment = segmentWidth()
+      if (!segment) return
+      if (carousel.scrollLeft < segment * 0.25) carousel.scrollLeft += segment
+      else if (carousel.scrollLeft > segment * 1.75) carousel.scrollLeft -= segment
+    }
+
+    carousel.scrollLeft = segmentWidth()
+
+    let frameId
+    let previousFrameTime = 0
+    const animate = (time) => {
+      const elapsed = previousFrameTime ? Math.min(time - previousFrameTime, 48) : 0
+      previousFrameTime = time
+      if (!reducedMotion.matches && time >= pauseUntil.current) {
+        carousel.scrollLeft -= elapsed * 0.025
+      }
+      normalizePosition()
+      frameId = window.requestAnimationFrame(animate)
+    }
+    frameId = window.requestAnimationFrame(animate)
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [repeatedBrands])
+
+  const pauseWhileInteracting = () => {
+    pauseUntil.current = Number.POSITIVE_INFINITY
+  }
+
+  const resumeAfterInteraction = () => {
+    pauseUntil.current = performance.now() + 1200
+  }
+
+  return (
+    <div
+      ref={carouselRef}
+      className="brand-marquee -mx-4 overflow-x-auto px-4 pb-1 md:hidden"
+      onTouchStart={pauseWhileInteracting}
+      onTouchEnd={resumeAfterInteraction}
+      onTouchCancel={resumeAfterInteraction}
+      onPointerDown={pauseWhileInteracting}
+      onPointerUp={resumeAfterInteraction}
+      onPointerCancel={resumeAfterInteraction}
+      onWheel={resumeAfterInteraction}
+    >
+      <div className="flex w-max">
+        {[0, 1, 2].map((copy) => (
+          <div key={copy} className="flex shrink-0 gap-3 pr-3" aria-hidden={copy !== 0 || undefined}>
+            {repeatedBrands.map((brand, index) => (
+              <Link
+                key={`${copy}-${brand.id}-${index}`}
+                to={`/shop?brand=${brand.id}`}
+                tabIndex={copy !== 0 ? -1 : undefined}
+                className="group flex w-[104px] shrink-0 flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-3 transition-colors hover:border-pink-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
+              >
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
+                  <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
+                </div>
+                <p className="w-full break-words text-center text-xs font-semibold leading-5 text-gray-900 group-hover:text-pink-600">{brand.name}</p>
+              </Link>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -179,19 +260,19 @@ function CosmeticMockup({ tone = 'pink' }) {
 function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const { addItem, updateQuantity, items } = useCartStore()
-  const { toggle, isWishlisted } = useWishlistStore()
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
-  const wishlisted = isWishlisted(product.id)
   const cartItem = items.find((i) => i.product?.id === product.id)
   const qty = cartItem?.quantity || 0
   const available = isAvailableForSale(product)
 
-  const discountPct = product.old_price
-    ? Math.round((1 - Number(product.display_price || product.retail_price) / product.old_price) * 100)
+  const currentPrice = Number(product.display_price || product.retail_price || 0)
+  const oldPrice = Number(product.old_price || 0)
+  const discountPct = oldPrice > currentPrice
+    ? Math.round((1 - currentPrice / oldPrice) * 100)
     : null
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
 
@@ -220,12 +301,6 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
     }
     updateQuantity(product.id, qty - 1) 
   }
-  const handleWishlist = (e) => {
-    e.stopPropagation()
-    toggle(product)
-    toast.success(wishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'))
-  }
-
   useEffect(() => {
     setImageLoaded(false)
     setImageFailed(false)
@@ -240,13 +315,6 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition active:scale-[0.98] md:hover:-translate-y-1 md:hover:shadow-soft"
       onClick={() => navigate(`/product/${product.id}`)}
     >
-      {/* Wishlist */}
-      <button
-        onClick={handleWishlist}
-        className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-white/90 shadow-sm transition ${wishlisted ? 'border-pink-200 text-pink-600' : 'border-pink-100 text-gray-500 hover:text-pink-600'}`}
-      >
-        <Heart size={17} className={wishlisted ? 'fill-pink-500' : ''} />
-      </button>
       {/* Badges */}
       <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
         {badge && (
@@ -277,22 +345,22 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
         )}
       </div>
       {/* Info */}
-      <div className="flex min-h-[166px] flex-col p-3">
-        <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
-          <span className="truncate">{product.brand_name || t('product.noBrand')}</span>
+      <div className="flex min-h-0 flex-col p-3 sm:min-h-[166px]">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
+          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
+            <Star size={13} className="fill-yellow-400 text-yellow-400" />{product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
+          </span>
         </div>
-        <h3 className="khmer-title mt-1 line-clamp-2 min-h-[48px] text-sm text-gray-950">{product.name}</h3>
-        <div className="mt-2 flex items-center gap-1">
-          <Star size={13} className="fill-yellow-400 text-yellow-400" />
-          <span className="text-xs font-semibold text-gray-500">{product.rating > 0 ? product.rating : '4.8'}</span>
-          <span className="text-xs text-gray-300">(126)</span>
-        </div>
-        <div className="mt-3 min-w-0">
-          <span className="text-lg font-black leading-none text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
-          {product.old_price && <span className="ml-2 text-xs font-semibold text-gray-400 line-through">{formatCurrency(product.old_price)}</span>}
+        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-sm text-gray-950">{product.name}</h3>
+          <div className="shrink-0 text-right">
+            <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
+            {oldPrice > currentPrice && <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span><span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">{t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}</span></span>}
+          </div>
         </div>
         <FlashSaleTimer item={product} nowMs={nowMs} />
-        <div className="mt-auto pt-3">
+        <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
           <ProductCardButton
             available={available}
             qty={qty}
@@ -389,11 +457,6 @@ export default function Home() {
   const sideCards = homeData?.side_cards || {}
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => brandsData || [], [brandsData])
-  const marqueeBrands = useMemo(() => {
-    if (!brands.length) return []
-    const repeats = Math.max(1, Math.ceil(12 / brands.length))
-    return Array.from({ length: repeats }, () => brands).flat()
-  }, [brands])
   const bestSellers = useMemo(() => bestSellerData || [], [bestSellerData])
   const flashSale = useMemo(() => {
     const source = flashData?.length ? flashData : directFlashData
@@ -953,28 +1016,7 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Mobile Continuous Marquee (< md screens) */}
-            <div className="brand-marquee -mx-4 overflow-x-auto px-4 pb-1 md:hidden">
-              <div className="brand-marquee-track flex w-max">
-                {[0, 1, 2].map((copy) => (
-                  <div key={copy} className="flex shrink-0 gap-3 pr-3" aria-hidden={copy !== 0 || undefined}>
-                    {marqueeBrands.map((brand, index) => (
-                      <Link
-                        key={`${copy}-${brand.id}-${index}`}
-                        to={`/shop?brand=${brand.id}`}
-                        tabIndex={copy !== 0 ? -1 : undefined}
-                        className="group flex w-[104px] shrink-0 flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-3 transition-colors hover:border-pink-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
-                      >
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
-                          <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
-                        </div>
-                        <p className="w-full break-words text-center text-xs font-semibold leading-5 text-gray-900 group-hover:text-pink-600">{brand.name}</p>
-                      </Link>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ShopByBrandCarousel brands={brands} />
           </div>
         )}
 

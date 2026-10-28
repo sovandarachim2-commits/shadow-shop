@@ -1056,7 +1056,6 @@ export default function CustomerLayout() {
         <BottomNavigation
           activeTab={mobileActiveTab}
           onChange={handleMobileNavChange}
-          onHomeReselect={() => window.location.reload()}
           labels={{
             home: t('nav.home'),
             products: t('nav.shop'),
