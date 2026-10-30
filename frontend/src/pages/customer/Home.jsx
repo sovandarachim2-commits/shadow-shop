@@ -419,6 +419,7 @@ export default function Home() {
   const bannerResumeTimerRef = useRef(0)
   const bannerPausedRef = useRef(false)
   const flashSaleScrollRef = useRef(null)
+  const bestSellerScrollRef = useRef(null)
   const refreshStart = useRef({ x: 0, y: 0 })
 
   // ── Queries (one round-trip for OVH VPS home) ───────────────────────────────
@@ -580,6 +581,12 @@ export default function Home() {
 
   const scrollFlashSale = (direction) => {
     const el = flashSaleScrollRef.current
+    if (!el) return
+    el.scrollBy({ left: direction * Math.max(240, el.clientWidth * 0.85), behavior: 'smooth' })
+  }
+
+  const scrollBestSellers = (direction) => {
+    const el = bestSellerScrollRef.current
     if (!el) return
     el.scrollBy({ left: direction * Math.max(240, el.clientWidth * 0.85), behavior: 'smooth' })
   }
@@ -1034,22 +1041,59 @@ export default function Home() {
                 </span>
                 <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.bestSellers')}</h2>
               </div>
-              <Link to="/shop?filter=best_seller" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
-                {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
-              </Link>
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="hidden items-center gap-1 md:flex">
+                  <button
+                    type="button"
+                    onClick={() => scrollBestSellers(-1)}
+                    aria-label={`Previous ${t('home.bestSellers')}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition hover:border-pink-300 hover:text-pink-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollBestSellers(1)}
+                    aria-label={`Next ${t('home.bestSellers')}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition hover:border-pink-300 hover:text-pink-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+                <Link to="/shop?filter=best_seller" className="flex shrink-0 items-center gap-0.5 text-[13px] font-black text-pink-600 transition active:scale-95">
+                  {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
+                </Link>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
+            <div
+              ref={bestSellerScrollRef}
+              role="region"
+              aria-label={t('home.bestSellers')}
+              className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:-mx-6 md:gap-4 md:px-6"
+            >
               {showBestSkeleton
-                ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"><div className="aspect-square animate-pulse bg-gray-100" /><div className="space-y-2 p-3"><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" /><div className="h-4 w-full animate-pulse rounded bg-gray-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" /><div className="h-5 w-16 animate-pulse rounded bg-gray-100" /><div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" /></div></div>)
+                ? Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="w-[46%] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card sm:w-[31%] lg:w-[24%] xl:w-[19%]">
+                    <div className="aspect-square animate-pulse bg-gray-100" />
+                    <div className="space-y-2 p-3">
+                      <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
+                      <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
+                      <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
+                      <div className="h-5 w-16 animate-pulse rounded bg-gray-100" />
+                      <div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" />
+                    </div>
+                  </div>
+                ))
                 : bestSellers.slice(0, 12).map((p, i) => (
-                  <ProductCard 
-                    key={p.id} 
-                    product={p} 
-                    badge={t('home.bestBadge')} 
-                    nowMs={nowMs} 
-                    priority={i < 4} 
-                    onAuthRequired={(type) => openAuthModal(type)}
-                  />
+                  <div key={p.id} className="w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[24%] xl:w-[19%]">
+                    <ProductCard
+                      product={p}
+                      badge={t('home.bestBadge')}
+                      nowMs={nowMs}
+                      priority={i < 4}
+                      onAuthRequired={(type) => openAuthModal(type)}
+                    />
+                  </div>
                 ))
               }
             </div>
