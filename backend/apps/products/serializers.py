@@ -291,13 +291,17 @@ class ProductWriteSerializer(serializers.ModelSerializer):
 
 class ProductSetItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    brand_name = serializers.SerializerMethodField()
     product_code = serializers.CharField(source='product.code', read_only=True)
     product_image = serializers.SerializerMethodField()
     product_current_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductSetItem
-        fields = ['id', 'product', 'product_name', 'product_code', 'product_image', 'product_current_stock', 'quantity']
+        fields = ['id', 'product', 'product_name', 'brand_name', 'product_code', 'product_image', 'product_current_stock', 'quantity']
+
+    def get_brand_name(self, obj):
+        return obj.product.brand.name if obj.product.brand else ''
 
     def get_product_image(self, obj):
         images = list(obj.product.images.all())

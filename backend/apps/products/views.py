@@ -179,7 +179,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = ProductFilter
     search_fields = ['name', 'code', 'barcode', 'description', 'brand__name']
-    ordering_fields = ['name', 'wholesale_price', 'created_at', 'rating']
+    ordering_fields = ['name', 'wholesale_price', 'retail_price', 'created_at', 'rating']
 
     def get_serializer_class(self):
         if self.action == 'list':
