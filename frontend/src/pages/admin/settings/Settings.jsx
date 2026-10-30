@@ -427,17 +427,20 @@ export default function Settings({ tab = 'general' }) {
   const [socialIconPreviews, setSocialIconPreviews] = useState({})
 
   const savePaymentMutation = useMutation({
-    mutationFn: () => {
-      const payload = paymentSettingsPayload(paymentMethods)
-      const logosToRemove = Object.keys(paymentLogoRemovals).filter((method) => paymentLogoRemovals[method])
-      if (Object.keys(paymentLogoFiles).length === 0 && logosToRemove.length === 0) {
+    mutationFn: ({
+      methods = paymentMethods,
+      logoFiles = paymentLogoFiles,
+      logosToRemove = Object.keys(paymentLogoRemovals).filter((method) => paymentLogoRemovals[method]),
+    } = {}) => {
+      const payload = paymentSettingsPayload(methods)
+      if (Object.keys(logoFiles).length === 0 && logosToRemove.length === 0) {
         return authApi.siteSettings.update({ payment_methods: payload })
       }
 
       const fd = new FormData()
       fd.append('payment_methods', JSON.stringify(payload))
       logosToRemove.forEach((method) => fd.append(`remove_payment_logo_${method}`, 'true'))
-      Object.entries(paymentLogoFiles).forEach(([method, file]) => {
+      Object.entries(logoFiles).forEach(([method, file]) => {
         if (file) fd.append(`payment_logo_${method}`, file)
       })
       return authApi.siteSettings.update(fd)
@@ -449,7 +452,10 @@ export default function Settings({ tab = 'general' }) {
       setPaymentLogoRemovals({})
       toast.success('Payment methods saved!')
     },
-    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to save payment methods')),
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] })
+      toast.error(apiErrorMessage(error, 'Failed to save payment methods'))
+    },
   })
 
   const pickPaymentLogo = (method) => (e) => {
@@ -463,21 +469,28 @@ export default function Settings({ tab = 'general' }) {
   }
 
   const removePaymentLogo = (method) => {
-    setPaymentLogoFiles((prev) => {
-      const next = { ...prev }
-      delete next[method]
-      return next
-    })
+    if (savePaymentMutation.isPending) return
+    const nextLogoFiles = { ...paymentLogoFiles }
+    delete nextLogoFiles[method]
+    setPaymentLogoFiles(nextLogoFiles)
     setPaymentLogoPreviews((prev) => {
       const next = { ...prev }
       delete next[method]
       return next
     })
+    const nextLogoUrls = { ...(paymentMethods.logo_urls || {}) }
+    delete nextLogoUrls[method]
+    const nextPaymentMethods = { ...paymentMethods, logo_urls: nextLogoUrls }
+    setPaymentMethods(nextPaymentMethods)
+    const logosToRemove = [
+      ...Object.keys(paymentLogoRemovals).filter((key) => paymentLogoRemovals[key]),
+      method,
+    ]
     setPaymentLogoRemovals((prev) => ({ ...prev, [method]: true }))
-    setPaymentMethods((prev) => {
-      const logoUrls = { ...(prev.logo_urls || {}) }
-      delete logoUrls[method]
-      return { ...prev, logo_urls: logoUrls }
+    savePaymentMutation.mutate({
+      methods: nextPaymentMethods,
+      logoFiles: nextLogoFiles,
+      logosToRemove,
     })
   }
 
@@ -1625,15 +1638,15 @@ export default function Settings({ tab = 'general' }) {
                         onChange={pickPaymentLogo(p.key)}
                       />
                     </label>
-                    {(paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key]) && (
+                    {(paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key] || (savePaymentMutation.isPending && paymentLogoRemovals[p.key])) && (
                       <button
                         type="button"
                         onClick={() => removePaymentLogo(p.key)}
+                        disabled={savePaymentMutation.isPending}
                         aria-label={`Remove ${p.label} logo`}
-                        className="inline-flex items-center gap-1 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-red-600 transition-colors hover:border-red-200 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                        className="inline-flex items-center gap-1 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-red-600 transition-colors hover:border-red-200 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 disabled:cursor-wait disabled:opacity-60"
                       >
-                        <Trash2 size={14} />
-                        Remove
+                        {savePaymentMutation.isPending && paymentLogoRemovals[p.key] ? 'Saving...' : <><Trash2 size={14} /> Remove</>}
                       </button>
                     )}
                     <label className="relative inline-flex items-center cursor-pointer">
