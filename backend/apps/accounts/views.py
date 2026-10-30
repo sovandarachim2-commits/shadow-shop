@@ -1688,8 +1688,15 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
         from utils.storefront_cache import bump_storefront_cache
         instance = serializer.save()
 
-        logo_urls = dict(instance.payment_methods.get('logo_urls') or {})
+        payment_methods = dict(instance.payment_methods or {})
+        logo_urls = dict(payment_methods.get('logo_urls') or {})
+        payment_logos_changed = False
         for method in PAYMENT_METHOD_KEYS:
+            remove_logo = str(self.request.data.get(f'remove_payment_logo_{method}', '')).lower() in {'1', 'true', 'yes'}
+            if remove_logo:
+                logo_urls.pop(method, None)
+                payment_logos_changed = True
+
             upload = self.request.FILES.get(f'payment_logo_{method}')
             if not upload:
                 continue
@@ -1697,10 +1704,13 @@ class SiteSettingsView(generics.RetrieveUpdateAPIView):
             path = default_storage.save(f'site/payment_methods/{method}/{filename}', upload)
             url = default_storage.url(path)
             logo_urls[method] = self.request.build_absolute_uri(url) if url.startswith('/') else url
+            payment_logos_changed = True
 
-        if logo_urls:
-            payment_methods = dict(instance.payment_methods or {})
-            payment_methods['logo_urls'] = logo_urls
+        if payment_logos_changed:
+            if logo_urls:
+                payment_methods['logo_urls'] = logo_urls
+            else:
+                payment_methods.pop('logo_urls', None)
             instance.payment_methods = payment_methods
             instance.save(update_fields=['payment_methods'])
 

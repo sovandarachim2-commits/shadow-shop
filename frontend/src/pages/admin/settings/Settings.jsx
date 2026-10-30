@@ -420,6 +420,7 @@ export default function Settings({ tab = 'general' }) {
   )
   const [paymentLogoFiles, setPaymentLogoFiles] = useState({})
   const [paymentLogoPreviews, setPaymentLogoPreviews] = useState({})
+  const [paymentLogoRemovals, setPaymentLogoRemovals] = useState({})
   const [footerMenus, setFooterMenus] = useState(normalizeFooterMenus())
   const [footerSocialLinks, setFooterSocialLinks] = useState(normalizeSocialLinks())
   const [socialIconFiles, setSocialIconFiles] = useState({})
@@ -428,12 +429,14 @@ export default function Settings({ tab = 'general' }) {
   const savePaymentMutation = useMutation({
     mutationFn: () => {
       const payload = paymentSettingsPayload(paymentMethods)
-      if (Object.keys(paymentLogoFiles).length === 0) {
+      const logosToRemove = Object.keys(paymentLogoRemovals).filter((method) => paymentLogoRemovals[method])
+      if (Object.keys(paymentLogoFiles).length === 0 && logosToRemove.length === 0) {
         return authApi.siteSettings.update({ payment_methods: payload })
       }
 
       const fd = new FormData()
       fd.append('payment_methods', JSON.stringify(payload))
+      logosToRemove.forEach((method) => fd.append(`remove_payment_logo_${method}`, 'true'))
       Object.entries(paymentLogoFiles).forEach(([method, file]) => {
         if (file) fd.append(`payment_logo_${method}`, file)
       })
@@ -443,6 +446,7 @@ export default function Settings({ tab = 'general' }) {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] })
       setPaymentLogoFiles({})
       setPaymentLogoPreviews({})
+      setPaymentLogoRemovals({})
       toast.success('Payment methods saved!')
     },
     onError: (error) => toast.error(apiErrorMessage(error, 'Failed to save payment methods')),
@@ -452,9 +456,29 @@ export default function Settings({ tab = 'general' }) {
     const file = e.target.files?.[0]
     if (!file) return
     setPaymentLogoFiles((prev) => ({ ...prev, [method]: file }))
+    setPaymentLogoRemovals((prev) => ({ ...prev, [method]: false }))
     const reader = new FileReader()
     reader.onload = (ev) => setPaymentLogoPreviews((prev) => ({ ...prev, [method]: ev.target.result }))
     reader.readAsDataURL(file)
+  }
+
+  const removePaymentLogo = (method) => {
+    setPaymentLogoFiles((prev) => {
+      const next = { ...prev }
+      delete next[method]
+      return next
+    })
+    setPaymentLogoPreviews((prev) => {
+      const next = { ...prev }
+      delete next[method]
+      return next
+    })
+    setPaymentLogoRemovals((prev) => ({ ...prev, [method]: true }))
+    setPaymentMethods((prev) => {
+      const logoUrls = { ...(prev.logo_urls || {}) }
+      delete logoUrls[method]
+      return { ...prev, logo_urls: logoUrls }
+    })
   }
 
   const setPaymentZones = (method, zones) => {
@@ -1601,6 +1625,17 @@ export default function Settings({ tab = 'general' }) {
                         onChange={pickPaymentLogo(p.key)}
                       />
                     </label>
+                    {(paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key]) && (
+                      <button
+                        type="button"
+                        onClick={() => removePaymentLogo(p.key)}
+                        aria-label={`Remove ${p.label} logo`}
+                        className="inline-flex items-center gap-1 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-red-600 transition-colors hover:border-red-200 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                      >
+                        <Trash2 size={14} />
+                        Remove
+                      </button>
+                    )}
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
