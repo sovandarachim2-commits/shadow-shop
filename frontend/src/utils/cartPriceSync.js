@@ -30,7 +30,7 @@ export function useCartPriceSync() {
     queryKey: ['storefront-revision'],
     queryFn: () => productsApi.revision().then((response) => response.data?.revision ?? 0),
     staleTime: 0,
-    refetchInterval: 1000,
+    refetchInterval: 15000,
     retry: false,
   })
 

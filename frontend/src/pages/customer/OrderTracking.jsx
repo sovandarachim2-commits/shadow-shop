@@ -159,7 +159,7 @@ export default function OrderTracking() {
   const deliveryAddress = formatFullAddressKhmer(customer)
   const deliveryAddressText = deliveryAddress && deliveryAddress !== '-' ? deliveryAddress : t('orders.noAddress')
   const paymentLabel = {
-    aba: 'ABA Pay',
+    aba: 'ABA KHQR',
     bakong: 'Bakong KHQR',
     cod: t('orders.payment.cashOnDelivery'),
     cash: t('orders.payment.cash'),

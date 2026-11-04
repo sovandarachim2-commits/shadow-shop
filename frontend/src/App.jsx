@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNa
 import { Component, lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react'
 import { QueryClient, QueryClientProvider, dehydrate, hydrate } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
-import toast, { Toaster } from 'react-hot-toast'
+import toast, { Toaster, useToasterStore } from 'react-hot-toast'
 import { AlertCircle, CheckCircle2, ClipboardList, Lock, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -560,6 +560,17 @@ function ScrollToTop() {
   return null
 }
 
+function ToastLimiter({ limit = 1 }) {
+  const { toasts } = useToasterStore()
+  useEffect(() => {
+    toasts
+      .filter((t) => t.visible)
+      .filter((_, i) => i >= limit)
+      .forEach((t) => toast.dismiss(t.id))
+  }, [toasts, limit])
+  return null
+}
+
 function resolveToastMessage(toastItem) {
   const message = toastItem?.message
   return typeof message === 'function' ? message(toastItem) : message
@@ -910,6 +921,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
 
+          <ToastLimiter limit={1} />
           <Toaster
             position="top-right"
             gutter={10}

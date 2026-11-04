@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -14,7 +14,7 @@ import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { CosmeticArt } from '@/components/customer/CustomerUi'
-import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import { showCartAddedToast, handleCartAdd, showStockLimitToast } from '@/components/customer/CartAddedToast'
 import { showWishlistToast } from '@/components/customer/WishlistToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -28,18 +28,21 @@ function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
 
-function RelatedProductCard({ product, priority = false, onAuthRequired }) {
+const RelatedProductCard = memo(function RelatedProductCard({ product, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { addItem, updateQuantity, items } = useCartStore()
-  const { toggle, isWishlisted } = useWishlistStore()
+  const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const qty = useCartStore((s) => {
+    const item = s.items.find((i) => i.product?.id === product.id)
+    return item?.quantity || 0
+  })
+  const toggle = useWishlistStore((s) => s.toggle)
+  const wishlisted = useWishlistStore((s) => s.items.some((i) => (i.product?.id || i.id) === product.id))
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
-  const wishlisted = isWishlisted(product.id)
-  const cartItem = items.find((item) => item.product?.id === product.id)
-  const qty = cartItem?.quantity || 0
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
   const available = isAvailableForSale(product)
   const price = Number(product.display_price || product.retail_price || 0)
@@ -59,21 +62,20 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
   const handleAdd = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    addItem(saleProduct, 1)
-    showCartAddedToast(saleProduct, navigate)
+    handleCartAdd(addItem, saleProduct, navigate, 1)
   }
 
   const handleUpdateQty = (e, newQty) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
     if (newQty > qty) {
-      addItem(saleProduct, 1)
+      handleCartAdd(addItem, saleProduct, navigate, newQty - qty)
     } else {
       updateQuantity(product.id, newQty)
     }
@@ -160,7 +162,7 @@ function RelatedProductCard({ product, priority = false, onAuthRequired }) {
       </div>
     </article>
   )
-}
+})
 
 function RelatedProductSkeleton() {
   return (
@@ -329,10 +331,15 @@ export default function ProductDetail() {
       return
     }
 
-    addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
-    setAdded(true)
-    showCartAddedToast(saleProduct, navigate, Math.min(qty, maxPurchaseQty || qty))
-    setTimeout(() => setAdded(false), 2000)
+    const toAdd = Math.min(qty, maxPurchaseQty || qty)
+    const result = addItem(saleProduct, toAdd)
+    if (result?.success) {
+      setAdded(true)
+      showCartAddedToast(saleProduct, navigate, result.quantity)
+      setTimeout(() => setAdded(false), 2000)
+    } else if (result?.reason === 'stock_limit') {
+      showStockLimitToast(saleProduct, result.maxQuantity)
+    }
   }
 
   const handleBuyNow = () => {
@@ -579,7 +586,13 @@ export default function ProductDetail() {
                 <Minus size={15} />
               </button>
               <span className="w-10 text-center text-base font-black">{qty}</span>
-              <button disabled={!isInStock || qty >= maxPurchaseQty} onClick={() => setQty((q) => Math.min(maxPurchaseQty, q + 1))} className="shop-icon-btn h-10 w-10 disabled:opacity-50">
+              <button disabled={!isInStock} onClick={() => {
+                if (qty >= maxPurchaseQty) {
+                  showStockLimitToast(saleProduct, maxPurchaseQty)
+                } else {
+                  setQty((q) => Math.min(maxPurchaseQty, q + 1))
+                }
+              }} className="shop-icon-btn h-10 w-10 disabled:opacity-50">
                 <Plus size={15} />
               </button>
             </div>
@@ -808,9 +821,15 @@ export default function ProductDetail() {
             <span className="min-w-6 text-center text-sm font-bold text-gray-950">{qty}</span>
             <button
               type="button"
-              onClick={() => setQty((q) => Math.min(maxPurchaseQty, q + 1))}
+              onClick={() => {
+                if (qty >= maxPurchaseQty) {
+                  showStockLimitToast(saleProduct, maxPurchaseQty)
+                } else {
+                  setQty((q) => Math.min(maxPurchaseQty, q + 1))
+                }
+              }}
               className="flex h-8 w-8 items-center justify-center text-gray-950 active:scale-95 disabled:text-gray-300"
-              disabled={!isInStock || qty >= maxPurchaseQty}
+              disabled={!isInStock}
               aria-label="Increase quantity"
             >
               <Plus size={16} strokeWidth={2.5} />

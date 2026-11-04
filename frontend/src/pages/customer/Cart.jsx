@@ -7,6 +7,7 @@ import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { formatCurrency } from '@/utils/helpers'
+import { showStockLimitToast } from '@/components/customer/CartAddedToast'
 import CouponStatusModal from '@/components/rewards/CouponStatusModal'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import toast from 'react-hot-toast'
@@ -291,7 +292,15 @@ export default function Cart() {
                         <Minus size={15} />
                       </button>
                       <span className="min-w-8 text-center text-sm font-black text-gray-900">{String(item.quantity).padStart(2, '0')}</span>
-                      <button onClick={() => updateQuantity(cartKey, item.quantity + 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm">
+                      <button
+                        onClick={() => {
+                          const res = updateQuantity(cartKey, item.quantity + 1)
+                          if (!res?.success && res?.reason === 'stock_limit') {
+                            showStockLimitToast(item.product, res.maxQuantity)
+                          }
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-600 text-white shadow-sm"
+                      >
                         <Plus size={16} />
                       </button>
                     </div>

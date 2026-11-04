@@ -27,9 +27,15 @@ function readUserCarts() {
   }
 }
 const getMaxQuantity = (product) => {
+  const limits = []
+  if (product?.availability_status !== 'available' && typeof product?.current_stock === 'number') {
+    limits.push(Math.max(0, product.current_stock))
+  }
   const maxFlashQty = Number(product?.flash_sale_max_order_qty || 0)
-  if (product?.is_flash_sale_active && maxFlashQty > 0) return maxFlashQty
-  return Infinity
+  if (product?.is_flash_sale_active && maxFlashQty > 0) {
+    limits.push(maxFlashQty)
+  }
+  return limits.length > 0 ? Math.min(...limits) : Infinity
 }
 
 const useCartStore = create(
@@ -39,7 +45,7 @@ const useCartStore = create(
       selectedProductIds: [],
       appliedCoupon: null,
       addItem: (product, quantity = 1) => {
-        if (!product?.id) return
+        if (!product?.id) return { success: false, reason: 'invalid' }
 
         const items = get().items
         const selectedProductIds = get().selectedProductIds
@@ -47,23 +53,31 @@ const useCartStore = create(
         const existing = items.find((i) => getProductId(i) === productKey)
         const nextQuantity = Number(quantity) || 1
         const maxQuantity = getMaxQuantity(product)
+        const currentQty = existing ? getQuantity(existing) : 0
+
+        if (currentQty >= maxQuantity) {
+          return { success: false, reason: 'stock_limit', maxQuantity, currentQuantity: currentQty }
+        }
+
+        const targetQty = Math.min(maxQuantity, currentQty + nextQuantity)
 
         if (existing) {
           set({
             items: items.map((i) =>
               getProductId(i) === productKey
-                ? { ...i, product: { ...i.product, ...product }, quantity: Math.min(maxQuantity, getQuantity(i) + nextQuantity) }
+                ? { ...i, product: { ...i.product, ...product }, quantity: targetQty }
                 : i
             ),
           })
         } else {
           set({
-            items: [...items, { product, quantity: Math.min(maxQuantity, nextQuantity) }],
+            items: [...items, { product, quantity: targetQty }],
             selectedProductIds: selectedProductIds.includes(productKey)
               ? selectedProductIds
               : [...selectedProductIds, productKey],
           })
         }
+        return { success: true, quantity: targetQty, maxQuantity }
       },
       removeItem: (productId) => {
         set({
@@ -75,17 +89,30 @@ const useCartStore = create(
         const nextQuantity = Number(quantity) || 0
         const currentItem = get().items.find((i) => getProductId(i) === productId)
         const maxQuantity = getMaxQuantity(currentItem?.product)
+        const currentQty = currentItem ? getQuantity(currentItem) : 0
 
         if (nextQuantity <= 0) {
           get().removeItem(productId)
-          return
+          return { success: true, quantity: 0 }
+        }
+
+        if (nextQuantity > maxQuantity) {
+          if (currentQty < maxQuantity) {
+            set({
+              items: get().items.map((i) =>
+                getProductId(i) === productId ? { ...i, quantity: maxQuantity } : i
+              ),
+            })
+          }
+          return { success: false, reason: 'stock_limit', maxQuantity, currentQuantity: maxQuantity }
         }
 
         set({
           items: get().items.map((i) =>
-            getProductId(i) === productId ? { ...i, quantity: Math.min(maxQuantity, nextQuantity) } : i
+            getProductId(i) === productId ? { ...i, quantity: nextQuantity } : i
           ),
         })
+        return { success: true, quantity: nextQuantity, maxQuantity }
       },
       toggleSelected: (productId) => {
         const selectedProductIds = get().selectedProductIds

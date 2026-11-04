@@ -51,7 +51,8 @@ export function showWelcomeToast({ returning = false, user = null } = {}) {
       ? i18n.t('auth.welcome')
       : i18n.t('auth.welcomeTo', { storeName: 'Shadow Shop' })
 
+  toast.dismiss('welcome-toast')
   toast.custom((item) => (
     <WelcomeToastCard item={item} message={message} />
-  ), { duration: 2400, position: 'top-right' })
+  ), { id: 'welcome-toast', duration: 2400, position: 'top-right' })
 }

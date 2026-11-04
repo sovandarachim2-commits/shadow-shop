@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -11,7 +11,7 @@ import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import { ProductThumb } from '@/components/customer/CustomerUi'
-import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import { showCartAddedToast, handleCartAdd, showStockLimitToast } from '@/components/customer/CartAddedToast'
 import { showWishlistToast } from '@/components/customer/WishlistToast'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -41,24 +41,27 @@ function relatedProductAvailable(item) {
   return item.is_available_for_sale ?? Number(item.current_stock || 0) > 0
 }
 
-function RelatedSetCard({ item, priority = false, onAuthRequired }) {
+const RelatedSetCard = memo(function RelatedSetCard({ item, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { addItem, updateQuantity, items } = useCartStore()
-  const { toggle, isWishlisted } = useWishlistStore()
+  const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const toggle = useWishlistStore((s) => s.toggle)
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const isSet = item.type === 'set'
   const cartProduct = isSet
     ? toCartProduct(item, t('product.productSet'))
     : (item.display_price ? { ...item, retail_price: item.display_price } : item)
   const cartKey = isSet ? cartProduct.cart_key : item.id
-  const cartItem = items.find((entry) => isSet
-    ? entry.product?.cart_key === cartKey
-    : entry.product?.id === item.id)
-  const qty = cartItem?.quantity || 0
+  const qty = useCartStore((s) => {
+    const entry = s.items.find((entry) => isSet
+      ? entry.product?.cart_key === cartKey
+      : entry.product?.id === item.id)
+    return entry?.quantity || 0
+  })
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
-  const wishlisted = !isSet && isWishlisted(item.id)
+  const wishlisted = useWishlistStore((s) => !isSet && s.items.some((entry) => (entry.product?.id || entry.id) === item.id))
   const imageUrl = isSet ? (item.image_url || item.image) : item.primary_image
   const price = Number(isSet ? (item.display_price || item.discount_price || item.price || 0) : (item.display_price || item.retail_price || 0))
   const oldPrice = Number(isSet ? (item.old_price || item.price || 0) : (item.old_price || 0))
@@ -76,8 +79,7 @@ function RelatedSetCard({ item, priority = false, onAuthRequired }) {
       onAuthRequired?.('cart')
       return
     }
-    addItem(cartProduct, 1)
-    showCartAddedToast(cartProduct, navigate)
+    handleCartAdd(addItem, cartProduct, navigate, 1)
   }
 
   const handleIncrease = (e) => {
@@ -86,7 +88,7 @@ function RelatedSetCard({ item, priority = false, onAuthRequired }) {
       onAuthRequired?.('cart')
       return
     }
-    addItem(cartProduct, 1)
+    handleCartAdd(addItem, cartProduct, navigate, 1)
   }
 
   const handleDecrease = (e) => {
@@ -168,7 +170,7 @@ function RelatedSetCard({ item, priority = false, onAuthRequired }) {
       </div>
     </article>
   )
-}
+})
 
 function RelatedSetSkeleton() {
   return (
@@ -290,15 +292,13 @@ export default function ProductSetDetail() {
   const addSetToCart = () => {
     if (!cartProduct || !isInStock) return
     if (!loggedIn) return onAuthRequired('cart')
-    addItem(cartProduct, 1)
-    toast.success(t('product.productSetAdded'))
+    handleCartAdd(addItem, cartProduct, navigate, 1)
   }
 
   const addSelectedSetToCart = () => {
     if (!cartProduct || !isInStock) return
     if (!loggedIn) return onAuthRequired('cart')
-    addItem(cartProduct, purchaseQty)
-    toast.success(t('product.productSetAdded'))
+    handleCartAdd(addItem, cartProduct, navigate, purchaseQty)
   }
 
   const buyNow = () => {

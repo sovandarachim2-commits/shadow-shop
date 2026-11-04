@@ -256,6 +256,7 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Shadow Shop <no-reply
 ABA_PAYWAY_MERCHANT_ID = config('ABA_PAYWAY_MERCHANT_ID', default='')
 ABA_PAYWAY_API_KEY = config('ABA_PAYWAY_API_KEY', default='')
 ABA_PAYWAY_IS_SANDBOX = env_bool('ABA_PAYWAY_IS_SANDBOX', default=True)
+ABA_PAYWAY_LIFETIME = config('ABA_PAYWAY_LIFETIME', default=10, cast=int)
 BACKEND_URL = config('BACKEND_URL', default='http://localhost:8000')
 
 # Bakong KHQR

@@ -617,44 +617,7 @@ export default function Roles() {
                   </Fragment>
                 )
               })}
-              {false && [].map((mod) => (
-                <tr key={mod} className="data-table-row">
-                  <td className="py-3 px-4 font-medium text-gray-900 capitalize">
-                    {mod.replace('_', ' ')}
-                  </td>
-                  {actions.map((act) => {
-                    const key = `${mod}_${act}`
-                    const granted = !!draftGrants[key]
-                    const changed = Boolean(serverGrantState[key]) !== granted
-                    const isSaving = false
-                    return (
-                      <td key={act} className="py-2 px-3 text-center">
-                        {isSaving ? (
-                          <Loader2 size={14} className="mx-auto text-purple-400 animate-spin" />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => toggle(mod, act)}
-                            disabled={savePending}
-                            aria-pressed={granted}
-                            className={`mx-auto inline-flex h-8 w-[72px] items-center rounded-full p-1 ring-2 transition-all disabled:opacity-60 ${
-                              granted
-                                ? 'justify-start bg-green-600 text-white hover:bg-green-700'
-                                : 'justify-end bg-gray-200 text-gray-500 hover:bg-gray-300'
-                            } ${changed ? 'ring-purple-300' : 'ring-transparent'}`}
-                            title={granted ? 'Granted — click to turn off' : 'Not granted — click to turn on'}
-                          >
-                            <span className={`px-1.5 text-[11px] font-black uppercase leading-none ${granted ? 'order-1' : 'order-2'}`}>
-                              {granted ? 'ON' : 'OFF'}
-                            </span>
-                            <span className={`h-6 w-6 rounded-full bg-white shadow transition ${granted ? 'order-2 ml-auto' : 'order-1 mr-auto'}`} />
-                          </button>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+
             </tbody>
           </table>
         )}

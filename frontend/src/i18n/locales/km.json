@@ -54,7 +54,9 @@
     "loadingReceipt": "កំពុងផ្ទុកវិក្កយបត្រ",
     "great": "អស្ចារ្យ!",
     "phonePlaceholder": "012345678",
-    "invalidPhone": "សូមបញ្ចូលលេខទូរស័ព្ទដែលត្រឹមត្រូវសម្រាប់ប្រទេសដែលបានជ្រើសរើស។"
+    "invalidPhone": "សូមបញ្ចូលលេខទូរស័ព្ទដែលត្រឹមត្រូវសម្រាប់ប្រទេសដែលបានជ្រើសរើស។",
+    "stockLimitReached": "{{name}} មានត្រឹមតែ {{count}} នៅក្នុងស្តុកប៉ុណ្ណោះ។",
+    "stockLimitTitle": "ដែនកំណត់ស្តុក"
   },
   "trust": {
     "authentic": "១០០% ពិតប្រាកដ",
@@ -440,7 +442,7 @@
     },
     "payment": {
       "title": "ការបង់ប្រាក់",
-      "aba": "ABA Pay",
+      "aba": "ABA KHQR",
       "bakong": "Bakong KHQR",
       "cashOnDelivery": "បង់ពេលទទួលទំនិញ",
       "cash": "សាច់ប្រាក់",
@@ -735,7 +737,21 @@
     "openTelegramSales": "បើក Telegram ផ្នែកលក់",
     "contactSalesNotice": "បញ្ជាទិញជាមុនសិន។ Telegram នឹងបើកជាមួយព័ត៌មានផលិតផលរបស់អ្នក ដើម្បីផ្ញើទៅផ្នែកលក់។",
     "generateBakongQr": "បង្កើត QR Bakong",
-    "payViaAba": "បង់តាម ABA PAY",
+    "payViaAba": "បង់តាម ABA KHQR",
+    "confirmAba": {
+      "badge": "បញ្ជាក់ការបង់ប្រាក់",
+      "title": "បញ្ជាក់ការបង់ប្រាក់ ABA KHQR",
+      "description": "សូមបញ្ជាក់ការទូទាត់នេះ។ អ្នកនឹងបង់ប្រាក់ជាមួយ ABA KHQR។",
+      "paymentMethod": "វិធីបង់ប្រាក់",
+      "abaKhqr": "ABA KHQR",
+      "totalAmount": "ចំនួនសរុប",
+      "timeLeft": "ពេលវេលានៅសល់",
+      "cancel": "បោះបង់",
+      "pay": "បង់ប្រាក់"
+    },
+    "abaPaymentFailedTitle": "ការបង់ប្រាក់មិនត្រូវបានបញ្ជាក់",
+    "abaPaymentFailedDesc": "ABA បានកំណត់ការបង់ប្រាក់នេះថាបានបោះបង់ ឬផុតកំណត់។ អ្នកអាចព្យាយាមម្ដងទៀត ឬត្រឡប់ទៅហាងវិញ។",
+    "abaTryAgain": "ព្យាយាមបង់ប្រាក់ម្តងទៀត",
     "item": "ផលិតផល",
     "items": "ផលិតផល",
     "qty": "ចំនួន",
@@ -767,9 +783,9 @@
         "desc": "ស្កេន និងបង់តាម Bakong"
       },
       "aba": {
-        "label": "ABA PAY",
+        "label": "ABA KHQR",
         "badge": "ABA",
-        "desc": "ចុចដើម្បីបង់តាម ABA Mobile"
+        "desc": "ស្គែនទូទាត់តាមធនាគារជាសមាជិក"
       },
       "acleda": {
         "label": "ធនាគារ ACLEDA",

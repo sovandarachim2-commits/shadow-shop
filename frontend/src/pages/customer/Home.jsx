@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -12,7 +12,7 @@ import { formatCurrency } from '@/utils/helpers'
 import { formatFlashSaleCountdown, getFlashSaleTimerState, hasFlashSaleTimer, isVisibleFlashSaleItem } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import { BrandLogo } from '@/components/customer/CustomerUi'
-import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import { showCartAddedToast, handleCartAdd } from '@/components/customer/CartAddedToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -49,67 +49,18 @@ function ProductImageFallback() {
 }
 
 function ShopByBrandCarousel({ brands }) {
-  const carouselRef = useRef(null)
-  const pauseUntil = useRef(0)
   const repeatedBrands = useMemo(() => {
     if (!brands.length) return []
-    const repeats = Math.max(1, Math.ceil(12 / brands.length))
+    const repeats = Math.max(2, Math.ceil(10 / brands.length))
     return Array.from({ length: repeats }, () => brands).flat()
   }, [brands])
 
-  useEffect(() => {
-    const carousel = carouselRef.current
-    if (!carousel) return undefined
-
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const segmentWidth = () => carousel.scrollWidth / 3
-    const normalizePosition = () => {
-      const segment = segmentWidth()
-      if (!segment) return
-      if (carousel.scrollLeft < segment * 0.25) carousel.scrollLeft += segment
-      else if (carousel.scrollLeft > segment * 1.75) carousel.scrollLeft -= segment
-    }
-
-    carousel.scrollLeft = segmentWidth()
-
-    let frameId
-    let previousFrameTime = 0
-    const animate = (time) => {
-      const elapsed = previousFrameTime ? Math.min(time - previousFrameTime, 48) : 0
-      previousFrameTime = time
-      if (!reducedMotion.matches && time >= pauseUntil.current) {
-        carousel.scrollLeft -= elapsed * 0.025
-      }
-      normalizePosition()
-      frameId = window.requestAnimationFrame(animate)
-    }
-    frameId = window.requestAnimationFrame(animate)
-
-    return () => window.cancelAnimationFrame(frameId)
-  }, [repeatedBrands])
-
-  const pauseWhileInteracting = () => {
-    pauseUntil.current = Number.POSITIVE_INFINITY
-  }
-
-  const resumeAfterInteraction = () => {
-    pauseUntil.current = performance.now() + 1200
-  }
+  if (!brands.length) return null
 
   return (
-    <div
-      ref={carouselRef}
-      className="brand-marquee -mx-4 overflow-x-auto px-4 pb-1 md:hidden"
-      onTouchStart={pauseWhileInteracting}
-      onTouchEnd={resumeAfterInteraction}
-      onTouchCancel={resumeAfterInteraction}
-      onPointerDown={pauseWhileInteracting}
-      onPointerUp={resumeAfterInteraction}
-      onPointerCancel={resumeAfterInteraction}
-      onWheel={resumeAfterInteraction}
-    >
-      <div className="flex w-max">
-        {[0, 1, 2].map((copy) => (
+    <div className="-mx-4 overflow-hidden px-4 pb-1 md:hidden">
+      <div className="brand-marquee-track">
+        {[0, 1].map((copy) => (
           <div key={copy} className="flex shrink-0 gap-3 pr-3" aria-hidden={copy !== 0 || undefined}>
             {repeatedBrands.map((brand, index) => (
               <Link
@@ -167,7 +118,17 @@ function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addL
 }
 
 // ─── Countdown to midnight ────────────────────────────────────────────────────
-function FlashSaleTimer({ item, nowMs, compact = false }) {
+function FlashSaleTimer({ item, compact = false }) {
+  const hasTimer = hasFlashSaleTimer(item)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!hasTimer) return undefined
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasTimer])
+
+  if (!hasTimer) return null
   const timer = getFlashSaleTimerState(item, nowMs)
   if (!timer?.value) return null
 
@@ -175,6 +136,57 @@ function FlashSaleTimer({ item, nowMs, compact = false }) {
     <div className={`mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 font-black leading-none text-pink-600 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
       <Clock3 size={compact ? 11 : 12} />
       <span>{timer.label} {timer.value}</span>
+    </div>
+  )
+}
+
+function FlashSaleSectionTimerBadge({ flashSale }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const hasAnyTimer = useMemo(() => flashSale.some(hasFlashSaleTimer), [flashSale])
+
+  useEffect(() => {
+    if (!hasAnyTimer) return undefined
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasAnyTimer])
+
+  const timer = useMemo(() => getFlashSaleSectionTimer(flashSale, nowMs), [flashSale, nowMs])
+  const parts = useMemo(() => timer?.value?.split(/[: ]/) || [], [timer])
+
+  if (!timer) return null
+
+  return (
+    <div className="hidden items-center gap-1 sm:flex">
+      <span className="text-[11px] font-black text-pink-600">{timer.label}</span>
+      {parts.map((v, i) => (
+        <span key={`${v}-${i}`} className="flex items-center">
+          <span className="flex h-[22px] min-w-[24px] items-center justify-center rounded-md bg-gray-900 px-1 text-[11px] font-black tabular-nums text-white">
+            {v}
+          </span>
+          {i < parts.length - 1 && <span className="mx-0.5 text-xs font-black text-gray-400">:</span>}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function FlashSaleSectionProgressBar({ flashSale }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const hasAnyTimer = useMemo(() => flashSale.some(hasFlashSaleTimer), [flashSale])
+
+  useEffect(() => {
+    if (!hasAnyTimer) return undefined
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasAnyTimer])
+
+  const timer = useMemo(() => getFlashSaleSectionTimer(flashSale, nowMs), [flashSale, nowMs])
+
+  if (!timer) return null
+
+  return (
+    <div className="mt-2 h-1.5 max-w-md overflow-hidden rounded-full bg-pink-100">
+      <div className="h-full rounded-full bg-pink-600 transition-all" style={{ width: `${timer.progress}%` }} />
     </div>
   )
 }
@@ -208,26 +220,6 @@ function getFlashSaleSectionTimer(items, nowMs) {
   }
 }
 
-function useCountdown() {
-  const calc = () => {
-    const now = new Date()
-    const end = new Date()
-    end.setHours(23, 59, 59, 999)
-    const diff = Math.max(0, end - now)
-    return {
-      h: String(Math.floor(diff / 3600000)).padStart(2, '0'),
-      m: String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0'),
-      s: String(Math.floor((diff % 60000) / 1000)).padStart(2, '0'),
-    }
-  }
-  const [time, setTime] = useState(calc)
-  useEffect(() => {
-    const t = setInterval(() => setTime(calc()), 1000)
-    return () => clearInterval(t)
-  }, [])
-  return time
-}
-
 // ─── Cosmetic placeholder ─────────────────────────────────────────────────────
 function CosmeticMockup({ tone = 'pink' }) {
   const palettes = {
@@ -257,16 +249,19 @@ function CosmeticMockup({ tone = 'pink' }) {
 }
 
 // ─── Product card ─────────────────────────────────────────────────────────────
-function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }) {
+const ProductCard = memo(function ProductCard({ product, badge, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
-  const { addItem, updateQuantity, items } = useCartStore()
+  const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const qty = useCartStore((s) => {
+    const item = s.items.find((i) => (i.product?.cart_key || i.product?.id) === (product.cart_key || product.id))
+    return item?.quantity || 0
+  })
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
-  const cartItem = items.find((i) => i.product?.id === product.id)
-  const qty = cartItem?.quantity || 0
   const available = isAvailableForSale(product)
 
   const currentPrice = Number(product.display_price || product.retail_price || 0)
@@ -279,24 +274,23 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
   const handleAdd = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    addItem(saleProduct, 1)
-    showCartAddedToast(saleProduct, navigate)
+    handleCartAdd(addItem, saleProduct, navigate, 1)
   }
   const handleIncrease = (e) => { 
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    addItem(saleProduct, 1) 
+    handleCartAdd(addItem, saleProduct, navigate, 1)
   }
   const handleDecrease = (e) => { 
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
     updateQuantity(product.id, qty - 1) 
@@ -359,7 +353,7 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
             {oldPrice > currentPrice && <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span><span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">{t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}</span></span>}
           </div>
         </div>
-        <FlashSaleTimer item={product} nowMs={nowMs} />
+        <FlashSaleTimer item={product} />
         <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
           <ProductCardButton
             available={available}
@@ -375,7 +369,7 @@ function ProductCard({ product, badge, nowMs, priority = false, onAuthRequired }
       </div>
     </article>
   )
-}
+})
 
 // ─── Flash sale card ──────────────────────────────────────────────────────────
 // ─── Home ─────────────────────────────────────────────────────────────────────
@@ -394,7 +388,8 @@ export default function Home() {
   const navigate = useNavigate()
   const pendingWelcomeBonus = useAuthStore((s) => s.pendingWelcomeBonus)
   const clearPendingWelcomeBonus = useAuthStore((s) => s.clearPendingWelcomeBonus)
-  const { openAuthModal } = useUiStore()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
+  const handleAuthRequired = useCallback((type) => openAuthModal(type), [openAuthModal])
   const [showWelcomeBonus, setShowWelcomeBonus] = useState(false)
   const [bonusPoints, setBonusPoints] = useState(0)
 
@@ -406,7 +401,6 @@ export default function Home() {
     }
   }, [pendingWelcomeBonus, clearPendingWelcomeBonus])
 
-  const [nowMs, setNowMs] = useState(Date.now())
   const [categoryPage, setCategoryPage] = useState(0)
   const [activeBannerIndex, setActiveBannerIndex] = useState(0)
   const [isPulling, setIsPulling] = useState(false)
@@ -461,21 +455,9 @@ export default function Home() {
   const bestSellers = useMemo(() => bestSellerData || [], [bestSellerData])
   const flashSale = useMemo(() => {
     const source = flashData?.length ? flashData : directFlashData
-    return source.filter((item) => isVisibleFlashSaleItem(item, nowMs))
-  }, [flashData, directFlashData, nowMs])
+    return source.filter((item) => isVisibleFlashSaleItem(item))
+  }, [flashData, directFlashData])
   const newArrivals = useMemo(() => newArrivalData || [], [newArrivalData])
-  const hasVisibleFlashSaleTimers = useMemo(
-    () => [...flashSale, ...bestSellers, ...newArrivals].some(hasFlashSaleTimer),
-    [flashSale, bestSellers, newArrivals],
-  )
-  const flashSaleSectionTimer = useMemo(
-    () => getFlashSaleSectionTimer(flashSale, nowMs),
-    [flashSale, nowMs],
-  )
-  const flashSaleSectionTimerParts = useMemo(
-    () => flashSaleSectionTimer?.value?.split(/[: ]/) || [],
-    [flashSaleSectionTimer],
-  )
 
   const categoryItems = useMemo(() => categories
     .filter((cat) => !cat.parent)
@@ -556,12 +538,6 @@ export default function Home() {
   useEffect(() => () => {
     if (bannerResumeTimerRef.current) window.clearTimeout(bannerResumeTimerRef.current)
   }, [])
-
-  useEffect(() => {
-    if (!hasVisibleFlashSaleTimers) return undefined
-    const interval = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [hasVisibleFlashSaleTimers])
 
   const handleBannerScroll = () => {
     const track = bannerScrollRef.current
@@ -907,25 +883,9 @@ export default function Home() {
                     <Zap size={14} className="fill-pink-600" strokeWidth={2.5} />
                   </span>
                   <h2 className="min-w-0 text-xl font-black leading-snug text-gray-950 md:text-2xl">{t('home.flashSale')}</h2>
-                  {flashSaleSectionTimer && (
-                    <div className="hidden items-center gap-1 sm:flex">
-                      <span className="text-[11px] font-black text-pink-600">{flashSaleSectionTimer.label}</span>
-                      {flashSaleSectionTimerParts.map((v, i) => (
-                        <span key={`${v}-${i}`} className="flex items-center">
-                          <span className="flex h-[22px] min-w-[24px] items-center justify-center rounded-md bg-gray-900 px-1 text-[11px] font-black tabular-nums text-white">
-                            {v}
-                          </span>
-                          {i < flashSaleSectionTimerParts.length - 1 && <span className="mx-0.5 text-xs font-black text-gray-400">:</span>}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <FlashSaleSectionTimerBadge flashSale={flashSale} />
                 </div>
-                {flashSaleSectionTimer && (
-                  <div className="mt-2 h-1.5 max-w-md overflow-hidden rounded-full bg-pink-100">
-                    <div className="h-full rounded-full bg-pink-600 transition-all" style={{ width: `${flashSaleSectionTimer.progress}%` }} />
-                  </div>
-                )}
+                <FlashSaleSectionProgressBar flashSale={flashSale} />
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {flashSale.length > 1 && (
@@ -974,8 +934,7 @@ export default function Home() {
                   <div key={p.id} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
                     <ProductCard 
                       product={p} 
-                      nowMs={nowMs} 
-                      onAuthRequired={(type) => openAuthModal(type)}
+                      onAuthRequired={handleAuthRequired}
                     />
                   </div>
                 ))
@@ -1089,7 +1048,6 @@ export default function Home() {
                     <ProductCard
                       product={p}
                       badge={t('home.bestBadge')}
-                      nowMs={nowMs}
                       priority={i < 4}
                       onAuthRequired={(type) => openAuthModal(type)}
                     />
@@ -1126,7 +1084,6 @@ export default function Home() {
                     key={p.id} 
                     product={p} 
                     badge={t('common.new')} 
-                    nowMs={nowMs} 
                     priority={i < 4} 
                     onAuthRequired={(type) => openAuthModal(type)}
                   />

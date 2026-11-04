@@ -36,7 +36,14 @@ const ONLINE_PAYMENT_METHODS = ['bakong', 'aba']
 
 function readPendingPayment() {
   try {
-    return JSON.parse(localStorage.getItem(PENDING_PAYMENT_KEY) || 'null')
+    const raw = localStorage.getItem(PENDING_PAYMENT_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    if (data?.expiresAt && Date.now() >= data.expiresAt) {
+      localStorage.removeItem(PENDING_PAYMENT_KEY)
+      return null
+    }
+    return data
   } catch {
     return null
   }
@@ -146,21 +153,33 @@ function buildDeliveryInfo(addresses, user) {
 }
 
 const ABA_PAYWAY_SCRIPT_ID = 'aba-payway-checkout-script'
-const ABA_PAYWAY_PROD_SCRIPT = 'https://checkout.payway.com.kh/plugins/checkout2-0.js'
+const ABA_PAYWAY_CHECKOUT_SCRIPT = 'https://checkout.payway.com.kh/plugins/checkout2-0.js'
 
 function isAbaPaywayReady() {
   return typeof AbaPayway !== 'undefined' && typeof AbaPayway.checkout === 'function'
 }
 
-function loadAbaPaywayScript() {
-  if (isAbaPaywayReady()) return Promise.resolve()
+function loadAbaPaywayScript(scriptUrl) {
+  // ABA PayWay only hosts checkout2-0.js on checkout.payway.com.kh (the sandbox domain returns 403 Forbidden).
+  // The plugin determines sandbox vs prod via the form's action URL.
+  const targetSrc = scriptUrl && !scriptUrl.includes('checkout-sandbox') ? scriptUrl : ABA_PAYWAY_CHECKOUT_SCRIPT
+  const existingScript = document.getElementById(ABA_PAYWAY_SCRIPT_ID)
+
+  if (existingScript && existingScript.src === targetSrc && isAbaPaywayReady()) {
+    return Promise.resolve()
+  }
+
+  if (existingScript && existingScript.src !== targetSrc) {
+    existingScript.remove()
+    delete window.AbaPayway
+  }
 
   return new Promise((resolve, reject) => {
     let script = document.getElementById(ABA_PAYWAY_SCRIPT_ID)
     if (!script) {
       script = document.createElement('script')
       script.id = ABA_PAYWAY_SCRIPT_ID
-      script.src = ABA_PAYWAY_PROD_SCRIPT
+      script.src = targetSrc
       script.async = true
       script.onerror = () => {
         clearInterval(readinessPoll)
@@ -184,7 +203,8 @@ function loadAbaPaywayScript() {
 }
 
 async function submitAbaForm(abaData) {
-  await loadAbaPaywayScript()
+  const scriptUrl = abaData?.checkout_script || ABA_PAYWAY_CHECKOUT_SCRIPT
+  await loadAbaPaywayScript(scriptUrl)
 
   document.getElementById('aba_merchant_request')?.remove()
   const form = document.createElement('form')
@@ -193,6 +213,7 @@ async function submitAbaForm(abaData) {
   form.target = 'aba_webservice'
   form.action = abaData.endpoint
   Object.entries(abaData.params || {}).forEach(([key, value]) => {
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return
     const input = document.createElement('input')
     input.type = 'hidden'
     input.name = key
@@ -359,20 +380,54 @@ export default function Checkout() {
     if (!reference && !orderId) return undefined
 
     let stopped = false
+    let inFlight = false
+    let timer = null
+    let initialDelayTimer = null
+
+    const createdAt = pendingReturnPayment?.createdAt || Date.now()
+    const expiresAt = pendingReturnPayment?.expiresAt || (createdAt + 10 * 60 * 1000)
+
     const checkOrderPayment = async () => {
+      if (stopped || inFlight) return
+
+      // Stop checking when transaction lifetime expires
+      if (Date.now() >= expiresAt) {
+        stopped = true
+        if (timer) clearInterval(timer)
+        if (initialDelayTimer) clearTimeout(initialDelayTimer)
+        setCheckingAbaPayment(false)
+        setShowAbaPopup(false)
+        setShowAbaFailureModal(true)
+        localStorage.removeItem(PENDING_PAYMENT_KEY)
+        setPendingReturnPayment(null)
+        toast.error(t('checkout.transactionExpired') || 'Transaction lifetime expired. Please place your order again.')
+        return
+      }
+
+      inFlight = true
       setCheckingAbaPayment(true)
       try {
         if (reference) {
           const { data } = await ordersApi.orders.checkoutStatus(reference)
           if (stopped) return
+
+          // Stop checking when status is cancelled or expired
           if (['cancelled', 'expired'].includes(data.status)) {
+            stopped = true
+            if (timer) clearInterval(timer)
+            if (initialDelayTimer) clearTimeout(initialDelayTimer)
             localStorage.removeItem(PENDING_PAYMENT_KEY)
             setPendingReturnPayment(null)
             setShowAbaPopup(false)
             setShowAbaFailureModal(true)
             return
           }
-          if (data.order_id && data.order) {
+
+          // Stop checking when status is Approved
+          if (data.status === 'paid' || (data.order_id && data.order)) {
+            stopped = true
+            if (timer) clearInterval(timer)
+            if (initialDelayTimer) clearTimeout(initialDelayTimer)
             localStorage.removeItem(PENDING_PAYMENT_KEY)
             setPendingReturnPayment(null)
             removeSelectedItems()
@@ -383,39 +438,51 @@ export default function Checkout() {
                 orderNumber: data.order_number,
               },
             })
+            return
           }
           return
         }
 
-        const { data: order } = await ordersApi.orders.get(orderId)
-        if (stopped) return
-        if (order.payment_status === 'paid') {
-          localStorage.removeItem(PENDING_PAYMENT_KEY)
-          setPendingReturnPayment(null)
-          removeSelectedItems()
-          navigate('/order-success', {
-            replace: true,
-            state: {
-              orderId: order.id,
-              orderNumber: order.order_number,
-            },
-          })
+        if (orderId) {
+          const { data: order } = await ordersApi.orders.get(orderId)
+          if (stopped) return
+          if (order.payment_status === 'paid') {
+            stopped = true
+            if (timer) clearInterval(timer)
+            if (initialDelayTimer) clearTimeout(initialDelayTimer)
+            localStorage.removeItem(PENDING_PAYMENT_KEY)
+            setPendingReturnPayment(null)
+            removeSelectedItems()
+            navigate('/order-success', {
+              replace: true,
+              state: {
+                orderId: order.id,
+                orderNumber: order.order_number,
+              },
+            })
+          }
         }
       } catch {
         // Keep the pending payment and QR available during temporary network failures.
       } finally {
+        inFlight = false
         if (!stopped) setCheckingAbaPayment(false)
       }
     }
 
-    checkOrderPayment()
-    const timer = setInterval(checkOrderPayment, 1200)
+    // ABA flow: Wait ~3 seconds after initiating, then check status every 3-5 seconds
+    initialDelayTimer = setTimeout(() => {
+      if (stopped) return
+      checkOrderPayment()
+      timer = setInterval(checkOrderPayment, 4000)
+    }, 3000)
 
     return () => {
       stopped = true
-      clearInterval(timer)
+      if (initialDelayTimer) clearTimeout(initialDelayTimer)
+      if (timer) clearInterval(timer)
     }
-  }, [pendingReturnPayment?.reference, pendingReturnPayment?.orderId, navigate, removeSelectedItems])
+  }, [pendingReturnPayment?.reference, pendingReturnPayment?.orderId, pendingReturnPayment?.expiresAt, navigate, removeSelectedItems, t])
 
   useEffect(() => {
     if (!bakongPayment || bakongPayment.status === 'paid' || bakongPayment.status === 'expired') {
@@ -597,10 +664,14 @@ export default function Checkout() {
         if (paymentMethod === 'aba') {
           const abaData = result.aba_payment
           if (!abaData) throw new Error('Missing ABA payment')
+          const expiresAtMs = pending.expires_at
+            ? new Date(pending.expires_at).getTime()
+            : Date.now() + 10 * 60 * 1000
           const pendingState = {
             reference: pending.reference,
             paymentMethod: 'aba',
             createdAt: Date.now(),
+            expiresAt: expiresAtMs,
             abaPayment: abaData.mode === 'qr' ? abaData : null,
             abaAwaitingConfirmation: false,
           }
@@ -635,8 +706,23 @@ export default function Checkout() {
       })
     } catch (error) {
       if (salesWindow) salesWindow.close()
-      const detail = error?.response?.data?.coupon_code || error?.response?.data?.detail || error?.message
-      toast.error(Array.isArray(detail) ? detail[0] : detail || t('checkout.placeOrderFailed'))
+      const data = error?.response?.data
+      let detail = null
+      if (data) {
+        if (typeof data === 'string') {
+          detail = data
+        } else if (data.items) {
+          detail = Array.isArray(data.items) ? data.items[0] : data.items
+        } else if (data.detail) {
+          detail = data.detail
+        } else if (data.coupon_code) {
+          detail = Array.isArray(data.coupon_code) ? data.coupon_code[0] : data.coupon_code
+        } else {
+          const firstVal = Object.values(data)[0]
+          detail = Array.isArray(firstVal) ? firstVal[0] : firstVal
+        }
+      }
+      toast.error(detail || error?.message || t('checkout.placeOrderFailed'))
     } finally {
       setSubmitting(false)
       setAbaLoading(false)
@@ -756,7 +842,7 @@ export default function Checkout() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold text-gray-950">{method.key === 'aba' ? 'ABA KHQR' : method.label}</span>
-                    <span className="text-xs text-gray-400">{method.key === 'aba' ? 'Scan to pay with any banking app' : method.desc}</span>
+                    <span className="text-xs text-gray-400">{method.desc}</span>
                   </span>
                   {paymentMethod === method.key && <Check className={`shrink-0 ${method.key === 'aba' ? 'text-blue-700' : 'text-pink-600'}`} size={18} />}
                 </button>
@@ -901,10 +987,14 @@ export default function Checkout() {
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-pink-600">Confirm Payment</p>
-                <h2 className="mt-1 text-xl font-black leading-tight text-gray-950">Confirm ABA Payment</h2>
+                <p className="text-xs font-black uppercase tracking-wide text-pink-600">
+                  {t('checkout.confirmAba.badge', 'Confirm Payment')}
+                </p>
+                <h2 className="mt-1 text-xl font-black leading-tight text-gray-950">
+                  {t('checkout.confirmAba.title', 'Confirm ABA KHQR')}
+                </h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-gray-500">
-                  Please confirm this payment. You will pay with ABA Mobile.
+                  {t('checkout.confirmAba.description', 'Please confirm this payment. You will pay with ABA KHQR.')}
                 </p>
               </div>
               <button
@@ -918,15 +1008,15 @@ export default function Checkout() {
 
             <div className="mt-6 space-y-4 rounded-2xl border border-gray-100 bg-gray-50 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-bold text-gray-500">Payment Method</span>
-                <span className="text-sm font-black text-gray-950">ABA PAY</span>
+                <span className="text-sm font-bold text-gray-500">{t('checkout.confirmAba.paymentMethod', t('checkout.paymentMethod'))}</span>
+                <span className="text-sm font-black text-gray-950">{t('checkout.confirmAba.abaKhqr', 'ABA KHQR')}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-bold text-gray-500">Total Amount</span>
+                <span className="text-sm font-bold text-gray-500">{t('checkout.confirmAba.totalAmount', t('checkout.totalAmount'))}</span>
                 <span className="text-base font-black text-gray-950">{formatCurrency(grandTotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-bold text-gray-500">Time Left</span>
+                <span className="text-sm font-bold text-gray-500">{t('checkout.confirmAba.timeLeft', 'Time Left')}</span>
                 <span className="flex items-center gap-1.5 text-sm font-black text-gray-950">
                   <Clock size={16} />
                   {formatTimer(abaConfirmSecondsLeft)}
@@ -940,7 +1030,7 @@ export default function Checkout() {
                 onClick={() => setShowAbaConfirm(false)}
                 className="rounded-full border border-gray-200 py-3 text-sm font-black text-gray-600 transition-colors hover:bg-gray-50"
               >
-                Cancel
+                {t('checkout.confirmAba.cancel', t('common.cancel'))}
               </button>
               <button
                 type="button"
@@ -951,7 +1041,7 @@ export default function Checkout() {
                 disabled={submitting}
                 className="flex items-center justify-center rounded-full bg-pink-600 py-3 text-sm font-black text-white shadow-lg shadow-pink-100 transition-all hover:bg-pink-700 active:scale-[0.98] disabled:opacity-50"
               >
-                {submitting ? t('checkout.pleaseWait') : 'Pay'}
+                {submitting ? t('checkout.pleaseWait') : t('checkout.confirmAba.pay', t('checkout.payNow', 'Pay'))}
               </button>
             </div>
           </div>
@@ -1158,9 +1248,9 @@ export default function Checkout() {
       <OrderSuccessModal
         open={showAbaFailureModal}
         variant="failed"
-        title="Payment not confirmed"
-        description="ABA marked this payment as cancelled or expired. You can try again or return to the shop."
-        trackLabel="Try payment again"
+        title={t('checkout.abaPaymentFailedTitle', 'Payment not confirmed')}
+        description={t('checkout.abaPaymentFailedDesc', 'ABA marked this payment as cancelled or expired. You can try again or return to the shop.')}
+        trackLabel={t('checkout.abaTryAgain', 'Try payment again')}
         onTrack={() => {
           setShowAbaFailureModal(false)
           setAbaPayment(null)

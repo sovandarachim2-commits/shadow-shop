@@ -44,7 +44,7 @@ const STATUS_LABEL_KEYS = {
 const COMPLETED_STATUSES = new Set(['completed', 'delivered', 'cancelled'])
 
 const PAYMENT_METHOD_LABELS = {
-  aba: 'ABA Pay',
+  aba: 'ABA KHQR',
   bakong: 'Bakong KHQR',
   acleda: 'ACLEDA',
   wing: 'Wing',

@@ -1,12 +1,12 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { Heart, ShoppingCart } from 'lucide-react'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 
-export default function HeaderActionIcons({ size = 'sm' }) {
-  const cartItems = useCartStore((s) => s.items)
+function HeaderActionIcons({ size = 'sm' }) {
+  const totalItems = useCartStore((s) => s.items.reduce((sum, item) => sum + item.quantity, 0))
   const wishlistCount = useWishlistStore((s) => s.items.length)
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
   const dimension = size === 'md' ? 'h-10 w-10' : 'h-9 w-9'
 
   return (
@@ -38,3 +38,6 @@ export default function HeaderActionIcons({ size = 'sm' }) {
     </div>
   )
 }
+
+export default memo(HeaderActionIcons)
+

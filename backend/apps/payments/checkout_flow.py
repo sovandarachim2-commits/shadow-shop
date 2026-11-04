@@ -86,7 +86,10 @@ def prepare_online_checkout(request, checkout_data):
         raise ValidationError({'payment_method': 'This payment method does not use deferred checkout.'})
 
     amount = preview_checkout_amount(request, checkout_data)
-    expires_minutes = max(settings.BAKONG_EXPIRATION_MINUTES, 1)
+    if payment_method == 'aba':
+        expires_minutes = max(int(getattr(settings, 'ABA_PAYWAY_LIFETIME', 10)), 1)
+    else:
+        expires_minutes = max(settings.BAKONG_EXPIRATION_MINUTES, 1)
     expires_at = timezone.now() + timezone.timedelta(minutes=expires_minutes)
 
     pending = PendingCheckout.objects.create(
@@ -127,14 +130,17 @@ def get_pending_checkout_status(request, reference, allow_guest=False):
     if not allow_guest:
         pending_qs = pending_qs.filter(user=request.user)
     pending = pending_qs.get()
-    if (
-        pending.payment_method == 'aba'
-        and pending.status == PendingCheckout.STATUS_PENDING
-        and not pending.order_id
-    ):
-        from .aba_services import confirm_pending_aba_payment
-        confirm_pending_aba_payment(pending.reference)
-        pending.refresh_from_db()
+    if pending.status == PendingCheckout.STATUS_PENDING:
+        if pending.expires_at and pending.expires_at <= timezone.now():
+            pending.status = PendingCheckout.STATUS_EXPIRED
+            pending.save(update_fields=['status', 'updated_at'])
+            if pending.payment_method == 'aba':
+                from .models import AbaPayment
+                AbaPayment.objects.filter(tran_id=pending.reference, status='pending').update(status='failed')
+        elif pending.payment_method == 'aba' and not pending.order_id:
+            from .aba_services import confirm_pending_aba_payment
+            confirm_pending_aba_payment(pending.reference)
+            pending.refresh_from_db()
     data = {
         'reference': pending.reference,
         'status': pending.status,

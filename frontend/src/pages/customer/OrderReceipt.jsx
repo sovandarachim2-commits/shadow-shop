@@ -17,7 +17,7 @@ function Row({ label, value, strong = false }) {
 }
 
 const PAYMENT_METHOD_LABELS = {
-  aba: 'ABA Pay',
+  aba: 'ABA KHQR',
   bakong: 'Bakong KHQR',
   cod: 'Cash on Delivery',
   cash: 'Cash',

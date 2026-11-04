@@ -190,8 +190,7 @@ npm run dev
 ```
 ### backend 
 ```bash
-cd "C:\xampp\htdocs\Shadow Shop\backend"
-venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
+                     
 ```
 ### Open From Another Device On The Same Wi-Fi
 

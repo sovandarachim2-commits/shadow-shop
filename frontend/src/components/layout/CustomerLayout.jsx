@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, startTransition, useRef } from 'react'
+import { Suspense, useState, useEffect, useMemo, startTransition, useRef } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home,
@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import toast from 'react-hot-toast'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { useLiveStorefront } from '@/utils/storefrontSync'
 import { cn, formatCurrency } from '@/utils/helpers'
@@ -42,7 +43,6 @@ import { productsApi } from '@/api/products'
 import { ordersApi } from '@/api/orders'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
-import InstallAppBanner from '@/components/customer/InstallAppBanner'
 import BottomNavigation from '@/components/BottomNavigation'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 import AuthModal from '@/components/customer/AuthModal'
@@ -331,12 +331,28 @@ export default function CustomerLayout() {
   })
 
   const isStaff = isAuthenticated && user?.role && user.role !== 'customer'
-  const cartItems = useCartStore((s) => s.items)
-  const selectedProductIds = useCartStore((s) => s.selectedProductIds)
+  const hasCartItems = useCartStore((s) => s.items.length > 0)
+  const hasCheckoutItems = useCartStore((s) => s.items.some((item) => s.selectedProductIds.includes(item.product?.id)))
+  const totalItems = useCartStore((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
+  const subtotal = useCartStore((s) => s.items.reduce((sum, i) => sum + (i.product?.retail_price || 0) * i.quantity, 0))
   const wishlistCount = useWishlistStore((s) => s.items.length)
-  const isKhmer = i18n.language === 'km'
+  const isKhmer = Boolean(i18n.language?.startsWith('km'))
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
-  const currentLanguage = LANGUAGE_OPTIONS.find((language) => language.code === (isKhmer ? 'km' : 'en')) || LANGUAGE_OPTIONS[0]
+  const languageOptions = useMemo(() => [
+    {
+      code: 'en',
+      label: isKhmer ? 'អង់គ្លេស' : 'English',
+      short: 'EN',
+      flag: 'https://flagcdn.com/us.svg',
+    },
+    {
+      code: 'km',
+      label: isKhmer ? 'ខ្មែរ' : 'Khmer',
+      short: isKhmer ? 'ខ្មែរ' : 'KH',
+      flag: 'https://flagcdn.com/kh.svg',
+    },
+  ], [isKhmer])
+  const currentLanguage = languageOptions.find((language) => language.code === (isKhmer ? 'km' : 'en')) || languageOptions[0]
   const selectLanguage = (code) => {
     i18n.changeLanguage(code)
     setIsLanguageMenuOpen(false)
@@ -375,10 +391,7 @@ export default function CustomerLayout() {
     setIsProfileDropdownOpen(false)
   }, [location.pathname, location.search])
 
-  const totalItems = cartItems.reduce((sum, i) => sum + i.quantity, 0)
-  const subtotal = cartItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
   const isHome = location.pathname === '/'
-  const hasCheckoutItems = cartItems.some((item) => selectedProductIds.includes(item.product.id))
   const isMyOrdersPage = location.pathname === '/my-orders'
   const isGuestOrdersPage = isMyOrdersPage && !isAuthenticated
   const myOrdersTab = new URLSearchParams(location.search).get('tab') === 'completed' ? 'completed' : 'ongoing'
@@ -387,7 +400,7 @@ export default function CustomerLayout() {
     location.pathname === '/shop' ||
     location.pathname === '/search' ||
     location.pathname === '/wishlist' ||
-    (location.pathname === '/cart' && cartItems.length > 0) ||
+    (location.pathname === '/cart' && hasCartItems) ||
     (location.pathname === '/checkout' && hasCheckoutItems) ||
     location.pathname.startsWith('/profile') ||
     location.pathname === '/address-book' ||
@@ -433,11 +446,11 @@ export default function CustomerLayout() {
         hideMobileHeader && 'hidden md:block'
       )}>
         <div className="hidden md:block">
-          <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-5 py-3 xl:gap-4 xl:px-6">
-            <div className="w-[174px] shrink-0 xl:w-[205px]">
+          <div className="mx-auto flex max-w-[1500px] items-center gap-2 px-3 py-3 md:gap-3 md:px-5 xl:gap-4 xl:px-6">
+            <div className="w-[140px] shrink-0 lg:w-[174px] xl:w-[205px]">
               <Logo logoUrl={logoUrl} storeName={storeName} />
             </div>
-            <div className="relative mx-auto flex-1 xl:max-w-xl" ref={searchRef}>
+            <div className="relative mx-auto min-w-0 flex-1 xl:max-w-xl" ref={searchRef}>
               <form
                 onSubmit={submitSearch}
                 className="flex h-11 w-full items-center rounded-xl border border-gray-200 bg-white shadow-sm transition focus-within:border-pink-300 focus-within:ring-4 focus-within:ring-pink-100"
@@ -549,12 +562,12 @@ export default function CustomerLayout() {
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2 text-sm font-semibold text-gray-700 xl:gap-2.5">
+            <div className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-gray-700 sm:gap-2 xl:gap-2.5">
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setIsLanguageMenuOpen((open) => !open)}
-                  className="flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-800 shadow-sm transition hover:border-pink-300 hover:text-pink-600"
+                  className="flex h-11 items-center gap-1.5 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-2.5 text-sm font-black text-gray-800 shadow-sm transition hover:border-pink-300 hover:text-pink-600 sm:gap-2 sm:px-3"
                   title="Switch Language"
                   aria-haspopup="menu"
                   aria-expanded={isLanguageMenuOpen}
@@ -567,13 +580,13 @@ export default function CustomerLayout() {
                     />
                   </div>
                   <span className="hidden xl:inline">{currentLanguage.label}</span>
-                  <span className="xl:hidden">{currentLanguage.short}</span>
+                  <span className="hidden sm:inline xl:hidden">{currentLanguage.short}</span>
                   <ChevronDown size={15} className={cn('text-gray-500 transition-transform', isLanguageMenuOpen && 'rotate-180')} />
                 </button>
 
                 {isLanguageMenuOpen && (
                   <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-[22px] border border-gray-100 bg-white p-2 shadow-[0_12px_35px_rgba(15,23,42,0.14)]">
-                    {LANGUAGE_OPTIONS.map((language) => {
+                    {languageOptions.map((language) => {
                       const isActive = language.code === currentLanguage.code
 
                       return (
@@ -809,12 +822,12 @@ export default function CustomerLayout() {
               </div>
               <Link
                 to="/cart"
-                className="relative flex h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 shadow-sm transition hover:border-pink-200 hover:text-pink-600"
+                className="relative flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 shadow-sm transition hover:border-pink-200 hover:text-pink-600"
                 title={t('nav.cart')}
               >
                 <ShoppingCart size={19} className="shrink-0" />
                 <span className="hidden 2xl:inline">{t('nav.cart')}</span>
-                <span className="text-xs font-black text-gray-400">{formatCurrency(subtotal)}</span>
+                <span className="hidden lg:inline text-xs font-black text-gray-400">{formatCurrency(subtotal)}</span>
                 {totalItems > 0 && (
                   <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-600 px-1.5 text-xs font-bold text-white">
                     {totalItems > 9 ? '9+' : totalItems}
@@ -1073,7 +1086,6 @@ export default function CustomerLayout() {
         />
       )}
 
-      <InstallAppBanner bottomOffset={!hideMobileBottomNav} />
 
       <CheckinSuccessModal
         isOpen={showCheckinSuccess}

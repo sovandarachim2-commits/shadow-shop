@@ -16,9 +16,22 @@ from .models import AbaPayment, PendingCheckout
 
 PAYWAY_SANDBOX_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase'
 PAYWAY_PROD_URL = 'https://checkout.payway.com.kh/api/payment-gateway/v1/payments/purchase'
-PAYWAY_SANDBOX_CHECKOUT_SCRIPT = 'https://checkout-sandbox.payway.com.kh/plugins/checkout2-0.js'
-PAYWAY_PROD_CHECKOUT_SCRIPT = 'https://checkout.payway.com.kh/plugins/checkout2-0.js'
+# Note: ABA PayWay serves the checkout2-0.js plugin exclusively from checkout.payway.com.kh (the sandbox domain returns 403 Forbidden).
+# The plugin dynamically routes to sandbox vs prod based on the form's action URL.
+PAYWAY_CHECKOUT_SCRIPT = 'https://checkout.payway.com.kh/plugins/checkout2-0.js'
+PAYWAY_SANDBOX_CHECKOUT_SCRIPT = PAYWAY_CHECKOUT_SCRIPT
+PAYWAY_PROD_CHECKOUT_SCRIPT = PAYWAY_CHECKOUT_SCRIPT
 
+
+PAYWAY_REQUIRED_FIELDS = {
+    'req_time',
+    'merchant_id',
+    'tran_id',
+    'amount',
+    'payment_option',
+    'currency',
+    'type',
+}
 
 PAYWAY_HASH_FIELDS = [
     'req_time',
@@ -48,7 +61,14 @@ PAYWAY_HASH_FIELDS = [
 ]
 
 def _aba_hash(fields: dict) -> str:
-    payload = ''.join(str(fields.get(field, '')) for field in PAYWAY_HASH_FIELDS)
+    parts = []
+    for field in PAYWAY_HASH_FIELDS:
+        val = fields.get(field)
+        if val is None:
+            parts.append('')
+        else:
+            parts.append(str(val))
+    payload = ''.join(parts)
     key = settings.ABA_PAYWAY_API_KEY.encode('utf-8')
     digest = hmac.new(key, payload.encode('utf-8'), hashlib.sha512).digest()
     return base64.b64encode(digest).decode('utf-8')
@@ -108,13 +128,25 @@ def confirm_pending_aba_payment(tran_id):
         return None
 
     paid, apv = aba_check_response_is_paid(result)
-    if not paid:
-        return None
-    return handle_aba_callback({
-        'tran_id': tran_id,
-        'status': '0',
-        'apv': apv,
-    })
+    if paid:
+        return handle_aba_callback({
+            'tran_id': tran_id,
+            'status': '0',
+            'apv': apv,
+        })
+
+    data = result.get('data') if isinstance(result.get('data'), dict) else {}
+    payment_status = str(data.get('payment_status') or '').strip().upper()
+    status_code = data.get('payment_status_code')
+
+    if payment_status in ('CANCELLED', 'CANCELED', 'DECLINED', 'FAILED') or status_code in (1, '1'):
+        AbaPayment.objects.filter(tran_id=tran_id, status='pending').update(status='cancelled', response_data=result)
+        PendingCheckout.objects.filter(reference=tran_id, status=PendingCheckout.STATUS_PENDING).update(status=PendingCheckout.STATUS_CANCELLED)
+    elif payment_status == 'EXPIRED' or status_code in (4, '4'):
+        AbaPayment.objects.filter(tran_id=tran_id, status='pending').update(status='failed', response_data=result)
+        PendingCheckout.objects.filter(reference=tran_id, status=PendingCheckout.STATUS_PENDING).update(status=PendingCheckout.STATUS_EXPIRED)
+
+    return None
 
 
 def _checkout_items_for_aba(checkout_data):
@@ -173,7 +205,7 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
         json.dumps({'reference': tran_id, 'order': order_number or ''}, separators=(',', ':')).encode('utf-8')
     ).decode('utf-8')
 
-    params = {
+    raw_params = {
         'tran_id': tran_id,
         'amount': amount_text,
         'merchant_id': merchant_id,
@@ -187,22 +219,25 @@ def _build_aba_params(tran_id, amount, checkout_data, request_user, order_number
         'phone': phone,
         'email': email,
         'type': 'purchase',
+        'lifetime': str(getattr(settings, 'ABA_PAYWAY_LIFETIME', 10)),
         'return_url': return_url,
         'continue_success_url': continue_success_url,
         'cancel_url': cancel_url,
-        'return_deeplink': '',
-        'custom_fields': '',
         'return_params': return_params,
-        'payout': '',
-        'lifetime': '',
-        'additional_params': '',
-        'google_pay_token': '',
         'skip_success_page': '1',
         'view_type': view_type,
         'payment_gate': '0',
     }
-    params['hash'] = _aba_hash(params)
-    return params
+
+    clean_params = {}
+    for k, v in raw_params.items():
+        if k in PAYWAY_REQUIRED_FIELDS:
+            clean_params[k] = v
+        elif v is not None and not (isinstance(v, str) and v.strip() == ''):
+            clean_params[k] = v
+
+    clean_params['hash'] = _aba_hash(clean_params)
+    return clean_params
 
 
 def build_aba_payment_params_for_pending(pending_checkout, request):

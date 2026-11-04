@@ -36,7 +36,7 @@ export default function OrderSuccess() {
     queryKey: ['checkout-status', checkoutReference],
     queryFn: () => ordersApi.orders.checkoutStatus(checkoutReference, checkoutStatusToken).then((r) => r.data),
     enabled: !!checkoutReference,
-    refetchInterval: (q) => (q.state.data?.order_id ? false : 1500),
+    refetchInterval: (q) => (q.state.data?.order_id ? false : 4000),
   })
 
   const resolvedOrderId = orderId || checkoutStatus?.order_id
@@ -64,7 +64,7 @@ export default function OrderSuccess() {
     refetchInterval: (q) => {
       const current = q.state.data
       if (!current || isPaymentComplete(current, bakongPayment)) return false
-      return ONLINE_PAYMENTS.includes(current.payment_method) ? 1500 : false
+      return ONLINE_PAYMENTS.includes(current.payment_method) ? 4000 : false
     },
   })
 

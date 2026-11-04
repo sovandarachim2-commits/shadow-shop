@@ -309,3 +309,31 @@ html[lang="km"] textarea {
     print-color-adjust: exact !important;
   }
 }
+
+@keyframes brandMarquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.brand-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: brandMarquee 25s linear infinite;
+  will-change: transform;
+}
+
+.brand-marquee-track:hover,
+.brand-marquee-track:active {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-marquee-track {
+    animation: none;
+  }
+}
+

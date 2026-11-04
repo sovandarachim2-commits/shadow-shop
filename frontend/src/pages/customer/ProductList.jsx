@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef, startTransition, memo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal, Clock3 } from 'lucide-react'
 import { productsApi } from '@/api/products'
@@ -11,7 +10,7 @@ import { cn, formatCurrency } from '@/utils/helpers'
 import { getFlashSaleTimerState, hasFlashSaleTimer } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
-import { showCartAddedToast } from '@/components/customer/CartAddedToast'
+import { showCartAddedToast, handleCartAdd } from '@/components/customer/CartAddedToast'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 import { useTranslation } from 'react-i18next'
@@ -96,55 +95,67 @@ function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addL
   )
 }
 
-function FlashSaleTimer({ item, nowMs }) {
+function FlashSaleTimer({ item, compact = false }) {
+  const hasTimer = hasFlashSaleTimer(item)
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!hasTimer) return undefined
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [hasTimer])
+
+  if (!hasTimer) return null
   const timer = getFlashSaleTimerState(item, nowMs)
   if (!timer?.value) return null
 
   return (
-    <div className="mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 text-[11px] font-black leading-none text-pink-600">
-      <Clock3 size={12} />
+    <div className={`mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 leading-none text-pink-600 ${compact ? 'text-[10px]' : 'text-[11px]'} font-black`}>
+      <Clock3 size={compact ? 11 : 12} />
       <span>{timer.label} {timer.value}</span>
     </div>
   )
 }
 
-function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
+const ProductCard = memo(function ProductCard({ product, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
-  const { addItem, updateQuantity, items } = useCartStore()
+  const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const qty = useCartStore((s) => {
+    const item = s.items.find((i) => i.product?.id === product.id)
+    return item?.quantity || 0
+  })
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const navigate = useNavigate()
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
 
-  const cartItem = items.find((i) => i.product?.id === product.id)
-  const qty = cartItem?.quantity || 0
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
   const available = isAvailableForSale(product)
 
   const handleAdd = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    addItem(saleProduct, 1)
-    showCartAddedToast(saleProduct, navigate)
+    handleCartAdd(addItem, saleProduct, navigate, 1)
   }
 
   const handleIncrease = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    addItem(saleProduct, 1)
+    handleCartAdd(addItem, saleProduct, navigate, 1)
   }
 
   const handleDecrease = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
     updateQuantity(product.id, qty - 1)
@@ -208,7 +219,7 @@ function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
             {oldPrice > currentPrice && <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span><span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">{t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}</span></span>}
           </div>
         </div>
-        <FlashSaleTimer item={product} nowMs={nowMs} />
+        <FlashSaleTimer item={product} />
         <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
           <ProductCardButton
             available={available}
@@ -224,12 +235,13 @@ function ProductCard({ product, priority = false, nowMs, onAuthRequired }) {
       </div>
     </article>
   )
-}
+})
 
-function ProductSetCard({ productSet, nowMs, priority = false, onAuthRequired }) {
+const ProductSetCard = memo(function ProductSetCard({ productSet, priority = false, onAuthRequired }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { addItem, updateQuantity, items } = useCartStore()
+  const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -253,32 +265,33 @@ function ProductSetCard({ productSet, nowMs, priority = false, onAuthRequired })
     flash_sale_max_order_qty: productSet.flash_sale_max_order_qty,
     category_name: t('product.productSet'),
   }
-  const cartItem = items.find((item) => item.product?.cart_key === cartProduct.cart_key)
-  const qty = cartItem?.quantity || 0
+  const qty = useCartStore((s) => {
+    const item = s.items.find((entry) => entry.product?.cart_key === cartProduct.cart_key)
+    return item?.quantity || 0
+  })
 
   const handleAdd = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    addItem(cartProduct, 1)
-    showCartAddedToast(cartProduct, navigate)
+    handleCartAdd(addItem, cartProduct, navigate, 1)
   }
 
   const handleIncrease = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
-    updateQuantity(cartProduct.cart_key, Math.min(setStock, qty + 1))
+    handleCartAdd(addItem, cartProduct, navigate, 1)
   }
 
   const handleDecrease = (e) => {
     e.stopPropagation()
     if (!loggedIn) {
-      onAuthRequired('cart')
+      onAuthRequired?.('cart')
       return
     }
     updateQuantity(cartProduct.cart_key, qty - 1)
@@ -337,7 +350,7 @@ function ProductSetCard({ productSet, nowMs, priority = false, onAuthRequired })
             {setStock > 0 ? t('common.inStock') : t('common.soldOut')}
           </span>
         </div>
-        <FlashSaleTimer item={productSet} nowMs={nowMs} />
+        <FlashSaleTimer item={productSet} />
         <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
           <ProductCardButton
             available={setStock > 0}
@@ -353,29 +366,28 @@ function ProductSetCard({ productSet, nowMs, priority = false, onAuthRequired })
       </div>
     </article>
   )
-}
+})
 
 export default function ProductList() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const cartItems = useCartStore((s) => s.items)
+  const totalItems = useCartStore((s) => s.items.reduce((sum, item) => sum + item.quantity, 0))
   const wishlistCount = useWishlistStore((s) => s.items.length)
   const activeFilter = searchParams.get('filter') || ''
   const searchParam = searchParams.get('search') || ''
   const categoryParam = searchParams.get('category') || ''
   const brandParam = searchParams.get('brand') || ''
-  const [nowMs, setNowMs] = useState(Date.now())
   const [search, setSearch] = useState(searchParam)
   const [categoryId, setCategoryId] = useState(categoryParam)
   const [brand, setBrand] = useState(brandParam)
   const [sortBy, setSortBy] = useState('-created_at')
-  const { openAuthModal } = useUiStore()
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
   const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
 
-  const onAuthRequired = (type = 'cart') => {
+  const onAuthRequired = useCallback((type = 'cart') => {
     openAuthModal(type)
-  }
+  }, [openAuthModal])
 
   useEffect(() => {
     setSearch(searchParam)
@@ -449,17 +461,33 @@ export default function ProductList() {
 
   const products = data?.results || []
   const productSets = (!categoryId && !brand && (!activeFilter || activeFilter === 'flash_sale')) ? setData.filter((set) => set.is_active !== false) : []
-  const hasVisibleFlashSaleTimers = products.some(hasFlashSaleTimer) || productSets.some(hasFlashSaleTimer)
   const isGridLoading = (isLoading && !data) || (isGridFetching && showGridRefetchLoader && products.length === 0 && productSets.length === 0)
   const total = (data?.count || 0) + productSets.length
-  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
   const isSearchResult = Boolean(searchParams.get('search'))
 
+  const CHUNK_SIZE = 24
+  const [visibleCount, setVisibleCount] = useState(CHUNK_SIZE)
+  const sentinelRef = useRef(null)
+
   useEffect(() => {
-    if (!hasVisibleFlashSaleTimers) return undefined
-    const timer = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [hasVisibleFlashSaleTimers])
+    setVisibleCount(CHUNK_SIZE)
+  }, [categoryId, brand, sortBy, activeFilter, search])
+
+  const visibleProducts = useMemo(() => products.slice(0, visibleCount), [products, visibleCount])
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || visibleCount >= products.length) return undefined
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount((prev) => Math.min(prev + CHUNK_SIZE, products.length))
+      }
+    }, { rootMargin: '500px' })
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [visibleCount, products.length])
 
   return (
     <div className="min-h-screen bg-white">
@@ -546,7 +574,7 @@ export default function ProductList() {
               )}
               <FilterSelect
                 value={categoryId}
-                onChange={(e) => { setCategoryId(e.target.value) }}
+                onChange={(e) => { const v = e.target.value; startTransition(() => setCategoryId(v)) }}
               >
                 <option value="">{t('shop.allCategories')}</option>
                 {categories.map((cat) => (
@@ -556,7 +584,7 @@ export default function ProductList() {
               {!isSearchResult && (
                 <FilterSelect
                 value={brand}
-                onChange={(e) => { setBrand(e.target.value) }}
+                onChange={(e) => { const v = e.target.value; startTransition(() => setBrand(v)) }}
                 >
                   <option value="">{t('shop.allBrands')}</option>
                   {shopBrands.map((b) => (
@@ -566,7 +594,7 @@ export default function ProductList() {
               )}
               <FilterSelect
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
+                onChange={(e) => { const v = e.target.value; startTransition(() => setSortBy(v)) }}
               >
                 <option value="-created_at">{isSearchResult ? t('shop.sortBy') : t('shop.newest')}</option>
                 <option value="retail_price">{t('shop.priceLowHigh')}</option>
@@ -593,20 +621,21 @@ export default function ProductList() {
                     <ProductSetCard 
                       key={`set-${set.id}`} 
                       productSet={set} 
-                      nowMs={nowMs} 
                       priority={i < 4} 
                       onAuthRequired={onAuthRequired}
                     />
                   ))}
-                  {products.map((p, i) => (
+                  {visibleProducts.map((p, i) => (
                     <ProductCard 
                       key={p.id} 
                       product={p} 
                       priority={i < 6} 
-                      nowMs={nowMs} 
                       onAuthRequired={onAuthRequired}
                     />
                   ))}
+                  {visibleCount < products.length && (
+                    <div ref={sentinelRef} className="col-span-full h-1" />
+                  )}
                 </>
               )}
           </div>

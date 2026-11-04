@@ -2,6 +2,7 @@ import { Heart, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function showWishlistToast(message, added) {
+  toast.dismiss('wishlist-toast')
   toast.custom((toastItem) => (
     <div
       role="status"
@@ -16,5 +17,5 @@ export function showWishlistToast(message, added) {
         <X size={16} />
       </button>
     </div>
-  ), { duration: 3500 })
+  ), { id: 'wishlist-toast', duration: 2500 })
 }

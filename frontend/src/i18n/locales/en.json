@@ -54,7 +54,9 @@
     "loadingReceipt": "Loading receipt",
     "great": "Great!",
     "phonePlaceholder": "012345678",
-    "invalidPhone": "Please enter a valid phone number for the selected country."
+    "invalidPhone": "Please enter a valid phone number for the selected country.",
+    "stockLimitReached": "{{name}} has only {{count}} in stock.",
+    "stockLimitTitle": "Stock Limit"
   },
   "trust": {
     "authentic": "100% Original",
@@ -440,7 +442,7 @@
     },
     "payment": {
       "title": "Payment",
-      "aba": "ABA Pay",
+      "aba": "ABA KHQR",
       "bakong": "Bakong KHQR",
       "cashOnDelivery": "Cash On Delivery",
       "cash": "Cash",
@@ -531,7 +533,7 @@
     "accountInfo": "Profile Information",
     "role": "Role",
     "memberLevel": "{{level}} Member",
-    "memberLevelLabel": "Member Level",
+    "memberLevelLabel": "Membership Level",
     "tiers": {
       "silver": "Silver",
       "gold": "Gold",
@@ -598,7 +600,6 @@
     "itemsCount": "{{count}} Items",
     "buyAgain": "Buy Again",
     "trackOrder": "Track Order",
-    "memberLevelLabel": "Membership Level",
     "enjoyBenefits": "Enjoy exclusive benefits",
     "ptsLabel": "pts",
     "goldTarget": "Gold: {{count}} pts",
@@ -736,7 +737,21 @@
     "openTelegramSales": "Open Telegram Sales",
     "contactSalesNotice": "Submit your order first. Telegram will open with your order items ready to send to sales.",
     "generateBakongQr": "Generate Bakong QR",
-    "payViaAba": "Pay via ABA PAY",
+    "payViaAba": "Pay via ABA KHQR",
+    "confirmAba": {
+      "badge": "CONFIRM PAYMENT",
+      "title": "Confirm ABA KHQR",
+      "description": "Please confirm this payment. You will pay with ABA KHQR.",
+      "paymentMethod": "Payment Method",
+      "abaKhqr": "ABA KHQR",
+      "totalAmount": "Total Amount",
+      "timeLeft": "Time Left",
+      "cancel": "Cancel",
+      "pay": "Pay"
+    },
+    "abaPaymentFailedTitle": "Payment not confirmed",
+    "abaPaymentFailedDesc": "ABA marked this payment as cancelled or expired. You can try again or return to the shop.",
+    "abaTryAgain": "Try payment again",
     "item": "item",
     "items": "items",
     "qty": "Qty",
@@ -768,9 +783,9 @@
         "desc": "Scan and pay with Bakong"
       },
       "aba": {
-        "label": "ABA PAY",
+        "label": "ABA KHQR",
         "badge": "ABA",
-        "desc": "Click to pay with ABA Mobile"
+        "desc": "Scan to pay with any banking app"
       },
       "acleda": {
         "label": "ACLEDA Bank",
