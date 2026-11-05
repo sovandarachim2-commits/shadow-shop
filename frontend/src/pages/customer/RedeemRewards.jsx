@@ -2,11 +2,10 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, ChevronRight, Gift, Loader2, Package, Percent, ShoppingCart, Star, Ticket, Truck } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Gift, Loader2, Package, Percent, Star, Ticket, Truck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
-import useCartStore from '@/store/cartStore'
 import { cn } from '@/utils/helpers'
 
 const FILTER_KEYS = ['all', 'vouchers', 'products', 'discounts', 'shipping']
@@ -63,7 +62,6 @@ export default function RedeemRewards() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const cartCount = useCartStore((state) => state.items.reduce((total, item) => total + item.quantity, 0))
   const [activeFilter, setActiveFilter] = useState('all')
   const [redeemingId, setRedeemingId] = useState(null)
   const [redeemedCoupon, setRedeemedCoupon] = useState(null)
@@ -128,20 +126,7 @@ export default function RedeemRewards() {
           <div className="min-w-0 text-center md:text-left">
             <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.redeem.title')}</h1>
           </div>
-          <div className="flex justify-end">
-            <button 
-              type="button" 
-              onClick={() => navigate('/cart')} 
-              className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
-            >
-              <ShoppingCart size={20} />
-              {cartCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[9px] font-black text-white">
-                  {cartCount > 9 ? '9+' : cartCount}
-                </span>
-              )}
-            </button>
-          </div>
+          <div className="md:hidden" />
         </div>
 
         <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] md:mb-4 md:mt-0 [&::-webkit-scrollbar]:hidden">

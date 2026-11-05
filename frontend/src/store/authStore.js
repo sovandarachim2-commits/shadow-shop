@@ -2,16 +2,18 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authApi } from '@/api/auth'
 import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 
 function rememberAccountCart(user) {
   if (user?.id == null) return
   useCartStore.getState().restoreCartForUser(user.id)
+  useWishlistStore.getState().syncWithServer()
 }
 
 function stashAccountCart(userId) {
   if (userId == null) return
   useCartStore.getState().saveCartForUser(userId)
-  useCartStore.getState().clearCart()
+  useCartStore.getState().clearCart(true)
 }
 
 const useAuthStore = create(

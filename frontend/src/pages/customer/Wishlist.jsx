@@ -9,7 +9,7 @@ import { showWishlistToast } from '@/components/customer/WishlistToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function getProductPrice(product) {
   return Number(product?.retail_price || product?.price || 0)
@@ -19,9 +19,15 @@ export default function Wishlist() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const addItem = useCartStore((s) => s.addItem)
-  const { items, toggle } = useWishlistStore()
+  const items = useWishlistStore((s) => s.items)
+  const remove = useWishlistStore((s) => s.remove)
+  const syncWithServer = useWishlistStore((s) => s.syncWithServer)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const openAuthModal = useUiStore((s) => s.openAuthModal)
+
+  useEffect(() => {
+    syncWithServer()
+  }, [syncWithServer])
 
   const handleAddToCart = (product) => {
     if (!isAuthenticated) {
@@ -33,7 +39,7 @@ export default function Wishlist() {
   }
 
   const handleRemove = (product) => {
-    toggle(product)
+    remove(product)
     showWishlistToast(t('product.removedFromWishlist'), false)
   }
 

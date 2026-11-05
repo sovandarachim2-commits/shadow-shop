@@ -21,7 +21,8 @@ import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 
 function cleanProductText(value) {
-  return typeof value === 'string' ? value.trim() : ''
+  if (typeof value !== 'string') return ''
+  return value.replace(/[ \t]+\)/g, ')').trim()
 }
 
 function isAvailableForSale(product) {
@@ -133,7 +134,7 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
           </span>
         </div>
         <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
-          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-base text-gray-950 sm:min-h-[48px] sm:text-sm">{product.name}</h3>
+          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-base font-bold leading-snug text-gray-950 sm:min-h-[48px] sm:text-sm">{product.name}</h3>
           <div className="shrink-0 text-right">
             <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
             {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
@@ -185,8 +186,8 @@ export default function ProductDetail() {
   const queryClient = useQueryClient()
   const [qty, setQty] = useState(1)
   const [activeImg, setActiveImg] = useState(0)
-  const [openAccordion, setOpenAccordion] = useState(null)
-  const [isWishlisted, setIsWishlisted] = useState(false)
+  const [activeTab, setActiveTab] = useState('description')
+  const toggleWishlist = useWishlistStore((s) => s.toggle)
   const [added, setAdded] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
@@ -209,6 +210,23 @@ export default function ProductDetail() {
     queryFn: () => productsApi.products.get(id).then((r) => r.data),
     ...STOREFRONT_LIVE_QUERY,
   })
+
+  const isWishlisted = useWishlistStore((s) => {
+    const targetId = Number(product?.id)
+    if (!targetId) return false
+    return s.items.some((i) => Number(i.product?.id || i.id) === targetId)
+  })
+
+  const handleToggleWishlist = async (e) => {
+    e?.stopPropagation?.()
+    if (!product?.id) return
+    const wasWishlisted = isWishlisted
+    await toggleWishlist(product)
+    showWishlistToast(
+      wasWishlisted ? t('product.removedFromWishlist') : t('product.addedToWishlist'),
+      !wasWishlisted
+    )
+  }
   const { data: reviewData } = useQuery({
     queryKey: ['product-reviews', id],
     queryFn: () => productsApi.reviews.list({ product: id }).then((r) => r.data.results || r.data),
@@ -272,14 +290,10 @@ export default function ProductDetail() {
   const showingSameCategory = sameCategoryProducts.length > 0
   const productsMoreLoading = relatedLoading || (!showingSameCategory && recommendedLoading)
 
-  const toggleAccordion = (key) => {
-    setOpenAccordion((current) => (current === key ? null : key))
-  }
-
   useEffect(() => {
     setActiveImg(0)
     setQty(1)
-    setOpenAccordion(null)
+    setActiveTab('description')
     if (galleryScrollRef.current) galleryScrollRef.current.scrollLeft = 0
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [product?.id])
@@ -395,7 +409,7 @@ export default function ProductDetail() {
   }
 
   return (
-    <div className="bg-white pb-24 md:pb-0">
+    <div className="product-detail-view bg-white pb-24 md:pb-0">
       <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
@@ -416,12 +430,10 @@ export default function ProductDetail() {
         <section className="-mx-4 overflow-hidden bg-white md:mx-0 md:rounded-[28px] md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-3 md:shadow-card lg:p-4">
           <div className="relative overflow-hidden bg-gray-50 md:rounded-[24px] md:bg-white">
             <button
-              onClick={() => {
-                const nextWishlisted = !isWishlisted
-                setIsWishlisted(nextWishlisted)
-                showWishlistToast(nextWishlisted ? t('product.addedToWishlist') : t('product.removedFromWishlist'), nextWishlisted)
-              }}
-              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-pink-600 shadow-xl shadow-pink-100"
+              type="button"
+              onClick={handleToggleWishlist}
+              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-pink-600 shadow-xl shadow-pink-100 transition active:scale-95"
+              aria-label="Toggle wishlist"
             >
               <Heart size={21} className={isWishlisted ? 'fill-pink-500 text-pink-500' : ''} />
             </button>
@@ -521,16 +533,23 @@ export default function ProductDetail() {
             {product.brand_name || product.category_name || t('product.cosmetics')}
           </p>
 
-          <h1 className="khmer-title mt-1 line-clamp-2 text-[22px] text-gray-950 md:line-clamp-none md:text-4xl lg:text-5xl">
+          <h1 className="pd-khmer-title mt-1 line-clamp-2 text-[22px] font-bold leading-snug text-gray-950 md:line-clamp-none md:text-3xl lg:text-4xl md:leading-normal">
             {product.name}
           </h1>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('reviews')
+                reviewsSectionRef.current?.scrollIntoView({ behavior: 'smooth' })
+              }}
+              className="flex items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-pink-600"
+            >
               <Star size={14} className="fill-yellow-400 text-yellow-400" />
               <span>{displayRating}</span>
-              <span className="text-gray-300">({reviewCount || reviews.length || 126})</span>
-            </div>
+              <span className="text-gray-400">({reviewCount || reviews.length || 0})</span>
+            </button>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
               isInStock ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
             }`}>
@@ -554,12 +573,8 @@ export default function ProductDetail() {
           <div className="mt-4 flex items-center md:hidden">
             <button
               type="button"
-              onClick={() => {
-                const nextWishlisted = !isWishlisted
-                setIsWishlisted(nextWishlisted)
-                showWishlistToast(nextWishlisted ? t('product.addedToWishlist') : t('product.removedFromWishlist'), nextWishlisted)
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition ${
+              onClick={handleToggleWishlist}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition active:scale-95 ${
                 isWishlisted ? 'border-pink-200 bg-pink-50 text-pink-600' : 'border-gray-200 text-gray-600'
               }`}
             >
@@ -604,7 +619,7 @@ export default function ProductDetail() {
             <button
               onClick={handleAddToCart}
               disabled={!isInStock}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-lg border py-4 text-base font-black transition ${
+              className={`pd-khmer-font flex flex-1 items-center justify-center gap-2 rounded-lg border py-4 text-base font-bold transition ${
                 added ? 'border-green-500 bg-green-500 text-white' : 'border-pink-500 bg-white text-pink-600 hover:bg-pink-50'
               }`}
             >
@@ -614,147 +629,209 @@ export default function ProductDetail() {
             <button
               onClick={handleBuyNow}
               disabled={!isInStock}
-              className="shop-btn-primary flex-1 py-4 text-base"
+              className="pd-khmer-font shop-btn-primary flex-1 py-4 text-base font-bold"
             >
               <Zap size={19} /> {t('common.buyNow')}
             </button>
           </div>
 
-          <div className="mt-4 border-t border-gray-100 md:mt-8">
-            {/* Description */}
-            {productDescription && (
-              <div className="border-b border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => toggleAccordion('description')}
-                  className="flex w-full items-center justify-between py-4 text-left"
-                >
-                  <span className="text-base font-medium text-gray-900">{t('product.description')}</span>
-                  <ChevronDown
-                    size={18}
-                    className={`text-gray-400 transition ${openAccordion === 'description' ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {openAccordion === 'description' && (
-                  <div className="pb-4 text-sm leading-6 text-gray-600">
-                    <p className="whitespace-pre-line">{productDescription}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Ingredients */}
-            {productIngredients && (
-              <div className="border-b border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => toggleAccordion('ingredients')}
-                  className="flex w-full items-center justify-between py-4 text-left"
-                >
-                  <span className="text-base font-medium text-gray-900">{t('product.ingredients')}</span>
-                  <ChevronDown
-                    size={18}
-                    className={`text-gray-400 transition ${openAccordion === 'ingredients' ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {openAccordion === 'ingredients' && (
-                  <div className="pb-4 text-sm leading-6 text-gray-600">
-                    <p className="whitespace-pre-line">{productIngredients}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Reviews */}
-            <div ref={reviewsSectionRef} className="border-b border-gray-100">
+          {/* Tabs Section matching requested UI */}
+          <div ref={reviewsSectionRef} className="mt-6 md:mt-8 border-t border-gray-100 pt-2">
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-100 gap-6 md:gap-8 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
                 type="button"
-                onClick={() => toggleAccordion('reviews')}
-                className="flex w-full items-center justify-between py-4 text-left"
+                onClick={() => setActiveTab('description')}
+                className={`pd-khmer-font relative pb-3 text-[15px] sm:text-base font-bold transition whitespace-nowrap ${
+                  activeTab === 'description'
+                    ? 'text-gray-950 font-black'
+                    : 'text-gray-400 font-semibold hover:text-gray-600'
+                }`}
               >
-                <span className="text-base font-medium text-gray-900">
-                  {t('product.reviews')} ({reviewCount || reviews.length || 0})
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold text-pink-600">{displayRating}</span>
-                  <Star size={14} className="fill-yellow-400 text-yellow-400" />
-                  <ChevronRight size={18} className="text-gray-400" />
-                </span>
+                {t('product.description')}
+                {activeTab === 'description' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[3px] rounded-full bg-pink-600" />
+                )}
               </button>
-              {openAccordion === 'reviews' && (
-                <div className="space-y-5 pb-4">
-                  <form onSubmit={handleSubmitReview} className="rounded-2xl bg-gray-50 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-950">{t('product.rateProduct')}</p>
-                        <p className="text-xs font-medium text-gray-400">{t('product.reviewHint')}</p>
-                      </div>
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => setReviewRating(value)}
-                            className="rounded-full p-1"
-                            aria-label={`${value} stars`}
-                          >
-                            <Star
-                              size={22}
-                              className={value <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <textarea
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      rows={3}
-                      className="mt-3 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
-                      placeholder={t('product.reviewPlaceholder')}
-                    />
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={reviewMutation.isPending}
-                        className="rounded-full bg-pink-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                      >
-                        {reviewMutation.isPending ? t('product.saving') : t('product.submitReview')}
-                      </button>
-                    </div>
-                  </form>
 
-                  <div className="space-y-3">
-                    {reviews.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center">
-                        <p className="text-sm font-medium text-gray-500">{t('product.noReviewsYet')}</p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('additional')}
+                className={`pd-khmer-font relative pb-3 text-[15px] sm:text-base font-bold transition whitespace-nowrap ${
+                  activeTab === 'additional'
+                    ? 'text-gray-950 font-black'
+                    : 'text-gray-400 font-semibold hover:text-gray-600'
+                }`}
+              >
+                {t('product.additionalInfo')}
+                {activeTab === 'additional' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[3px] rounded-full bg-pink-600" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('reviews')}
+                className={`pd-khmer-font relative pb-3 text-[15px] sm:text-base font-bold transition whitespace-nowrap ${
+                  activeTab === 'reviews'
+                    ? 'text-gray-950 font-black'
+                    : 'text-gray-400 font-semibold hover:text-gray-600'
+                }`}
+              >
+                {t('product.reviews')} {reviewCount > 0 || reviews.length > 0 ? `(${reviewCount || reviews.length})` : ''}
+                {activeTab === 'reviews' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[3px] rounded-full bg-pink-600" />
+                )}
+              </button>
+            </div>
+
+            {/* Tab 1: Description */}
+            {activeTab === 'description' && (
+              <div className="py-5">
+                {productDescription ? (
+                  <div className="pd-khmer-content whitespace-pre-line text-[15px] sm:text-base leading-[1.85] text-gray-700 font-normal">
+                    {productDescription}
+                  </div>
+                ) : (
+                  <p className="pd-khmer-font italic text-gray-400">{t('product.noDescription')}</p>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: Additional Information */}
+            {activeTab === 'additional' && (
+              <div className="py-5">
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                  <div className="divide-y divide-gray-100">
+                    <div className="flex items-center justify-between px-5 py-3.5">
+                      <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">{t('product.brand')}</span>
+                      <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">{product.brand_name || 'Lakamo'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between px-5 py-3.5">
+                      <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">{t('product.category')}</span>
+                      <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">{product.category_name || 'General'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between px-5 py-3.5">
+                      <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">{t('product.availability')}</span>
+                      <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">
+                        {isInStock ? t('common.inStock') : t('common.outOfStock')}
+                      </span>
+                    </div>
+
+                    {product.weight && (
+                      <div className="flex items-center justify-between px-5 py-3.5">
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">Weight</span>
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">{product.weight}</span>
                       </div>
-                    ) : reviews.map((review) => (
-                      <div key={review.id} className="rounded-2xl border border-gray-100 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-gray-950">{review.user_name || t('product.customer')}</p>
-                            <div className="mt-1 flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((value) => (
-                                <Star
-                                  key={value}
-                                  size={14}
-                                  className={value <= review.rating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <span className="text-xs font-medium text-gray-400">
-                            {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
-                          </span>
-                        </div>
-                        {review.comment && <p className="mt-3 text-sm leading-6 text-gray-600">{review.comment}</p>}
-                      </div>
-                    ))}
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
+
+                {productIngredients && (
+                  <div className="mt-7">
+                    <h3 className="pd-khmer-title text-base sm:text-lg font-bold text-gray-950 mb-3">{t('product.ingredients')}</h3>
+                    <div className="pd-khmer-content whitespace-pre-line text-[15px] sm:text-base leading-[1.85] text-gray-700 font-normal">
+                      {productIngredients}
+                    </div>
+                  </div>
+                )}
+
+                {product.how_to_use && (
+                  <div className="mt-6">
+                    <h3 className="pd-khmer-title text-base sm:text-lg font-bold text-gray-950 mb-3">{t('product.howToUse')}</h3>
+                    <div className="pd-khmer-content whitespace-pre-line text-[15px] sm:text-base leading-[1.85] text-gray-700 font-normal">
+                      {product.how_to_use}
+                    </div>
+                  </div>
+                )}
+
+                {product.benefits && (
+                  <div className="mt-6">
+                    <h3 className="pd-khmer-title text-base sm:text-lg font-bold text-gray-950 mb-3">{t('product.benefits')}</h3>
+                    <div className="pd-khmer-content whitespace-pre-line text-[15px] sm:text-base leading-[1.85] text-gray-700 font-normal">
+                      {product.benefits}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 3: Reviews */}
+            {activeTab === 'reviews' && (
+              <div className="py-5 space-y-5">
+                <form onSubmit={handleSubmitReview} className="rounded-2xl bg-gray-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-950">{t('product.rateProduct')}</p>
+                      <p className="text-xs font-medium text-gray-400">{t('product.reviewHint')}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setReviewRating(value)}
+                          className="rounded-full p-1"
+                          aria-label={`${value} stars`}
+                        >
+                          <Star
+                            size={22}
+                            className={value <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    rows={3}
+                    className="mt-3 w-full resize-none rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm outline-none focus:border-pink-300 focus:ring-2 focus:ring-pink-100"
+                    placeholder={t('product.reviewPlaceholder')}
+                  />
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={reviewMutation.isPending}
+                      className="rounded-full bg-pink-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 transition active:scale-95"
+                    >
+                      {reviewMutation.isPending ? t('product.saving') : t('product.submitReview')}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-3">
+                  {reviews.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center">
+                      <p className="text-sm font-medium text-gray-500">{t('product.noReviewsYet')}</p>
+                    </div>
+                  ) : reviews.map((review) => (
+                    <div key={review.id} className="rounded-2xl border border-gray-100 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-950">{review.user_name || t('product.customer')}</p>
+                          <div className="mt-1 flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((value) => (
+                              <Star
+                                key={value}
+                                size={14}
+                                className={value <= review.rating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200'}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-xs font-medium text-gray-400">
+                          {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
+                        </span>
+                      </div>
+                      {review.comment && <p className="pd-khmer-content mt-3 text-sm leading-[1.8] text-gray-600 font-normal">{review.comment}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -766,7 +843,7 @@ export default function ProductDetail() {
               <p className="text-xs font-black uppercase tracking-wide text-pink-600">
                 {showingSameCategory ? (product.category_name || t('product.relatedProducts')) : t('product.recommendedProducts')}
               </p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950 md:text-3xl">
+              <h2 className="khmer-title mt-1 text-2xl font-black text-gray-950 md:text-3xl">
                 {showingSameCategory ? t('product.moreFromThisCategory') : t('product.youMayAlsoLike')}
               </h2>
             </div>
@@ -839,7 +916,7 @@ export default function ProductDetail() {
           <button
             onClick={handleAddToCart}
             disabled={!isInStock}
-            className="flex h-12 items-center justify-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-bold text-white transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500"
+            className="pd-khmer-font flex h-12 items-center justify-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-bold text-white transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500"
           >
             <span>{isInStock ? t('common.addToCart') : t('common.outOfStock')}</span>
             {isInStock && <span>{formatCurrency(currentPrice * qty)}</span>}
@@ -853,11 +930,11 @@ export default function ProductDetail() {
 
 function FeatureChip({ icon: Icon, label, iconClass = 'text-pink-600' }) {
   return (
-    <div className="flex min-w-0 flex-col items-center justify-center gap-2 border-r border-gray-100 px-2 text-center last:border-r-0">
+    <div className="flex min-w-0 flex-col items-center justify-center gap-1.5 border-r border-gray-100 px-2 text-center last:border-r-0">
       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-50">
         <Icon size={17} className={iconClass} />
       </span>
-      <span className="text-[10px] font-black leading-tight text-gray-500">{label}</span>
+      <span className="pd-khmer-font text-[11px] sm:text-xs font-semibold leading-normal text-gray-600 text-center">{label}</span>
     </div>
   )
 }

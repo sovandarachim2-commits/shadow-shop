@@ -86,6 +86,56 @@ def prepare_online_checkout(request, checkout_data):
         raise ValidationError({'payment_method': 'This payment method does not use deferred checkout.'})
 
     amount = preview_checkout_amount(request, checkout_data)
+
+    # Prevent duplicate transactions: check whether an existing transaction is still pending or already paid
+    if request.user.is_authenticated:
+        existing_pending = PendingCheckout.objects.filter(
+            user=request.user,
+            payment_method=payment_method,
+            status=PendingCheckout.STATUS_PENDING,
+            expires_at__gt=timezone.now(),
+        ).order_by('-created_at').first()
+
+        if existing_pending:
+            if payment_method == 'aba':
+                from .aba_services import confirm_pending_aba_payment
+                confirm_pending_aba_payment(existing_pending.reference)
+                existing_pending.refresh_from_db()
+
+            if existing_pending.status == PendingCheckout.STATUS_PAID and existing_pending.order_id:
+                from apps.orders.serializers import OrderDetailSerializer
+                return {
+                    'pending_checkout': {
+                        'reference': existing_pending.reference,
+                        'status': 'paid',
+                        'order_id': existing_pending.order_id,
+                        'order_number': existing_pending.order.order_number,
+                    },
+                    'order': OrderDetailSerializer(existing_pending.order, context={'request': request}).data,
+                }
+
+            if existing_pending.status == PendingCheckout.STATUS_PENDING and existing_pending.amount == amount:
+                result = {
+                    'pending_checkout': {
+                        'reference': existing_pending.reference,
+                        'amount': str(existing_pending.amount),
+                        'payment_method': existing_pending.payment_method,
+                        'status': existing_pending.status,
+                        'expires_at': existing_pending.expires_at.isoformat(),
+                    },
+                }
+                if payment_method == 'aba':
+                    from .aba_services import build_aba_payment_params_for_pending
+                    result['aba_payment'] = build_aba_payment_params_for_pending(existing_pending, request)
+                    return result
+                elif payment_method == 'bakong':
+                    from .models import BakongPayment
+                    payment = BakongPayment.objects.filter(order__isnull=True, status='pending').order_by('-created_at').first()
+                    if payment:
+                        from .serializers import BakongPaymentSerializer
+                        result['bakong_payment'] = BakongPaymentSerializer(payment, context={'request': request}).data
+                        return result
+
     if payment_method == 'aba':
         expires_minutes = max(int(getattr(settings, 'ABA_PAYWAY_LIFETIME', 10)), 1)
     else:

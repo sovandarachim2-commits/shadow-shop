@@ -6,6 +6,8 @@ import toast, { Toaster, useToasterStore } from 'react-hot-toast'
 import { AlertCircle, CheckCircle2, ClipboardList, Lock, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
+import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { isSocialProfileIncomplete } from '@/utils/profileCompletion'
@@ -508,7 +510,11 @@ function AuthBootstrap() {
       if (isAuthenticated) clearSession()
       return
     }
-    if (isAuthenticated) fetchMe()
+    if (isAuthenticated) {
+      fetchMe()
+      useCartStore.getState().syncWithServer()
+      useWishlistStore.getState().syncWithServer()
+    }
   }, [])
 
   return null

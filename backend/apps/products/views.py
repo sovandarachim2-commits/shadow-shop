@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import viewsets, status, generics
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -21,6 +22,7 @@ from utils.permissions import IsAdminOrSuperAdmin, IsStaff
 from utils.storefront_cache import (
     HOME_FEED_CACHE_KEY,
     HOME_FEED_TTL,
+    bump_storefront_cache,
     get_storefront_revision,
     product_list_cache_key,
     safe_cache_get,
@@ -195,6 +197,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         product = serializer.save()
+        bump_storefront_cache()
         from apps.accounts.activity import log_activity
         log_activity(
             user=self.request.user,
@@ -208,6 +211,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         product = serializer.save()
+        bump_storefront_cache()
         from apps.accounts.activity import log_activity
         log_activity(
             user=self.request.user,
@@ -223,6 +227,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         name = instance.name
         product_id = instance.pk
         super().perform_destroy(instance)
+        bump_storefront_cache()
         from apps.accounts.activity import log_activity
         log_activity(
             user=self.request.user,
@@ -284,6 +289,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
             ensure_card_variant(img.image, force=True)
             created.append(ProductImageSerializer(img, context={'request': request}).data)
+        bump_storefront_cache()
         return Response(created, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
@@ -296,6 +302,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
         rest = [image.id for image in images if image.id != target.id]
         apply_image_display_order(images, [target.id, *rest])
+        bump_storefront_cache()
         return Response({'detail': 'Primary image updated.'})
 
     @action(detail=True, methods=['post'])
@@ -305,6 +312,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         if not isinstance(image_ids, list) or not image_ids:
             return Response({'detail': 'Choose the image order.'}, status=status.HTTP_400_BAD_REQUEST)
         apply_image_display_order(list(product.images.all()), image_ids)
+        bump_storefront_cache()
         return Response({'detail': 'Image order updated.'})
 
     @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
@@ -318,7 +326,96 @@ class ProductViewSet(viewsets.ModelViewSet):
             if first:
                 first.is_primary = True
                 first.save(update_fields=['is_primary'])
+        bump_storefront_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post', 'delete'], url_path='flash-sale')
+    def flash_sale(self, request, pk=None):
+        product = self.get_object()
+        if request.method == 'DELETE':
+            product.is_featured = False
+            product.flash_sale_price = None
+            product.flash_sale_starts_at = None
+            product.flash_sale_ends_at = None
+            product.flash_sale_max_order_qty = None
+            product.save(update_fields=[
+                'is_featured', 'flash_sale_price', 'flash_sale_starts_at',
+                'flash_sale_ends_at', 'flash_sale_max_order_qty', 'updated_at',
+            ])
+            bump_storefront_cache()
+            from apps.accounts.activity import log_activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                module='product_flash_sale',
+                description=f'Removed flash sale from product {product.name}',
+                request=request,
+                object_id=product.pk,
+                object_type='Product',
+            )
+            return Response({'detail': f'Flash sale removed from product {product.name}', 'id': product.id})
+
+        data = request.data
+        price = data.get('flash_sale_price')
+        if price is None or str(price).strip() == '':
+            return Response({'flash_sale_price': ['Flash sale price is required.']}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            price_dec = Decimal(str(price))
+            if price_dec <= 0:
+                return Response({'flash_sale_price': ['Flash sale price must be greater than zero.']}, status=status.HTTP_400_BAD_REQUEST)
+            if product.retail_price and price_dec >= product.retail_price:
+                return Response({'flash_sale_price': [f'Flash sale price must be lower than retail price (${product.retail_price}).']}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'flash_sale_price': ['Invalid flash sale price.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        starts_at = data.get('flash_sale_starts_at') or None
+        ends_at = data.get('flash_sale_ends_at') or None
+        if starts_at and ends_at and str(starts_at) >= str(ends_at):
+            return Response({'flash_sale_ends_at': ['End time must be after start time.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_qty = data.get('flash_sale_max_order_qty')
+        if max_qty:
+            try:
+                max_qty_int = int(max_qty)
+                if max_qty_int < 1:
+                    return Response({'flash_sale_max_order_qty': ['Max order quantity must be at least 1.']}, status=status.HTTP_400_BAD_REQUEST)
+            except (ValueError, TypeError):
+                return Response({'flash_sale_max_order_qty': ['Invalid max order quantity.']}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            max_qty_int = None
+
+        status_val = data.get('status', 'active')
+        is_featured = data.get('is_featured', True)
+        if status_val == 'inactive' or is_featured is False or str(is_featured).lower() in ('0', 'false', 'inactive'):
+            is_active_featured = False
+        else:
+            is_active_featured = True
+
+        serializer = ProductWriteSerializer(product, data={
+            'flash_sale_price': price_dec,
+            'flash_sale_starts_at': starts_at,
+            'flash_sale_ends_at': ends_at,
+            'flash_sale_max_order_qty': max_qty_int,
+            'is_featured': is_active_featured,
+        }, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        bump_storefront_cache()
+
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=request.user,
+            action='update',
+            module='product_flash_sale',
+            description=f'Configured flash sale for product {product.name}',
+            request=request,
+            object_id=product.pk,
+            object_type='Product',
+        )
+
+        product.refresh_from_db()
+        attach_flash_sale_stats([product])
+        return Response(ProductListSerializer(product, context={'request': request}).data)
 
     @action(detail=False, methods=['get'])
     def search_by_code(self, request):
@@ -377,6 +474,50 @@ class ProductSetViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [IsAuthenticated(), IsAdminOrSuperAdmin()]
 
+    def perform_create(self, serializer):
+        product_set = serializer.save()
+        bump_storefront_cache()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='create',
+            module='products',
+            description=f'Created product set {product_set.name}',
+            request=self.request,
+            object_id=product_set.pk,
+            object_type='ProductSet',
+        )
+
+    def perform_update(self, serializer):
+        product_set = serializer.save()
+        bump_storefront_cache()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='update',
+            module='products',
+            description=f'Updated product set {product_set.name}',
+            request=self.request,
+            object_id=product_set.pk,
+            object_type='ProductSet',
+        )
+
+    def perform_destroy(self, instance):
+        name = instance.name
+        set_id = instance.pk
+        super().perform_destroy(instance)
+        bump_storefront_cache()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='delete',
+            module='products',
+            description=f'Deleted product set {name}',
+            request=self.request,
+            object_id=set_id,
+            object_type='ProductSet',
+        )
+
     @action(detail=True, methods=['post'], url_path='set_items')
     def set_items(self, request, pk=None):
         product_set = self.get_object()
@@ -391,6 +532,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
                 )
             except Exception:
                 pass
+        bump_storefront_cache()
         serializer = self.get_serializer(product_set)
         return Response(serializer.data)
 
@@ -415,6 +557,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
             )
             ensure_card_variant(img.image, force=True)
             created.append(ProductSetImageSerializer(img, context={'request': request}).data)
+        bump_storefront_cache()
         return Response(created, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
@@ -427,6 +570,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
         rest = [image.id for image in images if image.id != target.id]
         apply_image_display_order(images, [target.id, *rest])
+        bump_storefront_cache()
         return Response({'detail': 'Primary image updated.'})
 
     @action(detail=True, methods=['post'])
@@ -436,6 +580,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
         if not isinstance(image_ids, list) or not image_ids:
             return Response({'detail': 'Choose the image order.'}, status=status.HTTP_400_BAD_REQUEST)
         apply_image_display_order(list(product_set.images.all()), image_ids)
+        bump_storefront_cache()
         return Response({'detail': 'Image order updated.'})
 
     @action(detail=True, methods=['delete'], url_path='delete_image/(?P<image_id>[^/.]+)')
@@ -449,7 +594,95 @@ class ProductSetViewSet(viewsets.ModelViewSet):
             if first:
                 first.is_primary = True
                 first.save(update_fields=['is_primary'])
+        bump_storefront_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post', 'delete'], url_path='flash-sale')
+    def flash_sale(self, request, pk=None):
+        product_set = self.get_object()
+        if request.method == 'DELETE':
+            product_set.is_featured = False
+            product_set.flash_sale_price = None
+            product_set.flash_sale_starts_at = None
+            product_set.flash_sale_ends_at = None
+            product_set.flash_sale_max_order_qty = None
+            product_set.save(update_fields=[
+                'is_featured', 'flash_sale_price', 'flash_sale_starts_at',
+                'flash_sale_ends_at', 'flash_sale_max_order_qty',
+            ])
+            bump_storefront_cache()
+            from apps.accounts.activity import log_activity
+            log_activity(
+                user=request.user,
+                action='delete',
+                module='product_flash_sale',
+                description=f'Removed flash sale from product set {product_set.name}',
+                request=request,
+                object_id=product_set.pk,
+                object_type='ProductSet',
+            )
+            return Response({'detail': f'Flash sale removed from product set {product_set.name}', 'id': product_set.id})
+
+        data = request.data
+        price = data.get('flash_sale_price')
+        if price is None or str(price).strip() == '':
+            return Response({'flash_sale_price': ['Flash sale price is required.']}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            price_dec = Decimal(str(price))
+            if price_dec <= 0:
+                return Response({'flash_sale_price': ['Flash sale price must be greater than zero.']}, status=status.HTTP_400_BAD_REQUEST)
+            if product_set.price and price_dec >= product_set.price:
+                return Response({'flash_sale_price': [f'Flash sale price must be lower than set price (${product_set.price}).']}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({'flash_sale_price': ['Invalid flash sale price.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        starts_at = data.get('flash_sale_starts_at') or None
+        ends_at = data.get('flash_sale_ends_at') or None
+        if starts_at and ends_at and str(starts_at) >= str(ends_at):
+            return Response({'flash_sale_ends_at': ['End time must be after start time.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_qty = data.get('flash_sale_max_order_qty')
+        if max_qty:
+            try:
+                max_qty_int = int(max_qty)
+                if max_qty_int < 1:
+                    return Response({'flash_sale_max_order_qty': ['Max order quantity must be at least 1.']}, status=status.HTTP_400_BAD_REQUEST)
+            except (ValueError, TypeError):
+                return Response({'flash_sale_max_order_qty': ['Invalid max order quantity.']}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            max_qty_int = None
+
+        status_val = data.get('status', 'active')
+        is_featured = data.get('is_featured', True)
+        if status_val == 'inactive' or is_featured is False or str(is_featured).lower() in ('0', 'false', 'inactive'):
+            is_active_featured = False
+        else:
+            is_active_featured = True
+
+        serializer = ProductSetSerializer(product_set, data={
+            'flash_sale_price': price_dec,
+            'flash_sale_starts_at': starts_at,
+            'flash_sale_ends_at': ends_at,
+            'flash_sale_max_order_qty': max_qty_int,
+            'is_featured': is_active_featured,
+        }, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        bump_storefront_cache()
+
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=request.user,
+            action='update',
+            module='product_flash_sale',
+            description=f'Configured flash sale for product set {product_set.name}',
+            request=request,
+            object_id=product_set.pk,
+            object_type='ProductSet',
+        )
+
+        product_set.refresh_from_db()
+        return Response(ProductSetSerializer(product_set, context={'request': request}).data)
 
 
 class PromotionViewSet(viewsets.ModelViewSet):

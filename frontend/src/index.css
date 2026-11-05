@@ -53,6 +53,30 @@ html[lang="km"] textarea {
     letter-spacing: 0;
     line-height: 1.7;
   }
+
+  /* Scoped exclusively to Product Detail page */
+  .product-detail-view {
+    --pd-khmer-font: 'Noto Sans Khmer', 'Inter', sans-serif;
+    font-family: var(--pd-khmer-font);
+  }
+  .product-detail-view .pd-khmer-font {
+    font-family: var(--pd-khmer-font);
+    letter-spacing: 0;
+  }
+  .product-detail-view .pd-khmer-title {
+    font-family: var(--pd-khmer-font);
+    font-synthesis: none;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.6;
+  }
+  .product-detail-view .pd-khmer-content {
+    font-family: var(--pd-khmer-font);
+    font-synthesis: none;
+    letter-spacing: 0;
+    line-height: 1.85;
+    word-break: break-word;
+  }
 }
 
 @layer components {

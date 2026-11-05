@@ -374,10 +374,44 @@ export default function Checkout() {
     }
   }, [paymentMethods, paymentMethod])
 
+  const handleCloseAbaModal = () => {
+    setShowAbaPopup(false)
+    setCheckingAbaPayment(false)
+  }
+
+  // Check pending ABA payment once on mount (e.g. if user closed QR, paid later on mobile, and returned)
+  useEffect(() => {
+    if (pendingReturnPayment?.reference && pendingReturnPayment.paymentMethod === 'aba') {
+      if (pendingReturnPayment.expiresAt > Date.now()) {
+        ordersApi.orders.checkoutStatus(pendingReturnPayment.reference).then(({ data }) => {
+          if (data.status === 'paid' || (data.order_id && data.order)) {
+            localStorage.removeItem(PENDING_PAYMENT_KEY)
+            setPendingReturnPayment(null)
+            removeSelectedItems()
+            navigate('/order-success', {
+              replace: true,
+              state: {
+                orderId: data.order_id,
+                orderNumber: data.order_number,
+              },
+            })
+          } else if (['cancelled', 'expired'].includes(data.status)) {
+            localStorage.removeItem(PENDING_PAYMENT_KEY)
+            setPendingReturnPayment(null)
+          }
+        }).catch(() => {})
+      } else {
+        localStorage.removeItem(PENDING_PAYMENT_KEY)
+        setPendingReturnPayment(null)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     const reference = pendingReturnPayment?.reference
     const orderId = pendingReturnPayment?.orderId
     if (!reference && !orderId) return undefined
+    if (!showAbaPopup && !pendingReturnPayment?.abaAwaitingConfirmation) return undefined
 
     let stopped = false
     let inFlight = false
@@ -482,7 +516,7 @@ export default function Checkout() {
       if (initialDelayTimer) clearTimeout(initialDelayTimer)
       if (timer) clearInterval(timer)
     }
-  }, [pendingReturnPayment?.reference, pendingReturnPayment?.orderId, pendingReturnPayment?.expiresAt, navigate, removeSelectedItems, t])
+  }, [pendingReturnPayment?.reference, pendingReturnPayment?.orderId, pendingReturnPayment?.expiresAt, navigate, removeSelectedItems, t, showAbaPopup, pendingReturnPayment?.abaAwaitingConfirmation])
 
   useEffect(() => {
     if (!bakongPayment || bakongPayment.status === 'paid' || bakongPayment.status === 'expired') {
@@ -610,8 +644,17 @@ export default function Checkout() {
     const codConfirmed = options?.codConfirmed === true
     const abaConfirmed = options?.abaConfirmed === true
 
+    if (!hasAddress) {
+      toast.error(t('checkout.addAddressFirst', 'Please add a delivery address first'), {
+        id: 'add-delivery-address-first',
+        duration: 2500,
+      })
+      navigate('/address-book', { state: { from: '/checkout' } })
+      return
+    }
+
     if (!paymentMethod) {
-      toast.error(t('checkout.selectPaymentMethod'))
+      toast.error(t('checkout.selectPaymentMethod', 'Please select a payment method'))
       return
     }
 
@@ -620,10 +663,39 @@ export default function Checkout() {
       return
     }
 
-    if (!hasAddress) {
-      toast.error(t('checkout.addAddressFirst'), { id: 'add-delivery-address-first', duration: 1800 })
-      navigate('/address-book', { state: { from: '/cart' } })
-      return
+    if (paymentMethod === 'aba' && pendingReturnPayment?.reference && pendingReturnPayment.paymentMethod === 'aba') {
+      if (pendingReturnPayment.expiresAt > Date.now()) {
+        try {
+          const { data } = await ordersApi.orders.checkoutStatus(pendingReturnPayment.reference)
+          if (data.status === 'paid' || (data.order_id && data.order)) {
+            localStorage.removeItem(PENDING_PAYMENT_KEY)
+            setPendingReturnPayment(null)
+            removeSelectedItems()
+            navigate('/order-success', {
+              replace: true,
+              state: {
+                orderId: data.order_id,
+                orderNumber: data.order_number,
+              },
+            })
+            return
+          }
+          if (data.status === 'pending' && abaPayment) {
+            setShowAbaPopup(true)
+            return
+          }
+          localStorage.removeItem(PENDING_PAYMENT_KEY)
+          setPendingReturnPayment(null)
+        } catch {
+          if (abaPayment) {
+            setShowAbaPopup(true)
+            return
+          }
+        }
+      } else {
+        localStorage.removeItem(PENDING_PAYMENT_KEY)
+        setPendingReturnPayment(null)
+      }
     }
 
     if (paymentMethod === 'cod' && !codConfirmed) {
@@ -901,11 +973,16 @@ export default function Checkout() {
           </div>
           <button
             onClick={handlePlaceOrder}
-            disabled={submitting || abaLoading || !hasAddress || !paymentMethod}
+            disabled={submitting || abaLoading}
             className="shop-btn-primary mt-6 hidden w-full py-4 disabled:cursor-not-allowed disabled:opacity-60 md:block"
           >
             {checkoutActionLabel}
           </button>
+          {!hasAddress && (
+            <p className="mt-2.5 hidden text-center text-xs font-semibold text-rose-500 md:block">
+              {t('checkout.addAddressFirst', 'Please add a delivery address first')}
+            </p>
+          )}
         </aside>
       </div>
 
@@ -917,7 +994,7 @@ export default function Checkout() {
           </div>
           <button
             onClick={handlePlaceOrder}
-            disabled={submitting || abaLoading || !hasAddress || !paymentMethod}
+            disabled={submitting || abaLoading}
             className="rounded-full bg-pink-600 px-6 py-2.5 text-base font-black text-white shadow-lg shadow-pink-200 disabled:opacity-60"
           >
             {checkoutActionLabel}
@@ -1147,7 +1224,7 @@ export default function Checkout() {
         <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-[#91a4bf]/85 px-4 py-6">
           <div className="relative mx-auto grid w-full max-w-[800px] overflow-hidden rounded-xl bg-white shadow-2xl md:min-h-[560px] md:grid-cols-[1fr_1.25fr]">
             <button
-              onClick={() => setShowAbaPopup(false)}
+              onClick={handleCloseAbaModal}
               aria-label="Close ABA payment"
               className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-cyan-600 transition hover:bg-cyan-50"
             >

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { cartApi } from '@/api/orders'
 
 const CARTS_BY_USER_KEY = 'shadow-shop-carts-by-user'
 
@@ -26,6 +27,7 @@ function readUserCarts() {
     return {}
   }
 }
+
 const getMaxQuantity = (product) => {
   const limits = []
   if (product?.availability_status !== 'available' && typeof product?.current_stock === 'number') {
@@ -44,6 +46,7 @@ const useCartStore = create(
       items: [],
       selectedProductIds: [],
       appliedCoupon: null,
+
       addItem: (product, quantity = 1) => {
         if (!product?.id) return { success: false, reason: 'invalid' }
 
@@ -77,14 +80,30 @@ const useCartStore = create(
               : [...selectedProductIds, productKey],
           })
         }
+
+        if (localStorage.getItem('access_token')) {
+          cartApi.setQuantity({
+            cart_key: productKey,
+            product_id: product.item_type === 'set' ? undefined : product.id,
+            product_set_id: product.item_type === 'set' ? (product.product_set_id || product.id) : undefined,
+            quantity: targetQty,
+          }).catch(() => {})
+        }
+
         return { success: true, quantity: targetQty, maxQuantity }
       },
+
       removeItem: (productId) => {
         set({
           items: get().items.filter((i) => getProductId(i) !== productId),
           selectedProductIds: get().selectedProductIds.filter((id) => id !== productId),
         })
+
+        if (localStorage.getItem('access_token')) {
+          cartApi.removeItem({ cart_key: productId }).catch(() => {})
+        }
       },
+
       updateQuantity: (productId, quantity) => {
         const nextQuantity = Number(quantity) || 0
         const currentItem = get().items.find((i) => getProductId(i) === productId)
@@ -103,6 +122,9 @@ const useCartStore = create(
                 getProductId(i) === productId ? { ...i, quantity: maxQuantity } : i
               ),
             })
+            if (localStorage.getItem('access_token')) {
+              cartApi.setQuantity({ cart_key: productId, quantity: maxQuantity }).catch(() => {})
+            }
           }
           return { success: false, reason: 'stock_limit', maxQuantity, currentQuantity: maxQuantity }
         }
@@ -112,8 +134,14 @@ const useCartStore = create(
             getProductId(i) === productId ? { ...i, quantity: nextQuantity } : i
           ),
         })
+
+        if (localStorage.getItem('access_token')) {
+          cartApi.setQuantity({ cart_key: productId, quantity: nextQuantity }).catch(() => {})
+        }
+
         return { success: true, quantity: nextQuantity, maxQuantity }
       },
+
       toggleSelected: (productId) => {
         const selectedProductIds = get().selectedProductIds
         set({
@@ -122,19 +150,40 @@ const useCartStore = create(
             : [...selectedProductIds, productId],
         })
       },
+
       selectAll: () => set({ selectedProductIds: get().items.map(getProductId).filter(Boolean) }),
       clearSelection: () => set({ selectedProductIds: [] }),
+
       removeSelectedItems: () => {
         const selected = new Set(get().selectedProductIds)
+        const removedIds = [...selected]
         set({
           items: get().items.filter((item) => !selected.has(getProductId(item))),
           selectedProductIds: [],
           appliedCoupon: null,
         })
+
+        if (localStorage.getItem('access_token')) {
+          if (get().items.length === 0) {
+            cartApi.clear().catch(() => {})
+          } else {
+            removedIds.forEach((id) => {
+              cartApi.removeItem({ cart_key: id }).catch(() => {})
+            })
+          }
+        }
       },
+
       applyCoupon: (coupon) => set({ appliedCoupon: coupon }),
       clearCoupon: () => set({ appliedCoupon: null }),
-      clearCart: () => set({ items: [], selectedProductIds: [], appliedCoupon: null }),
+
+      clearCart: (skipServer = false) => {
+        set({ items: [], selectedProductIds: [], appliedCoupon: null })
+        if (!skipServer && localStorage.getItem('access_token')) {
+          cartApi.clear().catch(() => {})
+        }
+      },
+
       syncPrices: ({ products = [], sets = [] } = {}) => {
         const byProduct = new Map(products.map((product) => [product.id, product]))
         const bySet = new Map(sets.map((productSet) => [productSet.id, productSet]))
@@ -178,28 +227,89 @@ const useCartStore = create(
         if (changed) set({ items })
         return raised
       },
+
+      syncWithServer: async () => {
+        if (!localStorage.getItem('access_token')) return
+        try {
+          const localItems = (get().items || []).filter(
+            (item) => getProductId(item) && getQuantity(item) > 0
+          )
+          let serverItems = []
+          if (localItems.length > 0) {
+            const payload = {
+              items: localItems.map((item) => ({
+                cart_key: getProductId(item),
+                product_id: item.product?.item_type === 'set' ? undefined : item.product?.id,
+                product_set_id: item.product?.item_type === 'set' ? (item.product?.product_set_id || item.product?.id) : undefined,
+                quantity: getQuantity(item),
+              })),
+            }
+            const { data } = await cartApi.sync(payload)
+            serverItems = Array.isArray(data) ? data : (data?.results || [])
+          } else {
+            const { data } = await cartApi.list()
+            serverItems = Array.isArray(data) ? data : (data?.results || [])
+          }
+
+          if (serverItems && serverItems.length > 0) {
+            const merged = serverItems.map((sItem) => {
+              const details = sItem.product_details || {}
+              return {
+                product: {
+                  ...details,
+                  id: details.id || sItem.product || sItem.cart_key,
+                  cart_key: sItem.cart_key || details.cart_key,
+                  item_type: sItem.item_type || details.item_type || 'product',
+                  name: sItem.product_name || details.name,
+                  retail_price: Number(sItem.product_price ?? details.retail_price ?? 0),
+                  primary_image: sItem.product_image || details.primary_image || details.image,
+                  code: sItem.product_code || details.code,
+                },
+                quantity: Number(sItem.quantity || 1),
+              }
+            })
+
+            const validKeys = merged.map(getProductId).filter(Boolean)
+            const currentSelected = get().selectedProductIds
+            const newSelected = currentSelected.length > 0
+              ? currentSelected.filter((id) => validKeys.includes(id))
+              : validKeys
+
+            set({
+              items: merged,
+              selectedProductIds: newSelected,
+            })
+          } else if (localItems.length === 0) {
+            set({ items: [], selectedProductIds: [] })
+          }
+        } catch (error) {
+          console.error('Failed to sync cart with server:', error)
+        }
+      },
+
       saveCartForUser: (userId) => {
         if (userId == null || userId === '') return
         const carts = readUserCarts()
         carts[String(userId)] = cartSnapshot(get())
         localStorage.setItem(CARTS_BY_USER_KEY, JSON.stringify(carts))
       },
+
       restoreCartForUser: (userId) => {
         if (userId == null || userId === '') return
         const carts = readUserCarts()
         const key = String(userId)
         const saved = carts[key]
-        if (!saved) {
-          carts[key] = cartSnapshot(get())
-          localStorage.setItem(CARTS_BY_USER_KEY, JSON.stringify(carts))
-          return
+        if (saved && Array.isArray(saved.items) && saved.items.length > 0) {
+          set({
+            items: saved.items,
+            selectedProductIds: Array.isArray(saved.selectedProductIds) ? saved.selectedProductIds : [],
+            appliedCoupon: saved.appliedCoupon || null,
+          })
         }
-        set({
-          items: Array.isArray(saved.items) ? saved.items : [],
-          selectedProductIds: Array.isArray(saved.selectedProductIds) ? saved.selectedProductIds : [],
-          appliedCoupon: saved.appliedCoupon || null,
-        })
+        // Always trigger server sync to get authoritative DB cart
+        get().syncWithServer()
       },
+
       totalItems: () => get().items.reduce((sum, i) => sum + getQuantity(i), 0),
       subtotal: () => get().items.reduce((sum, i) => sum + getProductPrice(i) * getQuantity(i), 0),
     }),

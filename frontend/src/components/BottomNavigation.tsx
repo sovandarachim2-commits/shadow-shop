@@ -116,7 +116,7 @@ export default function BottomNavigation({
                     >
                       <Icon size={26} strokeWidth={2.35} className="text-white" />
                     </span>
-                    <span className={cx('mt-auto max-w-full truncate text-[11px] leading-none', isActive ? 'font-semibold text-[#EC2F83]' : 'font-medium text-[#667085]')}>
+                    <span className={cx('mt-auto max-w-full truncate whitespace-nowrap text-[11px] leading-none', isActive ? 'font-semibold text-[#EC2F83]' : 'font-medium text-[#667085]')}>
                       {labels[item.id] || item.label}
                     </span>
                     <span
@@ -134,7 +134,10 @@ export default function BottomNavigation({
                       color={isActive ? PRIMARY_PINK : INACTIVE_COLOR}
                       className="mb-1 transition-transform duration-200"
                     />
-                    <span className={isActive ? 'font-semibold text-[#EC2F83]' : 'font-medium text-[#667085]'}>
+                    <span className={cx(
+                      'max-w-full truncate whitespace-nowrap text-[11px] leading-tight',
+                      isActive ? 'font-semibold text-[#EC2F83]' : 'font-medium text-[#667085]'
+                    )}>
                       {labels[item.id] || item.label}
                     </span>
                     <span

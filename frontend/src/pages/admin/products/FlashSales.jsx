@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Edit, Flame, Plus, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, Edit, Flame, Plus, Search, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageHeader from '@/components/shared/PageHeader'
 import { Modal } from '@/components/ui/Modal'
@@ -26,6 +26,21 @@ function flashSaleScheduleLabel(product) {
   return { label: 'Scheduled', variant: 'info' }
 }
 
+function extractErrorMessage(error, defaultMsg) {
+  const data = error?.response?.data
+  if (typeof data === 'string') return data
+  if (data?.detail) return data.detail
+  if (data?.message) return data.message
+  if (typeof data === 'object' && data !== null) {
+    for (const key of Object.keys(data)) {
+      const val = data[key]
+      if (Array.isArray(val) && val.length > 0) return `${key}: ${val[0]}`
+      if (typeof val === 'string') return `${key}: ${val}`
+    }
+  }
+  return defaultMsg
+}
+
 function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     product: saleProduct ? `${saleProduct._saleType}:${saleProduct.id}` : '',
@@ -46,8 +61,8 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
     if (!form.flash_sale_price || Number(form.flash_sale_price) <= 0) {
       return toast.error('Enter flash sale price')
     }
-    if (Number(form.flash_sale_price) >= Number(selectedProduct.retail_price)) {
-      return toast.error('Flash sale price must be lower than retail price')
+    if (selectedProduct.retail_price && Number(form.flash_sale_price) >= Number(selectedProduct.retail_price)) {
+      return toast.error(`Flash sale price must be lower than retail price (${formatCurrency(selectedProduct.retail_price)})`)
     }
     if (form.flash_sale_max_order_qty && Number(form.flash_sale_max_order_qty) < 1) {
       return toast.error('Max order qty must be at least 1')
@@ -108,7 +123,8 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
             step="0.01"
             value={form.flash_sale_price}
             onChange={(event) => set('flash_sale_price', event.target.value)}
-            className="input-field"
+            disabled={saving}
+            className="input-field disabled:opacity-60"
             placeholder="0.00"
           />
         </div>
@@ -120,7 +136,8 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
             step="1"
             value={form.flash_sale_max_order_qty}
             onChange={(event) => set('flash_sale_max_order_qty', event.target.value)}
-            className="input-field"
+            disabled={saving}
+            className="input-field disabled:opacity-60"
             placeholder="No limit"
           />
         </div>
@@ -130,7 +147,8 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
             type="datetime-local"
             value={form.flash_sale_starts_at}
             onChange={(event) => set('flash_sale_starts_at', event.target.value)}
-            className="input-field"
+            disabled={saving}
+            className="input-field disabled:opacity-60"
           />
         </div>
         <div>
@@ -139,7 +157,8 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
             type="datetime-local"
             value={form.flash_sale_ends_at}
             onChange={(event) => set('flash_sale_ends_at', event.target.value)}
-            className="input-field"
+            disabled={saving}
+            className="input-field disabled:opacity-60"
           />
         </div>
       </div>
@@ -150,7 +169,7 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
           value={form.status}
           onChange={(event) => set('status', event.target.value)}
           disabled={saving}
-          className="select-field"
+          className="select-field disabled:opacity-60"
         >
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -177,15 +196,18 @@ export default function FlashSales() {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState(null)
+  const [deleteProduct, setDeleteProduct] = useState(null)
 
   const { data: allProducts = [], isLoading } = useQuery({
     queryKey: ['flash-sale-products'],
-    queryFn: () => productsApi.products.list({ page_size: 200, is_active: true }).then((r) => getListResults(r.data)),
+    queryFn: () => productsApi.products.list({ page_size: 200, is_active: true }, { forceAuth: true }).then((r) => getListResults(r.data)),
+    staleTime: 0,
   })
 
   const { data: allSets = [], isLoading: setsLoading } = useQuery({
     queryKey: ['flash-sale-product-sets'],
-    queryFn: () => productsApi.sets.list({ page_size: 200, is_active: true }).then((r) => getListResults(r.data)),
+    queryFn: () => productsApi.sets.list({ page_size: 200, is_active: true }, { forceAuth: true }).then((r) => getListResults(r.data)),
+    staleTime: 0,
   })
 
   const saleItems = useMemo(() => [
@@ -218,59 +240,72 @@ export default function FlashSales() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: ({ product, form }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
-      is_featured: form.status !== 'inactive',
-      flash_sale_price: Number(form.flash_sale_price),
-      flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
-      flash_sale_starts_at: form.flash_sale_starts_at || null,
-      flash_sale_ends_at: form.flash_sale_ends_at || null,
-    }),
-    onSuccess: (response, { product, form }) => {
+    mutationFn: async ({ product, form }) => {
+      const payload = {
+        is_featured: form.status !== 'inactive',
+        flash_sale_price: Number(form.flash_sale_price),
+        flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
+        flash_sale_starts_at: form.flash_sale_starts_at || null,
+        flash_sale_ends_at: form.flash_sale_ends_at || null,
+      }
+      return productsApi.flashSale.set(product._saleType, product.id, payload)
+    },
+    onSuccess: async (response, { product, form }) => {
       updateSaleListImmediately(product._saleType, product.id, {
-        ...response.data,
+        ...(response?.data || {}),
         is_featured: form.status !== 'inactive',
         flash_sale_price: Number(form.flash_sale_price),
         flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
         flash_sale_starts_at: form.flash_sale_starts_at || null,
         flash_sale_ends_at: form.flash_sale_ends_at || null,
       })
-      queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
-      queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['flash-sale-products'] }),
+        queryClient.refetchQueries({ queryKey: ['flash-sale-product-sets'] }),
+      ])
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['home-feed'] })
       queryClient.invalidateQueries({ queryKey: ['home-flash-sale-fallback'] })
       setShowModal(false)
       setEditProduct(null)
-      toast.success('Flash sale saved')
+      toast.success(editProduct ? 'Flash sale updated successfully' : 'Flash sale created successfully')
     },
-    onError: () => toast.error('Failed to save flash sale'),
+    onError: (error) => {
+      toast.error(extractErrorMessage(error, 'Failed to save flash sale'))
+    },
   })
 
   const statusMutation = useMutation({
-    mutationFn: ({ product, status }) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
-      is_featured: status === 'active',
-    }),
-    onSuccess: (_, { product, status }) => {
+    mutationFn: async ({ product, status }) => {
+      return productsApi.flashSale.set(product._saleType, product.id, {
+        is_featured: status === 'active',
+        flash_sale_price: product.flash_sale_price ? Number(product.flash_sale_price) : 0.01,
+        flash_sale_starts_at: product.flash_sale_starts_at || null,
+        flash_sale_ends_at: product.flash_sale_ends_at || null,
+        flash_sale_max_order_qty: product.flash_sale_max_order_qty || null,
+      })
+    },
+    onSuccess: async (_, { product, status }) => {
       updateSaleListImmediately(product._saleType, product.id, { is_featured: status === 'active' })
-      queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
-      queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['flash-sale-products'] }),
+        queryClient.refetchQueries({ queryKey: ['flash-sale-product-sets'] }),
+      ])
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['home-feed'] })
       queryClient.invalidateQueries({ queryKey: ['home-flash-sale-fallback'] })
       toast.success('Flash sale status updated')
     },
-    onError: () => toast.error('Failed to update flash sale status'),
+    onError: (error) => {
+      toast.error(extractErrorMessage(error, 'Failed to update flash sale status'))
+    },
   })
 
   const removeMutation = useMutation({
-    mutationFn: (product) => productsApi[product._saleType === 'set' ? 'sets' : 'products'].update(product.id, {
-      is_featured: false,
-      flash_sale_price: null,
-      flash_sale_max_order_qty: null,
-      flash_sale_starts_at: null,
-      flash_sale_ends_at: null,
-    }),
-    onSuccess: (_, product) => {
+    mutationFn: async (product) => {
+      return productsApi.flashSale.remove(product._saleType, product.id)
+    },
+    onSuccess: async (_, product) => {
       updateSaleListImmediately(product._saleType, product.id, {
         is_featured: false,
         flash_sale_price: null,
@@ -278,14 +313,19 @@ export default function FlashSales() {
         flash_sale_starts_at: null,
         flash_sale_ends_at: null,
       })
-      queryClient.invalidateQueries({ queryKey: ['flash-sale-products'] })
-      queryClient.invalidateQueries({ queryKey: ['flash-sale-product-sets'] })
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['flash-sale-products'] }),
+        queryClient.refetchQueries({ queryKey: ['flash-sale-product-sets'] }),
+      ])
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['home-feed'] })
       queryClient.invalidateQueries({ queryKey: ['home-flash-sale-fallback'] })
-      toast.success('Flash sale removed')
+      setDeleteProduct(null)
+      toast.success('Flash sale removed successfully')
     },
-    onError: () => toast.error('Failed to remove flash sale'),
+    onError: (error) => {
+      toast.error(extractErrorMessage(error, 'Failed to remove flash sale'))
+    },
   })
 
   const openCreate = () => {
@@ -298,9 +338,9 @@ export default function FlashSales() {
     setShowModal(true)
   }
 
-  const handleRemove = (product) => {
-    if (!window.confirm(`Remove flash sale from "${product.name}"?`)) return
-    removeMutation.mutate(product)
+  const confirmRemove = () => {
+    if (!deleteProduct) return
+    removeMutation.mutate(deleteProduct)
   }
 
   return (
@@ -409,10 +449,22 @@ export default function FlashSales() {
                   </Td>
                   <Td>
                     <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => openEdit(product)} title="Edit" className="rounded-lg p-1.5 text-blue-500 transition-colors hover:bg-blue-50">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(product)}
+                        disabled={saveMutation.isPending || removeMutation.isPending}
+                        title="Edit"
+                        className="rounded-lg p-1.5 text-blue-500 transition-colors hover:bg-blue-50 disabled:opacity-60"
+                      >
                         <Edit size={14} />
                       </button>
-                      <button type="button" onClick={() => handleRemove(product)} disabled={removeMutation.isPending} title="Remove" className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 disabled:opacity-60">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteProduct(product)}
+                        disabled={saveMutation.isPending || removeMutation.isPending}
+                        title="Remove"
+                        className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 disabled:opacity-60"
+                      >
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -437,6 +489,48 @@ export default function FlashSales() {
           onSave={(product, form) => saveMutation.mutate({ product, form })}
           saving={saveMutation.isPending}
         />
+      </Modal>
+
+      <Modal
+        isOpen={!!deleteProduct}
+        onClose={() => !removeMutation.isPending && setDeleteProduct(null)}
+        title="Remove Flash Sale"
+        size="sm"
+      >
+        <div className="space-y-4 p-5">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-red-100 p-2.5 text-red-600">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">
+                Are you sure you want to remove the flash sale for &quot;{deleteProduct?.name}&quot;?
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                The product will remain in your catalog with its regular price ({formatCurrency(deleteProduct?.retail_price)}).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={confirmRemove}
+              disabled={removeMutation.isPending}
+              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+            >
+              {removeMutation.isPending ? 'Removing...' : 'Remove Flash Sale'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteProduct(null)}
+              disabled={removeMutation.isPending}
+              className="btn-secondary flex-1 justify-center"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

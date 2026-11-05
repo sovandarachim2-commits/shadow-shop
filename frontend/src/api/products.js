@@ -78,5 +78,9 @@ export const productsApi = {
   home: {
     feed: () => client.get('/products/home/'),
   },
+  flashSale: {
+    set: (type, id, data) => client.post(`/products/${type === 'set' ? 'sets' : 'items'}/${id}/flash-sale/`, data, { forceAuth: true }),
+    remove: (type, id) => client.delete(`/products/${type === 'set' ? 'sets' : 'items'}/${id}/flash-sale/`, { forceAuth: true }),
+  },
   revision: () => client.get('/products/revision/'),
 }

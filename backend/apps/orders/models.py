@@ -312,17 +312,19 @@ class Wishlist(models.Model):
 
 class CartItem(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart_items')
-    product = models.ForeignKey('products.Product', on_delete=models.CASCADE)
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, null=True, blank=True)
+    product_set = models.ForeignKey('products.ProductSet', on_delete=models.CASCADE, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'cart_items'
-        unique_together = ['user', 'product']
+        unique_together = [['user', 'product'], ['user', 'product_set']]
 
     def __str__(self):
-        return f"{self.user.username} - {self.product.name} x{self.quantity}"
+        name = self.product.name if self.product else (self.product_set.name if self.product_set else 'Unknown')
+        return f"{self.user.username} - {name} x{self.quantity}"
 
 
 class RewardItem(models.Model):

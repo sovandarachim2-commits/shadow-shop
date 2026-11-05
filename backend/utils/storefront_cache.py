@@ -66,20 +66,18 @@ def bump_storefront_cache():
     # Product list cache keys vary by query string; clear via version bump when available.
     try:
         cache.incr('storefront:product_list:version')
-    except ValueError:
-        safe_cache_set('storefront:product_list:version', 1, None)
-    except Exception:
-        logger.warning('product_list_cache_bump_failed', exc_info=True)
+    except (ValueError, Exception):
+        val = (safe_cache_get('storefront:product_list:version', 1) or 1) + 1
+        safe_cache_set('storefront:product_list:version', val, None)
     _bump_revision()
 
 
 def _bump_revision():
     try:
         cache.incr(STOREFRONT_REVISION_KEY)
-    except ValueError:
-        safe_cache_set(STOREFRONT_REVISION_KEY, 1, None)
-    except Exception:
-        logger.warning('storefront_revision_bump_failed', exc_info=True)
+    except (ValueError, Exception):
+        val = (safe_cache_get(STOREFRONT_REVISION_KEY, 0) or 0) + 1
+        safe_cache_set(STOREFRONT_REVISION_KEY, val, None)
 
 
 def get_storefront_revision():

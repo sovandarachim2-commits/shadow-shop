@@ -86,11 +86,6 @@ export default function Cart() {
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
   })
-  const { data: addresses = [], isLoading: addressesLoading, isError: addressesError } = useQuery({
-    queryKey: ['my-addresses'],
-    queryFn: () => authApi.addresses.list().then((r) => r.data.results ?? r.data),
-    enabled: isAuthenticated,
-  })
   const { data: rewardsSummary, isLoading: couponsLoading, isError: couponsError } = useQuery({
     queryKey: ['customer-rewards-summary'],
     queryFn: () => ordersApi.rewards.summary().then((response) => response.data),
@@ -132,15 +127,6 @@ export default function Cart() {
     if (selectedCount <= 0) return
     if (!isAuthenticated) {
       openAuthModal('checkout')
-      return
-    }
-    if (addressesLoading) {
-      toast.error(t('checkout.pleaseWait'))
-      return
-    }
-    if (!addressesError && addresses.length === 0) {
-      toast.error(t('checkout.addAddressFirst'), { id: 'add-delivery-address-first', duration: 1800 })
-      navigate('/address-book', { state: { from: '/cart' } })
       return
     }
     startTransition(() => navigate('/checkout'))
@@ -373,10 +359,10 @@ export default function Cart() {
           </div>
           <button
             onClick={goCheckout}
-            disabled={selectedCount === 0 || (isAuthenticated && addressesLoading)}
+            disabled={selectedCount === 0}
             className="shop-btn-primary mt-5 hidden min-h-[50px] w-full rounded-2xl px-5 py-3 text-[15px] font-black disabled:cursor-not-allowed disabled:opacity-60 lg:flex"
           >
-            {isAuthenticated && addressesLoading ? t('checkout.pleaseWait') : t('cart.proceedToCheckout')} <ArrowRight size={17} />
+            {t('cart.proceedToCheckout')} <ArrowRight size={17} />
           </button>
         </aside>
       </div>
@@ -384,10 +370,10 @@ export default function Cart() {
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-xl bg-white/95 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_28px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
         <button
           onClick={goCheckout}
-          disabled={selectedCount === 0 || (isAuthenticated && addressesLoading)}
+          disabled={selectedCount === 0}
           className="shop-btn-primary min-h-[50px] w-full rounded-2xl px-5 py-3 text-[15px] font-black disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isAuthenticated && addressesLoading ? t('checkout.pleaseWait') : t('cart.proceedToCheckout')} <ArrowRight size={17} />
+          {t('cart.proceedToCheckout')} <ArrowRight size={17} />
         </button>
       </div>
 

@@ -127,7 +127,7 @@ function RewardCard({ reward, currentPoints, onExchange, isExchanging, onView, t
             {isExchanging ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
-              t('rewardsPage.redeem')
+              t('rewardsPage.redeemBtn')
             )}
           </button>
         </div>

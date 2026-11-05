@@ -120,7 +120,7 @@ export default function RewardDetail() {
         <div className="min-w-0 text-center md:text-left">
           <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.detail.title')}</h1>
         </div>
-        <div className="flex justify-end">
+        <div className="flex justify-end md:hidden">
           <HeaderActionIcons />
         </div>
       </div>

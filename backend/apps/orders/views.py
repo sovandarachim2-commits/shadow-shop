@@ -871,10 +871,58 @@ class WishlistViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Wishlist.objects.filter(user=self.request.user).select_related('product')
+        return Wishlist.objects.filter(user=self.request.user).select_related(
+            'product', 'product__category'
+        ).prefetch_related('product__images')
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        product_id = request.data.get('product') or request.data.get('product_id')
+        if not product_id:
+            return Response({'error': 'Product is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        wishlist_item, created = Wishlist.objects.get_or_create(
+            user=request.user,
+            product_id=product_id
+        )
+        serializer = self.get_serializer(wishlist_item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        item = Wishlist.objects.filter(user=request.user, pk=pk).first()
+        if not item:
+            item = Wishlist.objects.filter(user=request.user, product_id=pk).first()
+        if item:
+            item.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'])
+    def toggle(self, request):
+        product_id = request.data.get('product') or request.data.get('product_id')
+        if not product_id:
+            return Response({'error': 'Product is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing = Wishlist.objects.filter(user=request.user, product_id=product_id).first()
+        if existing:
+            existing.delete()
+            return Response({'wishlisted': False, 'product_id': int(product_id)}, status=status.HTTP_200_OK)
+
+        item, _ = Wishlist.objects.get_or_create(user=request.user, product_id=product_id)
+        serializer = self.get_serializer(item)
+        return Response({'wishlisted': True, 'item': serializer.data}, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['delete'])
+    def remove_product(self, request):
+        product_id = (
+            request.query_params.get('product_id')
+            or request.query_params.get('product')
+            or request.data.get('product')
+            or request.data.get('product_id')
+        )
+        if not product_id:
+            return Response({'error': 'Product is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        Wishlist.objects.filter(user=request.user, product_id=product_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['delete'])
     def clear(self, request):
@@ -887,10 +935,180 @@ class CartViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return CartItem.objects.filter(user=self.request.user).select_related('product')
+        return CartItem.objects.filter(user=self.request.user).select_related(
+            'product', 'product__category', 'product__brand', 'product_set'
+        ).prefetch_related('product__images', 'product_set__images')
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        product_id = request.data.get('product') or request.data.get('product_id')
+        product_set_id = request.data.get('product_set') or request.data.get('product_set_id')
+        cart_key = str(request.data.get('cart_key') or '')
+        if cart_key.startswith('set-'):
+            try:
+                product_set_id = int(cart_key.replace('set-', ''))
+                product_id = None
+            except ValueError:
+                pass
+        elif cart_key and not product_id and not product_set_id:
+            product_id = cart_key
+
+        quantity = int(request.data.get('quantity', 1))
+        if quantity <= 0:
+            quantity = 1
+
+        if not product_id and not product_set_id:
+            return Response({'detail': 'Either product or product_set is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if product_id:
+            item, created = CartItem.objects.get_or_create(
+                user=request.user,
+                product_id=product_id,
+                defaults={'quantity': quantity}
+            )
+            if not created:
+                item.quantity += quantity
+                item.save(update_fields=['quantity', 'updated_at'])
+        else:
+            item, created = CartItem.objects.get_or_create(
+                user=request.user,
+                product_set_id=product_set_id,
+                defaults={'quantity': quantity}
+            )
+            if not created:
+                item.quantity += quantity
+                item.save(update_fields=['quantity', 'updated_at'])
+
+        serializer = self.get_serializer(item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def sync(self, request):
+        incoming_items = request.data.get('items', [])
+        if isinstance(incoming_items, list):
+            for entry in incoming_items:
+                product_id = entry.get('product_id')
+                if not product_id:
+                    prod = entry.get('product')
+                    if isinstance(prod, dict):
+                        if prod.get('item_type') != 'set':
+                            product_id = prod.get('id')
+                    elif prod:
+                        product_id = prod
+
+                product_set_id = entry.get('product_set_id')
+                if not product_set_id:
+                    prod = entry.get('product')
+                    if isinstance(prod, dict) and prod.get('item_type') == 'set':
+                        product_set_id = prod.get('product_set_id') or str(prod.get('id', '')).replace('set-', '')
+                    elif entry.get('product_set'):
+                        product_set_id = entry.get('product_set')
+
+                cart_key = str(entry.get('cart_key') or '')
+                if cart_key.startswith('set-'):
+                    try:
+                        product_set_id = int(cart_key.replace('set-', ''))
+                        product_id = None
+                    except ValueError:
+                        pass
+                elif cart_key and not product_id and not product_set_id:
+                    product_id = cart_key
+
+                qty = int(entry.get('quantity', 1))
+                if qty <= 0:
+                    continue
+
+                if product_id:
+                    try:
+                        item, created = CartItem.objects.get_or_create(
+                            user=request.user,
+                            product_id=product_id,
+                            defaults={'quantity': qty}
+                        )
+                        if not created:
+                            item.quantity = max(item.quantity, qty)
+                            item.save(update_fields=['quantity', 'updated_at'])
+                    except Exception:
+                        pass
+                elif product_set_id:
+                    try:
+                        item, created = CartItem.objects.get_or_create(
+                            user=request.user,
+                            product_set_id=product_set_id,
+                            defaults={'quantity': qty}
+                        )
+                        if not created:
+                            item.quantity = max(item.quantity, qty)
+                            item.save(update_fields=['quantity', 'updated_at'])
+                    except Exception:
+                        pass
+
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post', 'patch'])
+    def set_quantity(self, request):
+        cart_key = str(request.data.get('cart_key') or request.data.get('product_id') or '')
+        product_set_id = request.data.get('product_set_id')
+        product_id = request.data.get('product_id')
+        quantity = int(request.data.get('quantity', 0))
+
+        if cart_key.startswith('set-'):
+            try:
+                product_set_id = int(cart_key.replace('set-', ''))
+                cart_key = ''
+                product_id = None
+            except ValueError:
+                pass
+        elif cart_key and not product_id and not product_set_id:
+            product_id = cart_key
+
+        item = None
+        if product_set_id:
+            item = CartItem.objects.filter(user=request.user, product_set_id=product_set_id).first()
+        elif product_id:
+            item = CartItem.objects.filter(user=request.user, product_id=product_id).first()
+
+        if quantity <= 0:
+            if item:
+                item.delete()
+            return Response({'status': 'deleted'}, status=status.HTTP_200_OK)
+
+        if not item:
+            if product_set_id:
+                item = CartItem.objects.create(user=request.user, product_set_id=product_set_id, quantity=quantity)
+            elif product_id:
+                item = CartItem.objects.create(user=request.user, product_id=product_id, quantity=quantity)
+            else:
+                return Response({'detail': 'Item not found in cart.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            item.quantity = quantity
+            item.save(update_fields=['quantity', 'updated_at'])
+
+        return Response(self.get_serializer(item).data)
+
+    @action(detail=False, methods=['post', 'delete'])
+    def remove_item(self, request):
+        cart_key = str(request.data.get('cart_key') or request.query_params.get('cart_key') or '')
+        product_set_id = request.data.get('product_set_id') or request.query_params.get('product_set_id')
+        product_id = request.data.get('product_id') or request.query_params.get('product_id')
+
+        if cart_key.startswith('set-'):
+            try:
+                product_set_id = int(cart_key.replace('set-', ''))
+                cart_key = ''
+                product_id = None
+            except ValueError:
+                pass
+        elif cart_key and not product_id and not product_set_id:
+            product_id = cart_key
+
+        if product_set_id:
+            CartItem.objects.filter(user=request.user, product_set_id=product_set_id).delete()
+        elif product_id:
+            CartItem.objects.filter(user=request.user, product_id=product_id).delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['delete'])
     def clear(self, request):
@@ -899,12 +1117,17 @@ class CartViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        items = CartItem.objects.filter(user=request.user).select_related('product')
+        items = self.get_queryset()
         total_items = sum(item.quantity for item in items)
-        subtotal = sum(item.product.retail_price * item.quantity for item in items)
+        subtotal = 0
+        for item in items:
+            if item.product:
+                subtotal += float(item.product.retail_price or 0) * item.quantity
+            elif item.product_set:
+                subtotal += float(item.product_set.active_price or 0) * item.quantity
         return Response({
             'total_items': total_items,
-            'subtotal': float(subtotal),
+            'subtotal': round(subtotal, 2),
         })
 
 

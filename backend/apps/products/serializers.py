@@ -235,6 +235,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 class ProductWriteSerializer(serializers.ModelSerializer):
     code = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    is_flash_sale_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
@@ -244,9 +245,9 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             'wholesale_price', 'retail_price', 'compare_at_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
             'min_order_qty', 'availability_status', 'is_active',
-            'is_featured', 'is_new_arrival', 'is_best_seller',
+            'is_featured', 'is_flash_sale_active', 'is_new_arrival', 'is_best_seller',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'is_flash_sale_active']
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

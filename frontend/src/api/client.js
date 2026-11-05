@@ -95,7 +95,11 @@ client.interceptors.request.use((config) => {
     delete config.headers.Authorization
     return config
   }
-  if (isAuthFreeRequest(config) || isPublicGetRequest(config)) {
+
+  const isAdminContext = typeof window !== 'undefined' && window.location?.pathname?.startsWith('/admin')
+  const shouldSkipAuth = !config.forceAuth && !isAdminContext && (isAuthFreeRequest(config) || isPublicGetRequest(config))
+
+  if (shouldSkipAuth) {
     delete config.headers.Authorization
     return config
   }

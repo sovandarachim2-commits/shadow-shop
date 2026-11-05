@@ -91,10 +91,12 @@
   "product": {
     "brand": "Brand",
     "category": "Category",
+    "availability": "Availability",
     "price": "Price",
     "stock": "Stock",
     "quantity": "Quantity",
     "description": "Description",
+    "additionalInfo": "Additional Information",
     "benefits": "Benefits",
     "howToUse": "How to Use",
     "ingredients": "Ingredients",

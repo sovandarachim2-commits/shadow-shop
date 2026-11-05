@@ -858,46 +858,127 @@ class WishlistSerializer(serializers.ModelSerializer):
         source='product.retail_price', max_digits=12, decimal_places=2, read_only=True
     )
     product_image = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='product.category.name', read_only=True, default='')
+    slug = serializers.CharField(source='product.slug', read_only=True, default='')
+    stock_quantity = serializers.SerializerMethodField()
+    is_in_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = Wishlist
-        fields = ['id', 'product', 'product_name', 'product_price', 'product_image', 'created_at']
+        fields = [
+            'id', 'product', 'product_name', 'product_price', 'product_image',
+            'category_name', 'slug', 'stock_quantity', 'is_in_stock', 'created_at'
+        ]
 
     def get_product_image(self, obj):
-        img = obj.product.images.filter(is_primary=True).first()
+        images = list(obj.product.images.all())
+        img = next((i for i in images if i.is_primary), None) or (images[0] if images else None)
         if img and img.image:
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(img.image.url)
+            return img.image.url
         return None
+
+    def get_stock_quantity(self, obj):
+        try:
+            return obj.product.stock.quantity
+        except Exception:
+            return 0
+
+    def get_is_in_stock(self, obj):
+        try:
+            return obj.product.stock.quantity > 0
+        except Exception:
+            return True
 
 
 class CartItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    product_price = serializers.DecimalField(
-        source='product.retail_price', max_digits=12, decimal_places=2, read_only=True
-    )
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), required=False, allow_null=True)
+    product_set = serializers.PrimaryKeyRelatedField(queryset=ProductSet.objects.all(), required=False, allow_null=True)
+    product_name = serializers.SerializerMethodField()
+    product_price = serializers.SerializerMethodField()
     product_image = serializers.SerializerMethodField()
-    product_code = serializers.CharField(source='product.code', read_only=True)
+    product_code = serializers.SerializerMethodField()
+    cart_key = serializers.SerializerMethodField()
+    item_type = serializers.SerializerMethodField()
+    product_details = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
         fields = [
-            'id', 'product', 'product_name', 'product_code',
-            'product_price', 'product_image', 'quantity', 'subtotal', 'updated_at',
+            'id', 'product', 'product_set', 'product_name', 'product_code',
+            'product_price', 'product_image', 'quantity', 'subtotal',
+            'cart_key', 'item_type', 'product_details', 'updated_at',
         ]
 
+    def validate(self, attrs):
+        product = attrs.get('product')
+        product_set = attrs.get('product_set')
+        if not product and not product_set and not self.instance:
+            raise serializers.ValidationError('Either product or product_set is required.')
+        return attrs
+
+    def get_product_name(self, obj):
+        if obj.product:
+            return obj.product.name
+        if obj.product_set:
+            return obj.product_set.name
+        return ''
+
+    def get_product_price(self, obj):
+        if obj.product:
+            return float(obj.product.retail_price or 0)
+        if obj.product_set:
+            return float(obj.product_set.active_price or obj.product_set.price or 0)
+        return 0.0
+
+    def get_product_code(self, obj):
+        if obj.product:
+            return obj.product.code or ''
+        return ''
+
     def get_product_image(self, obj):
-        img = obj.product.images.filter(is_primary=True).first()
-        if img and img.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(img.image.url)
-        return None
+        request = self.context.get('request')
+        if obj.product:
+            return resolve_product_image_url(obj.product, request)
+        if obj.product_set:
+            return resolve_product_set_image_url(obj.product_set, request)
+        return ''
+
+    def get_cart_key(self, obj):
+        if obj.product_id:
+            return obj.product_id
+        if obj.product_set_id:
+            return f"set-{obj.product_set_id}"
+        return str(obj.id)
+
+    def get_item_type(self, obj):
+        return 'set' if obj.product_set_id else 'product'
 
     def get_subtotal(self, obj):
-        return float(obj.product.retail_price * obj.quantity)
+        price = self.get_product_price(obj)
+        return float(price * obj.quantity)
+
+    def get_product_details(self, obj):
+        request = self.context.get('request')
+        if obj.product:
+            from apps.products.serializers import ProductListSerializer
+            data = ProductListSerializer(obj.product, context={'request': request}).data
+            data['cart_key'] = obj.product.id
+            data['item_type'] = 'product'
+            return data
+        elif obj.product_set:
+            from apps.products.serializers import ProductSetSerializer
+            data = ProductSetSerializer(obj.product_set, context={'request': request}).data
+            data['cart_key'] = f"set-{obj.product_set.id}"
+            data['item_type'] = 'set'
+            data['product_set_id'] = obj.product_set.id
+            data['retail_price'] = float(obj.product_set.active_price or obj.product_set.price or 0)
+            data['primary_image'] = data.get('image_url') or (data['images'][0]['image'] if data.get('images') else '')
+            return data
+        return None
 
 
 class BlankableDateTimeField(serializers.DateTimeField):

@@ -66,11 +66,16 @@ export const ordersApi = {
     remove: (id) => client.delete(`/orders/cart/${id}/`),
     clear: () => client.delete('/orders/cart/clear/'),
     summary: () => client.get('/orders/cart/summary/'),
+    sync: (data) => client.post('/orders/cart/sync/', data),
+    setQuantity: (data) => client.post('/orders/cart/set_quantity/', data),
+    removeItem: (data) => client.post('/orders/cart/remove_item/', data),
   },
   wishlist: {
     list: () => client.get('/orders/wishlist/'),
     add: (data) => client.post('/orders/wishlist/', data),
+    toggle: (data) => client.post('/orders/wishlist/toggle/', data),
     remove: (id) => client.delete(`/orders/wishlist/${id}/`),
+    removeProduct: (productId) => client.delete('/orders/wishlist/remove_product/', { params: { product_id: productId } }),
     clear: () => client.delete('/orders/wishlist/clear/'),
   },
   rewards: {
@@ -123,3 +128,8 @@ export const ordersApi = {
     generateAba: (orderId) => client.post('/payments/aba/generate/', { order: orderId }),
   },
 }
+
+export const cartApi = ordersApi.cart
+export const rewardsApi = ordersApi.rewards
+export const wishlistApi = ordersApi.wishlist
+
