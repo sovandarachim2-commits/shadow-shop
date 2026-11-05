@@ -539,6 +539,7 @@ function ScrollToTop() {
   const navigationType = useNavigationType()
   const scrollPositions = useRef(new Map())
   const currentLocationKey = useRef(key)
+  const currentLocationPath = useRef(`${pathname}${search}`)
 
   useLayoutEffect(() => {
     const previousRestoration = window.history.scrollRestoration
@@ -550,17 +551,65 @@ function ScrollToTop() {
 
   useEffect(() => {
     const saveScrollPosition = () => {
-      scrollPositions.current.set(currentLocationKey.current, window.scrollY)
+      if (currentLocationKey.current) {
+        scrollPositions.current.set(currentLocationKey.current, window.scrollY)
+      }
+      if (currentLocationPath.current) {
+        scrollPositions.current.set(currentLocationPath.current, window.scrollY)
+      }
     }
     window.addEventListener('scroll', saveScrollPosition, { passive: true })
     return () => window.removeEventListener('scroll', saveScrollPosition)
   }, [])
 
   useLayoutEffect(() => {
-    const shouldRestoreHome = navigationType === 'POP' && pathname === '/'
-    const top = shouldRestoreHome ? scrollPositions.current.get(key) || 0 : 0
-    window.scrollTo({ top, left: 0, behavior: 'auto' })
+    const pathWithSearch = `${pathname}${search}`
+    const isPop = navigationType === 'POP'
+    const savedTop = isPop
+      ? (scrollPositions.current.get(key) ?? scrollPositions.current.get(pathWithSearch) ?? 0)
+      : 0
+
+    let cancelRaf = false
+    let attempts = 0
+
+    const stopTrackingUser = () => {
+      cancelRaf = true
+    }
+
+    if (isPop && savedTop > 0) {
+      window.scrollTo({ top: savedTop, left: 0, behavior: 'auto' })
+
+      const restoreScroll = () => {
+        if (cancelRaf) return
+        const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+        if (maxScroll >= savedTop || attempts >= 20) {
+          window.scrollTo({ top: savedTop, left: 0, behavior: 'auto' })
+        } else {
+          attempts++
+          requestAnimationFrame(restoreScroll)
+        }
+      }
+      requestAnimationFrame(restoreScroll)
+      window.addEventListener('wheel', stopTrackingUser, { passive: true, once: true })
+      window.addEventListener('touchmove', stopTrackingUser, { passive: true, once: true })
+    } else {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
+
     currentLocationKey.current = key
+    currentLocationPath.current = pathWithSearch
+
+    return () => {
+      cancelRaf = true
+      window.removeEventListener('wheel', stopTrackingUser)
+      window.removeEventListener('touchmove', stopTrackingUser)
+      if (currentLocationKey.current) {
+        scrollPositions.current.set(currentLocationKey.current, window.scrollY)
+      }
+      if (currentLocationPath.current) {
+        scrollPositions.current.set(currentLocationPath.current, window.scrollY)
+      }
+    }
   }, [key, navigationType, pathname, search])
 
   return null

@@ -32,7 +32,7 @@ const ACCOUNT_MENU_ITEMS = [
   { icon: Package, labelKey: 'profile.myOrders', descKey: 'profile.menuOrdersDesc', view: 'orders', path: '/my-orders' },
   { icon: MapPin, labelKey: 'profile.addresses', descKey: 'profile.menuAddressesDesc', view: 'addresses', path: '/address-book' },
   { icon: Gift, labelKey: 'profile.exchangeRewards', descKey: 'profile.menuRewardsDesc', view: 'rewards', path: '/profile/rewards' },
-  { icon: Percent, labelKey: 'profile.coupons', descKey: 'profile.menuCouponsDesc', view: 'coupons' },
+  { icon: Percent, labelKey: 'profile.coupons', descKey: 'profile.menuCouponsDesc', view: 'coupons', path: '/profile/rewards/coupons' },
   { icon: Bell, labelKey: 'profile.notifications', descKey: 'profile.menuNotificationsDesc', view: 'notifications' },
   { icon: Heart, labelKey: 'profile.wishlist', descKey: 'profile.menuWishlistDesc', view: 'wishlist', path: '/wishlist' },
   { icon: Shield, labelKey: 'profile.password', descKey: 'profile.menuPasswordDesc', view: 'password' },
@@ -67,7 +67,7 @@ const SHORTCUTS = [
   { tKey: 'profile.address', icon: MapPin, path: '/address-book' },
   { tKey: 'wishlist.title', icon: Heart, path: '/wishlist' },
   { tKey: 'profile.rewards', icon: Gift, path: '/profile/rewards' },
-  { tKey: 'profile.coupons', icon: Percent, path: '/profile' },
+  { tKey: 'profile.coupons', icon: Percent, path: '/profile/rewards/coupons' },
   { tKey: 'profile.reviews', icon: Star, path: '/my-orders' },
 ]
 
@@ -878,7 +878,7 @@ export default function Profile() {
 
   const mobileQuickActions = [
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },
-    { icon: Percent, labelKey: 'profile.coupons', action: () => setActiveView('coupons'), color: 'text-rose-400' },
+    { icon: Percent, labelKey: 'profile.coupons', action: () => navigate('/profile/rewards/coupons'), color: 'text-rose-400' },
     { icon: Heart, labelKey: 'profile.following', action: () => navigate('/wishlist'), color: 'text-amber-400' },
     { icon: Share2, labelKey: 'profile.referral', action: () => navigate('/profile/rewards/referral'), color: 'text-pink-500' },
   ]
@@ -888,7 +888,7 @@ export default function Profile() {
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders') },
     { icon: MapPin, labelKey: 'profile.myAddress', action: () => navigate('/address-book') },
     { icon: Gift, labelKey: 'profile.exchangeRewards', action: () => navigate('/profile/rewards') },
-    { icon: Percent, labelKey: 'profile.coupons', action: () => setActiveView('coupons') },
+    { icon: Percent, labelKey: 'profile.coupons', action: () => navigate('/profile/rewards/coupons') },
     { icon: Bell, labelKey: 'profile.notifications', action: () => setActiveView('notifications') },
   ]
 
