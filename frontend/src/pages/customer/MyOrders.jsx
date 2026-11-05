@@ -9,7 +9,6 @@ import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { formatFullAddressKhmer } from '@/utils/addressHelpers'
 import { KHMER_TEXT_STYLE } from '@/utils/constants'
 import { ProductThumb } from '@/components/customer/CustomerUi'
-import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import { useTranslation } from 'react-i18next'
 
@@ -512,7 +511,6 @@ export default function MyOrders() {
               <h1 className="truncate text-2xl font-black tracking-tight text-gray-950">{t('orders.title')}</h1>
             </div>
           </div>
-          <HeaderActionIcons size="md" />
         </div>
         <div className="mb-6 grid max-w-md grid-cols-2 rounded-lg bg-gray-200 p-1">
           {[
