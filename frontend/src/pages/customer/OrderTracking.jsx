@@ -21,6 +21,7 @@ import { ProductThumb } from '@/components/customer/CustomerUi'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { useTranslation } from 'react-i18next'
+import abaKhqrLogo from '@/assets/aba/ABA KHQR Logo.svg'
 
 const STATUS_STYLES = {
   new: 'bg-yellow-50 text-yellow-700',
@@ -103,6 +104,18 @@ function paymentMethodBadge(method, label) {
   return label.slice(0, 4)
 }
 
+function TelegramIcon({ size = 40, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <circle cx="12" cy="12" r="12" fill="#24A1DE" />
+      <path
+        d="M5.491 11.74L17.061 7.279C17.598 7.085 18.067 7.41 17.893 8.222L15.922 17.503C15.776 18.161 15.385 18.321 14.838 18.011L11.838 15.8L10.391 17.194C10.231 17.354 10.096 17.489 9.786 17.489L9.999 14.436L15.559 9.413C15.801 9.2 15.505 9.08 15.186 9.293L8.315 13.619L5.353 12.695C4.71 12.491 4.696 12.052 5.491 11.74Z"
+        fill="white"
+      />
+    </svg>
+  )
+}
+
 function normalizeTelegramUrl(value = '') {
   const clean = String(value || '').trim()
   if (!clean) return ''
@@ -126,6 +139,11 @@ export default function OrderTracking() {
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
+  })
+
+  const { data: telegramConfig } = useQuery({
+    queryKey: ['telegram-public-config'],
+    queryFn: () => authApi.telegramConfig().then((r) => r.data),
   })
 
   if (isLoading && !order) {
@@ -166,11 +184,27 @@ export default function OrderTracking() {
     acleda: 'ACLEDA Bank',
     wing: 'Wing',
     contact_sales: t('orders.payment.contact_sales'),
-  }[order.payment_method] || order.payment_method || t('orders.payment.title')
+  }[order.payment_method] || t(`checkout.paymentMethods.${order.payment_method}.label`, { defaultValue: order.payment_method || t('orders.payment.title') })
+  const logoUrls = siteSettings?.payment_methods?.logo_urls || {}
+  const paymentLogoUrl = logoUrls[order.payment_method] || ''
+  const isAba = order.payment_method === 'aba'
+  const hasLogo = Boolean(paymentLogoUrl || isAba)
+  const paymentBadge = t(`checkout.paymentMethods.${order.payment_method}.badge`, {
+    defaultValue: paymentMethodBadge(order.payment_method, paymentLabel),
+  })
   const contactSalesUrl = normalizeTelegramUrl(siteSettings?.payment_methods?.contact_sales_url)
-  const supportUrl = contactSalesUrl || (siteSettings?.store_phone ? `tel:${siteSettings.store_phone}` : '')
+  const botUsername = String(telegramConfig?.bot_username || '').replace('@', '').trim()
+  const telegramBotUrl = botUsername ? `https://t.me/${botUsername}` : ''
+  const telegramUrl = contactSalesUrl || telegramBotUrl || 'https://t.me/SovandaraONS'
+  const isTelegramSupport = Boolean(telegramUrl)
+  const supportUrl = telegramUrl || (siteSettings?.store_phone ? `tel:${siteSettings.store_phone}` : '')
   const openSupport = () => {
-    if (supportUrl) window.location.href = supportUrl
+    if (!supportUrl) return
+    if (supportUrl.startsWith('tel:')) {
+      window.location.href = supportUrl
+    } else {
+      window.open(supportUrl, '_blank', 'noopener,noreferrer')
+    }
   }
 
   return (
@@ -180,7 +214,13 @@ export default function OrderTracking() {
           <ChevronLeft size={20} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('orders.details')}</h1>
-        <button className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+        <button
+          type="button"
+          onClick={openSupport}
+          disabled={!supportUrl}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 disabled:opacity-40"
+          aria-label={t('orders.contactSupport')}
+        >
           <Headphones size={18} />
         </button>
       </div>
@@ -274,8 +314,28 @@ export default function OrderTracking() {
 
         <Card title={t('orders.paymentMethod')}>
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-center text-[11px] font-black leading-tight text-white">
-              {paymentMethodBadge(order.payment_method, paymentLabel)}
+            <div
+              className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ${
+                hasLogo
+                  ? 'border border-gray-100 bg-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600'
+              } text-xs font-bold`}
+            >
+              {paymentLogoUrl ? (
+                <img
+                  src={paymentLogoUrl}
+                  alt={paymentLabel}
+                  className="h-full w-full object-cover"
+                />
+              ) : isAba ? (
+                <img
+                  src={abaKhqrLogo}
+                  alt="ABA KHQR"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                paymentBadge
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-gray-950">{paymentLabel}</p>
@@ -292,9 +352,17 @@ export default function OrderTracking() {
             type="button"
             onClick={openSupport}
             disabled={!supportUrl}
-            className="flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center gap-3 text-left transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500"><Phone size={18} /></div>
+            {isTelegramSupport ? (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full shadow-xs">
+                <TelegramIcon size={40} />
+              </div>
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500">
+                <Phone size={18} />
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-gray-950">{t('orders.contactSupport')}</p>
               <p className="text-xs font-semibold text-gray-400">{t('orders.helpText')}</p>

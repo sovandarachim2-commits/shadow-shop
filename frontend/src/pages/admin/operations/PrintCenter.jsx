@@ -12,6 +12,7 @@ import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { formatFullAddressKhmer } from '@/utils/addressHelpers'
 import { KHMER_FONT_FAMILY } from '@/utils/constants'
 import toast from 'react-hot-toast'
+import abaKhqrLogo from '@/assets/aba/ABA KHQR Logo.svg'
 
 const PRINT_TYPES = [
   { key: 'receipt', label: 'Receipt', icon: FileText, desc: 'Customer payment receipt' },
@@ -36,11 +37,11 @@ function paymentMethodLabel(method) {
 }
 
 function PaymentMethodCell({ method, logoUrls = {} }) {
-  const logoUrl = logoUrls[method]
+  const logoUrl = logoUrls[method] || (method === 'aba' ? abaKhqrLogo : null)
 
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
-      {logoUrl && <img src={logoUrl} alt="" className="h-4 w-4 rounded-full object-cover" />}
+      {logoUrl && <img src={logoUrl} alt="" className="h-4 w-4 rounded-full object-contain" />}
       {paymentMethodLabel(method)}
     </span>
   )

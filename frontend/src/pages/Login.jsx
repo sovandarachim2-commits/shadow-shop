@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   AlertCircle, CheckCircle2,
-  Eye, EyeOff, Loader2, Lock, Send, Phone, Mail,
+  Eye, EyeOff, Loader2, Lock, Phone, Mail,
   ChevronLeft, ChevronRight, Globe, Headphones,
   Sparkles, ShieldCheck, User,
   ClipboardList, BarChart3, PackageCheck,
@@ -26,6 +26,18 @@ function GoogleMark({ size = 18 }) {
       <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.94v2.34A9 9 0 0 0 9 18z" />
       <path fill="#FBBC05" d="M3.96 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.94H.94A9 9 0 0 0 0 9c0 1.45.34 2.82.94 4.06l3.02-2.34z" />
       <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58A8.65 8.65 0 0 0 9 0 9 9 0 0 0 .94 4.94l3.02 2.34C4.67 5.16 6.66 3.58 9 3.58z" />
+    </svg>
+  )
+}
+
+function TelegramMark({ size = 18, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#24A1DE" />
+      <path
+        d="M5.491 11.74L17.061 7.279C17.598 7.085 18.067 7.41 17.893 8.222L15.922 17.503C15.776 18.161 15.385 18.321 14.838 18.011L11.838 15.8L10.391 17.194C10.231 17.354 10.096 17.489 9.786 17.489L9.999 14.436L15.559 9.413C15.801 9.2 15.505 9.08 15.186 9.293L8.315 13.619L5.353 12.695C4.71 12.491 4.696 12.052 5.491 11.74Z"
+        fill="white"
+      />
     </svg>
   )
 }
@@ -838,7 +850,7 @@ export default function Login() {
                         )}>
                         {telegramPhase === 'finish'
                           ? <Loader2 size={18} className="animate-spin text-sky-500" />
-                          : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
+                          : <TelegramMark size={18} />}
                         {t('auth.telegram')}
                       </button>
                     </div>
@@ -971,7 +983,7 @@ export default function Login() {
                         )}>
                         {telegramPhase === 'finish'
                           ? <Loader2 size={18} className="animate-spin text-sky-500" />
-                          : <Send size={18} className="text-[#2AABEE]" fill="#2AABEE" />}
+                          : <TelegramMark size={18} />}
                         {t('auth.telegram')}
                       </button>
                     </div>

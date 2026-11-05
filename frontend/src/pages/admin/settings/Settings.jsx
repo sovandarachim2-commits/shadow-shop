@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power, ChevronDown, Search, Facebook, Instagram, Youtube } from 'lucide-react'
+import { Save, TestTube, MapPin, CreditCard, Upload, Plus, Pencil, X, Trash2, Power, ChevronDown, Search, Facebook, Instagram, Youtube, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useState, useRef, useEffect } from 'react'
 import client from '@/api/client'
 import { authApi } from '@/api/auth'
 import { CAMBODIA_PROVINCES } from '@/utils/cambodiaProvinces'
+import abaKhqrLogo from '@/assets/aba/ABA KHQR Logo.svg'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const SECTION_TITLES = {
   general:  'General Settings',
@@ -284,6 +286,7 @@ function apiErrorMessage(error, fallback) {
 
 export default function Settings({ tab = 'general' }) {
   const queryClient = useQueryClient()
+  const [confirm, ConfirmDialog] = useConfirm()
 
   // ── General Settings ──────────────────────────────────────────────
   const [generalForm, setGeneralForm] = useState({
@@ -427,23 +430,30 @@ export default function Settings({ tab = 'general' }) {
   const [socialIconPreviews, setSocialIconPreviews] = useState({})
 
   const savePaymentMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       methods = paymentMethods,
       logoFiles = paymentLogoFiles,
       logosToRemove = Object.keys(paymentLogoRemovals).filter((method) => paymentLogoRemovals[method]),
     } = {}) => {
       const payload = paymentSettingsPayload(methods)
-      if (Object.keys(logoFiles).length === 0 && logosToRemove.length === 0) {
-        return authApi.siteSettings.update({ payment_methods: payload })
-      }
+      const savePromise = (Object.keys(logoFiles).length === 0 && logosToRemove.length === 0)
+        ? authApi.siteSettings.update({ payment_methods: payload })
+        : (() => {
+            const fd = new FormData()
+            fd.append('payment_methods', JSON.stringify(payload))
+            logosToRemove.forEach((method) => fd.append(`remove_payment_logo_${method}`, 'true'))
+            Object.entries(logoFiles).forEach(([method, file]) => {
+              if (file) fd.append(`payment_logo_${method}`, file)
+            })
+            return authApi.siteSettings.update(fd)
+          })()
 
-      const fd = new FormData()
-      fd.append('payment_methods', JSON.stringify(payload))
-      logosToRemove.forEach((method) => fd.append(`remove_payment_logo_${method}`, 'true'))
-      Object.entries(logoFiles).forEach(([method, file]) => {
-        if (file) fd.append(`payment_logo_${method}`, file)
-      })
-      return authApi.siteSettings.update(fd)
+      // Keep minimum 300ms duration so user sees clear saving feedback
+      const [res] = await Promise.all([
+        savePromise,
+        new Promise((resolve) => setTimeout(resolve, 300)),
+      ])
+      return res
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] })
@@ -468,8 +478,17 @@ export default function Settings({ tab = 'general' }) {
     reader.readAsDataURL(file)
   }
 
-  const removePaymentLogo = (method) => {
+  const removePaymentLogo = async (method) => {
     if (savePaymentMutation.isPending) return
+    const methodObj = ALL_PAYMENT_METHODS.find((m) => m.key === method)
+    const label = methodObj?.label || method
+    const ok = await confirm(
+      `Remove ${label} Logo?`,
+      'Are you sure you want to remove this payment method logo? The default icon will be restored.',
+      { confirmText: 'Remove', tone: 'danger' }
+    )
+    if (!ok) return
+
     const nextLogoFiles = { ...paymentLogoFiles }
     delete nextLogoFiles[method]
     setPaymentLogoFiles(nextLogoFiles)
@@ -724,7 +743,16 @@ export default function Settings({ tab = 'general' }) {
     saveDeliveryMutation.mutate(nextFees)
   }
 
-  const deleteDeliveryZone = (key) => {
+  const deleteDeliveryZone = async (key) => {
+    const zone = deliveryFees[key]
+    const label = zone?.label || key
+    const ok = await confirm(
+      `Delete ${label}?`,
+      `Are you sure you want to delete the delivery zone for ${label}?`,
+      { confirmText: 'Delete', tone: 'danger' }
+    )
+    if (!ok) return
+
     const nextFees = { ...deliveryFees }
     delete nextFees[key]
     setDeliveryFees(nextFees)
@@ -860,8 +888,14 @@ export default function Settings({ tab = 'general' }) {
     onError: () => toast.error('Failed to delete Telegram config'),
   })
 
+  const containerMaxWidth = tab === 'customerFooter'
+    ? 'max-w-7xl'
+    : ['telegram', 'payment', 'delivery'].includes(tab)
+      ? 'max-w-5xl'
+      : 'max-w-2xl'
+
   return (
-    <div>
+    <div className={`mx-auto ${containerMaxWidth}`}>
       <div className="page-header">
         <div>
           <h1 className="text-2xl font-bold text-navy-900">{SECTION_TITLES[tab]}</h1>
@@ -869,7 +903,7 @@ export default function Settings({ tab = 'general' }) {
         </div>
       </div>
 
-      <div className={`form-card mt-6 ${tab === 'customerFooter' ? 'max-w-7xl' : ['telegram'].includes(tab) ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className="form-card mt-6">
         {tab === 'general' && (
           <div className="space-y-5">
             {/* Logo */}
@@ -1605,93 +1639,130 @@ export default function Settings({ tab = 'general' }) {
         )}
 
         {tab === 'payment' && (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-500">Enable or disable payment methods available at checkout.</p>
-            {ALL_PAYMENT_METHODS.map((p) => (
-              <div key={p.key} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center overflow-hidden shadow-sm border border-gray-100">
-                      {paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key] ? (
-                        <img
-                          src={paymentLogoPreviews[p.key] || paymentMethods.logo_urls[p.key]}
-                          alt={`${p.label} logo`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <CreditCard size={16} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
-                      )}
-                    </div>
-                    <div>
-                      <p className={`font-medium text-sm ${paymentMethods[p.key] ? 'text-gray-900' : 'text-gray-400'}`}>{p.label}</p>
-                      <p className="text-xs text-gray-400">{p.desc}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-black text-gray-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700">
-                      <Upload size={14} />
-                      Logo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={pickPaymentLogo(p.key)}
-                      />
-                    </label>
-                    {(paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key] || (savePaymentMutation.isPending && paymentLogoRemovals[p.key])) && (
-                      <button
-                        type="button"
-                        onClick={() => removePaymentLogo(p.key)}
-                        disabled={savePaymentMutation.isPending}
-                        aria-label={`Remove ${p.label} logo`}
-                        className="inline-flex items-center gap-1 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-red-600 transition-colors hover:border-red-200 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {savePaymentMutation.isPending && paymentLogoRemovals[p.key] ? 'Saving...' : <><Trash2 size={14} /> Remove</>}
-                      </button>
-                    )}
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={paymentMethods[p.key] ?? true}
-                        onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
-                      />
-                      <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
-                    </label>
-                  </div>
-                </div>
-                {p.key === 'contact_sales' && (
-                  <div className="mt-4 border-t border-gray-200 pt-4">
-                    <label className="label">Telegram Sales Link</label>
-                    <input
-                      type="text"
-                      className="input-field bg-white"
-                      placeholder="@your_sales_account or https://t.me/your_sales_account"
-                      value={paymentMethods.contact_sales_url || ''}
-                      onChange={(e) => setPaymentMethods((prev) => ({ ...prev, contact_sales_url: e.target.value }))}
-                    />
-                    <p className="mt-1 text-xs text-gray-400">Shown to customers when they choose Contact Sales. Accepts @username, t.me/username, or full URL.</p>
-                  </div>
-                )}
-                <div className="mt-4 border-t border-gray-200 pt-4">
-                  <label className="label">Available zones</label>
-                  <p className="mb-2 text-xs text-gray-400">Leave empty (All zones) to allow this method everywhere.</p>
-                  <PaymentZonePicker
-                    zones={PROVINCE_OPTIONS}
-                    selectedKeys={paymentMethods.allowed_zones?.[p.key] || []}
-                    onChange={(zones) => setPaymentZones(p.key, zones)}
-                  />
-                </div>
+          <div className="space-y-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Payment Methods</h3>
+                <p className="text-sm text-gray-500">Enable or disable payment methods available at checkout.</p>
               </div>
-            ))}
-            <div className="pt-2">
               <button
+                type="button"
                 onClick={() => savePaymentMutation.mutate()}
                 disabled={savePaymentMutation.isPending}
-                className="btn-primary flex items-center gap-2"
+                className="btn-primary flex items-center gap-2 self-start sm:self-auto shrink-0 shadow-sm disabled:opacity-75"
               >
-                <Save size={15} /> {savePaymentMutation.isPending ? 'Saving...' : 'Save Payment Methods'}
+                {savePaymentMutation.isPending ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={15} />
+                    <span>Save Payment Methods</span>
+                  </>
+                )}
               </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ALL_PAYMENT_METHODS.map((p) => (
+                <div
+                  key={p.key}
+                  className={`rounded-2xl border p-4 transition-all flex flex-col justify-between ${
+                    paymentMethods[p.key]
+                      ? 'border-gray-200 bg-white shadow-xs'
+                      : 'border-gray-100 bg-gray-50/70 opacity-70'
+                  } ${p.key === 'contact_sales' ? 'md:col-span-2' : ''}`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden shadow-xs border border-gray-100 shrink-0">
+                          {paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key] ? (
+                            <img
+                              src={paymentLogoPreviews[p.key] || paymentMethods.logo_urls[p.key]}
+                              alt={`${p.label} logo`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : p.key === 'aba' ? (
+                            <img
+                              src={abaKhqrLogo}
+                              alt={`${p.label} logo`}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <CreditCard size={18} className={paymentMethods[p.key] ? 'text-purple-600' : 'text-gray-300'} />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`font-bold text-sm truncate ${paymentMethods[p.key] ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {p.label}
+                          </p>
+                          <p className="text-xs text-gray-400 truncate">{p.desc}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700 shadow-xs">
+                          <Upload size={13} />
+                          Logo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={pickPaymentLogo(p.key)}
+                          />
+                        </label>
+                        {(paymentLogoPreviews[p.key] || paymentMethods.logo_urls?.[p.key] || (savePaymentMutation.isPending && paymentLogoRemovals[p.key])) && (
+                          <button
+                            type="button"
+                            onClick={() => removePaymentLogo(p.key)}
+                            disabled={savePaymentMutation.isPending}
+                            aria-label={`Remove ${p.label} logo`}
+                            className="inline-flex items-center gap-1 rounded-xl border border-red-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:border-red-200 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 disabled:cursor-wait disabled:opacity-60 shadow-xs"
+                          >
+                            {savePaymentMutation.isPending && paymentLogoRemovals[p.key] ? 'Saving...' : <><Trash2 size={13} /> Remove</>}
+                          </button>
+                        )}
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={paymentMethods[p.key] ?? true}
+                            onChange={(e) => setPaymentMethods((prev) => ({ ...prev, [p.key]: e.target.checked }))}
+                          />
+                          <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600" />
+                        </label>
+                      </div>
+                    </div>
+
+                    {p.key === 'contact_sales' && (
+                      <div className="mt-3 border-t border-gray-100 pt-3">
+                        <label className="label text-xs">Telegram Sales Link</label>
+                        <input
+                          type="text"
+                          className="input-field bg-gray-50 text-xs py-2"
+                          placeholder="@your_sales_account or https://t.me/your_sales_account"
+                          value={paymentMethods.contact_sales_url || ''}
+                          onChange={(e) => setPaymentMethods((prev) => ({ ...prev, contact_sales_url: e.target.value }))}
+                        />
+                        <p className="mt-1 text-[11px] text-gray-400">Shown to customers when they choose Contact Sales. Accepts @username, t.me/username, or full URL.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <label className="label text-xs">Available zones</label>
+                    <p className="mb-1.5 text-[11px] text-gray-400">Leave empty (All zones) to allow this method everywhere.</p>
+                    <PaymentZonePicker
+                      zones={PROVINCE_OPTIONS}
+                      selectedKeys={paymentMethods.allowed_zones?.[p.key] || []}
+                      onChange={(zones) => setPaymentZones(p.key, zones)}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -1883,6 +1954,8 @@ export default function Settings({ tab = 'general' }) {
           </div>
         )}
       </div>
+
+      {ConfirmDialog}
     </div>
   )
 }

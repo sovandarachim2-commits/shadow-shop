@@ -2,6 +2,7 @@ import { CreditCard, History } from 'lucide-react'
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { formatDateTime } from '@/utils/helpers'
+import abaKhqrLogo from '@/assets/aba/ABA KHQR Logo.svg'
 
 const PAYMENT_METHOD_LABELS = {
   bakong: 'Bakong KHQR',
@@ -83,6 +84,7 @@ function historyTitle(note = '') {
 export function PaymentMethodButton({ order, logoUrls = {}, onClick, compact = false }) {
   const method = order?.payment_method
   const label = paymentMethodLabel(method)
+  const logo = logoUrls[method] || (method === 'aba' ? abaKhqrLogo : null)
 
   return (
     <button
@@ -91,8 +93,8 @@ export function PaymentMethodButton({ order, logoUrls = {}, onClick, compact = f
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-700 transition hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700 ${compact ? '' : 'max-w-full'}`}
       title="View payment history"
     >
-      {logoUrls[method] ? (
-        <img src={logoUrls[method]} alt="" className="h-4 w-4 rounded-full object-contain" />
+      {logo ? (
+        <img src={logo} alt="" className="h-4 w-4 rounded-full object-contain" />
       ) : (
         <CreditCard size={14} className="text-gray-400" />
       )}

@@ -11,7 +11,7 @@ import useAuthStore from '@/store/authStore'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
 import { formatCurrency, getUserContactDefaults } from '@/utils/helpers'
-import { formatAddressLocationKhmer, formatHomeDeliveryNote } from '@/utils/addressHelpers'
+import { formatAddressLocationKhmer } from '@/utils/addressHelpers'
 import { KHMER_FONT_FAMILY } from '@/utils/constants'
 import { useCartPriceSync } from '@/utils/cartPriceSync'
 import { CAMBODIA_PROVINCE_LABELS, toProvinceKey } from '@/utils/cambodiaProvinces'
@@ -577,11 +577,7 @@ export default function Checkout() {
     payment_status: 'unpaid',
     delivery_fee: deliveryFee,
     coupon_code: appliedCoupon?.coupon_code || '',
-    notes: formatHomeDeliveryNote({
-      district: info.district,
-      provinceKey: province?.value || info.province,
-      provinceLabel: province?.label,
-    }),
+    notes: '',
     items: checkoutItems.map((i) => ({
       product: i.product.item_type === 'set' ? undefined : i.product.id,
       product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
