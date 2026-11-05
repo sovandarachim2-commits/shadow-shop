@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Check, MapPin, QrCode, X, Clock, ShieldCheck, Loader2 } from 'lucide-react'
+import { ChevronLeft, Check, MapPin, QrCode, X, Clock, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useCartStore from '@/store/cartStore'
 import useAuthStore from '@/store/authStore'
@@ -289,37 +289,6 @@ export default function Checkout() {
   const [abaAwaitingConfirmation, setAbaAwaitingConfirmation] = useState(() => Boolean(readPendingPayment()?.abaAwaitingConfirmation))
   const [checkingBakong, setCheckingBakong] = useState(false)
   const [pendingReturnPayment, setPendingReturnPayment] = useState(readPendingPayment)
-  const [isAbaPaywayOpen, setIsAbaPaywayOpen] = useState(() => Boolean(readPendingPayment()?.reference))
-
-  useEffect(() => {
-    if (!pendingReturnPayment?.reference) {
-      setIsAbaPaywayOpen(false)
-      return undefined
-    }
-
-    const checkDom = () => {
-      const sheet = document.querySelector('#aba_checkout_sheet')
-      if (sheet) {
-        setIsAbaPaywayOpen(sheet.getAttribute('aria-hidden') === 'false')
-        return
-      }
-      const iframe = document.querySelector('iframe[name="aba_webservice"]')
-      if (iframe) {
-        setIsAbaPaywayOpen(Boolean(iframe.offsetParent !== null || iframe.clientHeight > 0))
-        return
-      }
-      const modal = document.querySelector('#aba_main_modal') || document.querySelector('.aba-modal')
-      if (modal) {
-        setIsAbaPaywayOpen(modal.style.display !== 'none')
-        return
-      }
-      setIsAbaPaywayOpen(true)
-    }
-
-    checkDom()
-    const timer = setInterval(checkDom, 300)
-    return () => clearInterval(timer)
-  }, [pendingReturnPayment?.reference])
 
   const { data: addresses = [], isLoading: addressesLoading } = useQuery({
     queryKey: ['my-addresses'],
@@ -385,65 +354,13 @@ export default function Checkout() {
   const grandTotal = subtotal + deliveryFee - couponDiscount
   const contactSalesUrl = String(siteSettings?.payment_methods?.contact_sales_url || '').trim()
   const selectedPaymentMethod = paymentMethods.find((method) => method.key === paymentMethod)
-  const isPendingAba = Boolean(
-    pendingReturnPayment?.reference &&
-    (pendingReturnPayment?.paymentMethod === 'aba' || !pendingReturnPayment?.paymentMethod)
-  )
-  const isPendingBakong = Boolean(
-    bakongPayment &&
-    bakongPayment.status !== 'paid' &&
-    paymentMethod === 'bakong'
-  )
-
-  const isQrActive = Boolean(
-    (abaPayment && showAbaPopup) ||
-    (bakongPayment && showBakongPopup) ||
-    (isPendingAba && isAbaPaywayOpen)
-  )
-
-  const isAwaitingQr = Boolean(
-    isPendingAba ||
-    (paymentMethod === 'aba' && abaPayment) ||
-    isPendingBakong
-  )
-
-  const cancelPendingPayment = () => {
-    localStorage.removeItem(PENDING_PAYMENT_KEY)
-    setPendingReturnPayment(null)
-    setAbaPayment(null)
-    setShowAbaPopup(false)
-    setBakongPayment(null)
-    setShowBakongPopup(false)
-    setIsAbaPaywayOpen(false)
-    setCheckingAbaPayment(false)
-  }
-
   const checkoutActionLabel = (submitting || abaLoading)
-    ? (
-        <span className="inline-flex items-center justify-center gap-2">
-          <Loader2 size={18} className="animate-spin" />
-          <span>{t('checkout.pleaseWait')}</span>
-        </span>
-      )
-    : isQrActive
-      ? (
-          <span className="inline-flex items-center justify-center gap-2">
-            <Loader2 size={18} className="animate-spin" />
-            <span>{t('checkout.waitingPayment', t('orderSuccess.waitingPayment', 'Waiting for payment...'))}</span>
-          </span>
-        )
-      : isAwaitingQr
-        ? (
-            <span className="inline-flex items-center justify-center gap-2">
-              <QrCode size={18} />
-              <span>{t('checkout.viewQrCode', 'View QR Code')}</span>
-            </span>
-          )
-        : paymentMethod === 'contact_sales'
-          ? t('checkout.contactSales')
-          : ONLINE_PAYMENT_METHODS.includes(paymentMethod)
-            ? t('checkout.payNow')
-            : t('checkout.placeOrder')
+    ? t('checkout.pleaseWait')
+    : paymentMethod === 'contact_sales'
+      ? t('checkout.contactSales')
+      : ONLINE_PAYMENT_METHODS.includes(paymentMethod)
+        ? t('checkout.payNow')
+        : t('checkout.placeOrder')
 
   useEffect(() => {
     if (items.length > 0 && selectedProductIds.length === 0) {
@@ -703,20 +620,6 @@ export default function Checkout() {
       return
     }
 
-    if (paymentMethod === 'aba') {
-      if (abaPayment) {
-        setShowAbaPopup(true)
-        return
-      }
-      if (isPendingAba) {
-        setIsAbaPaywayOpen(true)
-        if (typeof AbaPayway !== 'undefined' && typeof AbaPayway.checkout === 'function') {
-          AbaPayway.checkout()
-          return
-        }
-      }
-    }
-
     if (!hasAddress) {
       toast.error(t('checkout.addAddressFirst'), { id: 'add-delivery-address-first', duration: 1800 })
       navigate('/address-book', { state: { from: '/cart' } })
@@ -777,7 +680,6 @@ export default function Checkout() {
             toast.success(t('checkout.scanQrToast'))
             return
           }
-          setIsAbaPaywayOpen(true)
           await submitAbaForm(abaData)
           return
         }
@@ -999,20 +901,11 @@ export default function Checkout() {
           </div>
           <button
             onClick={handlePlaceOrder}
-            disabled={submitting || abaLoading || !hasAddress || !paymentMethod || isQrActive}
+            disabled={submitting || abaLoading || !hasAddress || !paymentMethod}
             className="shop-btn-primary mt-6 hidden w-full py-4 disabled:cursor-not-allowed disabled:opacity-60 md:block"
           >
             {checkoutActionLabel}
           </button>
-          {isAwaitingQr && !isQrActive && (
-            <button
-              type="button"
-              onClick={cancelPendingPayment}
-              className="mt-2.5 hidden w-full text-center text-xs font-semibold text-gray-400 hover:text-red-500 transition md:block"
-            >
-              {t('checkout.cancelPayment', 'Cancel payment')}
-            </button>
-          )}
         </aside>
       </div>
 
@@ -1022,24 +915,13 @@ export default function Checkout() {
             <p className="text-lg font-black text-gray-950">{formatCurrency(grandTotal)}</p>
             <p className="text-xs text-gray-400">{checkoutItems.length} {checkoutItems.length === 1 ? t('checkout.item') : t('checkout.items')}</p>
           </div>
-          <div className="flex flex-col items-end">
-            <button
-              onClick={handlePlaceOrder}
-              disabled={submitting || abaLoading || !hasAddress || !paymentMethod || isQrActive}
-              className="rounded-full bg-pink-600 px-6 py-2.5 text-base font-black text-white shadow-lg shadow-pink-200 disabled:opacity-60"
-            >
-              {checkoutActionLabel}
-            </button>
-            {isAwaitingQr && !isQrActive && (
-              <button
-                type="button"
-                onClick={cancelPendingPayment}
-                className="mt-1 text-xs font-semibold text-gray-400 hover:text-red-500 transition"
-              >
-                {t('checkout.cancelPayment', 'Cancel payment')}
-              </button>
-            )}
-          </div>
+          <button
+            onClick={handlePlaceOrder}
+            disabled={submitting || abaLoading || !hasAddress || !paymentMethod}
+            className="rounded-full bg-pink-600 px-6 py-2.5 text-base font-black text-white shadow-lg shadow-pink-200 disabled:opacity-60"
+          >
+            {checkoutActionLabel}
+          </button>
         </div>
       </div>
 
