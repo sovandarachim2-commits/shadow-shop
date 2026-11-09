@@ -6,14 +6,18 @@ import toast from 'react-hot-toast'
 import {
   BadgeCheck,
   CalendarDays,
+  Check,
   ChevronLeft,
   Gift,
+  Info,
   Loader2,
   PackageSearch,
   Percent,
+  ShieldCheck,
   Sparkles,
   Ticket,
   Truck,
+  Zap,
 } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
@@ -44,6 +48,7 @@ export default function RewardDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState('instructions')
   const [redeemedCoupon, setRedeemedCoupon] = useState(null)
   const TYPE_META = getTypeMeta(t)
 
@@ -86,7 +91,10 @@ export default function RewardDetail() {
         <PackageSearch size={52} className="mx-auto mb-4 text-gray-200" />
         <h1 className="text-xl font-black text-gray-950">{t('rewardsPage.detail.notFound')}</h1>
         <p className="mt-2 text-sm font-semibold text-gray-400">{t('rewardsPage.detail.notFoundHint')}</p>
-        <button onClick={() => navigate('/profile/rewards')} className="mt-6 rounded-lg bg-pink-600 px-6 py-3 text-sm font-black text-white">
+        <button
+          onClick={() => navigate('/profile/rewards')}
+          className="mt-6 rounded-xl bg-pink-600 px-6 py-3 text-sm font-black text-white shadow-md shadow-pink-200 hover:bg-pink-700 transition"
+        >
           {t('rewardsPage.backToRewards')}
         </button>
       </div>
@@ -106,125 +114,241 @@ export default function RewardDetail() {
       : t('rewardsPage.unavailable')
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-[760px] bg-gray-50 pb-24 md:max-w-[1440px] md:px-6 md:pb-6 md:pt-6">
+    <div className="mx-auto min-h-screen w-full max-w-[1240px] bg-white px-4 py-4 pb-28 sm:py-6 md:px-6 md:pb-12">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
-      
-      <div className="-mx-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
-        <button 
-          type="button" 
-          onClick={() => navigate(-1)} 
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white"
+
+      {/* Top Header matching ProductDetail */}
+      <div className="mb-6 flex items-center justify-between border-b border-gray-100 pb-4">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 active:scale-95"
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={16} />
+          <span>{t('rewardsPage.backToRewards', 'Back to Rewards')}</span>
         </button>
-        <div className="min-w-0 text-center md:text-left">
-          <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.detail.title')}</h1>
-        </div>
-        <div className="flex justify-end md:hidden">
+        <div className="flex items-center gap-2">
           <HeaderActionIcons />
         </div>
       </div>
 
-      <div className="grid gap-7 px-4 md:px-0 lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-3xl bg-white md:border md:border-pink-100 md:bg-gradient-to-br md:from-pink-50 md:to-white md:p-4 md:shadow-card">
-          <div className="relative overflow-hidden rounded-3xl bg-white">
-            <span className="absolute left-4 top-4 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black text-white shadow-lg shadow-pink-200">
-              {Number(reward.points_required).toLocaleString()} {t('rewardsPage.pts')}
+      {/* Main Product-Style 2-Column Detail Layout */}
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:gap-10 lg:gap-14 items-start">
+        {/* Left Column: Reward Image Card */}
+        <section className="relative aspect-square w-full overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-sm transition hover:shadow-md">
+          {/* Points Required Badge */}
+          <span className="absolute left-4 top-4 z-10 inline-flex items-center gap-1 rounded-full bg-[#EC3F8F] px-3.5 py-1.5 text-xs font-black text-white shadow-md shadow-pink-200">
+            <Ticket size={13} />
+            <span>{Number(reward.points_required).toLocaleString()} {t('rewardsPage.pts')}</span>
+          </span>
+
+          <div className="flex h-full w-full items-center justify-center">
+            {rewardImage ? (
+              <img
+                src={rewardImage}
+                alt={reward.name}
+                className="max-h-[85%] max-w-[85%] object-contain transition-transform duration-300 hover:scale-105"
+              />
+            ) : (
+              <div className={cn('flex h-36 w-36 items-center justify-center rounded-[36px]', meta.tone)}>
+                <Icon size={56} />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Right Column: Reward Information & Actions */}
+        <section className="flex flex-col">
+          {/* Category / Type & Stock Status */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#EC3F8F]">
+              <Sparkles size={12} />
+              <span>{meta.label}</span>
             </span>
-            <div className="flex aspect-[1/0.82] max-h-[520px] items-center justify-center md:aspect-square">
-              {rewardImage ? (
-                <img src={rewardImage} alt={reward.name} className="h-full w-full object-contain p-4" />
-              ) : (
-                <div className={cn('flex h-36 w-36 items-center justify-center rounded-[36px]', meta.tone)}>
-                  <Icon size={58} />
+            <span className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider',
+              hasStock ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-500'
+            )}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', hasStock ? 'bg-emerald-500' : 'bg-red-500')} />
+              <span>{hasStock ? (reward.stock != null ? `${reward.stock} left` : t('rewardsPage.detail.available')) : t('rewardsPage.outOfStock')}</span>
+            </span>
+            {(reward.starts_at || reward.ends_at) && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+                <CalendarDays size={12} />
+                <span>{reward.ends_at ? formatDate(reward.ends_at) : 'Active'}</span>
+              </span>
+            )}
+            {reward.member_tier_requirement && reward.member_tier_requirement !== 'all' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700">
+                <BadgeCheck size={12} />
+                <span>Tier: {reward.member_tier_requirement.split(',').map((t) => t.trim().charAt(0).toUpperCase() + t.trim().slice(1)).join(', ')}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Title */}
+          <h1 className="mt-3 text-2xl font-black text-gray-950 sm:text-3xl md:text-4xl leading-tight">
+            {reward.name}
+          </h1>
+
+          {/* Price / Points Row matching ProductDetail */}
+          <div className="mt-4 flex items-baseline gap-2.5 border-b border-gray-100 pb-4">
+            <span className="text-3xl font-black text-[#EC3F8F] sm:text-4xl">
+              {Number(reward.points_required).toLocaleString()}
+            </span>
+            <span className="text-sm font-bold text-gray-400">
+              {t('rewardsPage.pts')} {t('rewardsPage.detail.pointsRequired', 'required')}
+            </span>
+            {Number(reward.minimum_order_amount || 0) > 0 && (
+              <span className="ml-auto rounded-full bg-pink-50 px-2.5 py-1 text-xs font-semibold text-[#EC3F8F]">
+                Min Order: ${Number(reward.minimum_order_amount).toFixed(2)}
+              </span>
+            )}
+          </div>
+
+          {/* Subtitle / Description */}
+          <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">
+            {reward.description || reward.gift_product_name || t('rewardsPage.main.exchangeHint')}
+          </p>
+
+          {/* 3-Column Clean Info Chips matching ProductDetail */}
+          <div className="mt-5 grid grid-cols-3 gap-2.5 rounded-2xl bg-gray-50/80 p-3.5 ring-1 ring-gray-100 text-center">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Type</p>
+              <p className="mt-0.5 text-xs font-black text-gray-900 capitalize">{meta.label}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Reward Value</p>
+              <p className="mt-0.5 text-xs font-black text-gray-900 truncate" title={rewardValueText(reward, meta, t)}>
+                {rewardValueText(reward, meta, t)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Stock</p>
+              <p className="mt-0.5 text-xs font-black text-gray-900">
+                {reward.stock === null || reward.stock === undefined ? t('rewardsPage.detail.noLimit') : `${reward.stock} left`}
+              </p>
+            </div>
+          </div>
+
+          {/* Customer Point Balance Card */}
+          <div className="mt-5 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">{t('rewardsPage.detail.yourPoints')}</p>
+                <p className="mt-0.5 text-2xl font-black text-gray-950">
+                  {currentPoints.toLocaleString()} <span className="text-xs font-bold text-gray-400">{t('rewardsPage.pts')}</span>
+                </p>
+              </div>
+              {pointsShort > 0 ? (
+                <div className="text-right">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700 border border-amber-100">
+                    {pointsShort.toLocaleString()} pts short
+                  </span>
+                  <p className="mt-1 text-[11px] font-bold text-gray-400">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/profile/rewards/earn')}
+                      className="text-[#EC3F8F] hover:underline"
+                    >
+                      Earn points →
+                    </button>
+                  </p>
                 </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1.5 text-xs font-black text-emerald-700 border border-emerald-100">
+                  <Check size={14} className="stroke-[3]" />
+                  <span>Ready to exchange</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop Primary Action CTA Button */}
+          <div className="mt-6 hidden md:block">
+            <button
+              type="button"
+              disabled={!canExchange || exchangeMutation.isPending}
+              onClick={() => exchangeMutation.mutate(reward.id)}
+              className={cn(
+                'flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-black transition active:scale-[0.99]',
+                canExchange
+                  ? 'bg-[#EC3F8F] text-white shadow-lg shadow-pink-200 hover:bg-[#d92e7d]'
+                  : 'cursor-not-allowed bg-gray-100 text-gray-400'
+              )}
+            >
+              {exchangeMutation.isPending ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Ticket size={18} />
+              )}
+              <span>{canExchange ? t('rewardsPage.detail.exchangeReward') : unavailableText}</span>
+            </button>
+          </div>
+
+          {/* Tabs Section matching ProductDetail */}
+          <div className="mt-8 border-t border-gray-100 pt-5">
+            <div className="flex border-b border-gray-100 gap-6">
+              <button
+                type="button"
+                onClick={() => setActiveTab('instructions')}
+                className={cn(
+                  'relative pb-3 text-sm font-bold transition',
+                  activeTab === 'instructions'
+                    ? 'text-gray-950 font-black border-b-2 border-[#EC3F8F]'
+                    : 'text-gray-400 hover:text-gray-600'
+                )}
+              >
+                How to Redeem
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('terms')}
+                className={cn(
+                  'relative pb-3 text-sm font-bold transition',
+                  activeTab === 'terms'
+                    ? 'text-gray-950 font-black border-b-2 border-[#EC3F8F]'
+                    : 'text-gray-400 hover:text-gray-600'
+                )}
+              >
+                Terms & Conditions
+              </button>
+            </div>
+
+            <div className="py-4 text-xs sm:text-sm text-gray-600 leading-relaxed">
+              {activeTab === 'instructions' ? (
+                <ol className="list-decimal space-y-2 pl-4">
+                  <li>Click <strong>Exchange Reward</strong> to redeem using your earned points.</li>
+                  <li>A unique voucher or discount coupon code will be generated and saved to your <strong>My Coupons</strong> wallet.</li>
+                  <li>Apply the coupon code during checkout to enjoy your gift, free shipping, or discount.</li>
+                </ol>
+              ) : (
+                <ul className="list-disc space-y-2 pl-4">
+                  <li>Points used for reward redemptions are non-refundable once confirmed.</li>
+                  <li>Vouchers and gift items are subject to availability and cannot be transferred or exchanged for cash.</li>
+                  <li>Reward codes expire according to store reward promotion policies.</li>
+                </ul>
               )}
             </div>
           </div>
         </section>
-
-        <section className="flex flex-col">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-50 px-3.5 py-2 text-[11px] font-black uppercase text-pink-600">
-              <Sparkles size={14} /> {meta.label}
-            </span>
-            <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-black uppercase', hasStock ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500')}>
-              <span className={cn('h-2 w-2 rounded-full', hasStock ? 'bg-green-500' : 'bg-red-500')} />
-              {hasStock ? t('rewardsPage.detail.available') : t('rewardsPage.outOfStock')}
-            </span>
-          </div>
-
-          <h1 className="text-[28px] font-black leading-[1.12] text-gray-950 md:text-5xl">{reward.name}</h1>
-          <p className="mt-4 max-w-2xl text-[17px] leading-8 text-gray-600 md:text-base md:leading-7">
-            {reward.description || reward.gift_product_name || t('rewardsPage.main.exchangeHint')}
-          </p>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-pink-50 p-5">
-              <p className="text-[11px] font-black uppercase leading-none text-pink-500">{t('rewardsPage.detail.pointsRequired')}</p>
-              <p className="mt-3 text-[34px] font-black leading-none text-pink-600">{Number(reward.points_required).toLocaleString()}</p>
-            </div>
-            <div className="rounded-2xl bg-gray-50 p-5">
-              <p className="text-[11px] font-black uppercase leading-none text-gray-400">{t('rewardsPage.detail.rewardValue')}</p>
-              <p className="mt-3 text-base font-black leading-tight text-gray-900">{rewardValueText(reward, meta, t)}</p>
-            </div>
-            <div className="rounded-2xl bg-gray-50 p-5">
-              <p className="text-[11px] font-black uppercase leading-none text-gray-400">{t('rewardsPage.detail.stock')}</p>
-              <p className="mt-3 text-base font-black leading-tight text-gray-900">
-                {reward.stock === null || reward.stock === undefined ? t('rewardsPage.detail.noLimit') : t('rewardsPage.detail.left', { count: reward.stock })}
-              </p>
-            </div>
-            {Number(reward.minimum_order_amount || 0) > 0 && (
-              <div className="rounded-2xl bg-gray-50 p-5">
-                <p className="text-[11px] font-black uppercase leading-none text-gray-400">{t('rewardsPage.detail.minimumOrder')}</p>
-                <p className="mt-3 text-base font-black leading-tight text-gray-900">${Number(reward.minimum_order_amount).toFixed(2)}</p>
-              </div>
-            )}
-            {(reward.starts_at || reward.ends_at) && (
-              <div className="rounded-2xl bg-gray-50 p-5 sm:col-span-2">
-                <p className="flex items-center gap-1.5 text-[11px] font-black uppercase leading-none text-gray-400"><CalendarDays size={13} /> {t('rewardsPage.detail.availablePeriod')}</p>
-                <p className="mt-3 text-base font-black leading-tight text-gray-900">
-                  {reward.starts_at ? formatDate(reward.starts_at) : t('rewardsPage.detail.now')} - {reward.ends_at ? formatDate(reward.ends_at) : t('rewardsPage.detail.noEndDate')}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-7 rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-base font-black text-gray-950">{t('rewardsPage.detail.yourPoints')}</p>
-            <div className="mt-2 flex items-end gap-2">
-              <span className="text-[42px] font-black leading-none text-pink-600">{currentPoints.toLocaleString()}</span>
-              <span className="pb-1 text-sm font-black text-gray-400">{t('rewardsPage.pts')}</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={!canExchange || exchangeMutation.isPending}
-            onClick={() => exchangeMutation.mutate(reward.id)}
-            className={cn(
-              'mt-6 hidden h-14 items-center justify-center gap-2 rounded-lg text-base font-black transition md:flex',
-              canExchange ? 'bg-pink-600 text-white shadow-lg shadow-pink-100 active:scale-[0.98]' : 'cursor-not-allowed bg-gray-100 text-gray-400'
-            )}
-          >
-            {exchangeMutation.isPending ? <Loader2 size={19} className="animate-spin" /> : <Ticket size={19} />}
-            {canExchange ? t('rewardsPage.detail.exchangeReward') : unavailableText}
-          </button>
-        </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 bg-white px-4 pb-4 pt-2 shadow-[0_-8px_25px_rgba(15,23,42,0.08)] md:hidden">
+      {/* Mobile Sticky Bottom CTA matching ProductDetail */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white/95 px-4 py-3 shadow-[0_-8px_25px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
         <button
           type="button"
           disabled={!canExchange || exchangeMutation.isPending}
           onClick={() => exchangeMutation.mutate(reward.id)}
           className={cn(
-            'mx-auto flex h-12 w-full max-w-[720px] items-center justify-center gap-2 rounded-2xl text-sm font-black shadow-lg disabled:opacity-60',
-            canExchange ? 'bg-pink-600 text-white shadow-pink-200' : 'bg-gray-100 text-gray-400 shadow-gray-100'
+            'mx-auto flex h-12 w-full max-w-[720px] items-center justify-center gap-2 rounded-xl text-sm font-black transition active:scale-[0.99] disabled:opacity-60',
+            canExchange
+              ? 'bg-[#EC3F8F] text-white shadow-lg shadow-pink-200'
+              : 'bg-gray-100 text-gray-400'
           )}
         >
-          {exchangeMutation.isPending ? <Loader2 size={19} className="animate-spin" /> : <Ticket size={19} />}
-          {canExchange ? t('rewardsPage.detail.exchangeReward') : unavailableText}
+          {exchangeMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <Ticket size={18} />}
+          <span>{canExchange ? t('rewardsPage.detail.exchangeReward') : unavailableText}</span>
         </button>
       </div>
     </div>

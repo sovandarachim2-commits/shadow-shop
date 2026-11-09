@@ -407,6 +407,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         fields = ['id', 'store_name', 'store_phone', 'store_email', 'store_address',
                   'logo', 'favicon', 'login_logo', 'splash_logo', 'print_logo',
                   'flash_card_background', 'rewards_card_background',
+                  'flash_card_enabled', 'rewards_card_enabled',
                   'logo_url', 'favicon_url', 'login_logo_url', 'splash_logo_url', 'print_logo_url',
                   'flash_card_background_url', 'rewards_card_background_url',
                   'splash_enabled', 'splash_duration_ms', 'print_logo_size', 'print_qr_size', 'currency', 'timezone',

@@ -349,9 +349,14 @@ class RewardItem(models.Model):
 
     TIER_CHOICES = [
         ('all', 'All Members'),
+        ('classic', 'Classic'),
         ('silver', 'Silver'),
         ('gold', 'Gold'),
         ('platinum', 'Platinum'),
+        ('diamond', 'Diamond'),
+        ('vip', 'VIP'),
+        ('elite', 'Elite'),
+        ('royal', 'Royal'),
     ]
 
     DISCOUNT_TYPE_CHOICES = [
@@ -376,7 +381,7 @@ class RewardItem(models.Model):
     )
     stock = models.PositiveIntegerField(null=True, blank=True)
     per_customer_limit = models.PositiveIntegerField(null=True, blank=True)
-    member_tier_requirement = models.CharField(max_length=20, choices=TIER_CHOICES, default='all')
+    member_tier_requirement = models.CharField(max_length=255, default='all')
     is_active = models.BooleanField(default=True)
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
@@ -560,9 +565,62 @@ class RewardSettings(models.Model):
     expiration_enabled = models.BooleanField(default=True)
     minimum_redeem_points = models.PositiveIntegerField(default=0)
     maximum_points_per_order = models.PositiveIntegerField(default=0)
-    silver_min_points = models.PositiveIntegerField(default=0)
-    gold_min_points = models.PositiveIntegerField(default=2000)
-    platinum_min_points = models.PositiveIntegerField(default=5000)
+    classic_min_points = models.PositiveIntegerField(default=0)
+    silver_min_points = models.PositiveIntegerField(default=500)
+    gold_min_points = models.PositiveIntegerField(default=1500)
+    platinum_min_points = models.PositiveIntegerField(default=3000)
+    diamond_min_points = models.PositiveIntegerField(default=6000)
+    vip_min_points = models.PositiveIntegerField(default=10000)
+    elite_min_points = models.PositiveIntegerField(default=20000)
+    royal_min_points = models.PositiveIntegerField(default=50000)
+    classic_description = models.TextField(
+        default='Welcome to our membership programme. Enjoy basic member benefits and earn points on purchases.'
+    )
+    silver_description = models.TextField(
+        default='Enjoy additional rewards, exclusive discounts, and special member promotions.'
+    )
+    gold_description = models.TextField(
+        default='Unlock better rewards, higher discounts, and exclusive shopping privileges.'
+    )
+    platinum_description = models.TextField(
+        default='Enjoy premium benefits, birthday rewards, and priority access to special promotions.'
+    )
+    diamond_description = models.TextField(
+        default='Experience enhanced privileges, premium vouchers, and exclusive member offers.'
+    )
+    vip_description = models.TextField(
+        default='Enjoy VIP-only promotions, personalized rewards, and priority customer support.'
+    )
+    elite_description = models.TextField(
+        default='Access elite privileges, exceptional rewards, and exclusive shopping experiences.'
+    )
+    royal_description = models.TextField(
+        default='Our highest membership tier, offering the most exclusive rewards, maximum privileges, and personalized VIP experiences.'
+    )
+    classic_description_km = models.TextField(
+        default='សូមស្វាគមន៍មកកាន់កម្មវិធីសមាជិករបស់យើង។ រីករាយជាមួយអត្ថប្រយោជន៍ជាមូលដ្ឋាន និងសន្សំពិន្ទុរាល់ពេលទិញទំនិញ។'
+    )
+    silver_description_km = models.TextField(
+        default='ទទួលបានរង្វាន់បន្ថែម ការបញ្ចុះតម្លៃពិសេស និងប្រូម៉ូសិនផ្ដាច់មុខសម្រាប់សមាជិក។'
+    )
+    gold_description_km = models.TextField(
+        default='ដោះសោរង្វាន់កាន់តែប្រសើរ ការបញ្ចុះតម្លៃកាន់តែខ្ពស់ និងសិទ្ធិទិញទំនិញផ្តាច់មុខ។'
+    )
+    platinum_description_km = models.TextField(
+        default='រីករាយជាមួយអត្ថប្រយោជន៍កម្រិតខ្ពស់ រង្វាន់ថ្ងៃកំណើត និងសិទ្ធិចូលមើលការលក់ពិសេសមុនគេ។'
+    )
+    diamond_description_km = models.TextField(
+        default='ទទួលបានបទពិសោធន៍ឯកសិទ្ធិពិសេស ប័ណ្ណបញ្ចុះតម្លៃប្រណិត និងការផ្ដល់ជូនផ្តាច់មុខ។'
+    )
+    vip_description_km = models.TextField(
+        default='រីករាយជាមួយប្រូម៉ូសិនសម្រាប់តែ VIP រង្វាន់ផ្ទាល់ខ្លួន និងសេវាបម្រើអតិថិជនអាទិភាព។'
+    )
+    elite_description_km = models.TextField(
+        default='ទទួលបានសិទ្ធិកម្រិត Elite រង្វាន់ដ៏អស្ចារ្យ និងបទពិសោធន៍ទិញទំនិញផ្តាច់មុខបំផុត។'
+    )
+    royal_description_km = models.TextField(
+        default='កម្រិតសមាជិកខ្ពស់បំផុតរបស់យើង ផ្ដល់រង្វាន់ផ្តាច់មុខបំផុត អត្ថប្រយោជន៍អតិបរមា និងបទពិសោធន៍ VIP ផ្ទាល់ខ្លួន។'
+    )
     auto_approve_points = models.BooleanField(default=True)
     auto_apply_on_completed = models.BooleanField(default=False)
     low_stock_alert_enabled = models.BooleanField(default=True)

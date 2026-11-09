@@ -215,20 +215,52 @@ def get_points_balance(user):
 
 def get_member_level(points):
     settings_obj = RewardSettings.get_solo()
-    if points >= settings_obj.platinum_min_points:
+    pts = int(points or 0)
+    if pts >= getattr(settings_obj, 'royal_min_points', 50000):
+        return 'Royal'
+    if pts >= getattr(settings_obj, 'elite_min_points', 20000):
+        return 'Elite'
+    if pts >= getattr(settings_obj, 'vip_min_points', 10000):
+        return 'VIP'
+    if pts >= getattr(settings_obj, 'diamond_min_points', 6000):
+        return 'Diamond'
+    if pts >= getattr(settings_obj, 'platinum_min_points', 3000):
         return 'Platinum'
-    if points >= settings_obj.gold_min_points:
+    if pts >= getattr(settings_obj, 'gold_min_points', 1500):
         return 'Gold'
-    return 'Silver'
+    if pts >= getattr(settings_obj, 'silver_min_points', 500):
+        return 'Silver'
+    return 'Classic'
 
 
 def get_next_tier_points(points):
     settings_obj = RewardSettings.get_solo()
-    if points < settings_obj.gold_min_points:
-        return settings_obj.gold_min_points
-    if points < settings_obj.platinum_min_points:
-        return settings_obj.platinum_min_points
-    return points
+    pts = int(points or 0)
+    tier_thresholds = [
+        getattr(settings_obj, 'silver_min_points', 500),
+        getattr(settings_obj, 'gold_min_points', 1500),
+        getattr(settings_obj, 'platinum_min_points', 3000),
+        getattr(settings_obj, 'diamond_min_points', 6000),
+        getattr(settings_obj, 'vip_min_points', 10000),
+        getattr(settings_obj, 'elite_min_points', 20000),
+        getattr(settings_obj, 'royal_min_points', 50000),
+    ]
+    for threshold in tier_thresholds:
+        if pts < threshold:
+            return threshold
+    return getattr(settings_obj, 'royal_min_points', 50000)
+
+
+def get_next_tier_name(points):
+    current = get_member_level(points)
+    tier_sequence = ['Classic', 'Silver', 'Gold', 'Platinum', 'Diamond', 'VIP', 'Elite', 'Royal']
+    try:
+        idx = tier_sequence.index(current)
+        if idx < len(tier_sequence) - 1:
+            return tier_sequence[idx + 1]
+    except ValueError:
+        pass
+    return None
 
 
 def calculate_order_points(order):
@@ -339,10 +371,28 @@ def exchange_reward(user, reward_item_id):
     if balance < reward.points_required:
         raise ValueError('Not enough points to exchange this reward.')
     member_level = get_member_level(balance).lower()
-    tier_order = {'silver': 1, 'gold': 2, 'platinum': 3}
-    required_tier = reward.member_tier_requirement
-    if required_tier != 'all' and tier_order.get(member_level, 0) < tier_order.get(required_tier, 0):
-        raise ValueError(f'This reward requires {required_tier.title()} membership.')
+    tier_order = {
+        'classic': 1,
+        'silver': 2,
+        'gold': 3,
+        'platinum': 4,
+        'diamond': 5,
+        'vip': 6,
+        'elite': 7,
+        'royal': 8,
+    }
+    required_tier = (reward.member_tier_requirement or 'all').strip()
+    if required_tier and required_tier != 'all':
+        allowed_tiers = [t.strip().lower() for t in required_tier.split(',') if t.strip()]
+        if 'all' not in allowed_tiers:
+            is_eligible = False
+            if member_level in allowed_tiers:
+                is_eligible = True
+            elif len(allowed_tiers) == 1 and allowed_tiers[0] in tier_order:
+                is_eligible = tier_order.get(member_level, 0) >= tier_order.get(allowed_tiers[0], 0)
+            if not is_eligible:
+                tier_names = ', '.join([t.title() for t in allowed_tiers])
+                raise ValueError(f'This reward is available for {tier_names} membership.')
 
     coupon_types = {RewardItem.TYPE_VOUCHER, RewardItem.TYPE_DISCOUNT, RewardItem.TYPE_FREE_DELIVERY}
     physical_types = {RewardItem.TYPE_GIFT, RewardItem.TYPE_LUCKY_BOX, RewardItem.TYPE_MANUAL}

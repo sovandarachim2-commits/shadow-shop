@@ -3,12 +3,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Cake, CalendarCheck, ChevronLeft, ChevronRight, Edit3, HelpCircle, Loader2,
+  Cake, CalendarCheck, ChevronLeft, ChevronRight, Crown, Edit3, HelpCircle, Info, Loader2,
   Share2, ShoppingBag, Star, Users,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
+import MemberTiersModal from '@/components/customer/MemberTiersModal'
+import { getMemberTierImage } from '@/assets/member_shoppee'
 
 function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, disabled, completed = false }) {
   const { t } = useTranslation()
@@ -59,6 +61,7 @@ export default function EarnPoints() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showCheckinSuccess, setShowCheckinSuccess] = useState(false)
+  const [showTierModal, setShowTierModal] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -91,10 +94,10 @@ export default function EarnPoints() {
   if (isError) return <div className="py-20 text-center text-sm font-bold text-gray-500">{t('rewardsPage.earnLoadError')}</div>
 
   const points = data?.current_points || 0
-  const memberLevel = data?.member_level || 'Silver'
+  const memberLevel = data?.member_level || 'Classic'
   const translatedLevel = t(`profile.tiers.${memberLevel.toLowerCase()}`, { defaultValue: memberLevel })
-  const nextLevelRaw = memberLevel === 'Silver' ? 'Gold' : 'Platinum'
-  const nextLevel = t(`profile.tiers.${nextLevelRaw.toLowerCase()}`, { defaultValue: nextLevelRaw })
+  const nextLevelRaw = data?.next_tier_name
+  const nextLevel = nextLevelRaw ? t(`profile.tiers.${nextLevelRaw.toLowerCase()}`, { defaultValue: nextLevelRaw }) : ''
   const nextTierPoints = data?.next_tier_points || points
   const pointsToNext = data?.points_to_next_level || 0
   const progress = Math.min(100, data?.progress_pct || 0)
@@ -109,6 +112,16 @@ export default function EarnPoints() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
+      <MemberTiersModal
+        isOpen={showTierModal}
+        onClose={() => setShowTierModal(false)}
+        currentLevel={memberLevel}
+        currentPoints={points}
+        tierThresholds={data?.tier_thresholds || {}}
+        tierDescriptions={data?.tier_descriptions || {}}
+        tierDescriptionsKm={data?.tier_descriptions_km || {}}
+        t={t}
+      />
       <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
         <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button 
@@ -118,10 +131,20 @@ export default function EarnPoints() {
           >
             <ChevronLeft size={20} />
           </button>
-          <div className="min-w-0 text-center md:text-left">
+          <div className="min-w-0 text-center md:flex-1 md:text-left">
             <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.earn.title')}</h1>
           </div>
-          <div className="md:hidden" />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowTierModal(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-pink-50 text-pink-600 transition hover:bg-pink-100 active:scale-95 md:h-10 md:w-auto md:gap-2 md:rounded-xl md:border md:border-pink-200 md:bg-pink-50/70 md:px-3.5 md:py-2"
+              title={t('rewardsPage.viewTierDetails', 'View Level Details')}
+            >
+              <Crown size={18} />
+              <span className="hidden text-xs font-black md:inline">{t('rewardsPage.memberTiers', 'Member Levels')}</span>
+            </button>
+          </div>
         </div>
 
         <section className="relative mt-3 overflow-hidden rounded-[20px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-0 md:p-5">
@@ -131,12 +154,28 @@ export default function EarnPoints() {
             <span className="text-[28px] font-black leading-none md:text-[32px]">{points.toLocaleString()}</span>
             <span className="self-end pb-0.5 text-xs font-black md:text-sm">{t('rewardsPage.pts')}</span>
           </div>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-xs font-black text-gray-950 md:mt-4 md:px-3.5 md:py-1.5">
-            <Star size={12} fill="currentColor" className="text-gray-400" /> {t('profile.memberLevel', { level: translatedLevel })}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowTierModal(true)}
+            className="group mt-4 inline-flex items-center gap-2 rounded-xl bg-white/85 px-3 py-1.5 text-xs font-black text-gray-950 transition hover:bg-white active:scale-95 md:mt-4 md:px-3.5 md:py-1.5"
+          >
+            <span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-white p-0.5 shadow-sm">
+              <img src={getMemberTierImage(memberLevel)} alt="" className="h-full w-full object-contain" />
+            </span>
+            <span>{t('profile.memberLevel', { level: translatedLevel })}</span>
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition group-hover:bg-pink-200">
+              <Info size={11} />
+            </span>
+          </button>
           <div className="mt-5 flex justify-between gap-3 text-[11px] font-black md:mt-6 md:text-xs">
-            <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>
-            <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
+            {nextLevelRaw ? (
+              <>
+                <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>
+                <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
+              </>
+            ) : (
+              <span>{t('profile.maxTierReached')}</span>
+            )}
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2"><div className="h-full rounded-full bg-yellow-300" style={{ width: `${progress}%` }} /></div>
           <p className="mt-2.5 text-xs font-black md:mt-3 md:text-sm">{t('rewardsPage.ptsProgress', { current: points.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>

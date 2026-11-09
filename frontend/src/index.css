@@ -46,12 +46,12 @@ html[lang="km"] textarea {
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
   }
-  .khmer-title {
-    font-family: 'Noto Sans Khmer', 'Inter', sans-serif;
+  .khmer-title,
+  .font-khmer,
+  .khmer-font {
+    font-family: 'Noto Sans Khmer', 'Khmer OS Battambang', 'Khmer OS', 'Inter', sans-serif !important;
     font-synthesis: none;
-    font-weight: 700;
     letter-spacing: 0;
-    line-height: 1.7;
   }
 
   /* Scoped exclusively to Product Detail page */

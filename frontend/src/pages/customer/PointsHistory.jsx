@@ -62,10 +62,10 @@ export default function PointsHistory() {
   if (isError || historyError) return <div className="py-20 text-center text-sm font-bold text-gray-500">{t('rewardsPage.pointsLoadError')}</div>
 
   const points = data?.current_points || 0
-  const memberLevel = data?.member_level || 'Silver'
+  const memberLevel = data?.member_level || 'Classic'
   const translatedLevel = t(`profile.tiers.${memberLevel.toLowerCase()}`, { defaultValue: memberLevel })
-  const nextLevelRaw = memberLevel === 'Silver' ? 'Gold' : 'Platinum'
-  const nextLevel = t(`profile.tiers.${nextLevelRaw.toLowerCase()}`, { defaultValue: nextLevelRaw })
+  const nextLevelRaw = data?.next_tier_name
+  const nextLevel = nextLevelRaw ? t(`profile.tiers.${nextLevelRaw.toLowerCase()}`, { defaultValue: nextLevelRaw }) : ''
   const nextTierPoints = data?.next_tier_points || points
   const pointsToNext = data?.points_to_next_level || 0
   const progress = Math.min(100, data?.progress_pct || 0)
@@ -100,8 +100,14 @@ export default function PointsHistory() {
             <Star size={12} fill="currentColor" className="text-gray-400" /> {t('profile.memberLevel', { level: translatedLevel })}
           </div>
           <div className="mt-5 flex justify-between gap-3 text-[11px] font-black md:mt-6 md:text-xs">
-            <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>
-            <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
+            {nextLevelRaw ? (
+              <>
+                <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>
+                <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
+              </>
+            ) : (
+              <span>{t('profile.maxTierReached')}</span>
+            )}
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2"><div className="h-full rounded-full bg-yellow-300" style={{ width: `${progress}%` }} /></div>
           <p className="mt-2.5 text-xs font-black md:mt-3 md:text-sm">{t('rewardsPage.ptsProgress', { current: points.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>

@@ -780,6 +780,8 @@ class HomeFeedView(generics.GenericAPIView):
             'side_cards': {
                 'flash_sale_background': card_background(site.flash_card_background),
                 'rewards_background': card_background(site.rewards_card_background),
+                'flash_sale_enabled': getattr(site, 'flash_card_enabled', True),
+                'rewards_enabled': getattr(site, 'rewards_card_enabled', True),
             },
             'categories': CategorySerializer(categories, many=True, context=ctx).data,
             'brands': BrandSerializer(brands, many=True, context=ctx).data,

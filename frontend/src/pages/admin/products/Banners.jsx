@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImageIcon, ImagePlus, Pencil, Plus, Trash2, GripVertical } from 'lucide-react'
+import { ImageIcon, ImagePlus, Pencil, Plus, Trash2, GripVertical, Zap, Gift, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { authApi } from '@/api/auth'
@@ -169,7 +169,16 @@ function BannerForm({ banner, onClose, onSaved }) {
   )
 }
 
-function CardBackgroundField({ label, hint, imageUrl, fieldName, clearName, gradientClass }) {
+function CardBackgroundField({
+  label,
+  hint,
+  imageUrl,
+  fieldName,
+  clearName,
+  enabledFieldName,
+  isEnabled = true,
+  type = 'flash_sale',
+}) {
   const qc = useQueryClient()
   const fileRef = useRef(null)
   const [preview, setPreview] = useState(imageUrl || '')
@@ -189,6 +198,16 @@ function CardBackgroundField({ label, hint, imageUrl, fieldName, clearName, grad
       toast.success(`${label} background saved`)
     },
     onError: () => toast.error('Could not save the background'),
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: (active) => authApi.siteSettings.update({ [enabledFieldName]: active }),
+    onSuccess: (_, active) => {
+      qc.invalidateQueries({ queryKey: ['site-settings'] })
+      qc.invalidateQueries({ queryKey: ['home-feed'] })
+      toast.success(`${label} turned ${active ? 'ON' : 'OFF'}`)
+    },
+    onError: () => toast.error('Could not update status'),
   })
 
   const handleFile = async (event) => {
@@ -218,32 +237,136 @@ function CardBackgroundField({ label, hint, imageUrl, fieldName, clearName, grad
     saveMutation.mutate(fd)
   }
 
+  const isFlash = type === 'flash_sale'
+  const BadgeIcon = isFlash ? Zap : Gift
+  const badgeText = isFlash ? 'Flash Sale' : 'VIP Rewards'
+  const titleText = isFlash ? 'Limited Time Offers' : 'VIP Rewards & Points'
+  const subtitleText = isFlash ? 'Save up to 50% on top cosmetics brands' : 'Redeem points for exclusive cosmetics & vouchers'
+  const footerLabel = isFlash ? 'Shop Deals' : 'Claim Rewards'
+  const footerAction = isFlash ? 'Explore →' : 'Redeem Now →'
+  const fallbackGradient = isFlash
+    ? 'bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700'
+    : 'bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900'
+  const tintClass = isFlash
+    ? 'bg-gradient-to-t from-pink-950/70 via-rose-900/25 to-pink-950/20'
+    : 'bg-gradient-to-t from-slate-950/75 via-indigo-950/30 to-indigo-950/15'
+  const actionBtnClass = isFlash ? 'text-pink-600' : 'text-indigo-900'
+
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-      <p className="text-sm font-black text-gray-950">{label}</p>
-      <p className="mt-1 text-xs font-medium text-gray-500">{hint}</p>
-      <p className="mt-1 text-xs font-semibold text-gray-400">Recommended 800×640 (5:4)</p>
-      <button
-        type="button"
-        onClick={() => !compressing && fileRef.current?.click()}
-        className={`relative mt-3 flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/40 ${gradientClass}`}
-      >
-        {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" /> : null}
-        <span className="relative z-10 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-md">
-          <ImagePlus size={16} className="text-purple-600" />
-          {compressing ? 'Compressing...' : preview ? 'Change background' : 'Add background'}
-        </span>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-      </button>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={save} disabled={!file || compressing || saveMutation.isPending} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-          {saveMutation.isPending ? 'Saving...' : 'Save background'}
+    <div className="flex flex-col justify-between rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
+      {/* Top Header: Title, Description, and ON/OFF Slide Status */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-black text-gray-950">{label}</h3>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${isEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+              {isEnabled ? 'Active on Home' : 'Disabled'}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs font-medium text-gray-500">{hint}</p>
+        </div>
+
+        {/* ON / OFF Slide Button */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isEnabled}
+          aria-label={isEnabled ? `Turn ${label} off` : `Turn ${label} on`}
+          onClick={() => toggleMutation.mutate(!isEnabled)}
+          disabled={toggleMutation.isPending}
+          className={`relative inline-flex h-9 w-[76px] shrink-0 items-center rounded-full px-2.5 text-[11px] font-black tracking-wide text-white transition disabled:opacity-60 ${isEnabled ? 'bg-[#22c55e]' : 'bg-gray-300'}`}
+        >
+          <span className={isEnabled ? '' : 'ml-auto'}>{isEnabled ? 'ON' : 'OFF'}</span>
+          <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition-all ${isEnabled ? 'right-1' : 'left-1'}`} />
         </button>
-        {(preview || imageUrl) && (
-          <button type="button" onClick={remove} disabled={saveMutation.isPending} className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50">
-            <Trash2 size={15} /> Remove
+      </div>
+
+      {/* Real Banner Live Preview */}
+      <div className="relative mt-4">
+        <div
+          className={`group relative flex aspect-[16/10] min-h-[190px] w-full flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-md transition duration-300 ${preview ? (isFlash ? 'bg-pink-700' : 'bg-indigo-950') : fallbackGradient} ${!isEnabled ? 'opacity-60 ring-2 ring-dashed ring-gray-300' : ''}`}
+        >
+          {/* Backdrop Image & Tint */}
+          {preview ? (
+            <>
+              <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <div className={`absolute inset-0 z-[1] ${tintClass}`} />
+            </>
+          ) : null}
+
+          {/* Ambient light bubble */}
+          <div className={`absolute z-[2] h-24 w-24 rounded-full bg-white/10 blur-xl ${isFlash ? '-right-4 -top-4' : '-right-4 -bottom-4'}`} />
+
+          {/* Card Content Top */}
+          <div className="relative z-10">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
+                <BadgeIcon size={13} className={isFlash ? 'fill-yellow-300 text-yellow-300' : 'text-pink-300'} />
+                <span>{badgeText}</span>
+              </span>
+              <ChevronRight size={16} className="text-white/70" />
+            </div>
+            <h4 className="mt-3 text-lg font-black leading-snug">{titleText}</h4>
+            <p className="mt-1 text-xs text-white/90">{subtitleText}</p>
+          </div>
+
+          {/* Card Content Bottom */}
+          <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+            <span className="text-xs font-bold text-white/90">{footerLabel}</span>
+            <span className={`rounded-xl bg-white px-3 py-1.5 text-xs font-black shadow-sm ${actionBtnClass}`}>
+              {footerAction}
+            </span>
+          </div>
+
+          {/* Hover overlay to change background */}
+          <div
+            onClick={() => !compressing && fileRef.current?.click()}
+            className="absolute inset-0 z-20 flex cursor-pointer items-center justify-center bg-black/40 opacity-0 backdrop-blur-[2px] transition duration-200 group-hover:opacity-100"
+          >
+            <span className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-bold text-gray-900 shadow-xl">
+              <ImagePlus size={16} className="text-pink-600" />
+              {compressing ? 'Compressing...' : preview ? 'Change background photo' : 'Upload background photo'}
+            </span>
+          </div>
+        </div>
+
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      </div>
+
+      {/* Card Actions & File Notice */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+        <span className="text-xs text-gray-400">Recommended 800×640 (5:4)</span>
+
+        <div className="flex items-center gap-2">
+          {(preview || imageUrl) && (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={saveMutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 size={13} /> Remove
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => !compressing && fileRef.current?.click()}
+            disabled={compressing}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-200 disabled:opacity-50"
+          >
+            <ImagePlus size={13} /> {preview ? 'Replace photo' : 'Select photo'}
           </button>
-        )}
+
+          <button
+            type="button"
+            onClick={save}
+            disabled={!file || compressing || saveMutation.isPending}
+            className="btn-primary px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saveMutation.isPending ? 'Saving...' : 'Save background'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -257,24 +380,32 @@ function HomeCardBackgrounds() {
 
   return (
     <div className="mb-6">
-      <h2 className="text-base font-black text-gray-950">Side card backgrounds</h2>
-      <p className="mt-1 text-sm text-gray-500">The photo sits behind the text on the two home page cards. Recommended size is 800×640 (5:4).</p>
-      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-black text-gray-950">Side card banners</h2>
+          <p className="mt-0.5 text-sm text-gray-500">Live preview of the two home page cards next to the main promotion banner.</p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-5 lg:grid-cols-2">
         <CardBackgroundField
-          label="Flash Sale"
-          hint="Limited Time Offers card"
+          label="Flash Sale Card"
+          hint="Quick link to limited-time discounted products"
           imageUrl={settings?.flash_card_background_url}
           fieldName="flash_card_background"
           clearName="clear_flash_card_background"
-          gradientClass="bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700"
+          enabledFieldName="flash_card_enabled"
+          isEnabled={settings?.flash_card_enabled ?? true}
+          type="flash_sale"
         />
         <CardBackgroundField
-          label="VIP Rewards"
-          hint="VIP Rewards & Points card"
+          label="VIP Rewards Card"
+          hint="Quick link to loyalty points and voucher redemption"
           imageUrl={settings?.rewards_card_background_url}
           fieldName="rewards_card_background"
           clearName="clear_rewards_card_background"
-          gradientClass="bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900"
+          enabledFieldName="rewards_card_enabled"
+          isEnabled={settings?.rewards_card_enabled ?? true}
+          type="rewards"
         />
       </div>
     </div>

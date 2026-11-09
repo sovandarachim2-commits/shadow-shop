@@ -20,7 +20,7 @@ from .serializers import (
     OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, RewardSettingsSerializer, PointTransactionSerializer, PromoCodeSerializer,
 )
 from .rewards import (
-    award_points_for_paid_order, exchange_reward, get_member_level, get_next_tier_points,
+    award_points_for_paid_order, exchange_reward, get_member_level, get_next_tier_points, get_next_tier_name,
     get_points_balance, get_coupon_discount, coupon_response_payload, sync_paid_order_points,
 )
 from utils.permissions import HasModulePermission, IsStaff, IsSeller, IsCashier, user_has_module_permission
@@ -1147,9 +1147,40 @@ class RewardsViewSet(viewsets.ViewSet):
         return {
             'current_points': current_points,
             'member_level': get_member_level(current_points),
+            'next_tier_name': get_next_tier_name(current_points),
             'next_tier_points': next_tier_points,
             'points_to_next_level': max(0, next_tier_points - current_points),
             'progress_pct': min(100, progress_pct),
+            'tier_thresholds': {
+                'classic': getattr(reward_settings, 'classic_min_points', 0),
+                'silver': getattr(reward_settings, 'silver_min_points', 500),
+                'gold': getattr(reward_settings, 'gold_min_points', 1500),
+                'platinum': getattr(reward_settings, 'platinum_min_points', 3000),
+                'diamond': getattr(reward_settings, 'diamond_min_points', 6000),
+                'vip': getattr(reward_settings, 'vip_min_points', 10000),
+                'elite': getattr(reward_settings, 'elite_min_points', 20000),
+                'royal': getattr(reward_settings, 'royal_min_points', 50000),
+            },
+            'tier_descriptions': {
+                'classic': getattr(reward_settings, 'classic_description', ''),
+                'silver': getattr(reward_settings, 'silver_description', ''),
+                'gold': getattr(reward_settings, 'gold_description', ''),
+                'platinum': getattr(reward_settings, 'platinum_description', ''),
+                'diamond': getattr(reward_settings, 'diamond_description', ''),
+                'vip': getattr(reward_settings, 'vip_description', ''),
+                'elite': getattr(reward_settings, 'elite_description', ''),
+                'royal': getattr(reward_settings, 'royal_description', ''),
+            },
+            'tier_descriptions_km': {
+                'classic': getattr(reward_settings, 'classic_description_km', ''),
+                'silver': getattr(reward_settings, 'silver_description_km', ''),
+                'gold': getattr(reward_settings, 'gold_description_km', ''),
+                'platinum': getattr(reward_settings, 'platinum_description_km', ''),
+                'diamond': getattr(reward_settings, 'diamond_description_km', ''),
+                'vip': getattr(reward_settings, 'vip_description_km', ''),
+                'elite': getattr(reward_settings, 'elite_description_km', ''),
+                'royal': getattr(reward_settings, 'royal_description_km', ''),
+            },
             'catalog': RewardItemSerializer(items, many=True, context={'current_points': current_points, 'user': request.user}).data,
             'redemptions': RewardRedemptionSerializer(redemptions, many=True).data,
             'transactions': PointTransactionSerializer(transactions, many=True).data,
@@ -1265,9 +1296,19 @@ class AdminRewardItemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsStaff]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['type', 'is_active', 'member_tier_requirement']
+    filterset_fields = ['type', 'is_active']
     search_fields = ['name', 'description', 'type']
     ordering_fields = ['created_at', 'points_required', 'stock']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        tier = self.request.query_params.get('member_tier_requirement')
+        if tier:
+            if tier == 'all':
+                qs = qs.filter(Q(member_tier_requirement='all') | Q(member_tier_requirement='') | Q(member_tier_requirement__isnull=True))
+            else:
+                qs = qs.filter(Q(member_tier_requirement='all') | Q(member_tier_requirement__icontains=tier))
+        return qs
 
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
@@ -1493,6 +1534,9 @@ class AdminRewardTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         tx_type = self.request.query_params.get('type')
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
+        user_id = self.request.query_params.get('user') or self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
         if tx_type:
             queryset = queryset.filter(type=tx_type)
         if date_from:

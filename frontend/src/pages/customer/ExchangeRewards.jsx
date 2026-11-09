@@ -7,9 +7,11 @@ import {
   BadgeCheck,
   CheckCircle2,
   ChevronLeft,
+  Crown,
   Gift,
   HelpCircle,
   History,
+  Info,
   Loader2,
   Package,
   Percent,
@@ -20,6 +22,8 @@ import {
 } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
 import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
+import MemberTiersModal from '@/components/customer/MemberTiersModal'
+import { getMemberTierImage } from '@/assets/member_shoppee'
 import { cn, formatDate } from '@/utils/helpers'
 
 const CATEGORY_FILTER_KEYS = ['all', 'voucher', 'gift', 'discount', 'free_delivery']
@@ -224,6 +228,7 @@ export default function ExchangeRewards() {
   const [exchangingId, setExchangingId] = useState(null)
   const [activeCategory, setActiveCategory] = useState('all')
   const [redeemedCoupon, setRedeemedCoupon] = useState(null)
+  const [showTierModal, setShowTierModal] = useState(false)
   const typeMeta = getTypeMeta(t)
   const sampleRewards = getSampleRewards(t)
 
@@ -277,9 +282,10 @@ export default function ExchangeRewards() {
   const currentPoints = data?.current_points || 0
   const nextTierPoints = data?.next_tier_points || 2000
   const pointsToNext = data?.points_to_next_level ?? Math.max(0, nextTierPoints - currentPoints)
-  const memberLevel = data?.member_level || 'Silver'
+  const memberLevel = data?.member_level || 'Classic'
   const translatedLevel = t(`profile.tiers.${memberLevel.toLowerCase()}`, { defaultValue: memberLevel })
-  const nextMemberLevel = memberLevel === 'Silver' ? 'Gold' : memberLevel === 'Gold' ? 'Platinum' : 'Platinum'
+  const nextMemberLevelRaw = data?.next_tier_name
+  const nextMemberLevel = nextMemberLevelRaw ? t(`profile.tiers.${nextMemberLevelRaw.toLowerCase()}`, { defaultValue: nextMemberLevelRaw }) : ''
   const progressPct = Math.min(100, data?.progress_pct || Math.round((currentPoints / Math.max(nextTierPoints, 1)) * 100))
   const displayRewards = rewards.length > 0 ? rewards : sampleRewards
   const filteredRewards = displayRewards.filter((reward) => {
@@ -306,6 +312,16 @@ export default function ExchangeRewards() {
   return (
     <div className="min-h-screen bg-gray-50 pb-24 md:pb-6">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
+      <MemberTiersModal
+        isOpen={showTierModal}
+        onClose={() => setShowTierModal(false)}
+        currentLevel={memberLevel}
+        currentPoints={currentPoints}
+        tierThresholds={data?.tier_thresholds || {}}
+        tierDescriptions={data?.tier_descriptions || {}}
+        tierDescriptionsKm={data?.tier_descriptions_km || {}}
+        t={t}
+      />
       <div className="mx-auto flex w-full max-w-[1500px] flex-col px-5 pb-6 md:px-6 md:pt-6">
         <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button 
@@ -315,10 +331,20 @@ export default function ExchangeRewards() {
           >
             <ChevronLeft size={20} />
           </button>
-          <div className="min-w-0 text-center md:text-left">
+          <div className="min-w-0 text-center md:flex-1 md:text-left">
             <h1 className="truncate text-base font-black tracking-tight text-gray-950 md:text-2xl">{t('rewardsPage.main.title')}</h1>
           </div>
-          <div className="md:hidden" />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowTierModal(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-pink-50 text-pink-600 transition hover:bg-pink-100 active:scale-95 md:h-10 md:w-auto md:gap-2 md:rounded-xl md:border md:border-pink-200 md:bg-pink-50/70 md:px-3.5 md:py-2"
+              title={t('rewardsPage.viewTierDetails', 'View Level Details')}
+            >
+              <Crown size={18} />
+              <span className="hidden text-xs font-black md:inline">{t('rewardsPage.memberTiers', 'Member Levels')}</span>
+            </button>
+          </div>
         </div>
 
         <section className="relative mt-2 overflow-hidden rounded-[22px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-4 md:rounded-[22px] md:p-5">
@@ -337,24 +363,49 @@ export default function ExchangeRewards() {
                   <span className="pb-0.5 text-xs font-black md:pb-1 md:text-sm">{t('rewardsPage.pts')}</span>
                 </div>
               </div>
-              <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/75 px-3 py-1.5 text-gray-950 shadow-sm backdrop-blur md:mt-4 md:px-3.5 md:py-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-300 text-white md:h-6 md:w-6">
-                  <Star size={12} fill="currentColor" />
+              <button
+                type="button"
+                onClick={() => setShowTierModal(true)}
+                className="group mt-4 inline-flex items-center gap-2 rounded-xl bg-white/85 px-3 py-1.5 text-gray-950 shadow-sm backdrop-blur transition hover:bg-white active:scale-95 md:mt-4 md:px-3.5 md:py-1.5"
+              >
+                <span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-white p-0.5 shadow-sm md:h-6 md:w-6">
+                  <img src={getMemberTierImage(memberLevel)} alt="" className="h-full w-full object-contain" />
                 </span>
                 <span className="text-xs font-black md:text-sm">{t('profile.memberLevel', { level: translatedLevel })}</span>
-              </div>
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition group-hover:bg-pink-200">
+                  <Info size={11} />
+                </span>
+              </button>
             </div>
-            <div className="absolute right-5 top-8 flex h-20 w-20 shrink-0 items-center justify-center opacity-90 sm:relative sm:right-auto sm:top-auto sm:mt-2 sm:h-24 sm:w-24">
-              <div className="absolute inset-0 rotate-30 rounded-[28px] bg-white/25 shadow-2xl" />
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-[20px] border-[3px] border-white/70 bg-gradient-to-br from-gray-100 to-gray-400 text-white shadow-xl sm:h-20 sm:w-20 sm:rounded-[24px] sm:border-4">
-                <Star size={30} fill="currentColor" />
+            <button
+              type="button"
+              onClick={() => setShowTierModal(true)}
+              aria-label={t('rewardsPage.viewTierDetails', 'View Level Details')}
+              className="group absolute right-5 top-8 flex h-20 w-20 shrink-0 items-center justify-center opacity-95 transition hover:scale-105 active:scale-95 sm:relative sm:right-auto sm:top-auto sm:mt-2 sm:h-24 sm:w-24"
+            >
+              <div className="absolute inset-0 rotate-12 rounded-[28px] bg-white/20 shadow-2xl transition group-hover:rotate-45" />
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-[22px] border-[3px] border-white/80 bg-white/95 p-1.5 shadow-xl sm:h-20 sm:w-20 sm:rounded-[24px] sm:border-4">
+                <img
+                  src={getMemberTierImage(memberLevel)}
+                  alt={translatedLevel}
+                  className="h-full w-full object-contain"
+                />
               </div>
-            </div>
+              <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-pink-600 text-white shadow-md">
+                <Info size={12} />
+              </span>
+            </button>
           </div>
           <div className="relative z-10 mt-5 md:mt-6">
             <div className="mb-2 flex items-center justify-between gap-3 text-xs font-black md:mb-2.5">
-              <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextMemberLevel })}</span></span>
-              <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
+              {nextMemberLevelRaw ? (
+                <>
+                  <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextMemberLevel })}</span></span>
+                  <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
+                </>
+              ) : (
+                <span>{t('profile.maxTierReached')}</span>
+              )}
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2">
               <div className="h-full rounded-full bg-yellow-300 transition-all" style={{ width: `${progressPct}%` }} />

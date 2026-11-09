@@ -160,12 +160,17 @@ export default function Cart() {
     }
 
     setApplyingPromo(true)
+    const startTime = Date.now()
     try {
       const { data } = await ordersApi.rewards.validateCoupon({
         coupon_code: promoCode.trim(),
         subtotal,
         delivery_fee: deliveryFee,
       })
+      const elapsed = Date.now() - startTime
+      if (elapsed < 600) {
+        await new Promise((r) => setTimeout(r, 600 - elapsed))
+      }
       applyCoupon(data)
       setPromoCode(data.coupon_code)
       setCouponModal({
@@ -175,6 +180,10 @@ export default function Cart() {
         name: data.name
       })
     } catch (error) {
+      const elapsed = Date.now() - startTime
+      if (elapsed < 600) {
+        await new Promise((r) => setTimeout(r, 600 - elapsed))
+      }
       clearCoupon()
       const errorMsg = error?.response?.data?.detail || t('cart.promoApplyFailed')
       setCouponModal({
@@ -190,12 +199,17 @@ export default function Cart() {
 
   const handleApplySavedCoupon = async (coupon) => {
     setApplyingPromo(true)
+    const startTime = Date.now()
     try {
       const { data } = await ordersApi.rewards.validateCoupon({
         coupon_code: coupon.coupon_code,
         subtotal,
         delivery_fee: deliveryFee,
       })
+      const elapsed = Date.now() - startTime
+      if (elapsed < 600) {
+        await new Promise((r) => setTimeout(r, 600 - elapsed))
+      }
       applyCoupon(data)
       setShowCoupons(false)
       setCouponModal({
@@ -205,6 +219,10 @@ export default function Cart() {
         name: data.name
       })
     } catch (error) {
+      const elapsed = Date.now() - startTime
+      if (elapsed < 600) {
+        await new Promise((r) => setTimeout(r, 600 - elapsed))
+      }
       const errorMsg = error?.response?.data?.detail || t('cart.promoApplyFailed')
       setCouponModal({
         isOpen: true,
@@ -300,7 +318,7 @@ export default function Cart() {
         <aside className="h-fit px-1 py-2 lg:sticky lg:top-36 lg:rounded-[1.75rem] lg:bg-white lg:p-5 lg:shadow-sm">
           <h2 className="hidden text-xl font-black text-gray-950 lg:block">{t('cart.orderSummary')}</h2>
           <p className="mt-1 hidden text-sm font-semibold text-gray-400 lg:block">
-            {selectedCount} {selectedCount === 1 ? 'item' : 'items'} ready for checkout
+            {t('cart.readyForCheckout', { count: selectedCount })}
           </p>
           <form onSubmit={handleApplyPromo} className="lg:mt-5">
             <div className="mb-2 flex items-center justify-between gap-3">
@@ -321,21 +339,45 @@ export default function Cart() {
                   setPromoCode(event.target.value.toUpperCase())
                   if (appliedCoupon) clearCoupon()
                 }}
+                disabled={applyingPromo}
                 placeholder={t('cart.enterPromoCode')}
-                className="min-w-0 flex-1 bg-transparent py-2 text-sm font-bold uppercase text-gray-900 outline-none placeholder:font-semibold placeholder:normal-case placeholder:text-gray-400"
+                className="min-w-0 flex-1 bg-transparent py-2 text-sm font-bold uppercase text-gray-900 outline-none placeholder:font-semibold placeholder:normal-case placeholder:text-gray-400 disabled:opacity-60"
               />
               <button
                 type="submit"
                 disabled={applyingPromo || !promoCode.trim()}
-                className="min-w-[92px] rounded-full bg-pink-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-pink-700 disabled:bg-pink-300"
+                className="flex min-w-[96px] items-center justify-center gap-1.5 rounded-full bg-pink-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-pink-300 active:scale-95"
               >
-                {applyingPromo ? '...' : t('rewardsPage.coupons.apply')}
+                {applyingPromo ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span className="text-xs">Applying...</span>
+                  </>
+                ) : (
+                  t('rewardsPage.coupons.apply')
+                )}
               </button>
             </div>
             {appliedCoupon && (
-              <div className="mt-2 flex items-center justify-between px-2 text-xs font-bold text-emerald-600">
-                <span>{appliedCoupon.name}</span>
-                <button type="button" onClick={() => { clearCoupon(); setPromoCode('') }} className="text-gray-400 hover:text-red-500">{t('cart.removeCoupon')}</button>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 shadow-sm transition animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-sm">
+                    <Ticket size={18} strokeWidth={2.5} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-black uppercase text-emerald-950">{appliedCoupon.name || appliedCoupon.coupon_code}</p>
+                    <p className="text-[11px] font-semibold text-emerald-600">
+                      {appliedCoupon.coupon_code} · {t('cart.couponAppliedDesc', 'Coupon applied')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { clearCoupon(); setPromoCode('') }}
+                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold text-gray-500 transition hover:bg-emerald-100 hover:text-red-600"
+                >
+                  {t('cart.removeCoupon')}
+                </button>
               </div>
             )}
           </form>

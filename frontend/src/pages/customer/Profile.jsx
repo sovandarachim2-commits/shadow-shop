@@ -7,7 +7,7 @@ import {
   Package, Heart, CheckCircle2, Pencil, Lock, Loader2, Truck, ShoppingBag,
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
-  Home, Headphones, Eye, EyeOff, Clock, Share2,
+  Home, Headphones, Eye, EyeOff, Clock, Share2, Crown,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -17,6 +17,7 @@ import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { getMemberTierImage } from '@/assets/member_shoppee'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { formatAddressLocationKhmer, formatAddressRecordKhmer } from '@/utils/addressHelpers'
@@ -869,9 +870,11 @@ export default function Profile() {
   const memberSince = user.created_at ? formatDate(user.created_at, 'MMM yyyy') : '—'
   const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   const rewardPoints = rewardsSummary?.current_points ?? 0
-  const nextTierPoints = rewardsSummary?.next_tier_points ?? 3000
-  const membershipLevel = rewardsSummary?.member_level || 'Silver'
+  const nextTierPoints = rewardsSummary?.next_tier_points ?? 500
+  const membershipLevel = rewardsSummary?.member_level || 'Classic'
   const translatedLevel = t(`profile.tiers.${membershipLevel.toLowerCase()}`, { defaultValue: membershipLevel })
+  const nextTierName = rewardsSummary?.next_tier_name
+  const translatedNextTier = nextTierName ? t(`profile.tiers.${nextTierName.toLowerCase()}`, { defaultValue: nextTierName }) : ''
   const ptsToNext = rewardsSummary?.points_to_next_level ?? Math.max(0, nextTierPoints - rewardPoints)
   const progressPct = rewardsSummary?.progress_pct ?? Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
   const rewardRedemptions = rewardsSummary?.redemptions ?? []
@@ -1002,6 +1005,37 @@ export default function Profile() {
           </button>
         </div>
 
+        {/* Mobile Membership Tier Card */}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => navigate('/profile/rewards')}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-pink-100 bg-gradient-to-r from-pink-50/90 via-purple-50/40 to-white p-3.5 shadow-sm transition active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-pink-100 bg-white p-1 shadow-sm">
+                <img
+                  src={getMemberTierImage(membershipLevel)}
+                  alt={translatedLevel}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="text-left">
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/80 px-2 py-0.5 text-[10px] font-black text-pink-700">
+                  <Crown size={10} /> {t('profile.memberLevel', { level: translatedLevel })}
+                </span>
+                <p className="mt-0.5 text-xs font-black text-gray-900">
+                  {rewardPoints.toLocaleString()} <span className="text-[11px] font-bold text-gray-400">{t('profile.ptsLabel')}</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-xs font-black text-pink-600">
+              <span>{t('profile.rewards', 'Rewards')}</span>
+              <ChevronRight size={14} />
+            </div>
+          </button>
+        </div>
+
         <div className="mt-8 overflow-hidden rounded-xl bg-slate-50">
           <div className="grid grid-cols-4">
             {mobileQuickActions.map(({ icon: Icon, labelKey, action, color }, index) => (
@@ -1065,6 +1099,8 @@ export default function Profile() {
               rewardPoints={rewardPoints}
               nextTierPoints={nextTierPoints}
               membershipLevel={translatedLevel}
+              nextTierName={nextTierName}
+              translatedNextTier={translatedNextTier}
               ptsToNext={ptsToNext}
               progressPct={progressPct}
               wishlistCount={wishlistItems.length}
@@ -1206,26 +1242,50 @@ export default function Profile() {
             <div className="space-y-5">
               <h2 className="text-xl font-black text-gray-950">{t('profile.rewardsAndPoints')}</h2>
               <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-gray-500">{t('profile.totalPoints')}</p>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <span className="text-5xl font-black text-pink-600">{rewardPoints.toLocaleString()}</span>
-                      <span className="text-base font-bold text-gray-400">{t('profile.ptsLabel')}</span>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-pink-100 bg-gradient-to-br from-pink-50/80 via-purple-50/40 to-white p-2 shadow-sm">
+                      <img
+                        src={getMemberTierImage(membershipLevel)}
+                        alt={translatedLevel}
+                        className="h-full w-full object-contain drop-shadow"
+                      />
+                    </div>
+                    <div>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-pink-100/80 px-3 py-1 text-xs font-black text-pink-700">
+                        <Crown size={13} />
+                        {t('profile.memberLevel', { level: translatedLevel })}
+                      </span>
+                      <div className="mt-1.5 flex items-baseline gap-1">
+                        <span className="text-3xl sm:text-4xl font-black text-gray-950">{rewardPoints.toLocaleString()}</span>
+                        <span className="text-sm font-bold text-gray-400">{t('profile.ptsLabel')}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs font-semibold text-gray-500">{t('profile.totalPoints')}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="inline-flex items-center gap-2 rounded-2xl bg-gray-100 px-4 py-2">
-                      <div className="h-5 w-5 rounded-full bg-gradient-to-br from-gray-300 to-gray-400" />
-                      <span className="font-black text-gray-700">{t('profile.memberLevel', { level: translatedLevel })}</span>
-                    </div>
-                    <p className="mt-2 text-xs text-gray-400">{t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}</p>
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs font-bold text-gray-400">
+                      {nextTierName && ptsToNext > 0
+                        ? t('profile.ptsMoreToNext', { count: ptsToNext.toLocaleString(), tier: translatedNextTier })
+                        : t('profile.maxTierReached')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/profile/rewards')}
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-black text-pink-600 hover:text-pink-700"
+                    >
+                      <span>{t('profile.viewBenefits', 'View Benefits →')}</span>
+                    </button>
                   </div>
                 </div>
                 <div className="mt-6">
                   <div className="mb-2 flex justify-between text-xs font-semibold text-gray-500">
                     <span>{rewardPoints.toLocaleString()} {t('profile.ptsLabel')}</span>
-                    <span>{t('profile.goldTarget', { count: nextTierPoints.toLocaleString() })}</span>
+                    <span>
+                      {nextTierName
+                        ? t('profile.tierTarget', { count: nextTierPoints.toLocaleString(), tier: translatedNextTier })
+                        : t('profile.topTier')}
+                    </span>
                   </div>
                   <div className="h-3 overflow-hidden rounded-full bg-gray-100">
                     <div className="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all" style={{ width: `${progressPct}%` }} />
@@ -1417,6 +1477,8 @@ function DesktopProfileOverview({
   rewardPoints,
   nextTierPoints,
   membershipLevel,
+  nextTierName,
+  translatedNextTier,
   ptsToNext,
   progressPct,
   wishlistCount,
@@ -1561,18 +1623,39 @@ function DesktopProfileOverview({
           
           {/* Progress Bar Tier Widget */}
           <div className="mt-4 rounded-2xl border border-pink-100 bg-gradient-to-br from-pink-50/50 via-purple-50/30 to-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-sm font-black text-gray-700">
-              <span>{t('profile.myPoints')}</span>
-              <span className="text-pink-600">{rewardPoints.toLocaleString()} / {nextTierPoints.toLocaleString()} pt</span>
+            <div className="mb-3.5 flex items-center gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-pink-100 bg-white p-1 shadow-sm">
+                <img
+                  src={getMemberTierImage(membershipLevel)}
+                  alt={membershipLevel}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/80 px-2.5 py-0.5 text-[11px] font-black text-pink-700">
+                  <Crown size={11} /> {t('profile.memberLevel', { level: membershipLevel })}
+                </span>
+                <p className="mt-1 text-base font-black text-gray-900">
+                  {rewardPoints.toLocaleString()} <span className="text-xs font-bold text-gray-400">{t('profile.ptsLabel')}</span>
+                </p>
+              </div>
             </div>
-            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-gray-200/80">
+            <div className="flex items-center justify-between text-xs font-black text-gray-600">
+              <span>{t('profile.progress', 'Progress')}</span>
+              <span className="text-pink-600">
+                {rewardPoints.toLocaleString()} {nextTierName ? `/ ${nextTierPoints.toLocaleString()} pt` : 'pt'}
+              </span>
+            </div>
+            <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-gray-200/80">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-600 transition-all duration-500"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
             <p className="mt-2 text-right text-xs font-bold text-gray-400">
-              {t('profile.ptsMoreToGold', { count: ptsToNext.toLocaleString() })}
+              {nextTierName && ptsToNext > 0
+                ? t('profile.ptsMoreToNext', { count: ptsToNext.toLocaleString(), tier: translatedNextTier })
+                : t('profile.maxTierReached')}
             </p>
           </div>
         </DesktopProfileCard>

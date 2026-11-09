@@ -48,40 +48,6 @@ function ProductImageFallback() {
   )
 }
 
-function ShopByBrandCarousel({ brands }) {
-  const repeatedBrands = useMemo(() => {
-    if (!brands.length) return []
-    const repeats = Math.max(2, Math.ceil(10 / brands.length))
-    return Array.from({ length: repeats }, () => brands).flat()
-  }, [brands])
-
-  if (!brands.length) return null
-
-  return (
-    <div className="-mx-4 overflow-hidden px-4 pb-1 md:hidden">
-      <div className="brand-marquee-track">
-        {[0, 1].map((copy) => (
-          <div key={copy} className="flex shrink-0 gap-3 pr-3" aria-hidden={copy !== 0 || undefined}>
-            {repeatedBrands.map((brand, index) => (
-              <Link
-                key={`${copy}-${brand.id}-${index}`}
-                to={`/shop?brand=${brand.id}`}
-                tabIndex={copy !== 0 ? -1 : undefined}
-                className="group flex w-[104px] shrink-0 flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-3 transition-colors hover:border-pink-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
-              >
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
-                  <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
-                </div>
-                <p className="w-full break-words text-center text-xs font-semibold leading-5 text-gray-900 group-hover:text-pink-600">{brand.name}</p>
-              </Link>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addLabel, addToCartLabel, soldOutLabel }) {
   if (!available) {
     return (
@@ -450,6 +416,9 @@ export default function Home() {
   const showNewSkeleton = homeLoading && !newArrivalData
   const banners = useMemo(() => bannersData || [], [bannersData])
   const sideCards = homeData?.side_cards || {}
+  const showFlashCard = sideCards.flash_sale_enabled !== false
+  const showRewardsCard = sideCards.rewards_enabled !== false
+  const hasAnySideCard = showFlashCard || showRewardsCard
   const categories = useMemo(() => categoriesData || [], [categoriesData])
   const brands = useMemo(() => brandsData || [], [brandsData])
   const bestSellers = useMemo(() => bestSellerData || [], [bestSellerData])
@@ -723,7 +692,7 @@ export default function Home() {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
                 
                 {/* Left/Main Track Container (Full Carousel) */}
-                <div className="relative group lg:col-span-8 xl:col-span-9">
+                <div className={`relative group ${hasAnySideCard ? 'lg:col-span-8 xl:col-span-9' : 'lg:col-span-12 xl:col-span-12'}`}>
                   {/* Desktop Chevron Left Button */}
                   {banners.length > 1 && (
                     <button
@@ -769,18 +738,18 @@ export default function Home() {
                         to={banner.button_link || '/shop'}
                         className="group/item block w-[90%] min-w-[90%] shrink-0 snap-start lg:w-full lg:min-w-full"
                       >
-                        <div className="aspect-[2/1] w-full overflow-hidden rounded-[22px] bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] md:rounded-[28px]">
+                        <div className="aspect-[16/10] min-h-[185px] w-full overflow-hidden isolate rounded-2xl bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] sm:aspect-[16/9] sm:min-h-0 md:aspect-[2/1] md:rounded-3xl">
                           {banner.image_url ? (
                             <img
                               src={banner.image_url}
                               alt={banner.title || 'Promotion'}
-                              className="h-full w-full object-cover transition-transform duration-500 group-hover/item:scale-105"
+                              className="h-full w-full rounded-2xl object-cover transition-transform duration-500 group-hover/item:scale-105 md:rounded-3xl"
                               loading={idx === 0 ? 'eager' : 'lazy'}
                               decoding="async"
                               fetchpriority={idx === 0 ? 'high' : 'auto'}
                             />
                           ) : (
-                            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600">
+                            <div className="flex h-full w-full flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-pink-400 via-rose-500 to-pink-600 md:rounded-3xl">
                               <ShoppingBag size={44} className="mb-2 text-white/50" />
                               {banner.title && <p className="px-4 text-center text-lg font-black text-white md:text-xl">{banner.title}</p>}
                             </div>
@@ -810,63 +779,69 @@ export default function Home() {
                 </div>
 
                 {/* Right Side Quick Cards (Desktop Only - Concept 2 Feature) */}
-                <div className="hidden lg:flex lg:col-span-4 lg:flex-col lg:gap-3.5 xl:col-span-3">
-                  
-                  {/* Card 1: Live Flash Deals */}
-                  <Link
-                    to="/shop?filter=flash_sale"
-                    className={`group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-lg shadow-pink-200/50 transition hover:shadow-xl hover:shadow-pink-300/60 active:scale-[0.99] ${sideCards.flash_sale_background ? 'bg-pink-700' : 'bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700'}`}
-                  >
-                    <CardBackdrop imageUrl={sideCards.flash_sale_background} tintClass="bg-gradient-to-t from-pink-950/70 via-rose-900/25 to-pink-950/20" />
-                    <div className="absolute -right-4 -top-4 z-[2] h-24 w-24 rounded-full bg-white/10 blur-xl transition group-hover:scale-125" />
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
-                          <Zap size={13} className="fill-yellow-300 text-yellow-300" />
-                          <span>Flash Sale</span>
-                        </span>
-                        <ChevronRight size={16} className="text-white/70 transition group-hover:translate-x-1" />
-                      </div>
-                      <h3 className="mt-3 text-lg font-black leading-snug">Limited Time Offers</h3>
-                      <p className="mt-1 text-xs text-pink-100">Save up to 50% on top cosmetics brands</p>
-                    </div>
+                {hasAnySideCard && (
+                  <div className="hidden lg:flex lg:col-span-4 lg:flex-col lg:gap-3.5 xl:col-span-3">
+                    
+                    {/* Card 1: Live Flash Deals */}
+                    {showFlashCard && (
+                      <Link
+                        to="/shop?filter=flash_sale"
+                        className={`group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-lg shadow-pink-200/50 transition hover:shadow-xl hover:shadow-pink-300/60 active:scale-[0.99] ${sideCards.flash_sale_background ? 'bg-pink-700' : 'bg-gradient-to-br from-pink-600 via-rose-500 to-pink-700'}`}
+                      >
+                        <CardBackdrop imageUrl={sideCards.flash_sale_background} tintClass="bg-gradient-to-t from-pink-950/70 via-rose-900/25 to-pink-950/20" />
+                        <div className="absolute -right-4 -top-4 z-[2] h-24 w-24 rounded-full bg-white/10 blur-xl transition group-hover:scale-125" />
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
+                              <Zap size={13} className="fill-yellow-300 text-yellow-300" />
+                              <span>Flash Sale</span>
+                            </span>
+                            <ChevronRight size={16} className="text-white/70 transition group-hover:translate-x-1" />
+                          </div>
+                          <h3 className="mt-3 text-lg font-black leading-snug">Limited Time Offers</h3>
+                          <p className="mt-1 text-xs text-pink-100">Save up to 50% on top cosmetics brands</p>
+                        </div>
 
-                    <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
-                      <span className="text-xs font-bold text-white/90">Shop Deals</span>
-                      <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm transition group-hover:bg-pink-50">
-                        Explore →
-                      </span>
-                    </div>
-                  </Link>
+                        <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+                          <span className="text-xs font-bold text-white/90">Shop Deals</span>
+                          <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm transition group-hover:bg-pink-50">
+                            Explore →
+                          </span>
+                        </div>
+                      </Link>
+                    )}
 
-                  {/* Card 2: VIP Rewards & Point Exchange */}
-                  <Link
-                    to="/profile/rewards"
-                    className={`group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-lg shadow-indigo-200/50 transition hover:shadow-xl hover:shadow-indigo-300/60 active:scale-[0.99] ${sideCards.rewards_background ? 'bg-indigo-950' : 'bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900'}`}
-                  >
-                    <CardBackdrop imageUrl={sideCards.rewards_background} tintClass="bg-gradient-to-t from-slate-950/75 via-indigo-950/30 to-indigo-950/15" />
-                    <div className="absolute -right-4 -bottom-4 z-[2] h-24 w-24 rounded-full bg-purple-500/20 blur-xl transition group-hover:scale-125" />
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
-                          <Gift size={13} className="text-pink-300" />
-                          <span>VIP Rewards</span>
-                        </span>
-                        <ChevronRight size={16} className="text-white/70 transition group-hover:translate-x-1" />
-                      </div>
-                      <h3 className="mt-3 text-lg font-black leading-snug">VIP Rewards & Points</h3>
-                      <p className="mt-1 text-xs text-indigo-200">Redeem points for exclusive cosmetics & vouchers</p>
-                    </div>
+                    {/* Card 2: VIP Rewards & Point Exchange */}
+                    {showRewardsCard && (
+                      <Link
+                        to="/profile/rewards"
+                        className={`group relative flex flex-1 flex-col justify-between overflow-hidden rounded-[24px] p-5 text-white shadow-lg shadow-indigo-200/50 transition hover:shadow-xl hover:shadow-indigo-300/60 active:scale-[0.99] ${sideCards.rewards_background ? 'bg-indigo-950' : 'bg-gradient-to-br from-purple-700 via-indigo-800 to-slate-900'}`}
+                      >
+                        <CardBackdrop imageUrl={sideCards.rewards_background} tintClass="bg-gradient-to-t from-slate-950/75 via-indigo-950/30 to-indigo-950/15" />
+                        <div className="absolute -right-4 -bottom-4 z-[2] h-24 w-24 rounded-full bg-purple-500/20 blur-xl transition group-hover:scale-125" />
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-black uppercase tracking-wider backdrop-blur-md">
+                              <Gift size={13} className="text-pink-300" />
+                              <span>VIP Rewards</span>
+                            </span>
+                            <ChevronRight size={16} className="text-white/70 transition group-hover:translate-x-1" />
+                          </div>
+                          <h3 className="mt-3 text-lg font-black leading-snug">VIP Rewards & Points</h3>
+                          <p className="mt-1 text-xs text-indigo-200">Redeem points for exclusive cosmetics & vouchers</p>
+                        </div>
 
-                    <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
-                      <span className="text-xs font-bold text-white/90">Claim Rewards</span>
-                      <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-indigo-900 shadow-sm transition group-hover:bg-indigo-50">
-                        Redeem Now →
-                      </span>
-                    </div>
-                  </Link>
+                        <div className="relative z-10 mt-4 flex items-center justify-between border-t border-white/20 pt-3">
+                          <span className="text-xs font-bold text-white/90">Claim Rewards</span>
+                          <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-indigo-900 shadow-sm transition group-hover:bg-indigo-50">
+                            Redeem Now →
+                          </span>
+                        </div>
+                      </Link>
+                    )}
 
-                </div>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -982,7 +957,23 @@ export default function Home() {
               ))}
             </div>
 
-            <ShopByBrandCarousel brands={brands} />
+            {/* Mobile Swipeable Carousel (< md screens) */}
+            <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:hidden">
+              {brands.map((brand) => (
+                <Link
+                  key={brand.id}
+                  to={`/shop?brand=${brand.id}`}
+                  className="group flex w-[104px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-2.5 py-3 transition-colors hover:border-pink-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
+                >
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
+                    <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
+                  </div>
+                  <p className="w-full break-words text-center text-xs font-semibold leading-5 text-gray-900 group-hover:text-pink-600">
+                    {brand.name}
+                  </p>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 

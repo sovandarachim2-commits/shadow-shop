@@ -1075,6 +1075,23 @@ class RewardItemSerializer(serializers.ModelSerializer):
                 status__in=[RewardRedemption.STATUS_REJECTED, RewardRedemption.STATUS_CANCELLED]
             ).count()
             under_customer_limit = used_count < obj.per_customer_limit
+        tier_eligible = True
+        req_tier = (obj.member_tier_requirement or 'all').strip()
+        if req_tier and req_tier != 'all':
+            from apps.orders.rewards import get_member_level
+            user_level = get_member_level(current_points).lower()
+            allowed = [t.strip().lower() for t in req_tier.split(',') if t.strip()]
+            if 'all' not in allowed:
+                tier_order = {
+                    'classic': 1, 'silver': 2, 'gold': 3, 'platinum': 4,
+                    'diamond': 5, 'vip': 6, 'elite': 7, 'royal': 8
+                }
+                if user_level in allowed:
+                    tier_eligible = True
+                elif len(allowed) == 1 and allowed[0] in tier_order:
+                    tier_eligible = tier_order.get(user_level, 0) >= tier_order.get(allowed[0], 0)
+                else:
+                    tier_eligible = False
         return (
             obj.is_active
             and has_stock
@@ -1082,6 +1099,7 @@ class RewardItemSerializer(serializers.ModelSerializer):
             and not_expired
             and gift_product_available
             and under_customer_limit
+            and tier_eligible
             and current_points >= obj.points_required
         )
 
@@ -1244,18 +1262,28 @@ class RewardSettingsSerializer(serializers.ModelSerializer):
             'points_expiry_days', 'expiry_reminder_days',
             'expiration_enabled',
             'minimum_redeem_points', 'maximum_points_per_order', 'updated_at',
-            'silver_min_points', 'gold_min_points', 'platinum_min_points',
+            'classic_min_points', 'silver_min_points', 'gold_min_points', 'platinum_min_points',
+            'diamond_min_points', 'vip_min_points', 'elite_min_points', 'royal_min_points',
+            'classic_description', 'silver_description', 'gold_description', 'platinum_description',
+            'diamond_description', 'vip_description', 'elite_description', 'royal_description',
+            'classic_description_km', 'silver_description_km', 'gold_description_km', 'platinum_description_km',
+            'diamond_description_km', 'vip_description_km', 'elite_description_km', 'royal_description_km',
             'auto_approve_points', 'auto_apply_on_completed', 'low_stock_alert_enabled',
         ]
         read_only_fields = ['updated_at']
 
     def validate(self, attrs):
         instance = self.instance or RewardSettings.get_solo()
-        silver = attrs.get('silver_min_points', instance.silver_min_points)
-        gold = attrs.get('gold_min_points', instance.gold_min_points)
-        platinum = attrs.get('platinum_min_points', instance.platinum_min_points)
-        if not silver <= gold < platinum:
+        classic = attrs.get('classic_min_points', getattr(instance, 'classic_min_points', 0))
+        silver = attrs.get('silver_min_points', getattr(instance, 'silver_min_points', 500))
+        gold = attrs.get('gold_min_points', getattr(instance, 'gold_min_points', 1500))
+        platinum = attrs.get('platinum_min_points', getattr(instance, 'platinum_min_points', 3000))
+        diamond = attrs.get('diamond_min_points', getattr(instance, 'diamond_min_points', 6000))
+        vip = attrs.get('vip_min_points', getattr(instance, 'vip_min_points', 10000))
+        elite = attrs.get('elite_min_points', getattr(instance, 'elite_min_points', 20000))
+        royal = attrs.get('royal_min_points', getattr(instance, 'royal_min_points', 50000))
+        if not (classic <= silver <= gold <= platinum <= diamond <= vip <= elite <= royal):
             raise serializers.ValidationError(
-                'Member tiers must increase from Silver to Gold to Platinum.'
+                'Member tiers must increase progressively: Classic ≤ Silver ≤ Gold ≤ Platinum ≤ Diamond ≤ VIP ≤ Elite ≤ Royal.'
             )
         return attrs
