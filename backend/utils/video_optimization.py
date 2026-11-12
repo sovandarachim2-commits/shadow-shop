@@ -9,7 +9,7 @@ from django.core.files.uploadedfile import TemporaryUploadedFile
 
 COMPRESS_ABOVE_BYTES = 12 * 1024 * 1024  # 12 MB
 DEFAULT_MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB
-FFMPEG_TIMEOUT_SECONDS = 180
+FFMPEG_TIMEOUT_SECONDS = 300
 
 
 def is_ffmpeg_available():

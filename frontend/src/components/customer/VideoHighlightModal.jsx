@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { parseVideoEmbed } from '@/utils/videoEmbed'
 
 export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
   const { t } = useTranslation()
@@ -10,7 +11,10 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
   const [loadError, setLoadError] = useState(false)
 
   const videoSrc = video?.video_url || ''
+  const embedInfo = !videoSrc ? parseVideoEmbed(video?.original_video_url) : null
+  const embedUrl = embedInfo?.embedUrl || ''
   const externalUrl = video?.original_video_url || videoSrc
+  const isLandscapeEmbed = Boolean(embedUrl && embedInfo?.aspect === 'landscape')
 
   const stopAndClose = () => {
     if (videoRef.current) {
@@ -45,7 +49,7 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
       if (event.key !== 'Tab' || !modalRef.current) return
       const focusable = Array.from(
         modalRef.current.querySelectorAll(
-          'button:not([disabled]), a[href], video[controls], [tabindex]:not([tabindex="-1"])',
+          'button:not([disabled]), a[href], video[controls], iframe, [tabindex]:not([tabindex="-1"])',
         ),
       ).filter((el) => el.offsetParent !== null)
       if (focusable.length === 0) return
@@ -91,17 +95,19 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
       <div
         ref={modalRef}
         onClick={(event) => event.stopPropagation()}
-        className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] items-center justify-center overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/15"
+        className={`relative flex max-h-[calc(100dvh-1.5rem)] w-full items-center justify-center overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/15 ${
+          isLandscapeEmbed ? 'max-w-[720px]' : 'max-w-[420px]'
+        }`}
       >
-        {/* Top-left: Open video */}
+        {/* Top-left: View video */}
         {externalUrl && (
           <button
             type="button"
             onClick={handleOpenExternal}
-            className="absolute left-3 top-3 z-20 inline-flex items-center gap-1.5 rounded-full bg-black/65 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md transition hover:bg-black/85 focus:outline-none focus:ring-2 focus:ring-white/60"
+            className="absolute left-3 top-3 z-20 inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3.5 text-xs font-semibold tracking-tight text-white/95 shadow-sm backdrop-blur-md transition hover:bg-black/65 hover:text-white active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
           >
             <span>{t('home.openVideo')}</span>
-            <ExternalLink size={13} />
+            <ExternalLink size={13} strokeWidth={2} className="text-white/80" />
           </button>
         )}
 
@@ -111,26 +117,12 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
           type="button"
           onClick={stopAndClose}
           aria-label="Close video"
-          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-md transition hover:bg-black/85 focus:outline-none focus:ring-2 focus:ring-white/60"
+          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/95 shadow-sm backdrop-blur-md transition hover:bg-black/65 hover:text-white active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
         >
-          <X size={18} />
+          <X size={17} />
         </button>
 
-        {loadError || !videoSrc ? (
-          <div className="flex aspect-[9/16] max-h-[calc(100dvh-2rem)] w-full flex-col items-center justify-center gap-3 px-6 text-center text-white">
-            <p className="text-sm font-medium text-white/85">{t('home.videoLoadError')}</p>
-            {externalUrl && (
-              <button
-                type="button"
-                onClick={handleOpenExternal}
-                className="inline-flex items-center gap-1.5 rounded-full bg-pink-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-pink-700"
-              >
-                <span>{t('home.openVideo')}</span>
-                <ExternalLink size={14} />
-              </button>
-            )}
-          </div>
-        ) : (
+        {videoSrc && !loadError ? (
           <video
             ref={videoRef}
             key={videoSrc}
@@ -143,6 +135,35 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
             onError={() => setLoadError(true)}
             className="max-h-[calc(100dvh-2rem)] w-full bg-black object-contain"
           />
+        ) : embedUrl && !loadError ? (
+          <iframe
+            key={embedUrl}
+            src={embedUrl}
+            title={video.title || embedInfo?.label || t('home.videoHighlights')}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            onError={() => setLoadError(true)}
+            className={`w-full border-0 bg-black ${
+              isLandscapeEmbed
+                ? 'aspect-video max-h-[calc(100dvh-2rem)]'
+                : 'aspect-[9/16] max-h-[calc(100dvh-2rem)]'
+            }`}
+          />
+        ) : (
+          <div className="flex aspect-[9/16] max-h-[calc(100dvh-2rem)] w-full flex-col items-center justify-center gap-3 px-6 text-center text-white">
+            <p className="text-sm font-medium text-white/85">{t('home.videoLoadError')}</p>
+            {externalUrl && (
+              <button
+                type="button"
+                onClick={handleOpenExternal}
+                className="inline-flex items-center gap-1.5 rounded-full bg-pink-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-pink-600/25 transition hover:bg-pink-500 active:scale-95"
+              >
+                <span>{t('home.openVideo')}</span>
+                <ExternalLink size={13} strokeWidth={2} />
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

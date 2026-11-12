@@ -58,4 +58,7 @@ if settings.ENABLE_API_DOCS:
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    local_media_url = getattr(settings, 'LOCAL_MEDIA_URL', '/media/')
+    if local_media_url != settings.MEDIA_URL:
+        urlpatterns += static(local_media_url, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

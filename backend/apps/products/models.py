@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db.models import Avg
 from django.utils import timezone
 from django.utils.text import slugify
+from utils.storage import get_local_media_storage
 
 
 def assign_unique_slug(instance, source, *, fallback='item', slug_field='slug'):
@@ -704,7 +705,12 @@ class VideoHighlight(models.Model):
     ]
 
     title = models.CharField(max_length=200)
-    video = models.FileField(upload_to='video_highlights/videos/', null=True, blank=True)
+    video = models.FileField(
+        upload_to='video_highlights/videos/',
+        storage=get_local_media_storage,
+        null=True,
+        blank=True,
+    )
     cover_image = models.ImageField(upload_to='video_highlights/covers/', null=True, blank=True)
     product_label = models.CharField(max_length=120, blank=True)
     product_label_km = models.CharField(max_length=120, blank=True)

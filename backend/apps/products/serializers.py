@@ -877,11 +877,12 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True, default='')
     product_slug = serializers.CharField(source='product.slug', read_only=True, default='')
     product_is_available = serializers.SerializerMethodField()
+    clear_video = serializers.BooleanField(write_only=True, required=False, default=False)
 
     ALLOWED_VIDEO_EXTS = {'.mp4', '.mov', '.webm', '.m4v'}
     ALLOWED_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
     MAX_VIDEO_BYTES = 50 * 1024 * 1024
-    MAX_RAW_VIDEO_BYTES = 150 * 1024 * 1024
+    MAX_RAW_VIDEO_BYTES = 500 * 1024 * 1024
     MAX_COVER_BYTES = 5 * 1024 * 1024
 
     class Meta:
@@ -890,7 +891,7 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
             'id', 'title', 'video', 'video_url', 'cover_image', 'cover_image_url',
             'product_label', 'product_label_km', 'caption', 'caption_km',
             'product', 'product_name', 'product_slug', 'product_is_available',
-            'original_video_url', 'display_order', 'status',
+            'original_video_url', 'display_order', 'status', 'clear_video',
             'created_by', 'updated_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'updated_by', 'created_at', 'updated_at']
@@ -959,14 +960,24 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        if self.instance is None:
-            if not attrs.get('video'):
-                raise serializers.ValidationError({'video': 'Video file is required.'})
-            if not attrs.get('cover_image'):
-                raise serializers.ValidationError({'cover_image': 'Cover image is required.'})
+        clear_video = bool(attrs.get('clear_video', False))
+        has_video = bool(attrs.get('video') or (not clear_video and getattr(self.instance, 'video', None)))
+        link_val = (
+            attrs.get('original_video_url')
+            if 'original_video_url' in attrs
+            else getattr(self.instance, 'original_video_url', '')
+        )
+        has_link = bool((link_val or '').strip())
+        if not has_video and not has_link:
+            raise serializers.ValidationError({
+                'original_video_url': 'Upload a video file or provide a YouTube, TikTok, Facebook, or Telegram link.',
+            })
+        if self.instance is None and not attrs.get('cover_image'):
+            raise serializers.ValidationError({'cover_image': 'Cover image is required.'})
         return attrs
 
     def create(self, validated_data):
+        validated_data.pop('clear_video', None)
         request = self.context.get('request')
         user = request.user if request and request.user.is_authenticated else None
         validated_data['created_by'] = user
@@ -974,6 +985,10 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
+        clear_video = validated_data.pop('clear_video', False)
+        if clear_video and not validated_data.get('video') and instance.video:
+            instance.video.delete(save=False)
+            validated_data['video'] = None
         request = self.context.get('request')
         user = request.user if request and request.user.is_authenticated else None
         validated_data['updated_by'] = user

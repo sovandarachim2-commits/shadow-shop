@@ -23,9 +23,11 @@ import { productsApi } from '@/api/products'
 import { compressImageForUpload } from '@/utils/imageUpload'
 import {
   AUTO_COMPRESS_ABOVE_BYTES,
+  MAX_RAW_VIDEO_BYTES,
   compressVideoForUpload,
   formatFileSize,
 } from '@/utils/videoUpload'
+import { parseVideoEmbed } from '@/utils/videoEmbed'
 
 const INITIAL_FORM = {
   title: '',
@@ -39,6 +41,7 @@ const INITIAL_FORM = {
   status: 'draft',
   videoFile: null,
   coverFile: null,
+  clearVideo: false,
 }
 
 function extractApiError(error, fallback) {
@@ -59,7 +62,7 @@ function extractApiError(error, fallback) {
       if (typeof val === 'string') return `${key}: ${val}`
     }
   }
-  return fallback
+  return error?.message || fallback
 }
 
 export default function VideoHighlights() {
@@ -144,6 +147,9 @@ export default function VideoHighlights() {
             toast.success(`Compressed video: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.finalSize)}`)
           }
         }
+        if (videoToUpload && videoToUpload.size > MAX_RAW_VIDEO_BYTES) {
+          throw new Error('Video file size must be 500 MB or smaller.')
+        }
 
         let coverToUpload = form.coverFile
         if (coverToUpload) {
@@ -166,6 +172,7 @@ export default function VideoHighlights() {
         fd.append('display_order', String(Number(form.display_order || 0)))
         fd.append('status', form.status || 'draft')
         if (videoToUpload) fd.append('video', videoToUpload)
+        else if (form.clearVideo) fd.append('clear_video', 'true')
         if (coverToUpload) fd.append('cover_image', coverToUpload)
 
         setUploadStage('Uploading… 0%')
@@ -242,6 +249,7 @@ export default function VideoHighlights() {
       status: item.status || 'draft',
       videoFile: null,
       coverFile: null,
+      clearVideo: false,
     })
     setShowFormModal(true)
   }
@@ -249,10 +257,14 @@ export default function VideoHighlights() {
   const handleSubmit = (event) => {
     event.preventDefault()
     if (!form.title.trim()) return toast.error('Title is required')
-    if (!editingVideo && !form.videoFile) return toast.error('Please upload a video file')
+    const hasUploadedVideo = Boolean(form.videoFile || (editingVideo?.video_url && !form.clearVideo))
+    const hasVideoLink = Boolean(form.original_video_url.trim())
+    if (!hasUploadedVideo && !hasVideoLink) {
+      return toast.error('Please upload a video file or enter a YouTube, TikTok, Facebook, or Telegram link')
+    }
     if (!editingVideo && !form.coverFile) return toast.error('Please upload a cover image')
     if (form.original_video_url.trim() && !form.original_video_url.trim().startsWith('https://')) {
-      return toast.error('Original video link must start with https://')
+      return toast.error('Video link must start with https://')
     }
     saveMutation.mutate()
   }
@@ -269,7 +281,7 @@ export default function VideoHighlights() {
   const buildFormPreviewItem = () => ({
     id: editingVideo?.id || 'preview',
     title: form.title || 'Preview Video',
-    video_url: videoObjectUrl || editingVideo?.video_url || '',
+    video_url: form.clearVideo && !videoObjectUrl ? '' : (videoObjectUrl || editingVideo?.video_url || ''),
     cover_image_url: coverObjectUrl || editingVideo?.cover_image_url || '',
     product_label: form.product_label,
     product_label_km: form.product_label_km,
@@ -358,6 +370,11 @@ export default function VideoHighlights() {
                   <p className="font-semibold text-gray-900">{item.title}</p>
                   {item.product_label && (
                     <p className="text-xs text-gray-500">{item.product_label}</p>
+                  )}
+                  {!item.video_url && item.original_video_url && (
+                    <span className="mt-0.5 inline-block rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                      {parseVideoEmbed(item.original_video_url)?.embedUrl ? 'Iframe Embed' : 'External Link'}
+                    </span>
                   )}
                 </Td>
                 <Td>
@@ -464,35 +481,55 @@ export default function VideoHighlights() {
           {/* Uploads */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">Video Upload {editingVideo ? '(optional)' : '*'}</label>
+              <label className="label">Video Upload (optional if embed link added)</label>
               <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-4 text-center transition hover:border-pink-400 hover:bg-pink-50/40">
                 <Upload size={18} className="text-pink-600" />
                 <span className="text-xs font-semibold text-gray-700">
                   {form.videoFile
                     ? `${form.videoFile.name} (${formatFileSize(form.videoFile.size)})`
-                    : editingVideo?.video_url
-                      ? 'Replace current video'
+                    : editingVideo?.video_url && !form.clearVideo
+                      ? 'Replace current uploaded video'
                       : 'Choose MP4, MOV, WebM'}
                 </span>
                 <span className="text-[11px] text-gray-400">
-                  Portrait 9:16 • Auto-compressed if &gt; 18 MB (max 150 MB raw / 50 MB stored)
+                  Portrait 9:16 • Auto-compressed if &gt; 18 MB (max 500 MB raw / 50 MB stored)
                 </span>
                 <input
                   type="file"
                   accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v"
-                  onChange={(e) => setForm({ ...form, videoFile: e.target.files?.[0] || null })}
+                  onChange={(e) => setForm({ ...form, videoFile: e.target.files?.[0] || null, clearVideo: false })}
                   className="hidden"
                 />
               </label>
-              <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={compressLargeVideo}
-                  onChange={(e) => setCompressLargeVideo(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                />
-                <span>Compress large video before upload (saves storage)</span>
-              </label>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={compressLargeVideo}
+                    onChange={(e) => setCompressLargeVideo(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                  />
+                  <span>Compress large video before upload</span>
+                </label>
+                {editingVideo?.video_url && !form.clearVideo && !form.videoFile && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, clearVideo: true })}
+                    className="text-xs font-semibold text-red-600 hover:underline"
+                  >
+                    Remove uploaded file
+                  </button>
+                )}
+                {form.clearVideo && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, clearVideo: false })}
+                    className="text-xs font-semibold text-gray-600 hover:underline"
+                  >
+                    Keep existing file
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -589,14 +626,33 @@ export default function VideoHighlights() {
           </div>
 
           <div>
-            <label className="label">Original Video Link (optional HTTPS)</label>
+            <label className="label">Video Link / Iframe Embed (YouTube, TikTok, Facebook, Telegram)</label>
             <input
               type="url"
               value={form.original_video_url}
               onChange={(e) => setForm({ ...form, original_video_url: e.target.value })}
               className="input-field"
-              placeholder="https://www.tiktok.com/... or https://www.instagram.com/..."
+              placeholder="https://youtube.com/shorts/..., https://tiktok.com/@user/video/..., https://facebook.com/reel/..., https://t.me/channel/123"
             />
+            {form.original_video_url.trim() && (() => {
+              const info = parseVideoEmbed(form.original_video_url)
+              if (!info) {
+                return (
+                  <p className="mt-1 text-[11px] font-medium text-amber-600">
+                    Enter a valid HTTPS URL (e.g. YouTube, TikTok, Facebook, or public Telegram post).
+                  </p>
+                )
+              }
+              return info.embedUrl ? (
+                <p className="mt-1 text-[11px] font-medium text-emerald-600">
+                  {info.label} iframe embed ready — no server video upload required.
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] font-medium text-amber-600">
+                  {info.reason || `${info.label} will open externally when tapped.`}
+                </p>
+              )
+            })()}
           </div>
 
           <div className="flex flex-wrap gap-3 border-t border-gray-100 pt-4">
