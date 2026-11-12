@@ -9,7 +9,6 @@ from .models import (
     Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster, VideoHighlight,
 )
 from utils.image_optimization import card_variant_url, optimize_uploaded_image
-from utils.video_optimization import is_ffmpeg_available, optimize_uploaded_video
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -882,8 +881,7 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
 
     ALLOWED_VIDEO_EXTS = {'.mp4', '.mov', '.webm', '.m4v'}
     ALLOWED_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
-    MAX_VIDEO_BYTES = 50 * 1024 * 1024
-    MAX_RAW_VIDEO_BYTES = 500 * 1024 * 1024
+    MAX_VIDEO_BYTES = 500 * 1024 * 1024
     MAX_COVER_BYTES = 5 * 1024 * 1024
 
     class Meta:
@@ -953,13 +951,9 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
         name = (getattr(value, 'name', '') or '').lower()
         if not any(name.endswith(ext) for ext in self.ALLOWED_VIDEO_EXTS):
             raise serializers.ValidationError('Video must be MP4, MOV, WebM, or M4V.')
-        raw_limit = self.MAX_RAW_VIDEO_BYTES if is_ffmpeg_available() else self.MAX_VIDEO_BYTES
-        if getattr(value, 'size', 0) > raw_limit:
-            limit_mb = raw_limit // (1024 * 1024)
-            raise serializers.ValidationError(f'Video file size must be {limit_mb} MB or smaller.')
-        value = optimize_uploaded_video(value, max_bytes=self.MAX_VIDEO_BYTES)
         if getattr(value, 'size', 0) > self.MAX_VIDEO_BYTES:
-            raise serializers.ValidationError('Video file size must be 50 MB or smaller after compression.')
+            limit_mb = self.MAX_VIDEO_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f'Video file size must be {limit_mb} MB or smaller.')
         return value
 
     def validate_cover_image(self, value):

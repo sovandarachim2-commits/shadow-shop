@@ -97,7 +97,7 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
         ref={modalRef}
         onClick={(event) => event.stopPropagation()}
         className={`relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-neutral-950 shadow-[0_24px_64px_rgba(0,0,0,0.35)] ring-1 ring-black/15 ${
-          isLandscapeEmbed ? 'max-w-[720px]' : 'max-w-[420px]'
+          isLandscapeEmbed ? 'max-w-[min(94vw,1080px)]' : 'max-w-[480px]'
         }`}
       >
         {embedUrl && !videoSrc && !loadError ? (
@@ -180,8 +180,8 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
               embedInfo?.provider === 'telegram' ? 'bg-white' : 'bg-black'
             } ${
               isLandscapeEmbed
-                ? 'aspect-video max-h-[calc(100dvh-5.5rem)]'
-                : 'aspect-[9/16] max-h-[calc(100dvh-5.5rem)]'
+                ? 'aspect-video max-h-[calc(100dvh-5rem)]'
+                : 'aspect-[9/16] max-h-[calc(100dvh-5rem)]'
             }`}
           />
         ) : (

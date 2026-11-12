@@ -43,7 +43,7 @@ export function parseVideoEmbed(rawUrl) {
       return {
         provider: 'youtube',
         label: 'YouTube',
-        embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`,
+        embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`,
         aspect: isShorts ? 'portrait' : 'landscape',
         externalUrl: parsed.toString(),
       }
@@ -86,7 +86,7 @@ export function parseVideoEmbed(rawUrl) {
       return {
         provider: 'facebook',
         label: 'Facebook',
-        embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(parsed.toString())}&show_text=false`,
+        embedUrl: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(parsed.toString())}&show_text=false&width=${isReel ? 540 : 960}`,
         aspect: isReel ? 'portrait' : 'landscape',
         externalUrl: parsed.toString(),
       }

@@ -22,9 +22,7 @@ import VideoHighlightModal from '@/components/customer/VideoHighlightModal'
 import { productsApi } from '@/api/products'
 import { compressImageForUpload } from '@/utils/imageUpload'
 import {
-  AUTO_COMPRESS_ABOVE_BYTES,
   MAX_RAW_VIDEO_BYTES,
-  compressVideoForUpload,
   formatFileSize,
 } from '@/utils/videoUpload'
 import { parseVideoEmbed } from '@/utils/videoEmbed'
@@ -51,7 +49,7 @@ function extractApiError(error, fallback) {
   const status = error?.response?.status
   const data = error?.response?.data
   if (status === 413 || (typeof data === 'string' && data.includes('413'))) {
-    return 'Video is too large for the server (HTTP 413). Keep compression enabled or upload a smaller file.'
+    return 'Video is too large for the server (HTTP 413). Maximum allowed video size is 500 MB.'
   }
   if (typeof data === 'string' && data.trim()) {
     if (data.trim().startsWith('<')) return fallback
@@ -82,7 +80,6 @@ export default function VideoHighlights() {
 
   const [videoObjectUrl, setVideoObjectUrl] = useState('')
   const [coverObjectUrl, setCoverObjectUrl] = useState('')
-  const [compressLargeVideo, setCompressLargeVideo] = useState(true)
   const [uploadStage, setUploadStage] = useState('')
 
   useEffect(() => {
@@ -139,17 +136,7 @@ export default function VideoHighlights() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       try {
-        let videoToUpload = form.videoFile
-        if (videoToUpload && compressLargeVideo && videoToUpload.size > AUTO_COMPRESS_ABOVE_BYTES) {
-          setUploadStage('Compressing video… 0%')
-          const result = await compressVideoForUpload(videoToUpload, {
-            onProgress: (pct) => setUploadStage(`Compressing video… ${pct}%`),
-          })
-          videoToUpload = result.file
-          if (result.compressed) {
-            toast.success(`Compressed video: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.finalSize)}`)
-          }
-        }
+        const videoToUpload = form.videoFile
         if (videoToUpload && videoToUpload.size > MAX_RAW_VIDEO_BYTES) {
           throw new Error('Video file size must be 500 MB or smaller.')
         }
@@ -511,7 +498,7 @@ export default function VideoHighlights() {
                       : 'Choose MP4, MOV, WebM'}
                 </span>
                 <span className="text-[11px] text-gray-400">
-                  Portrait 9:16 • Auto-compressed if &gt; 18 MB (max 500 MB raw / 50 MB stored)
+                  Portrait 9:16 • Original quality (max 500 MB)
                 </span>
                 <input
                   type="file"
@@ -520,35 +507,28 @@ export default function VideoHighlights() {
                   className="hidden"
                 />
               </label>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={compressLargeVideo}
-                    onChange={(e) => setCompressLargeVideo(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                  />
-                  <span>Compress large video before upload</span>
-                </label>
-                {editingVideo?.video_url && !form.clearVideo && !form.videoFile && (
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, clearVideo: true })}
-                    className="text-xs font-semibold text-red-600 hover:underline"
-                  >
-                    Remove uploaded file
-                  </button>
-                )}
-                {form.clearVideo && (
-                  <button
-                    type="button"
-                    onClick={() => setForm({ ...form, clearVideo: false })}
-                    className="text-xs font-semibold text-gray-600 hover:underline"
-                  >
-                    Keep existing file
-                  </button>
-                )}
-              </div>
+              {(editingVideo?.video_url || form.clearVideo) && (
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                  {editingVideo?.video_url && !form.clearVideo && !form.videoFile && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, clearVideo: true })}
+                      className="text-xs font-semibold text-red-600 hover:underline"
+                    >
+                      Remove uploaded file
+                    </button>
+                  )}
+                  {form.clearVideo && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, clearVideo: false })}
+                      className="text-xs font-semibold text-gray-600 hover:underline"
+                    >
+                      Keep existing file
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
