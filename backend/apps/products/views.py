@@ -10,12 +10,12 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
 from django.db.models import Count, F, Q
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster, VideoHighlight
 from .serializers import (
     BrandSerializer, CategorySerializer, ProductListSerializer, ProductDetailSerializer,
     ProductWriteSerializer, ProductImageSerializer, ProductSetImageSerializer, ProductSetSerializer,
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
-    AnnouncementSerializer, OfferPosterSerializer,
+    AnnouncementSerializer, OfferPosterSerializer, VideoHighlightSerializer,
 )
 from .flash_sale_stats import attach_flash_sale_stats
 from utils.image_optimization import ensure_card_variant, optimize_uploaded_image
@@ -901,6 +901,13 @@ class HomeFeedView(generics.GenericAPIView):
             'best_sellers': ProductListSerializer(best_sellers, many=True, context=ctx).data,
             'flash_sale': ProductListSerializer(flash_qs, many=True, context=ctx).data,
             'new_arrivals': ProductListSerializer(new_arrivals, many=True, context=ctx).data,
+            'video_highlights': VideoHighlightSerializer(
+                VideoHighlight.objects.filter(status=VideoHighlight.STATUS_PUBLISHED)
+                .select_related('product')
+                .order_by('display_order', '-created_at'),
+                many=True,
+                context=ctx,
+            ).data,
         }
         safe_cache_set(HOME_FEED_CACHE_KEY, payload, HOME_FEED_TTL)
         return Response(payload)
@@ -1535,3 +1542,90 @@ class OfferPosterViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(eligible, many=True)
         return Response(serializer.data)
+
+
+class VideoHighlightViewSet(viewsets.ModelViewSet):
+    queryset = VideoHighlight.objects.select_related('product', 'created_by', 'updated_by').all()
+    serializer_class = VideoHighlightSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_module = 'marketing_videos'
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['status', 'product']
+    search_fields = ['title', 'product_label', 'product_label_km', 'caption', 'caption_km', 'product__name']
+    ordering_fields = ['display_order', 'created_at', 'updated_at']
+    ordering = ['display_order', '-created_at']
+
+    def get_permissions(self):
+        if self.action == 'public':
+            return [AllowAny()]
+        return super().get_permissions()
+
+    def _log(self, action_name, video_obj, description):
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action=action_name,
+            module='marketing_videos',
+            description=description,
+            request=self.request,
+            object_id=video_obj.pk,
+            object_type='VideoHighlight',
+        )
+
+    def perform_create(self, serializer):
+        video_obj = serializer.save()
+        bump_storefront_cache()
+        self._log('create', video_obj, f'Created video highlight: {video_obj.title}')
+
+    def perform_update(self, serializer):
+        video_obj = serializer.save()
+        bump_storefront_cache()
+        self._log('update', video_obj, f'Updated video highlight: {video_obj.title}')
+
+    def perform_destroy(self, instance):
+        title = instance.title
+        if instance.video:
+            instance.video.delete(save=False)
+        if instance.cover_image:
+            instance.cover_image.delete(save=False)
+        instance.delete()
+        bump_storefront_cache()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='delete',
+            module='marketing_videos',
+            description=f'Deleted video highlight: {title}',
+            request=self.request,
+            object_type='VideoHighlight',
+        )
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        video_obj = self.get_object()
+        video_obj.status = VideoHighlight.STATUS_PUBLISHED
+        video_obj.updated_by = request.user
+        video_obj.save(update_fields=['status', 'updated_by', 'updated_at'])
+        bump_storefront_cache()
+        self._log('update', video_obj, f'Published video highlight: {video_obj.title}')
+        return Response(self.get_serializer(video_obj).data)
+
+    @action(detail=True, methods=['post'])
+    def unpublish(self, request, pk=None):
+        video_obj = self.get_object()
+        video_obj.status = VideoHighlight.STATUS_DRAFT
+        video_obj.updated_by = request.user
+        video_obj.save(update_fields=['status', 'updated_by', 'updated_at'])
+        bump_storefront_cache()
+        self._log('update', video_obj, f'Unpublished video highlight: {video_obj.title}')
+        return Response(self.get_serializer(video_obj).data)
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def public(self, request):
+        videos = (
+            VideoHighlight.objects.filter(status=VideoHighlight.STATUS_PUBLISHED)
+            .select_related('product')
+            .order_by('display_order', '-created_at')
+        )
+        return Response(self.get_serializer(videos, many=True).data)

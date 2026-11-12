@@ -4,7 +4,10 @@ from rest_framework import serializers
 from django.db import IntegrityError
 from django.db.models import Sum
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster
+from .models import (
+    Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem,
+    Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster, VideoHighlight,
+)
 from utils.image_optimization import card_variant_url
 
 
@@ -864,4 +867,107 @@ class OfferPosterSerializer(serializers.ModelSerializer):
             validated_data['approval_status'] = OfferPoster.APPROVAL_PENDING
             validated_data['rejection_reason'] = ''
 
+        return super().update(instance, validated_data)
+
+
+class VideoHighlightSerializer(serializers.ModelSerializer):
+    video_url = serializers.SerializerMethodField()
+    cover_image_url = serializers.SerializerMethodField()
+    product_name = serializers.CharField(source='product.name', read_only=True, default='')
+    product_slug = serializers.CharField(source='product.slug', read_only=True, default='')
+    product_is_available = serializers.SerializerMethodField()
+
+    ALLOWED_VIDEO_EXTS = {'.mp4', '.mov', '.webm', '.m4v'}
+    ALLOWED_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+    MAX_VIDEO_BYTES = 50 * 1024 * 1024
+    MAX_COVER_BYTES = 5 * 1024 * 1024
+
+    class Meta:
+        model = VideoHighlight
+        fields = [
+            'id', 'title', 'video', 'video_url', 'cover_image', 'cover_image_url',
+            'product_label', 'product_label_km', 'caption', 'caption_km',
+            'product', 'product_name', 'product_slug', 'product_is_available',
+            'original_video_url', 'display_order', 'status',
+            'created_by', 'updated_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'updated_by', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'video': {'required': False, 'allow_null': True},
+            'cover_image': {'required': False, 'allow_null': True},
+            'original_video_url': {'required': False, 'allow_blank': True},
+        }
+
+    def _abs_url(self, file_field):
+        if not file_field:
+            return None
+        try:
+            url = file_field.url
+        except Exception:
+            return None
+        if str(url).startswith(('http://', 'https://')):
+            return url
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
+
+    def get_video_url(self, obj):
+        return self._abs_url(obj.video)
+
+    def get_cover_image_url(self, obj):
+        return self._abs_url(obj.cover_image)
+
+    def get_product_is_available(self, obj):
+        if not obj.product_id or not obj.product:
+            return False
+        return bool(obj.product.is_active and obj.product.is_available_for_sale)
+
+    def validate_video(self, value):
+        if not value:
+            return value
+        name = (getattr(value, 'name', '') or '').lower()
+        if not any(name.endswith(ext) for ext in self.ALLOWED_VIDEO_EXTS):
+            raise serializers.ValidationError('Video must be MP4, MOV, WebM, or M4V.')
+        if getattr(value, 'size', 0) > self.MAX_VIDEO_BYTES:
+            raise serializers.ValidationError('Video file size must be 50 MB or smaller.')
+        return value
+
+    def validate_cover_image(self, value):
+        if not value:
+            return value
+        name = (getattr(value, 'name', '') or '').lower()
+        if not any(name.endswith(ext) for ext in self.ALLOWED_IMAGE_EXTS):
+            raise serializers.ValidationError('Cover image must be PNG, JPG, JPEG, or WebP.')
+        if getattr(value, 'size', 0) > self.MAX_COVER_BYTES:
+            raise serializers.ValidationError('Cover image size must be 5 MB or smaller.')
+        return value
+
+    def validate_original_video_url(self, value):
+        url = (value or '').strip()
+        if not url:
+            return ''
+        parsed = urlparse(url)
+        if parsed.scheme != 'https' or not parsed.netloc:
+            raise serializers.ValidationError('Original video link must be a valid HTTPS URL.')
+        return url
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is None:
+            if not attrs.get('video'):
+                raise serializers.ValidationError({'video': 'Video file is required.'})
+            if not attrs.get('cover_image'):
+                raise serializers.ValidationError({'cover_image': 'Cover image is required.'})
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        validated_data['created_by'] = user
+        validated_data['updated_by'] = user
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        validated_data['updated_by'] = user
         return super().update(instance, validated_data)

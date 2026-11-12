@@ -277,21 +277,6 @@ export default function Notifications() {
     }
   }
 
-  const handleDisconnectTelegram = async () => {
-    if (telegramBusy) return
-    setTelegramBusy(true)
-    try {
-      const res = await authApi.telegramConnect.disconnect()
-      queryClient.setQueryData(['telegram-connect'], res.data)
-      setWaitingForTelegram(false)
-      toast.success(t('notificationsPage.telegramDisconnectedToast'))
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || t('common.error', 'Something went wrong'))
-    } finally {
-      setTelegramBusy(false)
-    }
-  }
-
   const categoryRows = [
     {
       key: 'promotions',
@@ -541,14 +526,6 @@ export default function Notifications() {
                       telegramStatus.telegram_notifications_enabled ? 'translate-x-5' : 'translate-x-0.5'
                     )}
                   />
-                </button>
-                <button
-                  type="button"
-                  disabled={telegramBusy}
-                  onClick={handleDisconnectTelegram}
-                  className="rounded-lg px-2 py-1 text-[11px] font-bold text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                >
-                  {t('notificationsPage.telegramDisconnect')}
                 </button>
               </div>
             ) : telegramDeepLink ? (

@@ -102,6 +102,7 @@ const FlashSales = lazyWithReload(() => import('@/pages/admin/products/FlashSale
 const Banners = lazyWithReload(() => import('@/pages/admin/products/Banners'))
 const AnnouncementBarAdmin = lazyWithReload(() => import('@/pages/admin/marketing/AnnouncementBar'))
 const PosterManagement = lazyWithReload(() => import('@/pages/admin/marketing/PosterManagement'))
+const VideoHighlights = lazyWithReload(() => import('@/pages/admin/marketing/VideoHighlights'))
 const StockDashboard = lazyWithReload(() => import('@/pages/admin/inventory/StockDashboard'))
 const StockMovements = lazyWithReload(() => import('@/pages/admin/inventory/StockMovements'))
 const StockTransfers = lazyWithReload(() => import('@/pages/admin/inventory/StockTransfers'))
@@ -694,6 +695,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'product_banners', path: '/admin/products/banners' },
   { module: 'marketing_announcements', path: '/admin/marketing/announcements' },
   { module: 'marketing_posters', path: '/admin/marketing/posters' },
+  { module: 'marketing_videos', path: '/admin/marketing/videos' },
   { module: 'inventory', path: '/admin/inventory' },
   { module: 'inventory_movements', path: '/admin/inventory/movements' },
   { module: 'inventory_storage', path: '/admin/inventory/storage' },
@@ -921,6 +923,7 @@ export default function App() {
             {/* Marketing */}
             <Route path="marketing/announcements" element={<LazyPage><AnnouncementBarAdmin /></LazyPage>} />
             <Route path="marketing/posters" element={<LazyPage><PosterManagement /></LazyPage>} />
+            <Route path="marketing/videos" element={<LazyPage><VideoHighlights /></LazyPage>} />
 
             {/* Inventory */}
             <Route path="inventory" element={<LazyPage><StockDashboard /></LazyPage>} />

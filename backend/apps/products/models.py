@@ -693,3 +693,53 @@ class OfferPoster(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class VideoHighlight(models.Model):
+    STATUS_DRAFT = 'draft'
+    STATUS_PUBLISHED = 'published'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_PUBLISHED, 'Published'),
+    ]
+
+    title = models.CharField(max_length=200)
+    video = models.FileField(upload_to='video_highlights/videos/', null=True, blank=True)
+    cover_image = models.ImageField(upload_to='video_highlights/covers/', null=True, blank=True)
+    product_label = models.CharField(max_length=120, blank=True)
+    product_label_km = models.CharField(max_length=120, blank=True)
+    caption = models.CharField(max_length=255, blank=True)
+    caption_km = models.CharField(max_length=255, blank=True)
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='video_highlights',
+    )
+    original_video_url = models.URLField(max_length=500, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_video_highlights',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_video_highlights',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'video_highlights'
+        ordering = ['display_order', '-created_at']
+
+    def __str__(self):
+        return self.title

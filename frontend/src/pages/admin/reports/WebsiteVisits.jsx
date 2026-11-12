@@ -106,7 +106,7 @@ export default function WebsiteVisits() {
       <PageHeader
         title="Website User Visits"
         subtitle="Track storefront traffic, unique visitors, top pages, and recent user visits"
-        action={
+        actions={
           <button
             type="button"
             onClick={() => refetch()}

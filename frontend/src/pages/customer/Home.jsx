@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 import WelcomeBonusModal from '@/components/rewards/WelcomeBonusModal'
+import VideoHighlightsSection from '@/components/customer/VideoHighlightsSection'
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const HOME_QUERY_OPTIONS = {
@@ -1059,6 +1060,13 @@ export default function Home() {
         )}
 
         <div className="h-2 bg-gray-50" />
+
+        {/* ════════════════════════════════════════════
+            VIDEO HIGHLIGHTS
+        ════════════════════════════════════════════ */}
+        <VideoHighlightsSection videos={homeData?.video_highlights || []} />
+
+        {(homeData?.video_highlights?.length > 0) && <div className="h-2 bg-gray-50" />}
 
         {/* ════════════════════════════════════════════
             BEST SELLERS

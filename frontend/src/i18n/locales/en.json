@@ -74,6 +74,10 @@
   "home": {
     "bestSeller": "Best Seller",
     "bestSellers": "Best Sellers",
+    "videoHighlights": "Video Highlights",
+    "openVideo": "Open video",
+    "shopNow": "Shop Now",
+    "videoLoadError": "Unable to load video. You can open it externally.",
     "bestBadge": "BEST",
     "categories": "Categories",
     "flashSale": "Flash Sale",

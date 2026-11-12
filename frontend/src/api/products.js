@@ -107,6 +107,22 @@ export const productsApi = {
     reject: (id, reason = '') => client.post(`/products/offer-posters/${id}/reject/`, { reason }),
     public: (params) => client.get('/products/offer-posters/public/', { params }),
   },
+  videoHighlights: {
+    list: (params) => client.get('/products/video-highlights/', { params }),
+    get: (id) => client.get(`/products/video-highlights/${id}/`),
+    create: (data, config = {}) => client.post('/products/video-highlights/', data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      ...config,
+    }),
+    update: (id, data, config = {}) => client.patch(`/products/video-highlights/${id}/`, data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      ...config,
+    }),
+    delete: (id) => client.delete(`/products/video-highlights/${id}/`),
+    publish: (id) => client.post(`/products/video-highlights/${id}/publish/`),
+    unpublish: (id) => client.post(`/products/video-highlights/${id}/unpublish/`),
+    public: (params) => client.get('/products/video-highlights/public/', { params }),
+  },
   home: {
     feed: () => client.get('/products/home/'),
   },
