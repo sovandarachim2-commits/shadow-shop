@@ -52,7 +52,7 @@ export default function WebsiteVisits() {
   const [device, setDevice] = useState('all')
   const [search, setSearch] = useState('')
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['admin-website-visits', days, device, search],
     queryFn: () =>
       authApi.visits
@@ -120,6 +120,11 @@ export default function WebsiteVisits() {
       />
 
       {/* Summary Cards */}
+      {isError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {error?.response?.data?.detail || error?.message || 'Failed to load website visits.'}
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => {
           const Icon = card.icon

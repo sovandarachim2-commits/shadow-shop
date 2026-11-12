@@ -2142,7 +2142,8 @@ class WebsiteVisitReportView(generics.GenericAPIView):
                 Q(path__icontains=search)
                 | Q(browser__icontains=search)
                 | Q(ip_address__icontains=search)
-                | Q(user__full_name__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
                 | Q(user__email__icontains=search)
                 | Q(user__username__icontains=search)
             )
@@ -2196,7 +2197,7 @@ class WebsiteVisitReportView(generics.GenericAPIView):
                 'id': visit.id,
                 'visitor_id': visit.visitor_id,
                 'user_id': visit.user_id,
-                'user_name': (visit.user.full_name or visit.user.username) if visit.user else 'Guest',
+                'user_name': (visit.user.get_full_name() or visit.user.username) if visit.user else 'Guest',
                 'user_email': visit.user.email if visit.user else '',
                 'path': visit.path,
                 'referrer': visit.referrer,
