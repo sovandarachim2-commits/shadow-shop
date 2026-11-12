@@ -644,8 +644,10 @@ export default function VideoHighlights() {
                 )
               }
               return info.embedUrl ? (
-                <p className="mt-1 text-[11px] font-medium text-emerald-600">
-                  {info.label} iframe embed ready — no server video upload required.
+                <p className={`mt-1 text-[11px] font-medium ${info.note ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {info.note
+                    ? `${info.label} iframe ready — ${info.note}`
+                    : `${info.label} iframe embed ready — no server video upload required.`}
                 </p>
               ) : (
                 <p className="mt-1 text-[11px] font-medium text-amber-600">

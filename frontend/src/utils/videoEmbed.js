@@ -103,6 +103,7 @@ export function parseVideoEmbed(rawUrl) {
         embedUrl: `https://t.me/${match[1]}/${match[2]}?embed=1`,
         aspect: 'portrait',
         externalUrl: parsed.toString(),
+        note: 'Telegram only plays videos under ~20 MB inside web embeds; larger videos show "Media is too big" and require opening Telegram.',
       }
     }
     return {

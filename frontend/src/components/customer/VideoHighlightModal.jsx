@@ -95,32 +95,63 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
       <div
         ref={modalRef}
         onClick={(event) => event.stopPropagation()}
-        className={`relative flex max-h-[calc(100dvh-1.5rem)] w-full items-center justify-center overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/15 ${
+        className={`relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-neutral-950 shadow-2xl ring-1 ring-white/15 ${
           isLandscapeEmbed ? 'max-w-[720px]' : 'max-w-[420px]'
         }`}
       >
-        {/* Top-left: View video */}
-        {externalUrl && (
-          <button
-            type="button"
-            onClick={handleOpenExternal}
-            className="absolute left-3 top-3 z-20 inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3.5 text-xs font-semibold tracking-tight text-white/95 shadow-sm backdrop-blur-md transition hover:bg-black/65 hover:text-white active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
-          >
-            <span>{t('home.openVideo')}</span>
-            <ExternalLink size={13} strokeWidth={2} className="text-white/80" />
-          </button>
-        )}
+        {embedUrl && !videoSrc && !loadError ? (
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-neutral-950 px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              {externalUrl && (
+                <button
+                  type="button"
+                  onClick={handleOpenExternal}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 text-xs font-semibold text-white/95 transition hover:bg-white/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
+                >
+                  <span>{t('home.openVideo')}</span>
+                  <ExternalLink size={12} strokeWidth={2} className="text-white/80" />
+                </button>
+              )}
+              {video.title && (
+                <span className="truncate text-xs font-medium text-white/70">{video.title}</span>
+              )}
+            </div>
+            <button
+              ref={closeBtnRef}
+              type="button"
+              onClick={stopAndClose}
+              aria-label="Close video"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/95 transition hover:bg-white/20 active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Top-left: View video */}
+            {externalUrl && (
+              <button
+                type="button"
+                onClick={handleOpenExternal}
+                className="absolute left-3 top-3 z-20 inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3.5 text-xs font-semibold tracking-tight text-white/95 shadow-sm backdrop-blur-md transition hover:bg-black/65 hover:text-white active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
+              >
+                <span>{t('home.openVideo')}</span>
+                <ExternalLink size={13} strokeWidth={2} className="text-white/80" />
+              </button>
+            )}
 
-        {/* Top-right: Close */}
-        <button
-          ref={closeBtnRef}
-          type="button"
-          onClick={stopAndClose}
-          aria-label="Close video"
-          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/95 shadow-sm backdrop-blur-md transition hover:bg-black/65 hover:text-white active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
-        >
-          <X size={17} />
-        </button>
+            {/* Top-right: Close */}
+            <button
+              ref={closeBtnRef}
+              type="button"
+              onClick={stopAndClose}
+              aria-label="Close video"
+              className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/95 shadow-sm backdrop-blur-md transition hover:bg-black/65 hover:text-white active:scale-95 focus:outline-none focus:ring-2 focus:ring-white/60"
+            >
+              <X size={17} />
+            </button>
+          </>
+        )}
 
         {videoSrc && !loadError ? (
           <video
@@ -144,10 +175,12 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
             onError={() => setLoadError(true)}
-            className={`w-full border-0 bg-black ${
+            className={`w-full border-0 ${
+              embedInfo?.provider === 'telegram' ? 'bg-white' : 'bg-black'
+            } ${
               isLandscapeEmbed
-                ? 'aspect-video max-h-[calc(100dvh-2rem)]'
-                : 'aspect-[9/16] max-h-[calc(100dvh-2rem)]'
+                ? 'aspect-video max-h-[calc(100dvh-5.5rem)]'
+                : 'aspect-[9/16] max-h-[calc(100dvh-5.5rem)]'
             }`}
           />
         ) : (
