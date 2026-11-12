@@ -767,6 +767,7 @@ export default function Profile() {
   const [activeModal, setActiveModal] = useState(null)
   const [activeView, setActiveView] = useState('profile')
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
+  const [copiedInviteCode, setCopiedInviteCode] = useState(false)
   const { t, i18n } = useTranslation()
   const isKhmer = i18n.language === 'km'
   const toggleLang = () => i18n.changeLanguage(isKhmer ? 'en' : 'km')
@@ -872,12 +873,12 @@ export default function Profile() {
     )
   }
 
-  const displayName = user.full_name || (user.first_name ? `${user.first_name} ${user.last_name}` : user.username)
+  const displayName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'User'
   const email = user.email || '—'
   const usernameDisplay = user.username ? `@${user.username}` : email
   const phone = user.phone || '—'
   const memberSince = user.created_at ? formatDate(user.created_at, 'MMM yyyy') : '—'
-  const initials = displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+  const initials = displayName.split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'U'
   const rewardPoints = rewardsSummary?.current_points ?? 0
   const nextTierPoints = rewardsSummary?.next_tier_points ?? 500
   const membershipLevel = rewardsSummary?.member_level || 'Classic'
@@ -888,7 +889,6 @@ export default function Profile() {
   const progressPct = rewardsSummary?.progress_pct ?? Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
   const rewardRedemptions = rewardsSummary?.redemptions ?? []
 
-  const [copiedInviteCode, setCopiedInviteCode] = useState(false)
   const copyInviteCode = () => {
     if (!user?.referral_code) return
     navigator.clipboard?.writeText(user.referral_code)
