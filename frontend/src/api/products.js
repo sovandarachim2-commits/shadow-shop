@@ -89,6 +89,24 @@ export const productsApi = {
     translate: (data) => client.post('/products/announcements/translate/', data),
     public: (params) => client.get('/products/announcements/public/', { params }),
   },
+  offerPosters: {
+    list: (params) => client.get('/products/offer-posters/', { params }),
+    get: (id) => client.get(`/products/offer-posters/${id}/`),
+    create: (data, config = {}) => client.post('/products/offer-posters/', data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      ...config,
+    }),
+    update: (id, data, config = {}) => client.patch(`/products/offer-posters/${id}/`, data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+      ...config,
+    }),
+    delete: (id) => client.delete(`/products/offer-posters/${id}/`),
+    publish: (id) => client.post(`/products/offer-posters/${id}/publish/`),
+    pause: (id) => client.post(`/products/offer-posters/${id}/pause/`),
+    approve: (id) => client.post(`/products/offer-posters/${id}/approve/`),
+    reject: (id, reason = '') => client.post(`/products/offer-posters/${id}/reject/`, { reason }),
+    public: (params) => client.get('/products/offer-posters/public/', { params }),
+  },
   home: {
     feed: () => client.get('/products/home/'),
   },

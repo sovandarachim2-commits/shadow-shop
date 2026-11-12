@@ -36,6 +36,7 @@ const PUBLIC_GET_PREFIXES = [
   '/products/promotions/',
   '/products/banners/',
   '/products/announcements/public/',
+  '/products/offer-posters/public/',
   '/products/revision/',
 ]
 

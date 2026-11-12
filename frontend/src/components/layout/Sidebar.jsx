@@ -13,7 +13,7 @@ import {
   UserCircle, Bell, Shield, Sliders, MessageCircle,
   MapPin, CreditCard, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
-  Flame, Gift, Ticket, Percent, SlidersHorizontal, Megaphone,
+  Flame, Gift, Ticket, Percent, SlidersHorizontal, Megaphone, Send,
 } from 'lucide-react'
 
 // `module` maps to the Permission.module value — used to check `view` access
@@ -50,6 +50,7 @@ const navItems = [
     icon: Megaphone,
     children: [
       { label: 'Announcement Bar', path: '/admin/marketing/announcements', icon: Megaphone, module: 'marketing_announcements' },
+      { label: 'Poster Management', path: '/admin/marketing/posters', icon: Image, module: 'marketing_posters' },
     ],
   },
   {
@@ -118,8 +119,9 @@ const navItems = [
     label: 'Administration',
     icon: Shield,
     children: [
-      { label: 'Users',              path: '/admin/users',    icon: Users,    module: 'users' },
-      { label: 'Roles & Permissions',path: '/admin/roles',    icon: Shield,   module: 'users_roles' },
+      { label: 'Users',              path: '/admin/users',          icon: Users,    module: 'users' },
+      { label: 'Telegram Alerts',    path: '/admin/users/telegram', icon: Send,     module: 'users' },
+      { label: 'Roles & Permissions',path: '/admin/roles',          icon: Shield,   module: 'users_roles' },
       { label: 'Activity Logs',      path: '/admin/activity', icon: Activity, module: 'users_activity' },
     ],
   },

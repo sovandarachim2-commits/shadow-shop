@@ -19,6 +19,8 @@ import { detectUserProvince } from '@/utils/addressHelpers'
 import { AddressForm } from '@/components/address/AddressFormModal'
 import { openTelegramLoginPopup } from '@/utils/telegramLogin'
 import { socialProfileStep } from '@/utils/profileCompletion'
+import { useReferralCodeCheck } from '@/hooks/useReferralCodeCheck'
+import ReferralCodeFeedback from '@/components/customer/ReferralCodeFeedback'
 import './AuthModal.css'
 // ─── Location Picker Helpers ──────────────────────────────────────────────────
 const EMPTY_CAMBODIA_ADMIN = {
@@ -386,6 +388,9 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
   // Profile Step States
   const [profileForm, setProfileForm] = useState({ full_name: '', phone: '', gender: '', email: '', friend_referral_code: '' })
   const [profileErrors, setProfileErrors] = useState({})
+  const referralCheck = useReferralCodeCheck(profileForm.friend_referral_code, {
+    enabled: Boolean(isOpen && view === 'completeProfile' && !user?.referred_by),
+  })
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const fileInputRef = useRef(null)
@@ -1018,7 +1023,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
             <h2 className="text-[26px] sm:text-[32px] font-bold tracking-tight text-slate-800 mb-3">{t('auth.welcome')}</h2>
             <p className="text-[16px] font-medium text-slate-400 mb-8">{t('auth.loginSubtitle')}</p>
 
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form onSubmit={handleLogin} autoComplete="off" className="space-y-6">
               <div>
                 <label htmlFor="shop-login-username" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.emailOrUsername')}</label>
                 <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
@@ -1026,8 +1031,10 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                   <input 
                     type="text" 
                     id="shop-login-username"
-                    name="username"
-                    autoComplete="username"
+                    name="login_identifier"
+                    autoComplete="off"
+                    readOnly
+                    onFocus={(e) => e.target.removeAttribute('readonly')}
                     autoCapitalize="none"
                     spellCheck={false}
                     required
@@ -1047,8 +1054,10 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                     type={showPass ? 'text' : 'password'} 
                     value={lf.password} 
                     id="shop-login-password"
-                    name="password"
-                    autoComplete="current-password"
+                    name="login_secret"
+                    autoComplete="new-password"
+                    readOnly
+                    onFocus={(e) => e.target.removeAttribute('readonly')}
                     required
                     onChange={(e) => setLf(f => ({ ...f, password: e.target.value }))}
                     placeholder={t('auth.passwordPlaceholder')}
@@ -1567,7 +1576,7 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                         autoCapitalize="characters"
                         spellCheck={false}
                         maxLength={20}
-                        aria-invalid={Boolean(profileErrors.friend_referral_code)}
+                        aria-invalid={Boolean(profileErrors.friend_referral_code || referralCheck.status === 'invalid')}
                         onChange={(e) => {
                           setProfileForm(f => ({ ...f, friend_referral_code: e.target.value.toUpperCase() }))
                           setProfileErrors(errors => ({ ...errors, friend_referral_code: '' }))
@@ -1575,12 +1584,18 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
                         placeholder={t('completeProfile.referralCodePlaceholder')}
                         className={cn(
                           "h-12 w-full rounded-xl border bg-white px-4 text-[15px] font-semibold uppercase tracking-wide text-slate-800 outline-none transition placeholder:font-medium placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-pink-300 focus:ring-4 focus:ring-pink-50",
-                          profileErrors.friend_referral_code ? "border-red-300" : "border-rose-100"
+                          (profileErrors.friend_referral_code || referralCheck.status === 'invalid')
+                            ? "border-red-300"
+                            : referralCheck.status === 'valid'
+                              ? "border-emerald-300"
+                              : "border-rose-100"
                         )}
                       />
-                      {profileErrors.friend_referral_code && (
-                        <p className="mt-1.5 px-1 text-[12px] font-semibold text-red-500">{profileErrors.friend_referral_code}</p>
-                      )}
+                      <ReferralCodeFeedback
+                        status={referralCheck.status}
+                        message={referralCheck.message}
+                        serverError={profileErrors.friend_referral_code}
+                      />
                     </div>
                   )}
                 </div>

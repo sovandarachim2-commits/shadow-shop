@@ -576,3 +576,118 @@ class Announcement(models.Model):
         if user is not None:
             self.updated_by = user
         self.save(update_fields=['status', 'has_unpublished_changes', 'updated_by', 'updated_at'])
+
+
+class OfferPoster(models.Model):
+    STATUS_DRAFT = 'draft'
+    STATUS_PUBLISHED = 'published'
+    STATUS_PAUSED = 'paused'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_PUBLISHED, 'Published'),
+        (STATUS_PAUSED, 'Paused'),
+    ]
+
+    APPROVAL_PENDING = 'pending'
+    APPROVAL_APPROVED = 'approved'
+    APPROVAL_REJECTED = 'rejected'
+    APPROVAL_CHOICES = [
+        (APPROVAL_PENDING, 'Pending'),
+        (APPROVAL_APPROVED, 'Approved'),
+        (APPROVAL_REJECTED, 'Rejected'),
+    ]
+
+    BUTTON_LABEL_CHOICES = [
+        ('Shop Now', 'Shop Now'),
+        ('View Flash Sale', 'View Flash Sale'),
+        ('Redeem Points', 'Redeem Points'),
+        ('View Details', 'View Details'),
+    ]
+
+    ACTION_STORE = 'store'
+    ACTION_FLASH_SALE = 'flash_sale'
+    ACTION_REWARDS = 'rewards'
+    ACTION_INTERNAL = 'internal'
+    ACTION_EXTERNAL = 'external'
+    ACTION_TYPE_CHOICES = [
+        (ACTION_STORE, 'Selected Store Page'),
+        (ACTION_FLASH_SALE, 'Flash Sale Page'),
+        (ACTION_REWARDS, 'Membership Rewards Page'),
+        (ACTION_INTERNAL, 'Internal Page'),
+        (ACTION_EXTERNAL, 'External URL'),
+    ]
+
+    AUDIENCE_EVERYONE = 'everyone'
+    AUDIENCE_GUESTS = 'guests'
+    AUDIENCE_LOGGED_IN = 'logged_in'
+    AUDIENCE_MEMBERSHIP = 'membership'
+    AUDIENCE_CHOICES = [
+        (AUDIENCE_EVERYONE, 'Everyone'),
+        (AUDIENCE_GUESTS, 'Guest Customers'),
+        (AUDIENCE_LOGGED_IN, 'Logged-in Customers'),
+        (AUDIENCE_MEMBERSHIP, 'Selected Membership Levels'),
+    ]
+
+    FREQ_SESSION = 'once_per_session'
+    FREQ_DAY = 'once_per_day'
+    FREQ_CAMPAIGN = 'once_per_campaign'
+    FREQUENCY_CHOICES = [
+        (FREQ_SESSION, 'Once per session'),
+        (FREQ_DAY, 'Once per day'),
+        (FREQ_CAMPAIGN, 'Once per campaign'),
+    ]
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    image = models.ImageField(upload_to='offer_posters/', null=True, blank=True)
+    mobile_image = models.ImageField(upload_to='offer_posters/mobile/', null=True, blank=True)
+    store = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='offer_posters',
+    )
+    button_label = models.CharField(max_length=40, choices=BUTTON_LABEL_CHOICES, default='Shop Now')
+    action_type = models.CharField(max_length=30, choices=ACTION_TYPE_CHOICES, default=ACTION_STORE)
+    action_url = models.CharField(max_length=500, blank=True)
+    target_audience = models.CharField(max_length=30, choices=AUDIENCE_CHOICES, default=AUDIENCE_EVERYONE)
+    membership_levels = models.JSONField(default=list, blank=True)
+    priority = models.PositiveIntegerField(default=0)
+    start_at = models.DateTimeField(null=True, blank=True)
+    end_at = models.DateTimeField(null=True, blank=True)
+    display_frequency = models.CharField(max_length=30, choices=FREQUENCY_CHOICES, default=FREQ_SESSION)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    approval_status = models.CharField(max_length=20, choices=APPROVAL_CHOICES, default=APPROVAL_PENDING)
+    rejection_reason = models.CharField(max_length=300, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_offer_posters',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_offer_posters',
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_offer_posters',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'offer_posters'
+        ordering = ['priority', '-created_at']
+
+    def __str__(self):
+        return self.title

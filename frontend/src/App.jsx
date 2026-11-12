@@ -101,6 +101,7 @@ const ProductSets = lazyWithReload(() => import('@/pages/admin/products/ProductS
 const FlashSales = lazyWithReload(() => import('@/pages/admin/products/FlashSales'))
 const Banners = lazyWithReload(() => import('@/pages/admin/products/Banners'))
 const AnnouncementBarAdmin = lazyWithReload(() => import('@/pages/admin/marketing/AnnouncementBar'))
+const PosterManagement = lazyWithReload(() => import('@/pages/admin/marketing/PosterManagement'))
 const StockDashboard = lazyWithReload(() => import('@/pages/admin/inventory/StockDashboard'))
 const StockMovements = lazyWithReload(() => import('@/pages/admin/inventory/StockMovements'))
 const StockTransfers = lazyWithReload(() => import('@/pages/admin/inventory/StockTransfers'))
@@ -126,6 +127,7 @@ const ProductReport = lazyWithReload(() => import('@/pages/admin/reports/Product
 const InventoryReport = lazyWithReload(() => import('@/pages/admin/reports/InventoryReport'))
 const StockSold = lazyWithReload(() => import('@/pages/admin/reports/StockSold'))
 const Users = lazyWithReload(() => import('@/pages/admin/users/Users'))
+const TelegramSubscribers = lazyWithReload(() => import('@/pages/admin/users/TelegramSubscribers'))
 const Roles = lazyWithReload(() => import('@/pages/admin/users/Roles'))
 const ActivityLogs = lazyWithReload(() => import('@/pages/admin/users/ActivityLogs'))
 const AdminProfile = lazyWithReload(() => import('@/pages/admin/users/AdminProfile'))
@@ -690,6 +692,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'product_flash_sale', path: '/admin/products/flash-sale' },
   { module: 'product_banners', path: '/admin/products/banners' },
   { module: 'marketing_announcements', path: '/admin/marketing/announcements' },
+  { module: 'marketing_posters', path: '/admin/marketing/posters' },
   { module: 'inventory', path: '/admin/inventory' },
   { module: 'inventory_movements', path: '/admin/inventory/movements' },
   { module: 'inventory_storage', path: '/admin/inventory/storage' },
@@ -714,6 +717,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'reports_products', path: '/admin/reports/products' },
   { module: 'reports_inventory', path: '/admin/reports/inventory' },
   { module: 'users', path: '/admin/users' },
+  { module: 'users', path: '/admin/users/telegram' },
   { module: 'users_roles', path: '/admin/roles' },
   { module: 'users_activity', path: '/admin/activity' },
   { module: 'settings', path: '/admin/settings' },
@@ -915,6 +919,7 @@ export default function App() {
 
             {/* Marketing */}
             <Route path="marketing/announcements" element={<LazyPage><AnnouncementBarAdmin /></LazyPage>} />
+            <Route path="marketing/posters" element={<LazyPage><PosterManagement /></LazyPage>} />
 
             {/* Inventory */}
             <Route path="inventory" element={<LazyPage><StockDashboard /></LazyPage>} />
@@ -965,6 +970,7 @@ export default function App() {
             {/* Administration */}
             <Route path="profile" element={<LazyPage><AdminProfile /></LazyPage>} />
             <Route path="users" element={<LazyPage><Users /></LazyPage>} />
+            <Route path="users/telegram" element={<LazyPage><TelegramSubscribers /></LazyPage>} />
             <Route path="roles" element={<LazyPage><Roles /></LazyPage>} />
             <Route path="activity" element={<LazyPage><ActivityLogs /></LazyPage>} />
 

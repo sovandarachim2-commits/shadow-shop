@@ -22,6 +22,8 @@ import { cn, formatCurrency, formatDate } from '@/utils/helpers'
 import { useUnreadNotificationCount } from '@/utils/notifications'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { formatAddressLocationKhmer, formatAddressRecordKhmer } from '@/utils/addressHelpers'
+import { useReferralCodeCheck } from '@/hooks/useReferralCodeCheck'
+import ReferralCodeFeedback from '@/components/customer/ReferralCodeFeedback'
 import './ProfileEditor.css'
 
 function firstApiMessage(value) {
@@ -129,6 +131,10 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
     phone: normalizeCambodiaPhone(user.phone),
     gender: user.gender || '',
     friend_referral_code: '',
+  })
+
+  const referralCheck = useReferralCodeCheck(form.friend_referral_code, {
+    enabled: !user.referred_by,
   })
 
   const initials = [user.first_name, user.last_name].filter(Boolean).map((n) => n[0]).join('').toUpperCase() || user.username?.[0]?.toUpperCase() || '?'
@@ -348,6 +354,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
                   placeholder={t('completeProfile.referralCodePlaceholder')}
                   icon={Gift}
                 />
+                <ReferralCodeFeedback status={referralCheck.status} message={referralCheck.message} />
                 <p className="mt-2 text-xs font-medium text-gray-400">
                   {t('completeProfile.referralCodeHelper')}
                 </p>

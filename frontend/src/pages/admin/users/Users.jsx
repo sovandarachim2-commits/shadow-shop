@@ -340,13 +340,14 @@ export default function Users() {
               <Th>Role</Th>
               <Th>Phone</Th>
               <Th>Telegram</Th>
+              <Th>Telegram Subscribe</Th>
               <Th>Status</Th>
               <Th>Joined</Th>
               <Th>Actions</Th>
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={10} />}
+            {isLoading && <LoadingRows cols={11} />}
             {!isLoading && users.map((u, index) => {
               const roleConf = getRoleConfig(u.role)
               return (
@@ -369,6 +370,15 @@ export default function Users() {
                       <p>{u.telegram_username ? `@${u.telegram_username}` : '-'}</p>
                       {u.telegram_id && <p className="mt-1 font-mono text-xs text-gray-500">ID: {u.telegram_id}</p>}
                     </div>
+                  </Td>
+                  <Td>
+                    {!u.telegram_id ? (
+                      <Badge variant="default">Not Connected</Badge>
+                    ) : u.telegram_notifications_enabled ? (
+                      <Badge variant="success">Subscribed</Badge>
+                    ) : (
+                      <Badge variant="warning">Paused</Badge>
+                    )}
                   </Td>
                   <Td>
                     <StatusSwitch
@@ -399,7 +409,7 @@ export default function Users() {
               )
             })}
             {!isLoading && users.length === 0 && (
-              <tr><td colSpan={9}><EmptyState message="No users found" icon={Shield} /></td></tr>
+              <tr><td colSpan={11}><EmptyState message="No users found" icon={Shield} /></td></tr>
             )}
           </Tbody>
         </Table>

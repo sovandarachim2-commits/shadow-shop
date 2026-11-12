@@ -283,3 +283,6 @@ sudo systemctl restart shadow_shop
 ```
 
 After this, `http://your-domain.com` redirects to `https://your-domain.com`.
+
+cd "c:\xampp\htdocs\Shadow Shop\backend"
+.\venv\Scripts\python.exe manage.py migrate

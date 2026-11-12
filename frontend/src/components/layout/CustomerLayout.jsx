@@ -49,6 +49,7 @@ import { ordersApi } from '@/api/orders'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import AnnouncementBar from '@/components/customer/AnnouncementBar'
+import OffersForYouModal from '@/components/customer/OffersForYouModal'
 import BottomNavigation from '@/components/BottomNavigation'
 import useScrollNavVisible from '@/hooks/useScrollNavVisible'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
@@ -1268,6 +1269,8 @@ export default function CustomerLayout() {
         onClose={closeAuthModal}
         type={authModal.type}
       />
+
+      <OffersForYouModal />
 
     </div>
   )

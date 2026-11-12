@@ -1391,13 +1391,22 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['role', 'is_active']
-    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone']
+    search_fields = ['username', 'first_name', 'last_name', 'email', 'phone', 'telegram_username', 'telegram_id']
     ordering_fields = ['created_at', 'username']
 
     def get_queryset(self):
-        return User.objects.annotate(
+        qs = User.objects.annotate(
             annotated_has_address=Exists(Address.objects.filter(user_id=OuterRef('pk')))
         ).order_by('-created_at')
+        tg_connected = self.request.query_params.get('telegram_connected')
+        if str(tg_connected).lower() in ('1', 'true', 'yes'):
+            qs = qs.filter(telegram_id__isnull=False).exclude(telegram_id='')
+        tg_enabled = self.request.query_params.get('telegram_notifications_enabled')
+        if str(tg_enabled).lower() in ('1', 'true', 'yes'):
+            qs = qs.filter(telegram_notifications_enabled=True)
+        elif str(tg_enabled).lower() in ('0', 'false', 'no'):
+            qs = qs.filter(telegram_notifications_enabled=False)
+        return qs
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -1991,3 +2000,44 @@ class SiteSettingsFaviconView(generics.GenericAPIView):
             target = site_settings.logo.url
         safe_cache_set(cache_key, target, 300)
         return HttpResponseRedirect(target)
+
+
+class ReferralCodeCheckView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        code = str(request.query_params.get('code') or '').strip().upper()
+        if not code:
+            return Response({
+                'valid': False,
+                'reason': 'empty',
+                'message': 'Enter a referral code.',
+            })
+
+        if request.user and request.user.is_authenticated:
+            if request.user.referred_by_id:
+                return Response({
+                    'valid': False,
+                    'reason': 'already_saved',
+                    'message': 'A friend referral code has already been saved.',
+                })
+            if code == (request.user.referral_code or '').upper():
+                return Response({
+                    'valid': False,
+                    'reason': 'self',
+                    'message': 'You cannot use your own referral code.',
+                })
+
+        exists = User.objects.filter(referral_code=code, is_active=True).exists()
+        if not exists:
+            return Response({
+                'valid': False,
+                'reason': 'invalid',
+                'message': 'This friend referral code is invalid.',
+            })
+
+        return Response({
+            'valid': True,
+            'reason': 'valid',
+            'message': 'Referral code is valid!',
+        })

@@ -11,6 +11,8 @@ import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { cn } from '@/utils/helpers'
+import { useReferralCodeCheck } from '@/hooks/useReferralCodeCheck'
+import ReferralCodeFeedback from '@/components/customer/ReferralCodeFeedback'
 
 function copyWithTextarea(text) {
   const input = document.createElement('textarea')
@@ -69,6 +71,10 @@ export default function Referral() {
   const { data: user } = useQuery({
     queryKey: ['me'],
     queryFn: () => authApi.me().then(res => res.data),
+  })
+
+  const referralCheck = useReferralCodeCheck(friendReferralCode, {
+    enabled: Boolean(user && !user.referred_by),
   })
 
   const saveFriendCode = useMutation({
@@ -209,24 +215,40 @@ export default function Referral() {
                   <CheckCircle2 size={16} /> {t('rewardsPage.referral.friendCodeAlreadySaved')}
                 </div>
               ) : (
-                <form onSubmit={handleSaveFriendCode} className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <input
-                    value={friendReferralCode}
-                    onChange={(event) => setFriendReferralCode(event.target.value.toUpperCase())}
-                    placeholder={t('rewardsPage.referral.friendCodePlaceholder')}
-                    maxLength={20}
-                    autoComplete="off"
-                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base font-semibold uppercase tracking-wider text-slate-900 outline-none placeholder:font-medium placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-pink-400 focus:ring-4 focus:ring-pink-100"
-                  />
-                  <button
-                    type="submit"
-                    disabled={saveFriendCode.isPending || !friendReferralCode.trim()}
-                    className="inline-flex h-12 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#EC197A] px-4 text-base font-bold text-white transition hover:bg-[#D9166F] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 sm:w-auto"
-                  >
-                    {saveFriendCode.isPending && <Loader2 size={15} className="animate-spin" />}
-                    {t('rewardsPage.referral.saveFriendCode')}
-                  </button>
-                </form>
+                <div>
+                  <form onSubmit={handleSaveFriendCode} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      value={friendReferralCode}
+                      onChange={(event) => setFriendReferralCode(event.target.value.toUpperCase())}
+                      placeholder={t('rewardsPage.referral.friendCodePlaceholder')}
+                      maxLength={20}
+                      autoComplete="off"
+                      aria-invalid={referralCheck.status === 'invalid'}
+                      className={cn(
+                        'min-w-0 flex-1 rounded-xl border bg-white px-3 py-2.5 text-base font-semibold uppercase tracking-wider text-slate-900 outline-none placeholder:font-medium placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-pink-400 focus:ring-4 focus:ring-pink-100',
+                        referralCheck.status === 'invalid'
+                          ? 'border-red-300'
+                          : referralCheck.status === 'valid'
+                            ? 'border-emerald-300'
+                            : 'border-slate-200',
+                      )}
+                    />
+                    <button
+                      type="submit"
+                      disabled={
+                        saveFriendCode.isPending ||
+                        !friendReferralCode.trim() ||
+                        referralCheck.status === 'checking' ||
+                        referralCheck.status === 'invalid'
+                      }
+                      className="inline-flex h-12 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#EC197A] px-4 text-base font-bold text-white transition hover:bg-[#D9166F] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 sm:w-auto"
+                    >
+                      {saveFriendCode.isPending && <Loader2 size={15} className="animate-spin" />}
+                      {t('rewardsPage.referral.saveFriendCode')}
+                    </button>
+                  </form>
+                  <ReferralCodeFeedback status={referralCheck.status} message={referralCheck.message} />
+                </div>
               )}
             </div>
 

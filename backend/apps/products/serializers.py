@@ -4,7 +4,7 @@ from rest_framework import serializers
 from django.db import IntegrityError
 from django.db.models import Sum
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster
 from utils.image_optimization import card_variant_url
 
 
@@ -663,3 +663,191 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             instance.has_unpublished_changes = True
             instance.save(update_fields=['has_unpublished_changes'])
         return instance
+
+
+VALID_POSTER_MEMBERSHIP_TIERS = {
+    'classic', 'silver', 'gold', 'platinum', 'diamond', 'vip', 'elite', 'royal',
+}
+ALLOWED_POSTER_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+MAX_POSTER_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def _validate_poster_image(file_obj, label='Image'):
+    if not file_obj:
+        return file_obj
+    import os
+    ext = os.path.splitext(str(getattr(file_obj, 'name', '') or ''))[1].lower()
+    if ext and ext not in ALLOWED_POSTER_IMAGE_EXTENSIONS:
+        raise serializers.ValidationError(f'{label} must be PNG, JPG, JPEG, or WebP.')
+    size = getattr(file_obj, 'size', 0) or 0
+    if size > MAX_POSTER_IMAGE_BYTES:
+        raise serializers.ValidationError(f'{label} must be 5 MB or smaller.')
+    return file_obj
+
+
+class OfferPosterSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    mobile_image_url = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+    store_slug = serializers.SerializerMethodField()
+    resolved_action_url = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    remove_image = serializers.BooleanField(write_only=True, required=False, default=False)
+    remove_mobile_image = serializers.BooleanField(write_only=True, required=False, default=False)
+
+    class Meta:
+        model = OfferPoster
+        fields = [
+            'id', 'title', 'description',
+            'image', 'image_url', 'mobile_image', 'mobile_image_url',
+            'remove_image', 'remove_mobile_image',
+            'store', 'store_name', 'store_slug',
+            'button_label', 'action_type', 'action_url', 'resolved_action_url',
+            'target_audience', 'membership_levels',
+            'priority', 'start_at', 'end_at', 'display_frequency',
+            'status', 'approval_status', 'rejection_reason',
+            'created_by', 'created_by_name', 'approved_by', 'approved_at',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'approval_status', 'rejection_reason',
+            'created_by', 'approved_by', 'approved_at',
+            'created_at', 'updated_at',
+        ]
+
+    def _build_media_url(self, field_file):
+        if not field_file:
+            return None
+        url = field_file.url
+        request = self.context.get('request')
+        if request and url.startswith('/'):
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_image_url(self, obj):
+        return self._build_media_url(obj.image)
+
+    def get_mobile_image_url(self, obj):
+        return self._build_media_url(obj.mobile_image)
+
+    def get_store_name(self, obj):
+        return obj.store.name if obj.store else ''
+
+    def get_store_slug(self, obj):
+        return obj.store.slug if obj.store else ''
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return ''
+        full = f'{obj.created_by.first_name} {obj.created_by.last_name}'.strip()
+        return full or obj.created_by.username or obj.created_by.email or ''
+
+    def get_resolved_action_url(self, obj):
+        if obj.action_type == OfferPoster.ACTION_STORE:
+            return f'/shop?brand={obj.store.slug}' if obj.store else '/shop'
+        if obj.action_type == OfferPoster.ACTION_FLASH_SALE:
+            return '/flash-sale'
+        if obj.action_type == OfferPoster.ACTION_REWARDS:
+            return '/profile/rewards'
+        return obj.action_url or '/'
+
+    def validate_title(self, value):
+        cleaned = sanitize_announcement_text(value, 'Poster title')
+        if not cleaned:
+            raise serializers.ValidationError('Poster title is required.')
+        return cleaned
+
+    def validate_description(self, value):
+        return sanitize_announcement_text(value, 'Short description')
+
+    def validate_image(self, value):
+        return _validate_poster_image(value, 'Desktop poster image')
+
+    def validate_mobile_image(self, value):
+        return _validate_poster_image(value, 'Mobile poster image')
+
+    def validate_membership_levels(self, value):
+        if value in (None, ''):
+            return []
+        if isinstance(value, str):
+            import json
+            try:
+                value = json.loads(value)
+            except Exception:
+                value = [part.strip() for part in value.split(',') if part.strip()]
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Membership levels must be a list.')
+        cleaned = []
+        for item in value:
+            tier = str(item or '').strip().lower()
+            if tier in VALID_POSTER_MEMBERSHIP_TIERS and tier not in cleaned:
+                cleaned.append(tier)
+        return cleaned
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        inst = self.instance
+
+        start_at = attrs.get('start_at', getattr(inst, 'start_at', None))
+        end_at = attrs.get('end_at', getattr(inst, 'end_at', None))
+        if start_at and end_at and start_at >= end_at:
+            raise serializers.ValidationError({'end_at': 'End date and time must be after start date and time.'})
+
+        action_type = attrs.get('action_type', getattr(inst, 'action_type', OfferPoster.ACTION_STORE))
+        action_url = str(attrs.get('action_url', getattr(inst, 'action_url', '')) or '').strip()
+
+        if action_type == OfferPoster.ACTION_EXTERNAL:
+            parsed = urlparse(action_url)
+            if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+                raise serializers.ValidationError({'action_url': 'Enter a valid http:// or https:// URL.'})
+            attrs['action_url'] = action_url
+        elif action_type == OfferPoster.ACTION_INTERNAL:
+            if not action_url:
+                raise serializers.ValidationError({'action_url': 'Enter an internal page path (e.g. /shop).'})
+            if not action_url.startswith('/'):
+                action_url = f'/{action_url}'
+            attrs['action_url'] = action_url
+
+        target_audience = attrs.get('target_audience', getattr(inst, 'target_audience', OfferPoster.AUDIENCE_EVERYONE))
+        levels = attrs.get('membership_levels', getattr(inst, 'membership_levels', []))
+        if target_audience == OfferPoster.AUDIENCE_MEMBERSHIP and not levels:
+            raise serializers.ValidationError({'membership_levels': 'Select at least one membership level.'})
+
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('remove_image', False)
+        validated_data.pop('remove_mobile_image', False)
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        validated_data['created_by'] = user
+        validated_data['updated_by'] = user
+        if user and (user.is_superuser or getattr(user, 'role', '') == 'super_admin'):
+            validated_data['approval_status'] = OfferPoster.APPROVAL_APPROVED
+            validated_data['approved_by'] = user
+            validated_data['approved_at'] = timezone.now()
+        else:
+            validated_data['approval_status'] = OfferPoster.APPROVAL_PENDING
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        remove_image = validated_data.pop('remove_image', False)
+        remove_mobile_image = validated_data.pop('remove_mobile_image', False)
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        validated_data['updated_by'] = user
+
+        if remove_image and 'image' not in validated_data:
+            if instance.image:
+                instance.image.delete(save=False)
+            validated_data['image'] = None
+        if remove_mobile_image and 'mobile_image' not in validated_data:
+            if instance.mobile_image:
+                instance.mobile_image.delete(save=False)
+            validated_data['mobile_image'] = None
+
+        if user and not (user.is_superuser or getattr(user, 'role', '') == 'super_admin'):
+            validated_data['approval_status'] = OfferPoster.APPROVAL_PENDING
+            validated_data['rejection_reason'] = ''
+
+        return super().update(instance, validated_data)

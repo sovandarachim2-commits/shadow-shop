@@ -24,6 +24,7 @@ export const authApi = {
   telegramOtpLogin: (data) => client.post('/auth/telegram/otp-login/', data),
   logout: (refresh) => client.post('/auth/logout/', { refresh }),
   me: () => client.get('/auth/me/'),
+  checkReferralCode: (code, signal) => client.get('/auth/referral/check/', { params: { code }, signal }),
   updateMe: (data) => client.patch('/auth/me/', data, {
     headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
   }),

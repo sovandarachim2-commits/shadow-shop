@@ -10,12 +10,12 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
 from django.db.models import Count, F, Q
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster
 from .serializers import (
     BrandSerializer, CategorySerializer, ProductListSerializer, ProductDetailSerializer,
     ProductWriteSerializer, ProductImageSerializer, ProductSetImageSerializer, ProductSetSerializer,
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
-    AnnouncementSerializer,
+    AnnouncementSerializer, OfferPosterSerializer,
 )
 from .flash_sale_stats import attach_flash_sale_stats
 from utils.image_optimization import ensure_card_variant, optimize_uploaded_image
@@ -1185,3 +1185,228 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
 
         visible.sort(key=lambda x: (int(x.get('priority') or 0), int(x.get('id') or 0)))
         return Response(visible)
+
+
+def _is_super_admin(user):
+    return bool(user and user.is_authenticated and (user.is_superuser or getattr(user, 'role', '') == 'super_admin'))
+
+
+def _is_admin_or_super_admin(user):
+    return bool(user and user.is_authenticated and (user.is_superuser or getattr(user, 'role', '') in ('super_admin', 'admin')))
+
+
+class OfferPosterViewSet(viewsets.ModelViewSet):
+    queryset = OfferPoster.objects.select_related('store', 'created_by', 'approved_by').all()
+    serializer_class = OfferPosterSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_module = 'marketing_posters'
+    permission_action_map = {
+        'list': 'view',
+        'retrieve': 'view',
+        'create': 'create',
+        'update': 'edit',
+        'partial_update': 'edit',
+        'publish': 'edit',
+        'pause': 'edit',
+        'approve': 'approve',
+        'reject': 'approve',
+        'destroy': 'delete',
+    }
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['status', 'approval_status', 'store', 'target_audience', 'display_frequency']
+    search_fields = ['title', 'description', 'store__name']
+    ordering_fields = ['priority', 'created_at', 'start_at', 'end_at', 'title']
+    ordering = ['priority', '-created_at']
+
+    def get_permissions(self):
+        if self.action == 'public':
+            return [AllowAny()]
+        return [IsAuthenticated(), HasModulePermission()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if self.action == 'public':
+            return qs
+        if _is_admin_or_super_admin(user):
+            return qs
+        return qs.filter(created_by=user)
+
+    def _log(self, action_name, poster, description):
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action=action_name,
+            module='marketing_posters',
+            description=description,
+            request=self.request,
+            object_id=poster.pk if poster else '',
+            object_type='OfferPoster',
+        )
+
+    def _notify_poster_subscribers(self, poster):
+        raw_flag = self.request.data.get('send_notification')
+        should_send = str(raw_flag or '').strip().lower() in ('1', 'true', 'yes', 'on')
+        if not should_send:
+            return
+        if poster.status != OfferPoster.STATUS_PUBLISHED or poster.approval_status != OfferPoster.APPROVAL_APPROVED:
+            return
+
+        from threading import Thread
+        from django.conf import settings
+        from django.utils.html import escape
+        from apps.accounts.models import User
+        from apps.notifications.services import TelegramService
+
+        title = escape(poster.title or 'New Offer')
+        desc = escape(poster.description or '')
+        store_line = f"\nStore: <b>{escape(poster.store.name)}</b>" if poster.store else ''
+        text = f"<b>{title}</b>{store_line}"
+        if desc:
+            text += f"\n\n{desc}"
+
+        frontend_url = str(getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+        target_path = OfferPosterSerializer(poster, context={'request': self.request}).data.get('resolved_action_url') or '/'
+        full_url = target_path if target_path.startswith('http') else (f"{frontend_url}{target_path}" if frontend_url else '')
+        reply_markup = None
+        if full_url:
+            reply_markup = {
+                'inline_keyboard': [[{'text': poster.button_label or 'Shop Now', 'url': full_url}]]
+            }
+
+        chat_ids = list(
+            User.objects.filter(
+                is_active=True,
+                telegram_id__isnull=False,
+                telegram_notifications_enabled=True,
+            ).exclude(telegram_id='').values_list('telegram_id', flat=True)
+        )
+        if not chat_ids:
+            return
+
+        def _send_all():
+            service = TelegramService()
+            for cid in chat_ids:
+                try:
+                    service.send_message(
+                        message=text,
+                        event_type='offer_poster',
+                        chat_id=str(cid),
+                        reference=f'poster_{poster.pk}',
+                        reply_markup=reply_markup,
+                    )
+                except Exception:
+                    pass
+
+        Thread(target=_send_all, daemon=True).start()
+
+    def perform_create(self, serializer):
+        poster = serializer.save()
+        bump_storefront_cache()
+        self._log('create', poster, f'Created offer poster: {poster.title}')
+        self._notify_poster_subscribers(poster)
+
+    def perform_update(self, serializer):
+        poster = serializer.save()
+        bump_storefront_cache()
+        self._log('update', poster, f'Updated offer poster: {poster.title}')
+        self._notify_poster_subscribers(poster)
+
+    def perform_destroy(self, instance):
+        title = instance.title
+        if instance.image:
+            instance.image.delete(save=False)
+        if instance.mobile_image:
+            instance.mobile_image.delete(save=False)
+        instance.delete()
+        bump_storefront_cache()
+        self._log('delete', None, f'Deleted offer poster: {title}')
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        poster = self.get_object()
+        poster.status = OfferPoster.STATUS_PUBLISHED
+        poster.updated_by = request.user
+        poster.save(update_fields=['status', 'updated_by', 'updated_at'])
+        bump_storefront_cache()
+        self._log('update', poster, f'Published offer poster: {poster.title}')
+        return Response(self.get_serializer(poster).data)
+
+    @action(detail=True, methods=['post'])
+    def pause(self, request, pk=None):
+        poster = self.get_object()
+        poster.status = OfferPoster.STATUS_PAUSED
+        poster.updated_by = request.user
+        poster.save(update_fields=['status', 'updated_by', 'updated_at'])
+        bump_storefront_cache()
+        self._log('update', poster, f'Paused offer poster: {poster.title}')
+        return Response(self.get_serializer(poster).data)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        if not _is_super_admin(request.user):
+            return Response({'detail': 'Only Super Admin can approve posters.'}, status=status.HTTP_403_FORBIDDEN)
+        poster = self.get_object()
+        poster.approval_status = OfferPoster.APPROVAL_APPROVED
+        poster.rejection_reason = ''
+        poster.approved_by = request.user
+        poster.approved_at = timezone.now()
+        poster.updated_by = request.user
+        poster.save(update_fields=['approval_status', 'rejection_reason', 'approved_by', 'approved_at', 'updated_by', 'updated_at'])
+        bump_storefront_cache()
+        self._log('approve', poster, f'Approved offer poster: {poster.title}')
+        return Response(self.get_serializer(poster).data)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        if not _is_super_admin(request.user):
+            return Response({'detail': 'Only Super Admin can reject posters.'}, status=status.HTTP_403_FORBIDDEN)
+        poster = self.get_object()
+        poster.approval_status = OfferPoster.APPROVAL_REJECTED
+        poster.rejection_reason = str(request.data.get('reason') or '').strip()[:300]
+        poster.updated_by = request.user
+        poster.save(update_fields=['approval_status', 'rejection_reason', 'updated_by', 'updated_at'])
+        bump_storefront_cache()
+        self._log('reject', poster, f'Rejected offer poster: {poster.title}')
+        return Response(self.get_serializer(poster).data)
+
+    @action(detail=False, methods=['get'], url_path='public')
+    def public(self, request):
+        now = timezone.now()
+        posters = OfferPoster.objects.filter(
+            status=OfferPoster.STATUS_PUBLISHED,
+            approval_status=OfferPoster.APPROVAL_APPROVED,
+        ).filter(
+            Q(start_at__isnull=True) | Q(start_at__lte=now),
+            Q(end_at__isnull=True) | Q(end_at__gte=now),
+        ).select_related('store').order_by('priority', '-created_at')
+
+        user = request.user
+        is_authenticated = bool(user and user.is_authenticated)
+        user_tier = ''
+        if is_authenticated:
+            try:
+                from apps.orders.models import RewardSettings
+                from apps.orders.rewards import get_member_tier
+                settings_obj = RewardSettings.get_solo()
+                user_tier = get_member_tier(getattr(user, 'reward_points', 0), settings_obj).lower()
+            except Exception:
+                user_tier = 'classic'
+
+        eligible = []
+        for poster in posters:
+            audience = poster.target_audience
+            if audience == OfferPoster.AUDIENCE_GUESTS and is_authenticated:
+                continue
+            if audience == OfferPoster.AUDIENCE_LOGGED_IN and not is_authenticated:
+                continue
+            if audience == OfferPoster.AUDIENCE_MEMBERSHIP:
+                if not is_authenticated:
+                    continue
+                levels = [str(lvl).strip().lower() for lvl in (poster.membership_levels or [])]
+                if user_tier not in levels:
+                    continue
+            eligible.append(poster)
+
+        serializer = self.get_serializer(eligible, many=True)
+        return Response(serializer.data)

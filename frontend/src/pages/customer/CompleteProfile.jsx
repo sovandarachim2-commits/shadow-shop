@@ -30,6 +30,8 @@ import useAuthStore from '@/store/authStore'
 import { cn } from '@/utils/helpers'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { AddressForm } from '@/components/address/AddressFormModal'
+import { useReferralCodeCheck } from '@/hooks/useReferralCodeCheck'
+import ReferralCodeFeedback from '@/components/customer/ReferralCodeFeedback'
 
 const GENDER_OPTIONS = [
   { value: '', labelKey: 'completeProfile.selectGender' },
@@ -498,6 +500,9 @@ function StepProgress({ step, totalSteps = 3, progress }) {
 }
 
 function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef, onAvatarChange, isPending, username, emailLocked, hasReferrer, t }) {
+  const referralCheck = useReferralCodeCheck(form.friend_referral_code, {
+    enabled: !hasReferrer,
+  })
   return (
     <div className="mt-6 flex flex-1 flex-col">
       <div className="flex items-center justify-center gap-4 rounded-3xl bg-[#FFF8FB] px-4 py-4">
@@ -584,15 +589,21 @@ function ProfileStep({ form, errors, set, avatarPreview, initials, fileInputRef,
               autoCapitalize="characters"
               spellCheck={false}
               maxLength={20}
-              aria-invalid={Boolean(errors.friend_referral_code)}
+              aria-invalid={Boolean(errors.friend_referral_code || referralCheck.status === 'invalid')}
               className={cn(
                 'h-12 w-full rounded-xl border bg-white px-4 text-sm font-bold uppercase tracking-wide text-slate-900 outline-none transition placeholder:font-semibold placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-[#EC4D97] focus:ring-4 focus:ring-pink-100',
-                errors.friend_referral_code ? 'border-[#EC4D97]' : 'border-rose-100'
+                (errors.friend_referral_code || referralCheck.status === 'invalid')
+                  ? 'border-[#EC4D97]'
+                  : referralCheck.status === 'valid'
+                    ? 'border-emerald-300'
+                    : 'border-rose-100'
               )}
             />
-            {errors.friend_referral_code && (
-              <p className="mt-1.5 text-xs font-bold text-[#EC4D97]">{errors.friend_referral_code}</p>
-            )}
+            <ReferralCodeFeedback
+              status={referralCheck.status}
+              message={referralCheck.message}
+              serverError={errors.friend_referral_code}
+            />
           </div>
         )}
       </div>

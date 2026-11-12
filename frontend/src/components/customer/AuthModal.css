@@ -6,6 +6,13 @@
   overscroll-behavior: contain;
 }
 
+.shop-auth input:-webkit-autofill,
+.shop-auth input:-webkit-autofill:hover,
+.shop-auth input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 .shop-auth-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

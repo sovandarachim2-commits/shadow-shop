@@ -32,6 +32,7 @@ urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', views.LogoutView.as_view(), name='logout'),
     path('me/', views.MeView.as_view(), name='me'),
+    path('referral/check/', views.ReferralCodeCheckView.as_view(), name='referral-check'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
     path('set-initial-password/', views.SetInitialPasswordView.as_view(), name='set-initial-password'),
     path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
