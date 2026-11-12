@@ -13,7 +13,7 @@ import {
   UserCircle, Bell, Shield, Sliders, MessageCircle,
   MapPin, CreditCard, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
-  Flame, Gift, Ticket, Percent, SlidersHorizontal, Megaphone, Send,
+  Flame, Gift, Ticket, Percent, SlidersHorizontal, Megaphone, Send, Globe,
 } from 'lucide-react'
 
 // `module` maps to the Permission.module value — used to check `view` access
@@ -110,6 +110,7 @@ const navItems = [
     icon: BarChart3,
     children: [
       { label: 'Sales Report',     path: '/admin/reports/sales',     icon: BarChart3, module: 'reports' },
+      { label: 'Website Visits',   path: '/admin/reports/visits',    icon: Globe,     module: 'reports' },
       { label: 'Product Report',   path: '/admin/reports/products',  icon: Package,   module: 'reports_products' },
       { label: 'Inventory Report', path: '/admin/reports/inventory', icon: Warehouse, module: 'reports_inventory' },
       { label: 'Stock Sold Report',      path: '/admin/reports/stock-sold', icon: PackageCheck, module: 'reports_inventory' },

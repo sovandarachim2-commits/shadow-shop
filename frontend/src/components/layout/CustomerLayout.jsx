@@ -247,10 +247,38 @@ function isItemActive(location, item) {
   return location.pathname === path && !location.search
 }
 
+const VISITOR_ID_KEY = 'shadow_shop_visitor_id'
+
+function getOrCreateVisitorId() {
+  try {
+    let id = localStorage.getItem(VISITOR_ID_KEY)
+    if (!id) {
+      id = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `v_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+      localStorage.setItem(VISITOR_ID_KEY, id)
+    }
+    return id
+  } catch {
+    return ''
+  }
+}
+
 export default function CustomerLayout() {
   useLiveStorefront()
   const location = useLocation()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const path = `${location.pathname}${location.search || ''}`
+    if (path.startsWith('/admin')) return
+    const visitorId = getOrCreateVisitorId()
+    authApi.visits.track({
+      visitor_id: visitorId,
+      path,
+      referrer: typeof document !== 'undefined' ? document.referrer || '' : '',
+    }).catch(() => {})
+  }, [location.pathname, location.search])
   const [headerSearch, setHeaderSearch] = useState('')
   const { authModal, openAuthModal, closeAuthModal } = useUiStore()
   const [searchSuggestions, setSearchSuggestions] = useState([])

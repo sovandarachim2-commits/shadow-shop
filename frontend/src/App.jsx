@@ -123,6 +123,7 @@ const RewardRedemptionsAdmin = lazyNamedWithReload(() => import('@/pages/admin/r
 const RewardSettingsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardSettingsAdmin')
 const RewardTransactionsAdmin = lazyNamedWithReload(() => import('@/pages/admin/rewards/RewardsAdmin'), 'RewardTransactionsAdmin')
 const SalesReport = lazyWithReload(() => import('@/pages/admin/reports/SalesReport'))
+const WebsiteVisits = lazyWithReload(() => import('@/pages/admin/reports/WebsiteVisits'))
 const ProductReport = lazyWithReload(() => import('@/pages/admin/reports/ProductReport'))
 const InventoryReport = lazyWithReload(() => import('@/pages/admin/reports/InventoryReport'))
 const StockSold = lazyWithReload(() => import('@/pages/admin/reports/StockSold'))
@@ -963,6 +964,7 @@ export default function App() {
 
             {/* Reports */}
             <Route path="reports/sales" element={<LazyPage><SalesReport /></LazyPage>} />
+            <Route path="reports/visits" element={<LazyPage><WebsiteVisits /></LazyPage>} />
             <Route path="reports/products" element={<LazyPage><ProductReport /></LazyPage>} />
             <Route path="reports/inventory" element={<LazyPage><InventoryReport /></LazyPage>} />
             <Route path="reports/stock-sold" element={<LazyPage><StockSold /></LazyPage>} />

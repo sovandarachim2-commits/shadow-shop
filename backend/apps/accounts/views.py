@@ -2041,3 +2041,180 @@ class ReferralCodeCheckView(generics.GenericAPIView):
             'reason': 'valid',
             'message': 'Referral code is valid!',
         })
+
+
+def _parse_visit_user_agent(ua: str):
+    ua_lower = (ua or '').lower()
+    if any(token in ua_lower for token in ('ipad', 'tablet', 'playbook', 'silk')):
+        device_type = 'tablet'
+    elif any(token in ua_lower for token in ('mobile', 'iphone', 'ipod', 'android', 'blackberry', 'opera mini', 'iemobile')):
+        device_type = 'mobile'
+    else:
+        device_type = 'desktop'
+
+    if 'telegram' in ua_lower:
+        browser = 'Telegram'
+    elif 'fban' in ua_lower or 'fbav' in ua_lower or 'facebook' in ua_lower:
+        browser = 'Facebook'
+    elif 'edg/' in ua_lower or 'edge' in ua_lower:
+        browser = 'Edge'
+    elif 'chrome' in ua_lower and 'safari' in ua_lower:
+        browser = 'Chrome'
+    elif 'firefox' in ua_lower:
+        browser = 'Firefox'
+    elif 'safari' in ua_lower:
+        browser = 'Safari'
+    else:
+        browser = 'Other'
+    return device_type, browser
+
+
+class WebsiteVisitTrackView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .models import WebsiteVisit
+        from .activity import get_client_ip
+
+        raw_path = str(request.data.get('path') or '/').strip()[:255] or '/'
+        if raw_path.startswith('/admin'):
+            return Response({'ok': True, 'skipped': True})
+
+        ua = str(request.META.get('HTTP_USER_AGENT') or '')[:255]
+        ua_lower = ua.lower()
+        if any(bot in ua_lower for bot in ('bot', 'crawler', 'spider', 'slurp', 'curl/', 'python-requests')):
+            return Response({'ok': True, 'skipped': True})
+
+        ip_address = get_client_ip(request)
+        visitor_id = str(request.data.get('visitor_id') or '').strip()[:64]
+        if not visitor_id:
+            visitor_id = hashlib.sha256(f"{ip_address or ''}:{ua}".encode()).hexdigest()[:32]
+
+        cutoff = timezone.now() - timedelta(seconds=30)
+        if WebsiteVisit.objects.filter(visitor_id=visitor_id, path=raw_path, created_at__gte=cutoff).exists():
+            return Response({'ok': True, 'deduplicated': True})
+
+        referrer = str(request.data.get('referrer') or '').strip()[:255]
+        device_type, browser = _parse_visit_user_agent(ua)
+        user = request.user if getattr(request.user, 'is_authenticated', False) else None
+
+        WebsiteVisit.objects.create(
+            visitor_id=visitor_id,
+            user=user,
+            path=raw_path,
+            referrer=referrer,
+            device_type=device_type,
+            browser=browser,
+            ip_address=ip_address,
+            user_agent=ua,
+        )
+        return Response({'ok': True}, status=status.HTTP_201_CREATED)
+
+
+class WebsiteVisitReportView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_module = 'reports'
+
+    def get(self, request):
+        from django.db.models import Count, Q
+        from django.db.models.functions import TruncDate
+        from .models import WebsiteVisit
+
+        try:
+            days = int(request.query_params.get('days', 7))
+        except (ValueError, TypeError):
+            days = 7
+        days = max(1, min(days, 90))
+
+        now = timezone.now()
+        today_start = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+        since = today_start if days == 1 else (today_start - timedelta(days=days - 1))
+
+        qs = WebsiteVisit.objects.filter(created_at__gte=since).select_related('user')
+
+        device_filter = (request.query_params.get('device') or '').strip().lower()
+        if device_filter in ('mobile', 'desktop', 'tablet'):
+            qs = qs.filter(device_type=device_filter)
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(
+                Q(path__icontains=search)
+                | Q(browser__icontains=search)
+                | Q(ip_address__icontains=search)
+                | Q(user__full_name__icontains=search)
+                | Q(user__email__icontains=search)
+                | Q(user__username__icontains=search)
+            )
+
+        all_today_qs = WebsiteVisit.objects.filter(created_at__gte=today_start)
+        live_since = now - timedelta(minutes=15)
+
+        summary = {
+            'total_visits': qs.count(),
+            'unique_visitors': qs.values('visitor_id').distinct().count(),
+            'logged_in_visitors': qs.filter(user__isnull=False).values('user_id').distinct().count(),
+            'today_visits': all_today_qs.count(),
+            'today_unique': all_today_qs.values('visitor_id').distinct().count(),
+            'live_now': WebsiteVisit.objects.filter(created_at__gte=live_since).values('visitor_id').distinct().count(),
+        }
+
+        daily_rows = list(
+            qs.annotate(date=TruncDate('created_at'))
+            .values('date')
+            .annotate(
+                visits=Count('id'),
+                unique_visitors=Count('visitor_id', distinct=True),
+            )
+            .order_by('date')
+        )
+        daily = [
+            {
+                'date': row['date'].isoformat() if row['date'] else '',
+                'visits': row['visits'],
+                'unique_visitors': row['unique_visitors'],
+            }
+            for row in daily_rows
+        ]
+
+        top_pages = list(
+            qs.values('path')
+            .annotate(
+                visits=Count('id'),
+                unique_visitors=Count('visitor_id', distinct=True),
+            )
+            .order_by('-visits')[:10]
+        )
+
+        devices = list(
+            qs.values('device_type')
+            .annotate(visits=Count('id'), unique_visitors=Count('visitor_id', distinct=True))
+            .order_by('-visits')
+        )
+
+        recent_rows = qs.order_by('-created_at')[:50]
+        recent_visits = [
+            {
+                'id': visit.id,
+                'visitor_id': visit.visitor_id,
+                'user_id': visit.user_id,
+                'user_name': (visit.user.full_name or visit.user.username) if visit.user else 'Guest',
+                'user_email': visit.user.email if visit.user else '',
+                'path': visit.path,
+                'referrer': visit.referrer,
+                'device_type': visit.device_type,
+                'browser': visit.browser,
+                'ip_address': visit.ip_address,
+                'created_at': visit.created_at,
+            }
+            for visit in recent_rows
+        ]
+
+        return Response({
+            'days': days,
+            'summary': summary,
+            'daily': daily,
+            'top_pages': top_pages,
+            'devices': devices,
+            'recent_visits': recent_visits,
+        })

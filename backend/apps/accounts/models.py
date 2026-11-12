@@ -323,6 +323,38 @@ class SiteSettings(models.Model):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
 
+
+class WebsiteVisit(models.Model):
+    DEVICE_MOBILE = 'mobile'
+    DEVICE_TABLET = 'tablet'
+    DEVICE_DESKTOP = 'desktop'
+
+    visitor_id = models.CharField(max_length=64, db_index=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='website_visits',
+    )
+    path = models.CharField(max_length=255, db_index=True)
+    referrer = models.CharField(max_length=255, blank=True, default='')
+    device_type = models.CharField(max_length=20, default=DEVICE_DESKTOP)
+    browser = models.CharField(max_length=50, blank=True, default='')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'website_visits'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_at', 'visitor_id']),
+        ]
+
+    def __str__(self):
+        return f'{self.path} ({self.visitor_id[:8]})'
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import random

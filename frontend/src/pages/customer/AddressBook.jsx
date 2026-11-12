@@ -175,7 +175,12 @@ export default function AddressBook() {
 
       {/* Header */}
       <div className="grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center gap-3 border-b border-gray-100 px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))]">
-        <button onClick={() => navigate(returnTo || '/profile')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+        <button
+          type="button"
+          onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate(returnTo || '/profile', { replace: true }))}
+          aria-label={t('common.back')}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95"
+        >
           <ChevronLeft size={22} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('addressBook.title')}</h1>

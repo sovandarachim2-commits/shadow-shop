@@ -65,4 +65,8 @@ export const authApi = {
       headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
     }),
   },
+  visits: {
+    track: (data) => client.post('/auth/visits/track/', data),
+    report: (params) => client.get('/auth/visits/', { params }),
+  },
 }
