@@ -294,6 +294,7 @@ export function AnnouncementBarStage({
         ...p.backgroundStyle,
         color: p.textColor,
         minHeight: `${p.height}px`,
+        paddingTop: !isPreview ? 'env(safe-area-inset-top, 0px)' : undefined,
         borderRadius: p.borderRadius ? `${p.borderRadius}px` : undefined,
         fontSize: `${p.fontSize}px`,
         fontWeight: p.fontWeight,
