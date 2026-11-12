@@ -191,7 +191,7 @@ export default function OffersForYouModal({
     >
       <div
         className={cn(
-          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200/80 transition-all',
+          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-pink-100/80 transition-all',
           previewMode && previewDevice === 'mobile' ? 'max-w-[380px]' : 'max-w-[540px]',
         )}
         onClick={(e) => e.stopPropagation()}
@@ -199,9 +199,9 @@ export default function OffersForYouModal({
         onMouseLeave={() => setIsHovered(false)}
       >
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-[#7C3AED]/10 via-white to-[#EC4899]/10 px-5 py-3.5">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#EC4899] text-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-pink-100/80 bg-gradient-to-r from-pink-50 via-white to-rose-50/70 px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#EC197A] to-[#FF5CA8] text-white shadow-sm shadow-pink-500/25">
               <Sparkles size={14} />
             </span>
             <h2 className="text-base font-black tracking-tight text-slate-900">
@@ -212,7 +212,7 @@ export default function OffersForYouModal({
             type="button"
             onClick={handleClose}
             aria-label="Close offers popup"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-50/80 text-slate-500 transition hover:bg-pink-100 hover:text-[#EC197A]"
           >
             <X size={16} />
           </button>
@@ -222,7 +222,7 @@ export default function OffersForYouModal({
         <div className="overflow-y-auto">
           {/* Poster Image Container (preserves original aspect ratio without stretching) */}
           {posterSrc && (
-            <div className="relative flex items-center justify-center bg-slate-50">
+            <div className="relative flex items-center justify-center bg-pink-50/30">
               <img
                 src={posterSrc}
                 alt={currentPoster.title}
@@ -256,13 +256,13 @@ export default function OffersForYouModal({
           <div className="space-y-3 p-5">
             <div className="flex flex-wrap items-center gap-2">
               {currentPoster.store_name && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#7C3AED]/10 px-2.5 py-1 text-[11px] font-bold text-[#7C3AED]">
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-2.5 py-1 text-[11px] font-bold text-[#EC197A] ring-1 ring-pink-200/70">
                   <Store size={12} />
                   {currentPoster.store_name}
                 </span>
               )}
               {countdown && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#EC4899]/10 px-2.5 py-1 text-[11px] font-bold text-[#EC4899]">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 ring-1 ring-rose-200/70">
                   <Clock size={12} />
                   Ends in {countdown}
                 </span>
@@ -283,7 +283,7 @@ export default function OffersForYouModal({
             <button
               type="button"
               onClick={handleActionClick}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#7C3AED] to-[#EC4899] px-5 text-sm font-bold text-white shadow-lg shadow-pink-500/20 transition hover:opacity-95 active:scale-[0.99]"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#EC197A] to-[#F43F8E] px-5 text-sm font-bold text-white shadow-lg shadow-pink-500/25 transition hover:from-[#d8146e] hover:to-[#e63280] active:scale-[0.99]"
             >
               <span>{currentPoster.button_label || 'Shop Now'}</span>
               {isExternal && <ExternalLink size={15} />}
@@ -297,7 +297,7 @@ export default function OffersForYouModal({
                     type="checkbox"
                     checked={dontShowAgain}
                     onChange={(e) => setDontShowAgain(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-[#EC4899] focus:ring-[#EC4899]"
+                    className="h-3.5 w-3.5 rounded border-pink-300 text-[#EC197A] focus:ring-[#EC197A]"
                   />
                   <span>Don&apos;t show this offer again</span>
                 </label>
@@ -317,7 +317,7 @@ export default function OffersForYouModal({
                       aria-label={`Go to offer ${idx + 1}`}
                       className={cn(
                         'h-2 rounded-full transition-all',
-                        idx === activeIndex ? 'w-5 bg-[#EC4899]' : 'w-2 bg-slate-200 hover:bg-slate-300',
+                        idx === activeIndex ? 'w-5 bg-[#EC197A]' : 'w-2 bg-pink-100 hover:bg-pink-200',
                       )}
                     />
                   ))}

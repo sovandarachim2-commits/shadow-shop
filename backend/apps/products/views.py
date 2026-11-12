@@ -332,6 +332,108 @@ class ProductViewSet(viewsets.ModelViewSet):
         bump_storefront_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @staticmethod
+    def _notify_flash_sale_subscribers(request, item, is_set=False):
+        raw_flag = request.data.get('send_notification')
+        should_send = str(raw_flag or '').strip().lower() in ('1', 'true', 'yes', 'on')
+        if not should_send or not getattr(item, 'is_featured', False):
+            return
+
+        from threading import Thread
+        from django.conf import settings
+        from django.utils.html import escape
+        from apps.accounts.models import User
+        from apps.notifications.services import TelegramService
+
+        chat_ids = list(
+            User.objects.filter(
+                is_active=True,
+                telegram_id__isnull=False,
+                telegram_notifications_enabled=True,
+            ).exclude(telegram_id='').values_list('telegram_id', flat=True)
+        )
+        if not chat_ids:
+            return
+
+        img_field = None
+        primary_img = item.images.filter(is_primary=True).first() or item.images.first()
+        if primary_img and getattr(primary_img, 'image', None):
+            img_field = primary_img.image
+        elif is_set and getattr(item, 'image', None):
+            img_field = item.image
+
+        photo_path = None
+        photo_url = None
+        if img_field:
+            try:
+                photo_path = img_field.path
+            except Exception:
+                photo_path = None
+            try:
+                photo_url = request.build_absolute_uri(img_field.url)
+            except Exception:
+                photo_url = None
+
+        regular_price = getattr(item, 'price', None) if is_set else getattr(item, 'retail_price', None)
+        flash_price = getattr(item, 'flash_sale_price', None)
+        lines = [f"⚡ <b>FLASH SALE: {escape(item.name)}</b>"]
+        if flash_price is not None:
+            price_text = f"🔥 Flash Price: <b>${flash_price}</b>"
+            if regular_price and regular_price > flash_price:
+                price_text += f" <s>${regular_price}</s>"
+            lines.append(price_text)
+        if getattr(item, 'flash_sale_stock', None):
+            lines.append(f"📦 Limited Stock: {item.flash_sale_stock}")
+        if getattr(item, 'flash_sale_max_order_qty', None):
+            lines.append(f"🛒 Max Order: {item.flash_sale_max_order_qty} per order")
+        caption = "\n".join(lines)
+
+        frontend_url = str(getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+        route_path = f"/product-set/{item.pk}" if is_set else f"/product/{item.pk}"
+        full_url = f"{frontend_url}{route_path}" if frontend_url else ''
+        reply_markup = (
+            {'inline_keyboard': [[{'text': '⚡ Shop Flash Sale', 'url': full_url}]]}
+            if full_url else None
+        )
+        ref_prefix = 'flash_sale_set' if is_set else 'flash_sale_product'
+
+        def _send_all():
+            service = TelegramService()
+            for cid in chat_ids:
+                try:
+                    service.send_photo(
+                        caption=caption,
+                        photo_path=photo_path,
+                        photo_url=photo_url,
+                        event_type='flash_sale',
+                        chat_id=str(cid),
+                        reference=f'{ref_prefix}_{item.pk}',
+                        reply_markup=reply_markup,
+                    )
+                except Exception:
+                    pass
+
+        Thread(target=_send_all, daemon=True).start()
+
+    @staticmethod
+    def _parse_optional_positive_int(data, field_name, label):
+        raw = data.get(field_name)
+        if raw is None or str(raw).strip() == '':
+            return None, None
+        try:
+            value = int(raw)
+            if value < 1:
+                return None, Response(
+                    {field_name: [f'{label} must be at least 1.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return value, None
+        except (ValueError, TypeError):
+            return None, Response(
+                {field_name: [f'Invalid {label.lower()}.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
     @action(detail=True, methods=['post', 'delete'], url_path='flash-sale')
     def flash_sale(self, request, pk=None):
         product = self.get_object()
@@ -341,9 +443,10 @@ class ProductViewSet(viewsets.ModelViewSet):
             product.flash_sale_starts_at = None
             product.flash_sale_ends_at = None
             product.flash_sale_max_order_qty = None
+            product.flash_sale_stock = None
             product.save(update_fields=[
                 'is_featured', 'flash_sale_price', 'flash_sale_starts_at',
-                'flash_sale_ends_at', 'flash_sale_max_order_qty', 'updated_at',
+                'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock', 'updated_at',
             ])
             bump_storefront_cache()
             from apps.accounts.activity import log_activity
@@ -376,16 +479,17 @@ class ProductViewSet(viewsets.ModelViewSet):
         if starts_at and ends_at and str(starts_at) >= str(ends_at):
             return Response({'flash_sale_ends_at': ['End time must be after start time.']}, status=status.HTTP_400_BAD_REQUEST)
 
-        max_qty = data.get('flash_sale_max_order_qty')
-        if max_qty:
-            try:
-                max_qty_int = int(max_qty)
-                if max_qty_int < 1:
-                    return Response({'flash_sale_max_order_qty': ['Max order quantity must be at least 1.']}, status=status.HTTP_400_BAD_REQUEST)
-            except (ValueError, TypeError):
-                return Response({'flash_sale_max_order_qty': ['Invalid max order quantity.']}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            max_qty_int = None
+        max_qty_int, error_response = self._parse_optional_positive_int(
+            data, 'flash_sale_max_order_qty', 'Max order quantity'
+        )
+        if error_response:
+            return error_response
+
+        flash_stock_int, error_response = self._parse_optional_positive_int(
+            data, 'flash_sale_stock', 'Flash sale stock'
+        )
+        if error_response:
+            return error_response
 
         status_val = data.get('status', 'active')
         is_featured = data.get('is_featured', True)
@@ -399,6 +503,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             'flash_sale_starts_at': starts_at,
             'flash_sale_ends_at': ends_at,
             'flash_sale_max_order_qty': max_qty_int,
+            'flash_sale_stock': flash_stock_int,
             'is_featured': is_active_featured,
         }, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -418,6 +523,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         product.refresh_from_db()
         attach_flash_sale_stats([product])
+        self._notify_flash_sale_subscribers(request, product, is_set=False)
         return Response(ProductListSerializer(product, context={'request': request}).data)
 
     @action(detail=False, methods=['get'])
@@ -609,9 +715,10 @@ class ProductSetViewSet(viewsets.ModelViewSet):
             product_set.flash_sale_starts_at = None
             product_set.flash_sale_ends_at = None
             product_set.flash_sale_max_order_qty = None
+            product_set.flash_sale_stock = None
             product_set.save(update_fields=[
                 'is_featured', 'flash_sale_price', 'flash_sale_starts_at',
-                'flash_sale_ends_at', 'flash_sale_max_order_qty',
+                'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
             ])
             bump_storefront_cache()
             from apps.accounts.activity import log_activity
@@ -644,16 +751,17 @@ class ProductSetViewSet(viewsets.ModelViewSet):
         if starts_at and ends_at and str(starts_at) >= str(ends_at):
             return Response({'flash_sale_ends_at': ['End time must be after start time.']}, status=status.HTTP_400_BAD_REQUEST)
 
-        max_qty = data.get('flash_sale_max_order_qty')
-        if max_qty:
-            try:
-                max_qty_int = int(max_qty)
-                if max_qty_int < 1:
-                    return Response({'flash_sale_max_order_qty': ['Max order quantity must be at least 1.']}, status=status.HTTP_400_BAD_REQUEST)
-            except (ValueError, TypeError):
-                return Response({'flash_sale_max_order_qty': ['Invalid max order quantity.']}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            max_qty_int = None
+        max_qty_int, error_response = ProductViewSet._parse_optional_positive_int(
+            data, 'flash_sale_max_order_qty', 'Max order quantity'
+        )
+        if error_response:
+            return error_response
+
+        flash_stock_int, error_response = ProductViewSet._parse_optional_positive_int(
+            data, 'flash_sale_stock', 'Flash sale stock'
+        )
+        if error_response:
+            return error_response
 
         status_val = data.get('status', 'active')
         is_featured = data.get('is_featured', True)
@@ -667,6 +775,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
             'flash_sale_starts_at': starts_at,
             'flash_sale_ends_at': ends_at,
             'flash_sale_max_order_qty': max_qty_int,
+            'flash_sale_stock': flash_stock_int,
             'is_featured': is_active_featured,
         }, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -685,6 +794,7 @@ class ProductSetViewSet(viewsets.ModelViewSet):
         )
 
         product_set.refresh_from_db()
+        ProductViewSet._notify_flash_sale_subscribers(request, product_set, is_set=True)
         return Response(ProductSetSerializer(product_set, context={'request': request}).data)
 
 
@@ -1284,12 +1394,27 @@ class OfferPosterViewSet(viewsets.ModelViewSet):
         if not chat_ids:
             return
 
+        img_field = getattr(poster, 'image', None) or getattr(poster, 'mobile_image', None)
+        photo_path = None
+        photo_url = None
+        if img_field:
+            try:
+                photo_path = img_field.path
+            except Exception:
+                photo_path = None
+            try:
+                photo_url = self.request.build_absolute_uri(img_field.url)
+            except Exception:
+                photo_url = None
+
         def _send_all():
             service = TelegramService()
             for cid in chat_ids:
                 try:
-                    service.send_message(
-                        message=text,
+                    service.send_photo(
+                        caption=text,
+                        photo_path=photo_path,
+                        photo_url=photo_url,
                         event_type='offer_poster',
                         chat_id=str(cid),
                         reference=f'poster_{poster.pk}',

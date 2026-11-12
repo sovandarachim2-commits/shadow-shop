@@ -1,3 +1,5 @@
+import json
+import os
 import requests
 import logging
 from threading import Thread
@@ -204,6 +206,109 @@ class TelegramService:
             log.save()
             logger.error(f"Telegram notification failed: {e}")
             return False
+
+    def send_photo(
+        self,
+        caption: str,
+        photo_path: str = None,
+        photo_url: str = None,
+        event_type: str = 'general',
+        chat_id: str = None,
+        message_thread_id: int = None,
+        reply_to_message_id: int = None,
+        reference: str = '',
+        reply_markup: dict = None,
+    ) -> bool:
+        """Send a Telegram photo with caption, falling back to send_message if unavailable."""
+        has_local_file = bool(photo_path and os.path.isfile(photo_path))
+        if not has_local_file and not photo_url:
+            return self.send_message(
+                message=caption,
+                event_type=event_type,
+                chat_id=chat_id,
+                message_thread_id=message_thread_id,
+                reply_to_message_id=reply_to_message_id,
+                reference=reference,
+                reply_markup=reply_markup,
+            )
+
+        if not self.config:
+            self.last_error_message = 'Telegram config is not set.'
+            return False
+
+        recipient = chat_id or self.config.chat_id
+        token = self.get_bot_token()
+        if self.is_placeholder(token):
+            self.last_error_message = 'Telegram bot token is not configured.'
+            return False
+        if self.is_placeholder(recipient):
+            self.last_error_message = 'Telegram chat ID is not configured.'
+            return False
+
+        safe_caption = caption[:1024] if len(caption) > 1024 else caption
+        log = NotificationLog.objects.create(
+            event_type=event_type,
+            message=safe_caption,
+            recipient=recipient,
+            reference=reference or '',
+        )
+
+        try:
+            url = f"https://api.telegram.org/bot{token}/sendPhoto"
+            data = {
+                'chat_id': recipient,
+                'caption': safe_caption,
+                'parse_mode': 'HTML',
+            }
+            if message_thread_id is not None:
+                thread_id = message_thread_id
+            elif str(recipient) == str(self.config.chat_id or ''):
+                thread_id = self.config.topic_id
+            else:
+                thread_id = None
+            if thread_id:
+                data['message_thread_id'] = thread_id
+            if reply_to_message_id:
+                data['reply_to_message_id'] = reply_to_message_id
+            if reply_markup:
+                data['reply_markup'] = json.dumps(reply_markup)
+
+            if has_local_file:
+                with open(photo_path, 'rb') as photo_file:
+                    response = requests.post(url, data=data, files={'photo': photo_file}, timeout=15)
+            else:
+                data['photo'] = photo_url
+                response = requests.post(url, data=data, timeout=15)
+
+            response_data = response.json() if response.content else {}
+            if response.status_code == 200:
+                self.last_error_message = ''
+                log.status = 'sent'
+                log.telegram_message_id = (response_data.get('result') or {}).get('message_id')
+                log.sent_at = timezone.now()
+                log.save()
+                return True
+
+            self.last_error_message = response.text
+            log.status = 'failed'
+            log.error_message = response.text
+            log.save()
+        except Exception as e:
+            self.last_error_message = str(e)
+            log.status = 'failed'
+            log.error_message = str(e)
+            log.save()
+            logger.error(f"Telegram photo notification failed: {e}")
+
+        return self.send_message(
+            message=caption,
+            event_type=event_type,
+            chat_id=chat_id,
+            message_thread_id=message_thread_id,
+            reply_to_message_id=reply_to_message_id,
+            reference=reference,
+            reply_markup=reply_markup,
+        )
 
     def send_to_configs(
         self,

@@ -6,6 +6,7 @@ from .models import (
     RewardItem, RewardRedemption, RewardSettings, PointTransaction, PromoCode, PromoCodeUsage,
 )
 from apps.products.models import Category, Product, ProductSet
+from apps.products.flash_sale_stats import attach_flash_sale_stats
 from utils.image_optimization import card_variant_url
 from utils.phone import validate_cambodia_phone
 from utils.payment_methods import is_payment_method_allowed
@@ -77,12 +78,29 @@ def price_checkout_items(items):
     return items
 
 
-def validate_flash_sale_max_quantities(requested):
+def validate_flash_sale_max_quantities(requested, old_product_totals=None):
+    old_product_totals = old_product_totals or {}
     errors = []
+    stock_limited = [
+        product for product in requested
+        if product.is_flash_sale_active and getattr(product, 'flash_sale_stock', None) is not None
+    ]
+    if stock_limited:
+        attach_flash_sale_stats(stock_limited)
+
     for product, quantity in requested.items():
         max_qty = getattr(product, 'flash_sale_max_order_qty', None)
         if product.is_flash_sale_active and max_qty and quantity > max_qty:
             errors.append(f'{product.name} flash sale maximum order quantity is {max_qty}.')
+        flash_stock = getattr(product, 'flash_sale_stock', None)
+        if product.is_flash_sale_active and flash_stock is not None:
+            sold = getattr(product, '_flash_sale_quantity_sold', 0) or 0
+            remaining = max(0, int(flash_stock) - int(sold) + int(old_product_totals.get(product, 0)))
+            if quantity > remaining:
+                if remaining == 0:
+                    errors.append(f'{product.name} flash sale stock is sold out.')
+                else:
+                    errors.append(f'{product.name} flash sale has only {remaining} left in stock.')
     return errors
 
 
@@ -152,7 +170,7 @@ def validate_order_target_stock(items, old_product_totals=None, old_set_totals=N
         available = product.current_stock + old_product_totals.get(product, 0) + old_components.get(product, 0)
         if quantity > available:
             errors.append(f'{product.name} has only {available} in stock.')
-    errors.extend(validate_flash_sale_max_quantities(requested_products))
+    errors.extend(validate_flash_sale_max_quantities(requested_products, old_product_totals))
 
     for product_set, quantity in requested_sets.items():
         available = get_product_set_stock(product_set) + old_set_totals.get(product_set, 0)

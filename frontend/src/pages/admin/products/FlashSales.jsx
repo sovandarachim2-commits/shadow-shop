@@ -46,9 +46,11 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
     product: saleProduct ? `${saleProduct._saleType}:${saleProduct.id}` : '',
     flash_sale_price: saleProduct?.flash_sale_price || '',
     flash_sale_max_order_qty: saleProduct?.flash_sale_max_order_qty || '',
+    flash_sale_stock: saleProduct?.flash_sale_stock || '',
     flash_sale_starts_at: toDatetimeLocal(saleProduct?.flash_sale_starts_at),
     flash_sale_ends_at: toDatetimeLocal(saleProduct?.flash_sale_ends_at),
     status: saleProduct?.is_featured === false ? 'inactive' : 'active',
+    send_notification: false,
   })
 
   const selectedProduct = items.find((item) => `${item._saleType}:${item.id}` === form.product)
@@ -66,6 +68,9 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
     }
     if (form.flash_sale_max_order_qty && Number(form.flash_sale_max_order_qty) < 1) {
       return toast.error('Max order qty must be at least 1')
+    }
+    if (form.flash_sale_stock && Number(form.flash_sale_stock) < 1) {
+      return toast.error('Flash sale stock must be at least 1')
     }
     if (
       form.flash_sale_starts_at &&
@@ -114,7 +119,7 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className="label">Flash Sale Price *</label>
           <input
@@ -136,6 +141,19 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
             step="1"
             value={form.flash_sale_max_order_qty}
             onChange={(event) => set('flash_sale_max_order_qty', event.target.value)}
+            disabled={saving}
+            className="input-field disabled:opacity-60"
+            placeholder="No limit"
+          />
+        </div>
+        <div>
+          <label className="label">Flash Sale Stock</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={form.flash_sale_stock}
+            onChange={(event) => set('flash_sale_stock', event.target.value)}
             disabled={saving}
             className="input-field disabled:opacity-60"
             placeholder="No limit"
@@ -178,6 +196,22 @@ function FlashSaleForm({ items, saleProduct, onClose, onSave, saving }) {
           Inactive keeps the price and schedule, and hides this sale from customers.
         </p>
       </div>
+
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-gray-200 bg-gray-50/70 px-3.5 py-2.5 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          checked={form.send_notification}
+          onChange={(event) => set('send_notification', event.target.checked)}
+          disabled={saving || form.status === 'inactive'}
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500 disabled:opacity-50"
+        />
+        <span>
+          <span className="font-semibold text-gray-900">Send Telegram notification</span>
+          <span className="block text-xs text-gray-500">
+            Notify subscribed customers on Telegram with the product image when active.
+          </span>
+        </span>
+      </label>
 
       <div className="flex gap-3 border-t border-gray-100 pt-4">
         <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center disabled:opacity-60">
@@ -245,8 +279,10 @@ export default function FlashSales() {
         is_featured: form.status !== 'inactive',
         flash_sale_price: Number(form.flash_sale_price),
         flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
+        flash_sale_stock: form.flash_sale_stock ? Number(form.flash_sale_stock) : null,
         flash_sale_starts_at: form.flash_sale_starts_at || null,
         flash_sale_ends_at: form.flash_sale_ends_at || null,
+        send_notification: !!form.send_notification,
       }
       return productsApi.flashSale.set(product._saleType, product.id, payload)
     },
@@ -256,6 +292,7 @@ export default function FlashSales() {
         is_featured: form.status !== 'inactive',
         flash_sale_price: Number(form.flash_sale_price),
         flash_sale_max_order_qty: form.flash_sale_max_order_qty ? Number(form.flash_sale_max_order_qty) : null,
+        flash_sale_stock: form.flash_sale_stock ? Number(form.flash_sale_stock) : null,
         flash_sale_starts_at: form.flash_sale_starts_at || null,
         flash_sale_ends_at: form.flash_sale_ends_at || null,
       })
@@ -283,6 +320,7 @@ export default function FlashSales() {
         flash_sale_starts_at: product.flash_sale_starts_at || null,
         flash_sale_ends_at: product.flash_sale_ends_at || null,
         flash_sale_max_order_qty: product.flash_sale_max_order_qty || null,
+        flash_sale_stock: product.flash_sale_stock || null,
       })
     },
     onSuccess: async (_, { product, status }) => {
@@ -310,6 +348,7 @@ export default function FlashSales() {
         is_featured: false,
         flash_sale_price: null,
         flash_sale_max_order_qty: null,
+        flash_sale_stock: null,
         flash_sale_starts_at: null,
         flash_sale_ends_at: null,
       })
@@ -378,6 +417,7 @@ export default function FlashSales() {
               <Th>Retail</Th>
               <Th>Flash Price</Th>
               <Th>Max Qty</Th>
+              <Th>Flash Stock</Th>
               <Th>Orders</Th>
               <Th>Schedule</Th>
               <Th>Status</Th>
@@ -424,6 +464,20 @@ export default function FlashSales() {
                   <Td><span className="text-sm text-gray-400 line-through">{formatCurrency(product.retail_price)}</span></Td>
                   <Td><span className="text-sm font-semibold text-pink-600">{formatCurrency(product.flash_sale_price)}</span></Td>
                   <Td><span className="text-sm font-semibold text-gray-800">{product.flash_sale_max_order_qty || 'No limit'}</span></Td>
+                  <Td>
+                    {product.flash_sale_stock ? (
+                      <>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {product.flash_sale_quantity_sold || 0} / {product.flash_sale_stock}
+                        </p>
+                        <p className="text-[11px] text-gray-400">
+                          {Math.max(0, Number(product.flash_sale_stock) - Number(product.flash_sale_quantity_sold || 0))} left
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-sm text-gray-400">No limit</span>
+                    )}
+                  </Td>
                   <Td>
                     <p className="text-sm font-semibold text-gray-900">{product._saleType === 'set' ? '—' : product.flash_sale_order_count || 0}</p>
                     <p className="text-[11px] text-gray-400">{product._saleType === 'set' ? 'Set' : `${product.flash_sale_quantity_sold || 0} qty`}</p>

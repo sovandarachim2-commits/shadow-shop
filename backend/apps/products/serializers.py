@@ -110,6 +110,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     is_flash_sale_active = serializers.BooleanField(read_only=True)
     flash_sale_order_count = serializers.SerializerMethodField()
     flash_sale_quantity_sold = serializers.SerializerMethodField()
+    flash_sale_remaining_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -118,10 +119,10 @@ class ProductListSerializer(serializers.ModelSerializer):
             'brand', 'brand_name',
             'primary_image', 'wholesale_price', 'retail_price', 'cost_price',
             'display_price', 'old_price', 'flash_sale_price',
-            'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
+            'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
             'unit', 'current_stock', 'availability_status', 'is_available_for_sale', 'is_active', 'is_featured',
             'is_flash_sale_active',
-            'flash_sale_order_count', 'flash_sale_quantity_sold',
+            'flash_sale_order_count', 'flash_sale_quantity_sold', 'flash_sale_remaining_stock',
             'is_new_arrival', 'is_best_seller', 'rating', 'created_at',
         ]
 
@@ -175,6 +176,12 @@ class ProductListSerializer(serializers.ModelSerializer):
             return 0
         return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
 
+    def get_flash_sale_remaining_stock(self, obj):
+        if obj.flash_sale_stock is None:
+            return None
+        sold = self.get_flash_sale_quantity_sold(obj)
+        return max(0, int(obj.flash_sale_stock) - int(sold or 0))
+
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -187,6 +194,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     is_flash_sale_active = serializers.BooleanField(read_only=True)
     flash_sale_order_count = serializers.SerializerMethodField()
     flash_sale_quantity_sold = serializers.SerializerMethodField()
+    flash_sale_remaining_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -235,6 +243,12 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             return 0
         return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
 
+    def get_flash_sale_remaining_stock(self, obj):
+        if obj.flash_sale_stock is None:
+            return None
+        sold = self.get_flash_sale_quantity_sold(obj)
+        return max(0, int(obj.flash_sale_stock) - int(sold or 0))
+
 
 class ProductWriteSerializer(serializers.ModelSerializer):
     code = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -246,7 +260,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             'id', 'code', 'barcode', 'name', 'category', 'brand', 'description', 'benefits',
             'ingredients', 'how_to_use', 'unit', 'weight', 'cost_price',
             'wholesale_price', 'retail_price', 'compare_at_price', 'flash_sale_price',
-            'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty',
+            'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
             'min_order_qty', 'availability_status', 'is_active',
             'is_featured', 'is_flash_sale_active', 'is_new_arrival', 'is_best_seller',
         ]
