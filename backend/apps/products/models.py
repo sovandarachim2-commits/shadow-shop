@@ -716,6 +716,9 @@ class VideoHighlight(models.Model):
     product_label_km = models.CharField(max_length=120, blank=True)
     caption = models.CharField(max_length=255, blank=True)
     caption_km = models.CharField(max_length=255, blank=True)
+    button_label = models.CharField(max_length=60, blank=True)
+    button_label_km = models.CharField(max_length=60, blank=True)
+    button_url = models.CharField(max_length=500, blank=True)
     product = models.ForeignKey(
         Product,
         on_delete=models.SET_NULL,

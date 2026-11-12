@@ -1062,13 +1062,6 @@ export default function Home() {
         <div className="h-2 bg-gray-50" />
 
         {/* ════════════════════════════════════════════
-            VIDEO HIGHLIGHTS
-        ════════════════════════════════════════════ */}
-        <VideoHighlightsSection videos={homeData?.video_highlights || []} />
-
-        {(homeData?.video_highlights?.length > 0) && <div className="h-2 bg-gray-50" />}
-
-        {/* ════════════════════════════════════════════
             BEST SELLERS
         ════════════════════════════════════════════ */}
         {(showBestSkeleton || bestSellers.length > 0) && (
@@ -1172,6 +1165,12 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* ════════════════════════════════════════════
+            VIDEO HIGHLIGHTS
+        ════════════════════════════════════════════ */}
+        {(homeData?.video_highlights?.length > 0) && <div className="h-2 bg-gray-50" />}
+        <VideoHighlightsSection videos={homeData?.video_highlights || []} />
 
         <div className="h-4 bg-gray-50" />
       </div>

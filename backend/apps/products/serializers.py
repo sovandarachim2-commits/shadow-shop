@@ -874,6 +874,7 @@ class OfferPosterSerializer(serializers.ModelSerializer):
 class VideoHighlightSerializer(serializers.ModelSerializer):
     video_url = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()
+    resolved_button_url = serializers.SerializerMethodField()
     product_name = serializers.CharField(source='product.name', read_only=True, default='')
     product_slug = serializers.CharField(source='product.slug', read_only=True, default='')
     product_is_available = serializers.SerializerMethodField()
@@ -890,6 +891,7 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'video', 'video_url', 'cover_image', 'cover_image_url',
             'product_label', 'product_label_km', 'caption', 'caption_km',
+            'button_label', 'button_label_km', 'button_url', 'resolved_button_url',
             'product', 'product_name', 'product_slug', 'product_is_available',
             'original_video_url', 'display_order', 'status', 'clear_video',
             'created_by', 'updated_by', 'created_at', 'updated_at',
@@ -923,6 +925,27 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
         if not obj.product_id or not obj.product:
             return False
         return bool(obj.product.is_active and obj.product.is_available_for_sale)
+
+    def get_resolved_button_url(self, obj):
+        custom_url = (obj.button_url or '').strip()
+        if custom_url:
+            return custom_url
+        if obj.product_id:
+            return f'/product/{obj.product_id}'
+        return ''
+
+    def validate_button_url(self, value):
+        url = (value or '').strip()
+        if not url:
+            return ''
+        if url.startswith('//'):
+            raise serializers.ValidationError('Button link must start with / or https://.')
+        if url.startswith('/'):
+            return url
+        parsed = urlparse(url)
+        if parsed.scheme in ('http', 'https') and parsed.netloc:
+            return url
+        raise serializers.ValidationError('Button link must be an internal path (starting with /) or an http(s):// URL.')
 
     def validate_video(self, value):
         if not value:

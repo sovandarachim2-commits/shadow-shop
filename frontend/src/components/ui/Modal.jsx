@@ -2,7 +2,17 @@ import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/utils/helpers'
 
-export function Modal({ isOpen, onClose, title, titleStyle, children, size = 'md', className, closeOnBackdrop = true }) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  titleStyle,
+  children,
+  size = 'md',
+  className,
+  backdropClassName,
+  closeOnBackdrop = true,
+}) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -24,7 +34,10 @@ export function Modal({ isOpen, onClose, title, titleStyle, children, size = 'md
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeOnBackdrop ? onClose : undefined} />
+      <div
+        className={cn('absolute inset-0 bg-black/40 backdrop-blur-sm', backdropClassName)}
+        onClick={closeOnBackdrop ? onClose : undefined}
+      />
       <div className={cn(
         'relative bg-white rounded-2xl shadow-2xl w-full animate-fade-in',
         sizes[size], className

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ExternalLink, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { parseVideoEmbed } from '@/utils/videoEmbed'
@@ -84,9 +85,9 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
     }
   }
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm sm:p-5"
+      className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-5"
       role="dialog"
       aria-modal="true"
       aria-label={video.title || t('home.videoHighlights')}
@@ -95,7 +96,7 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
       <div
         ref={modalRef}
         onClick={(event) => event.stopPropagation()}
-        className={`relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-neutral-950 shadow-2xl ring-1 ring-white/15 ${
+        className={`relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-neutral-950 shadow-[0_24px_64px_rgba(0,0,0,0.35)] ring-1 ring-black/15 ${
           isLandscapeEmbed ? 'max-w-[720px]' : 'max-w-[420px]'
         }`}
       >
@@ -201,5 +202,7 @@ export default function VideoHighlightModal({ video, onClose, returnFocusEl }) {
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent
 }
 

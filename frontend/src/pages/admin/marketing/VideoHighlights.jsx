@@ -35,6 +35,9 @@ const INITIAL_FORM = {
   product_label_km: '',
   caption: '',
   caption_km: '',
+  button_label: '',
+  button_label_km: '',
+  button_url: '',
   product: '',
   original_video_url: '',
   display_order: '0',
@@ -166,6 +169,9 @@ export default function VideoHighlights() {
         fd.append('product_label_km', form.product_label_km.trim())
         fd.append('caption', form.caption.trim())
         fd.append('caption_km', form.caption_km.trim())
+        fd.append('button_label', form.button_label.trim())
+        fd.append('button_label_km', form.button_label_km.trim())
+        fd.append('button_url', form.button_url.trim())
         if (form.product) fd.append('product', form.product)
         else fd.append('product', '')
         fd.append('original_video_url', form.original_video_url.trim())
@@ -243,6 +249,9 @@ export default function VideoHighlights() {
       product_label_km: item.product_label_km || '',
       caption: item.caption || '',
       caption_km: item.caption_km || '',
+      button_label: item.button_label || '',
+      button_label_km: item.button_label_km || '',
+      button_url: item.button_url || '',
       product: item.product ? String(item.product) : '',
       original_video_url: item.original_video_url || '',
       display_order: String(item.display_order ?? 0),
@@ -266,6 +275,10 @@ export default function VideoHighlights() {
     if (form.original_video_url.trim() && !form.original_video_url.trim().startsWith('https://')) {
       return toast.error('Video link must start with https://')
     }
+    const btnUrl = form.button_url.trim()
+    if (btnUrl && (btnUrl.startsWith('//') || (!btnUrl.startsWith('/') && !/^https?:\/\//i.test(btnUrl)))) {
+      return toast.error('Button link must start with / or https://')
+    }
     saveMutation.mutate()
   }
 
@@ -287,6 +300,10 @@ export default function VideoHighlights() {
     product_label_km: form.product_label_km,
     caption: form.caption,
     caption_km: form.caption_km,
+    button_label: form.button_label.trim(),
+    button_label_km: form.button_label_km.trim(),
+    button_url: form.button_url.trim(),
+    resolved_button_url: form.button_url.trim() || (form.product ? `/product/${form.product}` : ''),
     product: form.product ? Number(form.product) : null,
     product_is_available: Boolean(form.product),
     original_video_url: form.original_video_url.trim(),
@@ -296,7 +313,7 @@ export default function VideoHighlights() {
     <div className="space-y-6">
       <PageHeader
         title="Video Highlights"
-        subtitle="Manage 9:16 storefront video highlights shown between Flash Sale and Best Sellers"
+        subtitle="Manage 9:16 storefront video highlights shown after New Arrivals"
         actions={
           <button type="button" onClick={openCreate} className="btn-primary gap-2">
             <Plus size={16} />
@@ -450,6 +467,8 @@ export default function VideoHighlights() {
         }}
         title={editingVideo ? 'Edit Video Highlight' : 'Add Video Highlight'}
         size="lg"
+        backdropClassName="bg-transparent backdrop-blur-none"
+        className="border border-gray-200"
         closeOnBackdrop={false}
       >
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
@@ -598,13 +617,50 @@ export default function VideoHighlights() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
+              <label className="label">Button Name (English, optional)</label>
+              <input
+                type="text"
+                value={form.button_label}
+                onChange={(e) => setForm({ ...form, button_label: e.target.value })}
+                className="input-field"
+                placeholder="Shop Now"
+              />
+            </div>
+            <div>
+              <label className="label">Button Name (Khmer, optional)</label>
+              <input
+                type="text"
+                value={form.button_label_km}
+                onChange={(e) => setForm({ ...form, button_label_km: e.target.value })}
+                className="input-field"
+                placeholder="ទិញឥឡូវ"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Button Link (optional — overrides Linked Product link)</label>
+            <input
+              type="text"
+              value={form.button_url}
+              onChange={(e) => setForm({ ...form, button_url: e.target.value })}
+              className="input-field"
+              placeholder="/shop, /flash-sale, /product/12, or https://..."
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              Leave blank to link automatically to the Linked Product page (or hide button if no product is selected).
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
               <label className="label">Linked Product</label>
               <select
                 value={form.product}
                 onChange={(e) => setForm({ ...form, product: e.target.value })}
                 className="select-field"
               >
-                <option value="">- None (hide Shop Now) -</option>
+                <option value="">- None -</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -693,6 +749,8 @@ export default function VideoHighlights() {
         onClose={() => setPreviewCardItem(null)}
         title="Video Card Preview"
         size="sm"
+        backdropClassName="bg-transparent backdrop-blur-none"
+        className="border border-gray-200"
       >
         {previewCardItem && (
           <div className="flex flex-col items-center gap-3 p-5">
@@ -701,7 +759,10 @@ export default function VideoHighlights() {
                 video={previewCardItem}
                 isPreview
                 onPlay={(item) => setPreviewPlayerItem(item)}
-                onShopNow={() => toast('Shop Now opens the linked product page')}
+                onShopNow={(item) => {
+                  const target = item.resolved_button_url || item.button_url || (item.product ? `/product/${item.product}` : '')
+                  toast(target ? `Button opens: ${target}` : 'No button link configured')
+                }}
               />
             </div>
             <p className="text-center text-xs text-gray-500">

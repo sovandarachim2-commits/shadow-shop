@@ -9,7 +9,11 @@ export function VideoHighlightCard({ video, onPlay, onShopNow, isPreview = false
   const isKm = (i18n.language || '').startsWith('km')
   const label = isKm ? (video.product_label_km || video.product_label) : (video.product_label || video.product_label_km)
   const caption = isKm ? (video.caption_km || video.caption) : (video.caption || video.caption_km)
-  const canShop = Boolean(video.product && (isPreview ? true : video.product_is_available !== false))
+  const customButtonText = isKm ? (video.button_label_km || video.button_label) : (video.button_label || video.button_label_km)
+  const buttonText = customButtonText || t('home.shopNow')
+  const hasCustomButtonUrl = Boolean((video.button_url || '').trim())
+  const canLinkedProductShop = Boolean(video.product && (isPreview ? true : video.product_is_available !== false))
+  const canShop = hasCustomButtonUrl || canLinkedProductShop
 
   return (
     <div
@@ -67,7 +71,7 @@ export function VideoHighlightCard({ video, onPlay, onShopNow, isPreview = false
               }}
               className="inline-flex h-8 items-center justify-center rounded-full bg-[#EC197A] px-3.5 text-xs font-extrabold text-white shadow-md shadow-pink-600/30 transition hover:bg-[#d8146e] active:scale-95"
             >
-              {t('home.shopNow')}
+              {buttonText}
             </button>
           )}
         </div>
@@ -143,7 +147,13 @@ export default function VideoHighlightsSection({ videos = [] }) {
                   setActiveVideo(item)
                 }}
                 onShopNow={(item) => {
-                  if (item.product) navigate(`/product/${item.product}`)
+                  const target = item.resolved_button_url || item.button_url || (item.product ? `/product/${item.product}` : '')
+                  if (!target) return
+                  if (/^https?:\/\//i.test(target)) {
+                    window.open(target, '_blank', 'noopener,noreferrer')
+                  } else {
+                    navigate(target)
+                  }
                 }}
               />
             </div>
