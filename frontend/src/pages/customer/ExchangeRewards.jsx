@@ -39,21 +39,12 @@ function getTypeMeta(t) {
   }
 }
 
-function getSampleRewards(t) {
-  return [
-    { id: 'sample-1', name: t('rewardsPage.main.sampleDiscount'), description: t('rewardsPage.main.sampleDiscountDesc'), type: 'discount', points_required: 500, preview: true },
-    { id: 'sample-2', name: t('rewardsPage.main.sampleFreeDelivery'), description: t('rewardsPage.main.sampleFreeDeliveryDesc'), type: 'free_delivery', points_required: 800, preview: true },
-    { id: 'sample-3', name: t('rewardsPage.main.samplePercentOff'), description: t('rewardsPage.main.samplePercentOffDesc'), type: 'discount', points_required: 1000, preview: true },
-    { id: 'sample-4', name: t('rewardsPage.main.sampleLuckyBox'), description: t('rewardsPage.main.sampleLuckyBoxDesc'), type: 'lucky_box', points_required: 1500, preview: true },
-  ]
-}
-
 function RewardCard({ reward, currentPoints, onExchange, isExchanging, onView, t, typeMeta }) {
   const meta = typeMeta[reward.type] || typeMeta.discount
   const Icon = meta.icon
   const rewardImage = reward.reward_image_url || reward.gift_product_image
   const hasStock = reward.stock === null || reward.stock === undefined || reward.stock > 0
-  const canExchange = !reward.preview && reward.can_exchange && hasStock
+  const canExchange = reward.can_exchange && hasStock
   const pointsShort = Math.max(0, reward.points_required - currentPoints)
   const unavailableText = !hasStock
     ? t('rewardsPage.outOfStock')
@@ -65,11 +56,11 @@ function RewardCard({ reward, currentPoints, onExchange, isExchanging, onView, t
     <article
       role="button"
       tabIndex={0}
-      onClick={() => !reward.preview && onView(reward)}
+      onClick={() => onView(reward)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          if (!reward.preview) onView(reward)
+          onView(reward)
         }
       }}
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
@@ -230,7 +221,6 @@ export default function ExchangeRewards() {
   const [redeemedCoupon, setRedeemedCoupon] = useState(null)
   const [showTierModal, setShowTierModal] = useState(false)
   const typeMeta = getTypeMeta(t)
-  const sampleRewards = getSampleRewards(t)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -287,8 +277,7 @@ export default function ExchangeRewards() {
   const nextMemberLevelRaw = data?.next_tier_name
   const nextMemberLevel = nextMemberLevelRaw ? t(`profile.tiers.${nextMemberLevelRaw.toLowerCase()}`, { defaultValue: nextMemberLevelRaw }) : ''
   const progressPct = Math.min(100, data?.progress_pct || Math.round((currentPoints / Math.max(nextTierPoints, 1)) * 100))
-  const displayRewards = rewards.length > 0 ? rewards : sampleRewards
-  const filteredRewards = displayRewards.filter((reward) => {
+  const filteredRewards = rewards.filter((reward) => {
     if (activeCategory === 'all') return true
     if (activeCategory === 'voucher') return ['voucher', 'discount'].includes(reward.type)
     return reward.type === activeCategory
@@ -459,20 +448,27 @@ export default function ExchangeRewards() {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
-            {filteredRewards.map((reward) => (
-              <RewardCard
-                key={reward.id}
-                reward={reward}
-                currentPoints={currentPoints}
-                isExchanging={exchangingId === reward.id}
-                onView={(item) => navigate(`/profile/rewards/${item.id}`)}
-                onExchange={(rewardId) => exchangeMutation.mutate(rewardId)}
-                t={t}
-                typeMeta={typeMeta}
-              />
-            ))}
-          </div>
+          {filteredRewards.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
+              {filteredRewards.map((reward) => (
+                <RewardCard
+                  key={reward.id}
+                  reward={reward}
+                  currentPoints={currentPoints}
+                  isExchanging={exchangingId === reward.id}
+                  onView={(item) => navigate(`/profile/rewards/${item.id}`)}
+                  onExchange={(rewardId) => exchangeMutation.mutate(rewardId)}
+                  t={t}
+                  typeMeta={typeMeta}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-white py-12 text-center">
+              <Gift size={32} className="mx-auto text-gray-200" />
+              <p className="mt-3 text-sm font-black text-gray-500">{t('rewardsPage.redeem.noRewards')}</p>
+            </div>
+          )}
         </section>
 
         {redemptions.length > 0 && (
