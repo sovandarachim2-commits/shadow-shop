@@ -878,6 +878,7 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
     product_slug = serializers.CharField(source='product.slug', read_only=True, default='')
     product_is_available = serializers.SerializerMethodField()
     clear_video = serializers.BooleanField(write_only=True, required=False, default=False)
+    clear_cover = serializers.BooleanField(write_only=True, required=False, default=False)
 
     ALLOWED_VIDEO_EXTS = {'.mp4', '.mov', '.webm', '.m4v'}
     ALLOWED_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
@@ -891,7 +892,7 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
             'product_label', 'product_label_km', 'caption', 'caption_km',
             'button_label', 'button_label_km', 'button_url', 'resolved_button_url',
             'product', 'product_name', 'product_slug', 'product_is_available',
-            'original_video_url', 'display_order', 'status', 'clear_video',
+            'original_video_url', 'display_order', 'status', 'clear_video', 'clear_cover',
             'created_by', 'updated_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'updated_by', 'created_at', 'updated_at']
@@ -989,12 +990,11 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'original_video_url': 'Upload a video file or provide a YouTube, TikTok, Facebook, or Telegram link.',
             })
-        if self.instance is None and not attrs.get('cover_image'):
-            raise serializers.ValidationError({'cover_image': 'Cover image is required.'})
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('clear_video', None)
+        validated_data.pop('clear_cover', None)
         request = self.context.get('request')
         user = request.user if request and request.user.is_authenticated else None
         validated_data['created_by'] = user
@@ -1003,9 +1003,13 @@ class VideoHighlightSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         clear_video = validated_data.pop('clear_video', False)
+        clear_cover = validated_data.pop('clear_cover', False)
         if clear_video and not validated_data.get('video') and instance.video:
             instance.video.delete(save=False)
             validated_data['video'] = None
+        if clear_cover and not validated_data.get('cover_image') and instance.cover_image:
+            instance.cover_image.delete(save=False)
+            validated_data['cover_image'] = None
         request = self.context.get('request')
         user = request.user if request and request.user.is_authenticated else None
         validated_data['updated_by'] = user

@@ -43,6 +43,7 @@ const INITIAL_FORM = {
   videoFile: null,
   coverFile: null,
   clearVideo: false,
+  clearCover: false,
 }
 
 function extractApiError(error, fallback) {
@@ -167,6 +168,7 @@ export default function VideoHighlights() {
         if (videoToUpload) fd.append('video', videoToUpload)
         else if (form.clearVideo) fd.append('clear_video', 'true')
         if (coverToUpload) fd.append('cover_image', coverToUpload)
+        else if (form.clearCover) fd.append('clear_cover', 'true')
 
         setUploadStage('Uploading… 0%')
         const uploadConfig = {
@@ -246,6 +248,7 @@ export default function VideoHighlights() {
       videoFile: null,
       coverFile: null,
       clearVideo: false,
+      clearCover: false,
     })
     setShowFormModal(true)
   }
@@ -258,7 +261,6 @@ export default function VideoHighlights() {
     if (!hasUploadedVideo && !hasVideoLink) {
       return toast.error('Please upload a video file or enter a YouTube, TikTok, Facebook, or Telegram link')
     }
-    if (!editingVideo && !form.coverFile) return toast.error('Please upload a cover image')
     if (form.original_video_url.trim() && !form.original_video_url.trim().startsWith('https://')) {
       return toast.error('Video link must start with https://')
     }
@@ -282,7 +284,7 @@ export default function VideoHighlights() {
     id: editingVideo?.id || 'preview',
     title: form.title || 'Preview Video',
     video_url: form.clearVideo && !videoObjectUrl ? '' : (videoObjectUrl || editingVideo?.video_url || ''),
-    cover_image_url: coverObjectUrl || editingVideo?.cover_image_url || '',
+    cover_image_url: form.clearCover && !coverObjectUrl ? '' : (coverObjectUrl || editingVideo?.cover_image_url || ''),
     product_label: form.product_label,
     product_label_km: form.product_label_km,
     caption: form.caption,
@@ -532,20 +534,46 @@ export default function VideoHighlights() {
             </div>
 
             <div>
-              <label className="label">Cover Image {editingVideo ? '(optional)' : '*'}</label>
+              <label className="label">Cover Image (optional)</label>
               <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-4 text-center transition hover:border-pink-400 hover:bg-pink-50/40">
                 <ImageIcon size={18} className="text-pink-600" />
                 <span className="text-xs font-semibold text-gray-700">
-                  {form.coverFile ? form.coverFile.name : editingVideo?.cover_image_url ? 'Replace cover image' : 'Choose PNG, JPG, WebP'}
+                  {form.coverFile
+                    ? form.coverFile.name
+                    : editingVideo?.cover_image_url && !form.clearCover
+                      ? 'Replace cover image'
+                      : 'Choose PNG, JPG, WebP'}
                 </span>
                 <span className="text-[11px] text-gray-400">Recommended 9:16 (720×1280) • Max 5 MB</span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-                  onChange={(e) => setForm({ ...form, coverFile: e.target.files?.[0] || null })}
+                  onChange={(e) => setForm({ ...form, coverFile: e.target.files?.[0] || null, clearCover: false })}
                   className="hidden"
                 />
               </label>
+              {(editingVideo?.cover_image_url || form.clearCover) && (
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                  {editingVideo?.cover_image_url && !form.clearCover && !form.coverFile && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, clearCover: true })}
+                      className="text-xs font-semibold text-red-600 hover:underline"
+                    >
+                      Remove cover image
+                    </button>
+                  )}
+                  {form.clearCover && (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, clearCover: false })}
+                      className="text-xs font-semibold text-gray-600 hover:underline"
+                    >
+                      Keep existing cover
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

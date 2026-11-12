@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Play, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import VideoHighlightModal from './VideoHighlightModal'
+import { parseVideoEmbed } from '@/utils/videoEmbed'
 
 export function VideoHighlightCard({ video, onPlay, onShopNow, isPreview = false }) {
   const { i18n, t } = useTranslation()
@@ -14,6 +15,8 @@ export function VideoHighlightCard({ video, onPlay, onShopNow, isPreview = false
   const hasCustomButtonUrl = Boolean((video.button_url || '').trim())
   const canLinkedProductShop = Boolean(video.product && (isPreview ? true : video.product_is_available !== false))
   const canShop = hasCustomButtonUrl || canLinkedProductShop
+  const embedInfo = !video.cover_image_url && video.original_video_url ? parseVideoEmbed(video.original_video_url) : null
+  const coverSrc = video.cover_image_url || embedInfo?.thumbnailUrl || ''
 
   return (
     <div
@@ -25,16 +28,28 @@ export function VideoHighlightCard({ video, onPlay, onShopNow, isPreview = false
         aria-label={`Play ${video.title || label || 'video'}`}
         className="relative block h-full w-full text-left focus:outline-none focus:ring-2 focus:ring-pink-500"
       >
-        {video.cover_image_url ? (
+        {coverSrc ? (
           <img
-            src={video.cover_image_url}
+            src={coverSrc}
             alt={video.title || label || 'Video cover'}
             loading="lazy"
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
           />
+        ) : video.video_url ? (
+          <video
+            src={`${video.video_url}#t=0.5`}
+            preload="metadata"
+            muted
+            playsInline
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+          />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-pink-500/30 to-slate-900 text-xs text-white/60">
-            9:16 Cover
+          <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-pink-950/80 px-4 text-center">
+            {embedInfo?.label && (
+              <span className="mb-14 rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/80">
+                {embedInfo.label}
+              </span>
+            )}
           </div>
         )}
 

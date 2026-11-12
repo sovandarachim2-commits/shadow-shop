@@ -44,6 +44,7 @@ export function parseVideoEmbed(rawUrl) {
         provider: 'youtube',
         label: 'YouTube',
         embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`,
+        thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
         aspect: isShorts ? 'portrait' : 'landscape',
         externalUrl: parsed.toString(),
       }
