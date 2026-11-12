@@ -138,8 +138,11 @@ const useAuthStore = create(
           const { data } = await authApi.me()
           set({ user: data, isAuthenticated: true })
           return data
-        } catch {
-          get().clearSession()
+        } catch (err) {
+          const status = err?.response?.status
+          if (status === 401 || status === 403) {
+            get().clearSession()
+          }
         }
       },
     }),

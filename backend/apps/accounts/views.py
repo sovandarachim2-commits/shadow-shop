@@ -2116,8 +2116,8 @@ class WebsiteVisitReportView(generics.GenericAPIView):
     permission_module = 'reports'
 
     def get(self, request):
+        from collections import defaultdict
         from django.db.models import Count, Q
-        from django.db.models.functions import TruncDate
         from .models import WebsiteVisit
 
         try:
@@ -2159,22 +2159,20 @@ class WebsiteVisitReportView(generics.GenericAPIView):
             'live_now': WebsiteVisit.objects.filter(created_at__gte=live_since).values('visitor_id').distinct().count(),
         }
 
-        daily_rows = list(
-            qs.annotate(date=TruncDate('created_at'))
-            .values('date')
-            .annotate(
-                visits=Count('id'),
-                unique_visitors=Count('visitor_id', distinct=True),
-            )
-            .order_by('date')
-        )
+        current_tz = timezone.get_current_timezone()
+        daily_counts = defaultdict(int)
+        daily_uniques = defaultdict(set)
+        for created_at, vid in qs.values_list('created_at', 'visitor_id'):
+            day_key = timezone.localtime(created_at, current_tz).date().isoformat()
+            daily_counts[day_key] += 1
+            daily_uniques[day_key].add(vid)
         daily = [
             {
-                'date': row['date'].isoformat() if row['date'] else '',
-                'visits': row['visits'],
-                'unique_visitors': row['unique_visitors'],
+                'date': day_key,
+                'visits': daily_counts[day_key],
+                'unique_visitors': len(daily_uniques[day_key]),
             }
-            for row in daily_rows
+            for day_key in sorted(daily_counts)
         ]
 
         top_pages = list(

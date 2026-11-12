@@ -92,6 +92,35 @@ async function clearAuthSession() {
   useAuthStore.getState().clearSession()
 }
 
+let refreshPromise = null
+
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    const refresh = localStorage.getItem('refresh_token')
+    if (!refresh) return null
+    refreshPromise = axios
+      .post(`${API_BASE}/auth/refresh/`, { refresh })
+      .then(async ({ data }) => {
+        localStorage.setItem('access_token', data.access)
+        const nextRefresh = data.refresh || localStorage.getItem('refresh_token')
+        if (data.refresh) {
+          localStorage.setItem('refresh_token', data.refresh)
+        }
+        const { default: useAuthStore } = await import('@/store/authStore')
+        useAuthStore.setState({
+          accessToken: data.access,
+          refreshToken: nextRefresh,
+          isAuthenticated: true,
+        })
+        return data.access
+      })
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
+}
+
 client.interceptors.request.use((config) => {
   if (config.skipAuth) {
     delete config.headers.Authorization
@@ -125,17 +154,16 @@ client.interceptors.response.use(
       const refresh = localStorage.getItem('refresh_token')
       if (refresh) {
         try {
-          const { data } = await axios.post(`${API_BASE}/auth/refresh/`, { refresh })
-          localStorage.setItem('access_token', data.access)
-          if (data.refresh) {
-            localStorage.setItem('refresh_token', data.refresh)
-            const { default: useAuthStore } = await import('@/store/authStore')
-            useAuthStore.setState({ accessToken: data.access, refreshToken: data.refresh, isAuthenticated: true })
+          const nextAccess = await refreshAccessToken()
+          if (nextAccess) {
+            original.headers.Authorization = `Bearer ${nextAccess}`
+            return client(original)
           }
-          original.headers.Authorization = `Bearer ${data.access}`
-          return client(original)
-        } catch {
-          await clearAuthSession()
+        } catch (refreshError) {
+          const refreshStatus = refreshError?.response?.status
+          if (refreshStatus === 401 || refreshStatus === 403 || refreshStatus === 400) {
+            await clearAuthSession()
+          }
         }
       } else if (localStorage.getItem('access_token')) {
         await clearAuthSession()
