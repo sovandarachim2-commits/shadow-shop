@@ -20,6 +20,12 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { VideoHighlightCard } from '@/components/customer/VideoHighlightsSection'
 import VideoHighlightModal from '@/components/customer/VideoHighlightModal'
 import { productsApi } from '@/api/products'
+import { compressImageForUpload } from '@/utils/imageUpload'
+import {
+  AUTO_COMPRESS_ABOVE_BYTES,
+  compressVideoForUpload,
+  formatFileSize,
+} from '@/utils/videoUpload'
 
 const INITIAL_FORM = {
   title: '',
@@ -36,8 +42,15 @@ const INITIAL_FORM = {
 }
 
 function extractApiError(error, fallback) {
+  const status = error?.response?.status
   const data = error?.response?.data
-  if (typeof data === 'string' && data.trim()) return data
+  if (status === 413 || (typeof data === 'string' && data.includes('413'))) {
+    return 'Video is too large for the server (HTTP 413). Keep compression enabled or upload a smaller file.'
+  }
+  if (typeof data === 'string' && data.trim()) {
+    if (data.trim().startsWith('<')) return fallback
+    return data
+  }
   if (data && typeof data === 'object') {
     if (data.detail) return String(data.detail)
     for (const key of Object.keys(data)) {
@@ -63,6 +76,8 @@ export default function VideoHighlights() {
 
   const [videoObjectUrl, setVideoObjectUrl] = useState('')
   const [coverObjectUrl, setCoverObjectUrl] = useState('')
+  const [compressLargeVideo, setCompressLargeVideo] = useState(true)
+  const [uploadStage, setUploadStage] = useState('')
 
   useEffect(() => {
     if (!form.videoFile) {
@@ -117,24 +132,58 @@ export default function VideoHighlights() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const fd = new FormData()
-      fd.append('title', form.title.trim())
-      fd.append('product_label', form.product_label.trim())
-      fd.append('product_label_km', form.product_label_km.trim())
-      fd.append('caption', form.caption.trim())
-      fd.append('caption_km', form.caption_km.trim())
-      if (form.product) fd.append('product', form.product)
-      else fd.append('product', '')
-      fd.append('original_video_url', form.original_video_url.trim())
-      fd.append('display_order', String(Number(form.display_order || 0)))
-      fd.append('status', form.status || 'draft')
-      if (form.videoFile) fd.append('video', form.videoFile)
-      if (form.coverFile) fd.append('cover_image', form.coverFile)
+      try {
+        let videoToUpload = form.videoFile
+        if (videoToUpload && compressLargeVideo && videoToUpload.size > AUTO_COMPRESS_ABOVE_BYTES) {
+          setUploadStage('Compressing video… 0%')
+          const result = await compressVideoForUpload(videoToUpload, {
+            onProgress: (pct) => setUploadStage(`Compressing video… ${pct}%`),
+          })
+          videoToUpload = result.file
+          if (result.compressed) {
+            toast.success(`Compressed video: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.finalSize)}`)
+          }
+        }
 
-      if (editingVideo) {
-        return productsApi.videoHighlights.update(editingVideo.id, fd)
+        let coverToUpload = form.coverFile
+        if (coverToUpload) {
+          setUploadStage('Optimizing cover…')
+          coverToUpload = await compressImageForUpload(coverToUpload, {
+            maxSize: 1280,
+            targetSize: 220 * 1024,
+          })
+        }
+
+        const fd = new FormData()
+        fd.append('title', form.title.trim())
+        fd.append('product_label', form.product_label.trim())
+        fd.append('product_label_km', form.product_label_km.trim())
+        fd.append('caption', form.caption.trim())
+        fd.append('caption_km', form.caption_km.trim())
+        if (form.product) fd.append('product', form.product)
+        else fd.append('product', '')
+        fd.append('original_video_url', form.original_video_url.trim())
+        fd.append('display_order', String(Number(form.display_order || 0)))
+        fd.append('status', form.status || 'draft')
+        if (videoToUpload) fd.append('video', videoToUpload)
+        if (coverToUpload) fd.append('cover_image', coverToUpload)
+
+        setUploadStage('Uploading… 0%')
+        const uploadConfig = {
+          onUploadProgress: (progressEvent) => {
+            if (!progressEvent.total) return
+            const pct = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100))
+            setUploadStage(pct >= 100 ? 'Processing on server…' : `Uploading… ${pct}%`)
+          },
+        }
+
+        if (editingVideo) {
+          return await productsApi.videoHighlights.update(editingVideo.id, fd, uploadConfig)
+        }
+        return await productsApi.videoHighlights.create(fd, uploadConfig)
+      } finally {
+        setUploadStage('')
       }
-      return productsApi.videoHighlights.create(fd)
     },
     onSuccess: () => {
       invalidateAll()
@@ -419,15 +468,30 @@ export default function VideoHighlights() {
               <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 bg-gray-50/70 p-4 text-center transition hover:border-pink-400 hover:bg-pink-50/40">
                 <Upload size={18} className="text-pink-600" />
                 <span className="text-xs font-semibold text-gray-700">
-                  {form.videoFile ? form.videoFile.name : editingVideo?.video_url ? 'Replace current video' : 'Choose MP4, MOV, WebM'}
+                  {form.videoFile
+                    ? `${form.videoFile.name} (${formatFileSize(form.videoFile.size)})`
+                    : editingVideo?.video_url
+                      ? 'Replace current video'
+                      : 'Choose MP4, MOV, WebM'}
                 </span>
-                <span className="text-[11px] text-gray-400">Portrait 9:16 • Max 50 MB</span>
+                <span className="text-[11px] text-gray-400">
+                  Portrait 9:16 • Auto-compressed if &gt; 18 MB (max 150 MB raw / 50 MB stored)
+                </span>
                 <input
                   type="file"
                   accept="video/mp4,video/quicktime,video/webm,video/x-m4v,.mp4,.mov,.webm,.m4v"
                   onChange={(e) => setForm({ ...form, videoFile: e.target.files?.[0] || null })}
                   className="hidden"
                 />
+              </label>
+              <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={compressLargeVideo}
+                  onChange={(e) => setCompressLargeVideo(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-pink-600 focus:ring-pink-500"
+                />
+                <span>Compress large video before upload (saves storage)</span>
               </label>
             </div>
 
@@ -549,7 +613,7 @@ export default function VideoHighlights() {
               disabled={saveMutation.isPending}
               className="btn-primary flex-1 justify-center disabled:opacity-60"
             >
-              {saveMutation.isPending ? 'Saving...' : editingVideo ? 'Update Video' : 'Create Video'}
+              {saveMutation.isPending ? (uploadStage || 'Saving...') : editingVideo ? 'Update Video' : 'Create Video'}
             </button>
             <button
               type="button"

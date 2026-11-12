@@ -6,7 +6,7 @@ echo "=== Shadow Shop Initial Setup ==="
 # Install system dependencies
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y python3.13 python3.13-venv python3-pip \
-    nginx mysql-server redis-server git curl nodejs npm certbot python3-certbot-nginx
+    nginx mysql-server redis-server git curl nodejs npm certbot python3-certbot-nginx ffmpeg
 
 # Create application directory
 sudo mkdir -p /var/www/shadow_shop
