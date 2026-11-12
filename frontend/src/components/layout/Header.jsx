@@ -13,6 +13,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/products/brands', 'Brands'],
   ['/admin/products/sets', 'Product Sets'],
   ['/admin/products/banners', 'Banners'],
+  ['/admin/marketing/announcements', 'Announcement Bar'],
   ['/admin/products', 'Products'],
   ['/admin/orders/new', 'Create New Order'],
   ['/admin/orders/', 'Order Details'],

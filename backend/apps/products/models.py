@@ -368,3 +368,211 @@ class Banner(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Announcement(models.Model):
+    STATUS_DRAFT = 'draft'
+    STATUS_PUBLISHED = 'published'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_PUBLISHED, 'Published'),
+    ]
+
+    FONT_WEIGHT_CHOICES = [
+        ('normal', 'Normal'),
+        ('medium', 'Medium'),
+        ('bold', 'Bold'),
+    ]
+
+    ALIGNMENT_CHOICES = [
+        ('left', 'Left'),
+        ('center', 'Center'),
+        ('right', 'Right'),
+    ]
+
+    ANIMATION_CHOICES = [
+        ('static', 'Static'),
+        ('slide', 'Sliding text'),
+        ('marquee', 'Marquee / continuous scrolling'),
+        ('rotate', 'Rotating announcements'),
+        ('fade', 'Fade transition'),
+    ]
+
+    DIRECTION_CHOICES = [
+        ('left', 'Left'),
+        ('right', 'Right'),
+    ]
+
+    LANGUAGE_RULE_CHOICES = [
+        ('all', 'All Languages'),
+        ('en', 'English Only'),
+        ('km', 'Khmer Only'),
+    ]
+
+    PAGE_MODE_CHOICES = [
+        ('all', 'All Pages'),
+        ('selected', 'Selected Pages'),
+    ]
+
+    # Content
+    title = models.CharField(max_length=200, blank=True)
+    message_en = models.TextField(blank=True)
+    message_km = models.TextField(blank=True)
+    mobile_message_en = models.TextField(blank=True)
+    mobile_message_km = models.TextField(blank=True)
+    icon = models.CharField(max_length=60, blank=True)
+    link_url = models.CharField(max_length=500, blank=True)
+    link_text = models.CharField(max_length=120, blank=True)
+    link_text_km = models.CharField(max_length=120, blank=True)
+    open_in_new_tab = models.BooleanField(default=False)
+
+    # Appearance
+    background_color = models.CharField(max_length=30, default='#111827')
+    text_color = models.CharField(max_length=30, default='#FFFFFF')
+    use_gradient = models.BooleanField(default=False)
+    gradient_css = models.CharField(max_length=300, blank=True)
+    font_size = models.PositiveSmallIntegerField(default=14)
+    font_weight = models.CharField(max_length=20, choices=FONT_WEIGHT_CHOICES, default='medium')
+    alignment = models.CharField(max_length=10, choices=ALIGNMENT_CHOICES, default='center')
+    height = models.PositiveSmallIntegerField(default=40)
+    padding_x = models.PositiveSmallIntegerField(default=16)
+    border_radius = models.PositiveSmallIntegerField(default=0)
+    icon_size = models.PositiveSmallIntegerField(default=16)
+    icon_color = models.CharField(max_length=30, default='#FFFFFF')
+    show_close_button = models.BooleanField(default=True)
+
+    # Animation
+    animation_type = models.CharField(max_length=20, choices=ANIMATION_CHOICES, default='static')
+    animation_speed = models.PositiveSmallIntegerField(default=5)
+    animation_direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, default='left')
+    transition_duration = models.PositiveIntegerField(default=400)
+    rotation_delay = models.PositiveIntegerField(default=4000)
+    reduced_motion = models.BooleanField(default=False)
+
+    # Responsive settings
+    show_on_desktop = models.BooleanField(default=True)
+    show_on_tablet = models.BooleanField(default=True)
+    show_on_mobile = models.BooleanField(default=True)
+    tablet_font_size = models.PositiveSmallIntegerField(null=True, blank=True)
+    tablet_height = models.PositiveSmallIntegerField(null=True, blank=True)
+    tablet_padding_x = models.PositiveSmallIntegerField(null=True, blank=True)
+    tablet_alignment = models.CharField(max_length=10, blank=True)
+    mobile_font_size = models.PositiveSmallIntegerField(null=True, blank=True)
+    mobile_height = models.PositiveSmallIntegerField(null=True, blank=True)
+    mobile_padding_x = models.PositiveSmallIntegerField(null=True, blank=True)
+    mobile_alignment = models.CharField(max_length=10, blank=True)
+
+    # Scheduling & Display rules
+    start_at = models.DateTimeField(null=True, blank=True)
+    end_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    priority = models.PositiveIntegerField(default=0)
+    target_stores = models.JSONField(default=list, blank=True)
+    target_delivery_areas = models.JSONField(default=list, blank=True)
+    language_rule = models.CharField(max_length=10, choices=LANGUAGE_RULE_CHOICES, default='all')
+    page_display_mode = models.CharField(max_length=20, choices=PAGE_MODE_CHOICES, default='all')
+    target_pages = models.JSONField(default=list, blank=True)
+
+    # Publishing & Audit
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    published_snapshot = models.JSONField(null=True, blank=True)
+    has_unpublished_changes = models.BooleanField(default=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_announcements',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_announcements',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'announcements'
+        ordering = ['priority', 'id']
+        indexes = [
+            models.Index(fields=['status', 'is_active', 'priority']),
+            models.Index(fields=['start_at', 'end_at']),
+        ]
+
+    def __str__(self):
+        return self.title or self.message_en[:50] or self.message_km[:50] or f'Announcement #{self.pk}'
+
+    def build_snapshot(self):
+        return {
+            'id': self.pk,
+            'title': self.title,
+            'message_en': self.message_en,
+            'message_km': self.message_km,
+            'mobile_message_en': self.mobile_message_en,
+            'mobile_message_km': self.mobile_message_km,
+            'icon': self.icon,
+            'link_url': self.link_url,
+            'link_text': self.link_text,
+            'link_text_km': self.link_text_km,
+            'open_in_new_tab': self.open_in_new_tab,
+            'background_color': self.background_color,
+            'text_color': self.text_color,
+            'use_gradient': self.use_gradient,
+            'gradient_css': self.gradient_css,
+            'font_size': self.font_size,
+            'font_weight': self.font_weight,
+            'alignment': self.alignment,
+            'height': self.height,
+            'padding_x': self.padding_x,
+            'border_radius': self.border_radius,
+            'icon_size': self.icon_size,
+            'icon_color': self.icon_color,
+            'show_close_button': self.show_close_button,
+            'animation_type': self.animation_type,
+            'animation_speed': self.animation_speed,
+            'animation_direction': self.animation_direction,
+            'transition_duration': self.transition_duration,
+            'rotation_delay': self.rotation_delay,
+            'reduced_motion': self.reduced_motion,
+            'show_on_desktop': self.show_on_desktop,
+            'show_on_tablet': self.show_on_tablet,
+            'show_on_mobile': self.show_on_mobile,
+            'tablet_font_size': self.tablet_font_size,
+            'tablet_height': self.tablet_height,
+            'tablet_padding_x': self.tablet_padding_x,
+            'tablet_alignment': self.tablet_alignment,
+            'mobile_font_size': self.mobile_font_size,
+            'mobile_height': self.mobile_height,
+            'mobile_padding_x': self.mobile_padding_x,
+            'mobile_alignment': self.mobile_alignment,
+            'start_at': self.start_at.isoformat() if self.start_at else None,
+            'end_at': self.end_at.isoformat() if self.end_at else None,
+            'is_active': self.is_active,
+            'priority': self.priority,
+            'target_stores': list(self.target_stores or []),
+            'target_delivery_areas': list(self.target_delivery_areas or []),
+            'language_rule': self.language_rule,
+            'page_display_mode': self.page_display_mode,
+            'target_pages': list(self.target_pages or []),
+        }
+
+    def publish(self, user=None):
+        now = timezone.now()
+        self.status = self.STATUS_PUBLISHED
+        self.published_at = now
+        self.has_unpublished_changes = False
+        if user is not None:
+            self.updated_by = user
+        self.published_snapshot = self.build_snapshot()
+        self.save()
+
+    def unpublish(self, user=None):
+        self.status = self.STATUS_DRAFT
+        self.has_unpublished_changes = False
+        if user is not None:
+            self.updated_by = user
+        self.save(update_fields=['status', 'has_unpublished_changes', 'updated_by', 'updated_at'])

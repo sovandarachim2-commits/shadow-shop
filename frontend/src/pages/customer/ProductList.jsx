@@ -198,14 +198,14 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
               decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
+              className="absolute inset-0 h-full w-full object-contain p-1 transition duration-300 group-hover:scale-[1.03] sm:p-2"
             />
           </>
         ) : (
           <ProductImageFallback />
         )}
       </div>
-      <div className="flex min-h-0 flex-col p-3 sm:min-h-[166px]">
+      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
@@ -323,7 +323,7 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
               decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
+              className="absolute inset-0 h-full w-full object-contain p-1 transition duration-300 group-hover:scale-[1.03] sm:p-2"
             />
           </>
         ) : (
@@ -333,7 +333,7 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
           {t('product.productSetBadge')}
         </span>
       </div>
-      <div className="flex min-h-0 flex-col p-3 sm:min-h-[166px]">
+      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{t('product.productSet')}</span>
         </div>
@@ -612,7 +612,7 @@ export default function ProductList() {
             </p>
           </div>
 
-          <div className="relative z-0 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
+          <div className="relative z-0 -mx-2.5 grid grid-cols-2 gap-2 sm:mx-0 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 md:gap-4">
             {isGridLoading
               ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)
               : (

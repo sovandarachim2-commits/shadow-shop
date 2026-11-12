@@ -10,16 +10,19 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
 from django.db.models import Count, F, Q
 from django.utils import timezone
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement
 from .serializers import (
     BrandSerializer, CategorySerializer, ProductListSerializer, ProductDetailSerializer,
     ProductWriteSerializer, ProductImageSerializer, ProductSetImageSerializer, ProductSetSerializer,
     ProductReviewSerializer, PromotionSerializer, BannerSerializer, HomeSectionStyleSerializer,
+    AnnouncementSerializer,
 )
 from .flash_sale_stats import attach_flash_sale_stats
 from utils.image_optimization import ensure_card_variant, optimize_uploaded_image
-from utils.permissions import IsAdminOrSuperAdmin, IsStaff
+from utils.permissions import IsAdminOrSuperAdmin, IsStaff, HasModulePermission
 from utils.storefront_cache import (
+    ANNOUNCEMENTS_PUBLIC_CACHE_KEY,
+    ANNOUNCEMENTS_PUBLIC_TTL,
     HOME_FEED_CACHE_KEY,
     HOME_FEED_TTL,
     bump_storefront_cache,
@@ -791,3 +794,295 @@ class HomeFeedView(generics.GenericAPIView):
         }
         safe_cache_set(HOME_FEED_CACHE_KEY, payload, HOME_FEED_TTL)
         return Response(payload)
+
+
+class AnnouncementViewSet(viewsets.ModelViewSet):
+    queryset = Announcement.objects.all().select_related('created_by', 'updated_by').order_by('priority', 'id')
+    serializer_class = AnnouncementSerializer
+    pagination_class = None
+    permission_module = 'marketing_announcements'
+    permission_action_map = {
+        'list': 'view',
+        'retrieve': 'view',
+        'create': 'create',
+        'duplicate': 'create',
+        'update': 'edit',
+        'partial_update': 'edit',
+        'publish': 'edit',
+        'unpublish': 'edit',
+        'toggle_active': 'edit',
+        'reorder': 'edit',
+        'destroy': 'delete',
+    }
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['status', 'is_active', 'animation_type', 'language_rule']
+    search_fields = ['title', 'message_en', 'message_km', 'mobile_message_en', 'mobile_message_km']
+    ordering_fields = ['priority', 'created_at', 'updated_at', 'start_at', 'end_at']
+
+    def get_permissions(self):
+        if self.action == 'public':
+            return [AllowAny()]
+        return [IsAuthenticated(), HasModulePermission()]
+
+    def _log(self, action_name, announcement, description):
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action=action_name,
+            module='marketing_announcements',
+            description=description,
+            request=self.request,
+            object_id=announcement.pk if announcement else '',
+            object_type='Announcement',
+        )
+
+    def perform_create(self, serializer):
+        announcement = serializer.save()
+        if announcement.status == Announcement.STATUS_PUBLISHED:
+            bump_storefront_cache()
+        self._log('create', announcement, f'Created announcement "{announcement}"')
+
+    def perform_update(self, serializer):
+        was_published = serializer.instance.status == Announcement.STATUS_PUBLISHED
+        announcement = serializer.save()
+        if announcement.status == Announcement.STATUS_PUBLISHED and not announcement.has_unpublished_changes:
+            bump_storefront_cache()
+        elif was_published and announcement.status != Announcement.STATUS_PUBLISHED:
+            bump_storefront_cache()
+        self._log('update', announcement, f'Updated announcement "{announcement}"')
+
+    def perform_destroy(self, instance):
+        ann_id = instance.pk
+        label = str(instance)
+        was_published = instance.status == Announcement.STATUS_PUBLISHED
+        super().perform_destroy(instance)
+        if was_published:
+            bump_storefront_cache()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=self.request.user,
+            action='delete',
+            module='marketing_announcements',
+            description=f'Deleted announcement "{label}"',
+            request=self.request,
+            object_id=ann_id,
+            object_type='Announcement',
+        )
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        announcement = self.get_object()
+        announcement.publish(user=request.user)
+        bump_storefront_cache()
+        self._log('update', announcement, f'Published announcement "{announcement}"')
+        return Response(self.get_serializer(announcement).data)
+
+    @action(detail=True, methods=['post'])
+    def unpublish(self, request, pk=None):
+        announcement = self.get_object()
+        announcement.unpublish(user=request.user)
+        bump_storefront_cache()
+        self._log('update', announcement, f'Unpublished announcement "{announcement}"')
+        return Response(self.get_serializer(announcement).data)
+
+    @action(detail=True, methods=['post'], url_path='toggle-active')
+    def toggle_active(self, request, pk=None):
+        announcement = self.get_object()
+        next_active = request.data.get('is_active')
+        if next_active is None:
+            announcement.is_active = not announcement.is_active
+        else:
+            announcement.is_active = str(next_active).lower() in ('1', 'true', 'yes', 'on') if isinstance(next_active, str) else bool(next_active)
+        announcement.updated_by = request.user
+        update_fields = ['is_active', 'updated_by', 'updated_at']
+        if isinstance(announcement.published_snapshot, dict):
+            snapshot = dict(announcement.published_snapshot)
+            snapshot['is_active'] = announcement.is_active
+            announcement.published_snapshot = snapshot
+            update_fields.append('published_snapshot')
+        announcement.save(update_fields=update_fields)
+        if announcement.status == Announcement.STATUS_PUBLISHED:
+            bump_storefront_cache()
+        self._log('update', announcement, f'{"Enabled" if announcement.is_active else "Disabled"} announcement "{announcement}"')
+        return Response(self.get_serializer(announcement).data)
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        source = self.get_object()
+        max_priority = Announcement.objects.order_by('-priority').values_list('priority', flat=True).first()
+        next_priority = (max_priority + 1) if max_priority is not None else 0
+        copy_title = f'{source.title} (Copy)' if source.title else ''
+        duplicate_obj = Announcement.objects.create(
+            title=copy_title[:200],
+            message_en=source.message_en,
+            message_km=source.message_km,
+            mobile_message_en=source.mobile_message_en,
+            mobile_message_km=source.mobile_message_km,
+            icon=source.icon,
+            link_url=source.link_url,
+            link_text=source.link_text,
+            link_text_km=source.link_text_km,
+            open_in_new_tab=source.open_in_new_tab,
+            background_color=source.background_color,
+            text_color=source.text_color,
+            use_gradient=source.use_gradient,
+            gradient_css=source.gradient_css,
+            font_size=source.font_size,
+            font_weight=source.font_weight,
+            alignment=source.alignment,
+            height=source.height,
+            padding_x=source.padding_x,
+            border_radius=source.border_radius,
+            icon_size=source.icon_size,
+            icon_color=source.icon_color,
+            show_close_button=source.show_close_button,
+            animation_type=source.animation_type,
+            animation_speed=source.animation_speed,
+            animation_direction=source.animation_direction,
+            transition_duration=source.transition_duration,
+            rotation_delay=source.rotation_delay,
+            reduced_motion=source.reduced_motion,
+            show_on_desktop=source.show_on_desktop,
+            show_on_tablet=source.show_on_tablet,
+            show_on_mobile=source.show_on_mobile,
+            tablet_font_size=source.tablet_font_size,
+            tablet_height=source.tablet_height,
+            tablet_padding_x=source.tablet_padding_x,
+            tablet_alignment=source.tablet_alignment,
+            mobile_font_size=source.mobile_font_size,
+            mobile_height=source.mobile_height,
+            mobile_padding_x=source.mobile_padding_x,
+            mobile_alignment=source.mobile_alignment,
+            start_at=source.start_at,
+            end_at=source.end_at,
+            is_active=False,
+            priority=next_priority,
+            target_stores=list(source.target_stores or []),
+            target_delivery_areas=list(source.target_delivery_areas or []),
+            language_rule=source.language_rule,
+            page_display_mode=source.page_display_mode,
+            target_pages=list(source.target_pages or []),
+            status=Announcement.STATUS_DRAFT,
+            published_snapshot=None,
+            has_unpublished_changes=False,
+            published_at=None,
+            created_by=request.user,
+            updated_by=request.user,
+        )
+        self._log('create', duplicate_obj, f'Duplicated announcement "{source}" as "{duplicate_obj}"')
+        return Response(self.get_serializer(duplicate_obj).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        ordered_ids = request.data.get('ordered_ids') or []
+        if not isinstance(ordered_ids, list) or not ordered_ids:
+            return Response({'detail': 'ordered_ids list is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        announcements = list(Announcement.objects.all().order_by('priority', 'id'))
+        by_id = {item.id: item for item in announcements}
+        ordered = []
+        seen = set()
+        for raw_id in ordered_ids:
+            try:
+                item_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            item = by_id.get(item_id)
+            if item and item.id not in seen:
+                ordered.append(item)
+                seen.add(item.id)
+        ordered.extend(item for item in announcements if item.id not in seen)
+
+        published_touched = False
+        for index, item in enumerate(ordered):
+            if item.priority != index:
+                item.priority = index
+                update_fields = ['priority']
+                if isinstance(item.published_snapshot, dict):
+                    snapshot = dict(item.published_snapshot)
+                    snapshot['priority'] = index
+                    item.published_snapshot = snapshot
+                    update_fields.append('published_snapshot')
+                item.save(update_fields=update_fields)
+                if item.status == Announcement.STATUS_PUBLISHED:
+                    published_touched = True
+
+        if published_touched:
+            bump_storefront_cache()
+        from apps.accounts.activity import log_activity
+        log_activity(
+            user=request.user,
+            action='update',
+            module='marketing_announcements',
+            description='Reordered announcement bar priorities',
+            request=request,
+            object_type='Announcement',
+        )
+        return Response(self.get_serializer(ordered, many=True).data)
+
+    @action(detail=False, methods=['get'], authentication_classes=[], permission_classes=[AllowAny])
+    def public(self, request):
+        from django.utils.dateparse import parse_datetime
+
+        items = safe_cache_get(ANNOUNCEMENTS_PUBLIC_CACHE_KEY)
+        if items is None:
+            qs = Announcement.objects.filter(
+                status=Announcement.STATUS_PUBLISHED,
+                is_active=True,
+            ).order_by('priority', 'id')
+            items = []
+            for ann in qs:
+                payload = dict(ann.published_snapshot) if isinstance(ann.published_snapshot, dict) else ann.build_snapshot()
+                payload['id'] = ann.pk
+                payload['priority'] = ann.priority
+                payload['is_active'] = ann.is_active
+                payload['version'] = (ann.published_at or ann.updated_at).isoformat() if (ann.published_at or ann.updated_at) else str(ann.pk)
+                items.append(payload)
+            safe_cache_set(ANNOUNCEMENTS_PUBLIC_CACHE_KEY, items, ANNOUNCEMENTS_PUBLIC_TTL)
+
+        now = timezone.now()
+        lang_filter = (request.query_params.get('lang') or '').strip().lower()
+        page_filter = (request.query_params.get('page') or '').strip().lower()
+        store_filter = (request.query_params.get('store') or '').strip()
+        area_filter = (request.query_params.get('area') or '').strip().lower()
+
+        visible = []
+        for item in items:
+            if not item.get('is_active', True):
+                continue
+            start_raw = item.get('start_at')
+            end_raw = item.get('end_at')
+            if start_raw:
+                start_dt = parse_datetime(start_raw)
+                if start_dt and timezone.is_naive(start_dt):
+                    start_dt = timezone.make_aware(start_dt, timezone.get_current_timezone())
+                if start_dt and start_dt > now:
+                    continue
+            if end_raw:
+                end_dt = parse_datetime(end_raw)
+                if end_dt and timezone.is_naive(end_dt):
+                    end_dt = timezone.make_aware(end_dt, timezone.get_current_timezone())
+                if end_dt and end_dt < now:
+                    continue
+
+            lang_rule = (item.get('language_rule') or 'all').lower()
+            if lang_filter in ('en', 'km') and lang_rule in ('en', 'km') and lang_rule != lang_filter:
+                continue
+
+            if page_filter and item.get('page_display_mode') == 'selected':
+                allowed_pages = [str(p).strip().lower() for p in (item.get('target_pages') or [])]
+                if page_filter not in allowed_pages:
+                    continue
+
+            target_stores = [str(s).strip() for s in (item.get('target_stores') or []) if str(s).strip()]
+            if store_filter and target_stores and store_filter not in target_stores:
+                continue
+
+            target_areas = [str(a).strip().lower() for a in (item.get('target_delivery_areas') or []) if str(a).strip()]
+            if area_filter and target_areas and area_filter not in target_areas:
+                continue
+
+            visible.append(item)
+
+        visible.sort(key=lambda x: (int(x.get('priority') or 0), int(x.get('id') or 0)))
+        return Response(visible)

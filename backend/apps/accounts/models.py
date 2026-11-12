@@ -66,6 +66,7 @@ class Permission(models.Model):
         ('product_sets', 'Product Sets'),
         ('product_flash_sale', 'Product Flash Sale'),
         ('product_banners', 'Product Banners'),
+        ('marketing_announcements', 'Marketing - Announcement Bar'),
         ('inventory', 'Inventory'),
         ('inventory_movements', 'Inventory Movements'),
         ('inventory_storage', 'Inventory Storage'),

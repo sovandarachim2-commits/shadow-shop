@@ -294,7 +294,7 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
               alt={product.name}
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
+              className="absolute inset-0 h-full w-full object-contain p-1 transition duration-300 group-hover:scale-[1.03] sm:p-2"
               loading={priority ? 'eager' : 'lazy'}
               fetchpriority={priority ? 'high' : 'auto'}
               decoding="async"
@@ -305,7 +305,7 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
         )}
       </div>
       {/* Info */}
-      <div className="flex min-h-0 flex-col p-3 sm:min-h-[166px]">
+      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
@@ -850,7 +850,7 @@ export default function Home() {
 
         <div className="h-2 bg-gray-50" />
         {(showFlashSkeleton || flashSale.length > 0) && (
-          <div className="bg-white px-4 pb-4 pt-4 md:px-6">
+          <div className="bg-white px-2.5 pb-4 pt-4 sm:px-4 md:px-6">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
@@ -890,13 +890,13 @@ export default function Home() {
             </div>
             <div
               ref={flashSaleScrollRef}
-              className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 scroll-smooth [scrollbar-width:none] md:-mx-6 md:gap-4 md:px-6 [&::-webkit-scrollbar]:hidden"
+              className="-mx-2.5 flex snap-x snap-mandatory scroll-px-2.5 gap-2 overflow-x-auto px-2.5 pb-1 scroll-smooth [scrollbar-width:none] sm:-mx-4 sm:scroll-px-4 sm:gap-3 sm:px-4 md:-mx-6 md:gap-4 md:px-6 [&::-webkit-scrollbar]:hidden"
             >
               {showFlashSkeleton
                 ? Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
+                  <div key={i} className="w-[calc((100vw-1.75rem)/2)] min-w-[160px] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
                     <div className="aspect-square animate-pulse bg-gray-100" />
-                    <div className="space-y-2 p-3">
+                    <div className="space-y-2 p-2.5 sm:p-3">
                       <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
                       <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
                       <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
@@ -906,7 +906,7 @@ export default function Home() {
                   </div>
                 ))
                 : flashSale.map((p, i) => (
-                  <div key={p.id} className="w-[calc((100vw-3rem)/2)] min-w-[168px] shrink-0 snap-start sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
+                  <div key={p.id} className="w-[calc((100vw-1.75rem)/2)] min-w-[160px] shrink-0 snap-start sm:w-[240px] md:w-[calc((100%-2rem)/3)] lg:w-[calc((100%-3rem)/4)]">
                     <ProductCard 
                       product={p} 
                       onAuthRequired={handleAuthRequired}
@@ -983,7 +983,7 @@ export default function Home() {
             BEST SELLERS
         ════════════════════════════════════════════ */}
         {(showBestSkeleton || bestSellers.length > 0) && (
-          <div className="bg-white px-4 pb-4 pt-4 md:px-6">
+          <div className="bg-white px-2.5 pb-4 pt-4 sm:px-4 md:px-6">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-500 shadow-sm shadow-amber-100">
@@ -1019,13 +1019,13 @@ export default function Home() {
               ref={bestSellerScrollRef}
               role="region"
               aria-label={t('home.bestSellers')}
-              className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:-mx-6 md:gap-4 md:px-6"
+              className="-mx-2.5 flex snap-x snap-mandatory scroll-px-2.5 gap-2 overflow-x-auto px-2.5 pb-2 scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden sm:-mx-4 sm:scroll-px-4 sm:gap-3 sm:px-4 md:-mx-6 md:gap-4 md:px-6"
             >
               {showBestSkeleton
                 ? Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="w-[46%] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card sm:w-[31%] lg:w-[24%] xl:w-[19%]">
+                  <div key={i} className="w-[47.5%] shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card sm:w-[31%] lg:w-[24%] xl:w-[19%]">
                     <div className="aspect-square animate-pulse bg-gray-100" />
-                    <div className="space-y-2 p-3">
+                    <div className="space-y-2 p-2.5 sm:p-3">
                       <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
                       <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
                       <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
@@ -1035,7 +1035,7 @@ export default function Home() {
                   </div>
                 ))
                 : bestSellers.slice(0, 12).map((p, i) => (
-                  <div key={p.id} className="w-[46%] shrink-0 snap-start sm:w-[31%] lg:w-[24%] xl:w-[19%]">
+                  <div key={p.id} className="w-[47.5%] shrink-0 snap-start sm:w-[31%] lg:w-[24%] xl:w-[19%]">
                     <ProductCard
                       product={p}
                       badge={t('home.bestBadge')}
@@ -1055,7 +1055,7 @@ export default function Home() {
             NEW ARRIVALS
         ════════════════════════════════════════════ */}
         {(showNewSkeleton || newArrivals.length > 0) && (
-          <div className="bg-white px-4 pb-5 pt-4 md:px-6">
+          <div className="bg-white px-2.5 pb-5 pt-4 sm:px-4 md:px-6">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 shadow-sm shadow-green-100">
@@ -1067,7 +1067,7 @@ export default function Home() {
                 {t('common.seeAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:gap-4 lg:grid-cols-4">
               {showNewSkeleton
                 ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card"><div className="aspect-square animate-pulse bg-gray-100" /><div className="space-y-2 p-3"><div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" /><div className="h-4 w-full animate-pulse rounded bg-gray-100" /><div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" /><div className="h-5 w-16 animate-pulse rounded bg-gray-100" /><div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" /></div></div>)
                 : newArrivals.slice(0, 12).map((p, i) => (

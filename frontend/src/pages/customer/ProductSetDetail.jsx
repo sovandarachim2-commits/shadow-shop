@@ -122,7 +122,7 @@ const RelatedSetCard = memo(function RelatedSetCard({ item, priority = false, on
             decoding="async"
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageFailed(true)}
-            className={`absolute inset-0 h-full w-full ${isSet ? 'object-cover' : 'object-contain p-2'} transition duration-300 group-hover:scale-[1.03]`}
+            className={`absolute inset-0 h-full w-full ${isSet ? 'object-cover' : 'object-contain p-1 sm:p-2'} transition duration-300 group-hover:scale-[1.03]`}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300">
@@ -136,7 +136,7 @@ const RelatedSetCard = memo(function RelatedSetCard({ item, priority = false, on
           </span>
         )}
       </div>
-      <div className="flex min-h-0 flex-col p-3.5 sm:min-h-[230px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[230px] sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-sm font-semibold text-gray-400 sm:text-xs">{isSet ? t('product.productSet') : (item.brand_name || item.category_name || t('product.cosmetics'))}</span>
           {!isSet && <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-500 sm:text-xs"><Star size={14} className="fill-yellow-400 text-yellow-400" />{item.rating > 0 ? item.rating : '4.8'} <span className="text-gray-300">(126)</span></span>}
@@ -540,7 +540,7 @@ export default function ProductSetDetail() {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
+          <div className="-mx-2.5 grid grid-cols-2 gap-2 sm:mx-0 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 md:gap-4">
             {relatedLoading
               ? Array.from({ length: 4 }).map((_, index) => <RelatedSetSkeleton key={index} />)
               : relatedItems.map((item, index) => (

@@ -356,8 +356,102 @@ html[lang="km"] textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-marquee-track {
-    animation: none;
+  .brand-marquee-track,
+  .announcement-marquee-track {
+    animation: none !important;
   }
+  .announcement-slide-in,
+  .announcement-fade-in,
+  .announcement-rotate-in {
+    animation: none !important;
+  }
+}
+
+@keyframes announcementMarqueeLeft {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes announcementMarqueeRight {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes announcementSlideFromRight {
+  0% {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes announcementSlideFromLeft {
+  0% {
+    opacity: 0;
+    transform: translate3d(-28px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes announcementFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes announcementRotateIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.announcement-marquee-track {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  will-change: transform;
+}
+
+.announcement-marquee-track:hover,
+.announcement-marquee-track:focus-within {
+  animation-play-state: paused !important;
+}
+
+.announcement-slide-left {
+  animation: announcementSlideFromRight var(--ann-duration, 400ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.announcement-slide-right {
+  animation: announcementSlideFromLeft var(--ann-duration, 400ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.announcement-fade-in {
+  animation: announcementFadeIn var(--ann-duration, 400ms) ease both;
+}
+
+.announcement-rotate-in {
+  animation: announcementRotateIn var(--ann-duration, 400ms) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 

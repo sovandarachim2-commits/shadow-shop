@@ -1,7 +1,10 @@
+import re
+from urllib.parse import urlparse
 from rest_framework import serializers
 from django.db import IntegrityError
 from django.db.models import Sum
-from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle
+from django.utils import timezone
+from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement
 from utils.image_optimization import card_variant_url
 
 
@@ -388,3 +391,275 @@ class BannerSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.image.url)
         return None
+
+
+_HEX_COLOR_RE = re.compile(r'^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
+_RGB_COLOR_RE = re.compile(r'^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(\s*,\s*(0|1|0?\.\d+))?\s*\)$')
+_GRADIENT_RE = re.compile(r'^(linear|radial)-gradient\([a-zA-Z0-9#%,.\s()-]+\)$')
+_HTML_TAG_RE = re.compile(r'</?[a-zA-Z][^>]*>')
+_UNSAFE_TEXT_RE = re.compile(r'(<\s*script|</\s*script|<\s*iframe|<\s*object|<\s*embed|<\s*svg|javascript:|vbscript:|data:text/html|\bon[a-z]+\s*=)', re.IGNORECASE)
+
+
+def sanitize_announcement_text(value, field_label='Text'):
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    if _UNSAFE_TEXT_RE.search(text):
+        raise serializers.ValidationError(f'{field_label} contains disallowed HTML or script content.')
+    cleaned = _HTML_TAG_RE.sub('', text).strip()
+    return cleaned
+
+
+def validate_announcement_url(value):
+    url = str(value or '').strip()
+    if not url:
+        return ''
+    if any(ch in url for ch in ('\r', '\n', '\x00')):
+        raise serializers.ValidationError('Link URL contains invalid characters.')
+    lower = url.lower()
+    if lower.startswith(('javascript:', 'data:', 'vbscript:', 'file:', '//')):
+        raise serializers.ValidationError('Unsafe link URL scheme is not allowed.')
+    if url.startswith('/'):
+        return url
+    parsed = urlparse(url)
+    if parsed.scheme.lower() in ('http', 'https', 'mailto', 'tel'):
+        if parsed.scheme.lower() in ('http', 'https') and not parsed.netloc:
+            raise serializers.ValidationError('Enter a valid URL.')
+        return url
+    raise serializers.ValidationError('Link URL must be a relative path (/...) or start with http://, https://, mailto:, or tel:.')
+
+
+def validate_announcement_color(value, default='#111827'):
+    color = str(value or default).strip()
+    if _HEX_COLOR_RE.match(color) or _RGB_COLOR_RE.match(color):
+        return color
+    raise serializers.ValidationError('Enter a valid hex (#RRGGBB) or rgb/rgba color.')
+
+
+def validate_announcement_gradient(value):
+    grad = str(value or '').strip()
+    if not grad:
+        return ''
+    lower = grad.lower()
+    if any(bad in lower for bad in ('url(', 'expression(', ';', '{', '}', '<', '>', 'javascript:')):
+        raise serializers.ValidationError('Gradient contains disallowed CSS.')
+    if not _GRADIENT_RE.match(grad):
+        raise serializers.ValidationError('Gradient must be a valid linear-gradient(...) or radial-gradient(...) value.')
+    return grad
+
+
+def _bounded_int(value, minimum, maximum, field_label):
+    if value is None or value == '':
+        return None
+    try:
+        num = int(value)
+    except (TypeError, ValueError):
+        raise serializers.ValidationError(f'{field_label} must be a whole number.')
+    if num < minimum or num > maximum:
+        raise serializers.ValidationError(f'{field_label} must be between {minimum} and {maximum}.')
+    return num
+
+
+def _clean_string_list(value):
+    if value is None or value == '':
+        return []
+    if not isinstance(value, list):
+        raise serializers.ValidationError('Must be a list of strings.')
+    cleaned = []
+    seen = set()
+    for item in value:
+        s = str(item or '').strip()
+        if s and s not in seen:
+            cleaned.append(s[:100])
+            seen.add(s)
+    return cleaned
+
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    save_mode = serializers.ChoiceField(choices=['draft', 'publish'], write_only=True, required=False, default='draft')
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+    is_currently_live = serializers.SerializerMethodField()
+    schedule_state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Announcement
+        fields = [
+            'id', 'title', 'message_en', 'message_km', 'mobile_message_en', 'mobile_message_km',
+            'icon', 'link_url', 'link_text', 'link_text_km', 'open_in_new_tab',
+            'background_color', 'text_color', 'use_gradient', 'gradient_css',
+            'font_size', 'font_weight', 'alignment', 'height', 'padding_x', 'border_radius',
+            'icon_size', 'icon_color', 'show_close_button',
+            'animation_type', 'animation_speed', 'animation_direction',
+            'transition_duration', 'rotation_delay', 'reduced_motion',
+            'show_on_desktop', 'show_on_tablet', 'show_on_mobile',
+            'tablet_font_size', 'tablet_height', 'tablet_padding_x', 'tablet_alignment',
+            'mobile_font_size', 'mobile_height', 'mobile_padding_x', 'mobile_alignment',
+            'start_at', 'end_at', 'is_active', 'priority',
+            'target_stores', 'target_delivery_areas', 'language_rule',
+            'page_display_mode', 'target_pages',
+            'status', 'has_unpublished_changes', 'published_at',
+            'created_by', 'created_by_name', 'updated_by', 'updated_by_name',
+            'created_at', 'updated_at', 'is_currently_live', 'schedule_state',
+            'save_mode',
+        ]
+        read_only_fields = [
+            'id', 'status', 'has_unpublished_changes', 'published_at',
+            'created_by', 'updated_by', 'created_at', 'updated_at',
+        ]
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return ''
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    def get_updated_by_name(self, obj):
+        if not obj.updated_by:
+            return ''
+        return obj.updated_by.get_full_name() or obj.updated_by.username
+
+    def get_schedule_state(self, obj):
+        now = timezone.now()
+        snapshot = obj.published_snapshot if (obj.status == Announcement.STATUS_PUBLISHED and obj.published_snapshot) else None
+        start_at = obj.start_at
+        end_at = obj.end_at
+        if snapshot:
+            from django.utils.dateparse import parse_datetime
+            if snapshot.get('start_at'):
+                start_at = parse_datetime(snapshot['start_at']) or start_at
+            if snapshot.get('end_at'):
+                end_at = parse_datetime(snapshot['end_at']) or end_at
+        if end_at and end_at < now:
+            return 'expired'
+        if start_at and start_at > now:
+            return 'scheduled'
+        return 'active'
+
+    def get_is_currently_live(self, obj):
+        if obj.status != Announcement.STATUS_PUBLISHED or not obj.is_active:
+            return False
+        return self.get_schedule_state(obj) == 'active'
+
+    def validate_title(self, value):
+        return sanitize_announcement_text(value, 'Title')
+
+    def validate_message_en(self, value):
+        return sanitize_announcement_text(value, 'English message')
+
+    def validate_message_km(self, value):
+        return sanitize_announcement_text(value, 'Khmer message')
+
+    def validate_mobile_message_en(self, value):
+        return sanitize_announcement_text(value, 'Mobile English message')
+
+    def validate_mobile_message_km(self, value):
+        return sanitize_announcement_text(value, 'Mobile Khmer message')
+
+    def validate_link_text(self, value):
+        return sanitize_announcement_text(value, 'Link text')
+
+    def validate_link_text_km(self, value):
+        return sanitize_announcement_text(value, 'Khmer link text')
+
+    def validate_icon(self, value):
+        return sanitize_announcement_text(value, 'Icon')[:60]
+
+    def validate_link_url(self, value):
+        return validate_announcement_url(value)
+
+    def validate_background_color(self, value):
+        return validate_announcement_color(value, '#111827')
+
+    def validate_text_color(self, value):
+        return validate_announcement_color(value, '#FFFFFF')
+
+    def validate_icon_color(self, value):
+        return validate_announcement_color(value, '#FFFFFF')
+
+    def validate_gradient_css(self, value):
+        return validate_announcement_gradient(value)
+
+    def validate_tablet_alignment(self, value):
+        v = str(value or '').strip()
+        if v and v not in ('left', 'center', 'right'):
+            raise serializers.ValidationError('Invalid tablet alignment.')
+        return v
+
+    def validate_mobile_alignment(self, value):
+        v = str(value or '').strip()
+        if v and v not in ('left', 'center', 'right'):
+            raise serializers.ValidationError('Invalid mobile alignment.')
+        return v
+
+    def validate_target_stores(self, value):
+        return _clean_string_list(value)
+
+    def validate_target_delivery_areas(self, value):
+        return _clean_string_list(value)
+
+    def validate_target_pages(self, value):
+        return _clean_string_list(value)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        inst = self.instance
+
+        # Bounded integer validations
+        int_rules = [
+            ('font_size', 10, 32, 'Font size'),
+            ('height', 24, 120, 'Bar height'),
+            ('padding_x', 0, 64, 'Horizontal padding'),
+            ('border_radius', 0, 32, 'Border radius'),
+            ('icon_size', 10, 32, 'Icon size'),
+            ('animation_speed', 1, 10, 'Animation speed'),
+            ('transition_duration', 100, 5000, 'Transition duration'),
+            ('rotation_delay', 1000, 30000, 'Delay between announcements'),
+            ('tablet_font_size', 10, 32, 'Tablet font size'),
+            ('tablet_height', 24, 120, 'Tablet height'),
+            ('tablet_padding_x', 0, 64, 'Tablet padding'),
+            ('mobile_font_size', 10, 32, 'Mobile font size'),
+            ('mobile_height', 24, 120, 'Mobile height'),
+            ('mobile_padding_x', 0, 64, 'Mobile padding'),
+        ]
+        for field, min_v, max_v, label in int_rules:
+            if field in attrs and attrs[field] is not None:
+                attrs[field] = _bounded_int(attrs[field], min_v, max_v, label)
+
+        start_at = attrs.get('start_at', getattr(inst, 'start_at', None))
+        end_at = attrs.get('end_at', getattr(inst, 'end_at', None))
+        if start_at and end_at and start_at >= end_at:
+            raise serializers.ValidationError({'end_at': 'End date and time must be after start date and time.'})
+
+        msg_en = attrs.get('message_en', getattr(inst, 'message_en', ''))
+        msg_km = attrs.get('message_km', getattr(inst, 'message_km', ''))
+        mob_en = attrs.get('mobile_message_en', getattr(inst, 'mobile_message_en', ''))
+        mob_km = attrs.get('mobile_message_km', getattr(inst, 'mobile_message_km', ''))
+        if not any((str(msg_en or '').strip(), str(msg_km or '').strip(), str(mob_en or '').strip(), str(mob_km or '').strip())):
+            raise serializers.ValidationError({'message_en': 'At least one announcement message (English or Khmer) is required.'})
+
+        return attrs
+
+    def create(self, validated_data):
+        save_mode = validated_data.pop('save_mode', 'draft')
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        validated_data['created_by'] = user
+        validated_data['updated_by'] = user
+        instance = super().create(validated_data)
+        if save_mode == 'publish':
+            instance.publish(user=user)
+        return instance
+
+    def update(self, instance, validated_data):
+        save_mode = validated_data.pop('save_mode', 'draft')
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        validated_data['updated_by'] = user
+        was_published = instance.status == Announcement.STATUS_PUBLISHED
+        instance = super().update(instance, validated_data)
+        if save_mode == 'publish':
+            instance.publish(user=user)
+        elif was_published:
+            instance.has_unpublished_changes = True
+            instance.save(update_fields=['has_unpublished_changes'])
+        return instance

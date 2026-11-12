@@ -118,14 +118,14 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
               decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageFailed(true)}
-              className="absolute inset-0 h-full w-full object-contain p-2 transition duration-300 group-hover:scale-[1.03]"
+              className="absolute inset-0 h-full w-full object-contain p-1 transition duration-300 group-hover:scale-[1.03] sm:p-2"
             />
           </>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300"><ShoppingBag size={30} /></div>
         )}
       </div>
-      <div className="flex min-h-0 flex-col p-3.5 sm:min-h-[166px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-sm font-semibold text-gray-400 sm:text-xs">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-500 sm:text-xs">
@@ -858,7 +858,7 @@ export default function ProductDetail() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
+          <div className="-mx-2.5 grid grid-cols-2 gap-2 sm:mx-0 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 md:gap-4">
             {productsMoreLoading
               ? Array.from({ length: 4 }).map((_, index) => <RelatedProductSkeleton key={index} />)
               : relatedProducts.map((item, index) => (

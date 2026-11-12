@@ -27,6 +27,13 @@ const PAGE_GROUPS = [
     ],
   },
   {
+    key: 'marketing',
+    label: 'Marketing',
+    children: [
+      { module: 'marketing_announcements', label: 'Announcement Bar' },
+    ],
+  },
+  {
     key: 'inventory',
     label: 'Inventory',
     children: [

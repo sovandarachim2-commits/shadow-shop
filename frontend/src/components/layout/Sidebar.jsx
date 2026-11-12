@@ -13,7 +13,7 @@ import {
   UserCircle, Bell, Shield, Sliders, MessageCircle,
   MapPin, CreditCard, Tag, Boxes, Receipt,
   PieChart, Activity, ClipboardList, Award, Image, UserCheck,
-  Flame, Gift, Ticket, Percent, SlidersHorizontal,
+  Flame, Gift, Ticket, Percent, SlidersHorizontal, Megaphone,
 } from 'lucide-react'
 
 // `module` maps to the Permission.module value — used to check `view` access
@@ -43,6 +43,13 @@ const navItems = [
       { label: 'Product Sets',      path: '/admin/products/sets',       icon: PackageCheck, module: 'product_sets' },
       { label: 'Flash Sale',        path: '/admin/products/flash-sale', icon: Flame,        module: 'product_flash_sale' },
       { label: 'Banners',           path: '/admin/products/banners',    icon: Image,        module: 'product_banners' },
+    ],
+  },
+  {
+    label: 'Marketing',
+    icon: Megaphone,
+    children: [
+      { label: 'Announcement Bar', path: '/admin/marketing/announcements', icon: Megaphone, module: 'marketing_announcements' },
     ],
   },
   {

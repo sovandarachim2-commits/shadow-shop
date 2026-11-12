@@ -7,12 +7,14 @@ logger = logging.getLogger('shadow_shop.performance')
 HOME_FEED_CACHE_KEY = 'storefront:home_feed:v1'
 SITE_SETTINGS_CACHE_KEY = 'storefront:site_settings:v1'
 STORE_NAME_CACHE_KEY = 'storefront:store_name:v1'
+ANNOUNCEMENTS_PUBLIC_CACHE_KEY = 'storefront:announcements:public:v1'
 PRODUCT_LIST_CACHE_PREFIX = 'storefront:product_list:v1:'
 STOREFRONT_REVISION_KEY = 'storefront:revision'
 
 HOME_FEED_TTL = 120
 SITE_SETTINGS_TTL = 120
 STORE_NAME_TTL = 120
+ANNOUNCEMENTS_PUBLIC_TTL = 120
 PRODUCT_LIST_TTL = 30
 
 
@@ -52,6 +54,7 @@ def bump_storefront_cache():
         HOME_FEED_CACHE_KEY,
         SITE_SETTINGS_CACHE_KEY,
         STORE_NAME_CACHE_KEY,
+        ANNOUNCEMENTS_PUBLIC_CACHE_KEY,
         'auth:telegram_login_config:v1',
         'auth:telegram_login_config:v2',
         'auth:site_manifest:v1',

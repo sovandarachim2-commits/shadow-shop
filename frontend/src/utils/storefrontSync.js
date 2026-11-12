@@ -24,6 +24,7 @@ const STOREFRONT_QUERY_ROOTS = [
   ['site-settings'],
   ['home-banners'],
   ['categories-home'],
+  ['public-announcements'],
 ]
 
 function refreshStorefrontQueries(queryClient) {

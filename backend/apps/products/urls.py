@@ -11,6 +11,7 @@ router.register('reviews', views.ProductReviewViewSet, basename='product-reviews
 router.register('sets', views.ProductSetViewSet, basename='product-sets')
 router.register('promotions', views.PromotionViewSet, basename='promotions')
 router.register('banners', views.BannerViewSet, basename='banners')
+router.register('announcements', views.AnnouncementViewSet, basename='announcements')
 
 urlpatterns = [
     path('revision/', views.StorefrontRevisionView.as_view(), name='storefront-revision'),

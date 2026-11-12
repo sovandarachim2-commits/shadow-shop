@@ -43,6 +43,7 @@ import { productsApi } from '@/api/products'
 import { ordersApi } from '@/api/orders'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
+import AnnouncementBar from '@/components/customer/AnnouncementBar'
 import BottomNavigation from '@/components/BottomNavigation'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 import AuthModal from '@/components/customer/AuthModal'
@@ -441,6 +442,7 @@ export default function CustomerLayout() {
 
   return (
     <div className={cn('flex min-h-screen flex-col bg-white text-gray-950 md:pb-0', hideMobileBottomNav ? '' : 'pb-[calc(104px+max(16px,env(safe-area-inset-bottom)))]')}>
+      <AnnouncementBar />
       <header className={cn(
         'sticky top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur',
         hideMobileHeader && 'hidden md:block'
