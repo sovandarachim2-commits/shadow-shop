@@ -323,7 +323,7 @@ export default function ExchangeRewards() {
         t={t}
       />
       <div className="mx-auto flex w-full max-w-[1500px] flex-col px-5 pb-6 md:px-6 md:pt-6">
-        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
+        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button 
             type="button" 
             onClick={() => navigate('/profile')} 

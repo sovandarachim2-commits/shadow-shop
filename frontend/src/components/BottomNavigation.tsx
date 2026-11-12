@@ -7,6 +7,7 @@ type BottomNavigationProps = {
   defaultActiveTab?: BottomNavigationTab
   onChange?: (tab: BottomNavigationTab) => void
   showOnDesktop?: boolean
+  hidden?: boolean
   labels?: Partial<Record<BottomNavigationTab, string>>
   ariaLabels?: Partial<Record<BottomNavigationTab, string>>
 }
@@ -32,6 +33,7 @@ export default function BottomNavigation({
   defaultActiveTab = 'home',
   onChange,
   showOnDesktop = false,
+  hidden = false,
   labels = {},
   ariaLabels = {},
 }: BottomNavigationProps) {
@@ -50,12 +52,14 @@ export default function BottomNavigation({
   return (
     <div
       className={cx(
-        'fixed inset-x-0 bottom-0 z-50 flex justify-center px-2 font-sans pointer-events-none',
+        'fixed inset-x-0 bottom-0 z-50 flex justify-center px-2 font-sans pointer-events-none transition-[transform,opacity] duration-300 ease-out will-change-transform motion-reduce:transition-none',
+        hidden ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100',
         showOnDesktop ? '' : 'md:hidden',
       )}
+      aria-hidden={hidden}
       aria-label="Mobile primary navigation"
     >
-      <div className="relative h-[calc(104px+max(16px,env(safe-area-inset-bottom)))] w-full max-w-[480px] pointer-events-auto">
+      <div className={cx('relative h-[calc(104px+max(16px,env(safe-area-inset-bottom)))] w-full max-w-[480px]', hidden ? 'pointer-events-none' : 'pointer-events-auto')}>
         <div
           aria-hidden="true"
           className="absolute inset-x-0 bottom-0 rounded-b-[22px] border-b-2 border-[rgba(236,47,131,0.28)] bg-white"

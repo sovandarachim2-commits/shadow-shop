@@ -11,6 +11,12 @@ export const authApi = {
   googleConfig: () => client.get('/auth/google/config/'),
   googleLogin: (data) => client.post('/auth/google/login/', data),
   telegramConfig: () => client.get('/auth/telegram/config/'),
+  telegramConnect: {
+    get: () => client.get('/auth/telegram/connect/'),
+    createLink: () => client.post('/auth/telegram/connect/'),
+    setNotifications: (enabled) => client.patch('/auth/telegram/connect/', { telegram_notifications_enabled: enabled }),
+    disconnect: () => client.delete('/auth/telegram/connect/'),
+  },
   telegramLogin: (data) => client.post('/auth/telegram/login/', data),
   telegramStart: (data) => client.post('/auth/telegram/start/', data),
   telegramStatus: (params) => client.get('/auth/telegram/status/', { params }),

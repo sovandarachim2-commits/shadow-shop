@@ -617,7 +617,7 @@ export default function MyOrders() {
       {receiptOrderId && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-white p-0 sm:bg-gray-950/55 sm:p-3 sm:backdrop-blur-sm">
           <div className="flex h-full w-full max-w-[760px] flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[94vh] sm:rounded-3xl">
-            <div className="no-print relative grid grid-cols-[44px_minmax(0,1fr)] items-center gap-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:flex sm:justify-between sm:pt-3">
+            <div className="no-print relative grid grid-cols-[44px_minmax(0,1fr)] items-center gap-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] sm:flex sm:justify-between sm:pt-3">
               <button
                 type="button"
                 onClick={() => setReceiptOrderId(null)}

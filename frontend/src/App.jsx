@@ -149,6 +149,7 @@ const PointsHistory = lazyWithReload(() => import('@/pages/customer/PointsHistor
 const RedeemRewards = lazyWithReload(() => import('@/pages/customer/RedeemRewards'))
 const Referral = lazyWithReload(() => import('@/pages/customer/Referral'))
 const MyCoupons = lazyWithReload(() => import('@/pages/customer/MyCoupons'))
+const Notifications = lazyWithReload(() => import('@/pages/customer/Notifications'))
 const RewardDetail = lazyWithReload(() => import('@/pages/customer/RewardDetail'))
 const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
 const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
@@ -802,6 +803,7 @@ export default function App() {
               </RequireOrdersAuth>
             } />
             <Route path="wishlist" element={<LazyPage><Wishlist /></LazyPage>} />
+            <Route path="notifications" element={<LazyPage><Notifications /></LazyPage>} />
             <Route path="profile" element={<LazyPage><Profile /></LazyPage>} />
             <Route path="profile/edit" element={
               <RequireAuth>

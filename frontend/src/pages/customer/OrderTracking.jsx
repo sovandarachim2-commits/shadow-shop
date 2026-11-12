@@ -209,7 +209,7 @@ export default function OrderTracking() {
 
   return (
     <div className="mx-auto max-w-3xl pb-24 md:pb-0">
-      <div className="-mx-4 -mt-4 mb-4 grid min-h-[48px] grid-cols-[40px_1fr_40px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:border-0 md:px-0 md:pt-0">
+      <div className="-mx-4 -mt-4 mb-4 grid min-h-[48px] grid-cols-[40px_1fr_40px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:border-0 md:px-0 md:pt-0">
         <button onClick={() => navigate('/my-orders')} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
         </button>

@@ -86,6 +86,7 @@ export const productsApi = {
     toggleActive: (id, is_active) => client.post(`/products/announcements/${id}/toggle-active/`, { is_active }),
     duplicate: (id) => client.post(`/products/announcements/${id}/duplicate/`),
     reorder: (ordered_ids) => client.post('/products/announcements/reorder/', { ordered_ids }),
+    translate: (data) => client.post('/products/announcements/translate/', data),
     public: (params) => client.get('/products/announcements/public/', { params }),
   },
   home: {

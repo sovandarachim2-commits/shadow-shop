@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Gift, Heart, Minus, PackageSearch, Plus, ShoppingBag, ShoppingCart, Star, Trash2, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Gift, Heart, Minus, PackageSearch, Plus, ShoppingBag, ShoppingCart, Star, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
@@ -10,11 +10,12 @@ import { formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
-import { ProductThumb } from '@/components/customer/CustomerUi'
+import { ProductImageAddButton, ProductThumb } from '@/components/customer/CustomerUi'
 import { showCartAddedToast, handleCartAdd, showStockLimitToast } from '@/components/customer/CartAddedToast'
 import { showWishlistToast } from '@/components/customer/WishlistToast'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
+import useScrollNavVisible from '@/hooks/useScrollNavVisible'
 
 function toCartProduct(productSet, categoryLabel) {
   const imageUrl = productSet.image_url || productSet.image
@@ -135,37 +136,24 @@ const RelatedSetCard = memo(function RelatedSetCard({ item, priority = false, on
             {t('product.productSetBadge')}
           </span>
         )}
+        <ProductImageAddButton
+          available={available}
+          qty={qty}
+          onAdd={handleAdd}
+          onIncrease={handleIncrease}
+          onDecrease={handleDecrease}
+          soldOutLabel={t('common.soldOut')}
+        />
       </div>
-      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[230px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-sm font-semibold text-gray-400 sm:text-xs">{isSet ? t('product.productSet') : (item.brand_name || item.category_name || t('product.cosmetics'))}</span>
           {!isSet && <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-500 sm:text-xs"><Star size={14} className="fill-yellow-400 text-yellow-400" />{item.rating > 0 ? item.rating : '4.8'} <span className="text-gray-300">(126)</span></span>}
         </div>
-        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
-          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-base text-gray-950 sm:text-sm">{item.name}</h3>
-          <div className="shrink-0 text-right">
-            <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
-            {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-          </div>
-        </div>
-        <div className="mt-auto pt-4">
-          {!available ? (
-            <span className="flex h-[42px] w-full items-center justify-center rounded-xl bg-gray-100 text-xs font-black text-gray-400 sm:h-12">{t('common.soldOut')}</span>
-          ) : qty === 0 ? (
-            <button onClick={handleAdd} className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:text-sm">
-              <ShoppingCart size={17} /> <span className="sm:hidden">{t('common.add')}</span><span className="hidden sm:inline">{t('common.addToCart')}</span>
-            </button>
-          ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
-              <button onClick={handleDecrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-                {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
-              </button>
-              <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
-              <button onClick={handleIncrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-                <Plus size={16} />
-              </button>
-            </div>
-          )}
+        <h3 className="khmer-title mt-1 line-clamp-2 text-base text-gray-950 sm:text-sm">{item.name}</h3>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
+          <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
+          {oldPrice > price && <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
         </div>
       </div>
     </article>
@@ -198,6 +186,14 @@ export default function ProductSetDetail() {
   const [purchaseQty, setPurchaseQty] = useState(1)
   const galleryScrollRef = useRef(null)
   const galleryScrollRaf = useRef(0)
+  const mobileHeaderVisible = useScrollNavVisible({ resetKey: id })
+
+  useEffect(() => {
+    setActiveImg(0)
+    setPurchaseQty(1)
+    if (galleryScrollRef.current) galleryScrollRef.current.scrollLeft = 0
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [id])
 
   const onAuthRequired = (action = 'cart') => {
     openAuthModal(action)
@@ -337,7 +333,11 @@ export default function ProductSetDetail() {
 
   return (
     <div className="bg-white pb-28 md:pb-0">
-      <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
+      <div
+        className={`sticky top-0 z-30 -mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] backdrop-blur transition-[transform,opacity] duration-300 ease-out will-change-transform motion-reduce:transition-none md:hidden ${
+          mobileHeaderVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'
+        }`}
+      >
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
         </button>

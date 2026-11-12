@@ -834,7 +834,7 @@ export default function Checkout() {
 
   return (
     <div className="bg-white pb-28 md:pb-0">
-      <div className="-mx-4 -mt-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
+      <div className="-mx-4 -mt-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
         <button onClick={() => navigate('/cart')} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95 md:h-10 md:w-10 md:border md:border-gray-200 md:bg-white">
           <ChevronLeft size={20} />
         </button>

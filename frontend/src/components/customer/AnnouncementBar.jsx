@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -364,7 +364,7 @@ export function AnnouncementBarStage({
   )
 }
 
-export default function AnnouncementBar() {
+export default function AnnouncementBar({ onVisibilityChange }) {
   const { i18n } = useTranslation()
   const location = useLocation()
   const { isAuthenticated } = useAuthStore()
@@ -374,6 +374,9 @@ export default function AnnouncementBar() {
 
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [activeIndex, setActiveIndex] = useState(0)
+  const [isAtTop, setIsAtTop] = useState(() => (typeof window === 'undefined' ? true : window.scrollY <= 12))
+  const [barHeight, setBarHeight] = useState(0)
+  const barRef = useRef(null)
 
   const { data: announcements = [] } = useQuery({
     queryKey: ['public-announcements'],
@@ -464,17 +467,75 @@ export default function AnnouncementBar() {
     return () => window.clearTimeout(timer)
   }, [visibleAnnouncements, activeIndex])
 
-  if (visibleAnnouncements.length === 0) return null
+  const hasAnnouncements = visibleAnnouncements.length > 0
+  const isBarVisible = hasAnnouncements && isAtTop
+
+  useEffect(() => {
+    if (!hasAnnouncements) return undefined
+    let rafId = 0
+    const updateAtTop = () => {
+      rafId = 0
+      const atTop = window.scrollY <= 12
+      setIsAtTop((prev) => (prev === atTop ? prev : atTop))
+    }
+    updateAtTop()
+    const handleScroll = () => {
+      if (!rafId) {
+        rafId = window.requestAnimationFrame(updateAtTop)
+      }
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [hasAnnouncements])
+
+  useEffect(() => {
+    document.documentElement.dataset.announcementVisible = isBarVisible ? 'true' : 'false'
+    onVisibilityChange?.(isBarVisible)
+    return () => {
+      document.documentElement.dataset.announcementVisible = 'false'
+      onVisibilityChange?.(false)
+    }
+  }, [isBarVisible, onVisibilityChange])
+
+  useLayoutEffect(() => {
+    const node = barRef.current
+    if (!node || !hasAnnouncements) {
+      setBarHeight(0)
+      return undefined
+    }
+    const syncHeight = () => setBarHeight(node.offsetHeight)
+    syncHeight()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(syncHeight)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasAnnouncements, activeIndex, device, language])
+
+  if (!hasAnnouncements) return null
 
   return (
-    <AnnouncementBarStage
-      announcements={visibleAnnouncements}
-      activeIndex={activeIndex}
-      onSelectIndex={setActiveIndex}
-      device={device}
-      language={language}
-      className="z-50"
-    />
+    <>
+      <div aria-hidden="true" style={{ height: barHeight ? `${barHeight}px` : undefined }} />
+      <div
+        ref={barRef}
+        aria-hidden={!isAtTop}
+        className={cn(
+          'fixed inset-x-0 top-0 z-50 transition-[transform,opacity] duration-300 ease-out will-change-transform motion-reduce:transition-none',
+          isAtTop ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'
+        )}
+      >
+        <AnnouncementBarStage
+          announcements={visibleAnnouncements}
+          activeIndex={activeIndex}
+          onSelectIndex={setActiveIndex}
+          device={device}
+          language={language}
+        />
+      </div>
+    </>
   )
 }
 

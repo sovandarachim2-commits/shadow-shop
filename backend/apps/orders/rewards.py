@@ -75,8 +75,8 @@ def get_coupon_discount(user, coupon_code, subtotal, delivery_fee=0, lock=False,
             RewardItem.TYPE_FREE_DELIVERY,
         }:
             raise ValueError('This reward cannot be used as a promo code.')
-        if not reward.is_active or (reward.expires_at and reward.expires_at < now):
-            raise ValueError('This promo code is not currently available.')
+        if reward.expires_at and reward.expires_at < now:
+            raise ValueError('This promo code has expired.')
         if subtotal < reward.minimum_order_amount:
             raise ValueError(f'Minimum order amount is ${reward.minimum_order_amount:.2f}.')
 

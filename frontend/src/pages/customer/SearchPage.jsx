@@ -105,7 +105,7 @@ export default function SearchPage() {
           event.preventDefault()
           submitSearch()
         }}
-        className="sticky top-0 z-20 grid grid-cols-[44px_1fr] items-center gap-3 border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur md:static md:border-0 md:px-0 md:pt-0"
+        className="sticky top-0 z-20 grid grid-cols-[44px_1fr] items-center gap-3 border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] backdrop-blur md:static md:border-0 md:px-0 md:pt-0"
       >
         <button
           type="button"

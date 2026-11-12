@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Star, ShoppingBag,
-  Gift, Brush, Droplet, SprayCan, Trash2, Plus, Minus, RefreshCw, Zap, ShoppingCart,
+  Gift, Brush, Droplet, SprayCan, RefreshCw, Zap,
   Sparkles, Clock3,
 } from 'lucide-react'
 import { productsApi } from '@/api/products'
@@ -11,7 +11,7 @@ import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import { formatFlashSaleCountdown, getFlashSaleTimerState, hasFlashSaleTimer, isVisibleFlashSaleItem } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
-import { BrandLogo } from '@/components/customer/CustomerUi'
+import { ProductImageAddButton } from '@/components/customer/CustomerUi'
 import { showCartAddedToast, handleCartAdd } from '@/components/customer/CartAddedToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -40,45 +40,168 @@ function ProductImageLoading() {
   return <div className="absolute inset-0 animate-pulse bg-gray-100" />
 }
 
+const BrandCarousel = memo(function BrandCarousel({ brands }) {
+  const trackRef = useRef(null)
+  const pausedRef = useRef(false)
+  const resumeTimerRef = useRef(null)
+  const dragRef = useRef({ active: false, startX: 0, startScroll: 0, moved: false })
+
+  const shouldLoop = brands.length > 0
+  const items = useMemo(() => {
+    if (brands.length === 0) return []
+    const minCards = 18
+    let repeatCount = Math.max(2, Math.ceil(minCards / brands.length))
+    if (repeatCount % 2 !== 0) repeatCount += 1
+    return Array.from({ length: repeatCount }, () => brands).flat()
+  }, [brands])
+
+  const pauseTemporarily = useCallback((delayMs = 1500) => {
+    pausedRef.current = true
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current)
+    resumeTimerRef.current = setTimeout(() => {
+      pausedRef.current = false
+    }, delayMs)
+  }, [])
+
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track || !shouldLoop) return
+
+    let rafId = 0
+    let lastTime = performance.now()
+
+    const tick = (now) => {
+      const dt = Math.min(now - lastTime, 64)
+      lastTime = now
+
+      if (!pausedRef.current && track.scrollWidth > track.clientWidth) {
+        track.scrollLeft += (dt / 16.67) * 0.55
+        const half = track.scrollWidth / 2
+        if (track.scrollLeft >= half) {
+          track.scrollLeft -= half
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+
+    rafId = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(rafId)
+      if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current)
+    }
+  }, [shouldLoop, brands.length])
+
+  const handlePointerDown = (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    const track = trackRef.current
+    if (!track) return
+    pausedRef.current = true
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current)
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startScroll: track.scrollLeft,
+      moved: false,
+    }
+  }
+
+  const handlePointerMove = (e) => {
+    const drag = dragRef.current
+    const track = trackRef.current
+    if (!drag.active || !track) return
+    const dx = e.clientX - drag.startX
+    if (Math.abs(dx) > 5) drag.moved = true
+    track.scrollLeft = drag.startScroll - dx
+  }
+
+  const handlePointerUp = () => {
+    if (!dragRef.current.active) return
+    dragRef.current.active = false
+    pauseTemporarily(1400)
+  }
+
+  const handleScroll = () => {
+    const track = trackRef.current
+    if (!track || !shouldLoop) return
+    const half = track.scrollWidth / 2
+    if (half > 0 && track.scrollLeft >= half) {
+      track.scrollLeft -= half
+    }
+  }
+
+  return (
+    <div
+      ref={trackRef}
+      onMouseEnter={() => {
+        pausedRef.current = true
+        if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current)
+      }}
+      onMouseLeave={() => {
+        if (!dragRef.current.active) {
+          pausedRef.current = false
+        }
+      }}
+      onTouchStart={() => {
+        pausedRef.current = true
+        if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current)
+      }}
+      onTouchEnd={() => pauseTemporarily(1500)}
+      onTouchCancel={() => pauseTemporarily(1500)}
+      onWheel={() => pauseTemporarily(1500)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onScroll={handleScroll}
+      onClickCapture={(e) => {
+        if (dragRef.current.moved) {
+          e.preventDefault()
+          e.stopPropagation()
+          dragRef.current.moved = false
+        }
+      }}
+      className="-mx-4 flex cursor-grab select-none gap-3 overflow-x-auto px-4 py-1.5 active:cursor-grabbing [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0"
+    >
+      {items.map((brand, idx) => {
+        const logoUrl = brand?.logo_url || brand?.logo
+        const initials = brand?.name
+          ? brand.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+          : '?'
+        return (
+          <Link
+            key={`${brand.id}-${idx}`}
+            to={`/shop?brand=${brand.id}`}
+            draggable={false}
+            className="group flex w-[94px] shrink-0 flex-col items-center rounded-2xl border border-gray-100 bg-white px-2.5 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.06)] transition hover:border-pink-200 hover:shadow-md sm:w-[108px] md:w-[118px]"
+          >
+            <div className="flex h-12 w-full items-center justify-center overflow-hidden rounded-xl sm:h-14">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={brand.name}
+                  loading="lazy"
+                  decoding="async"
+                  draggable={false}
+                  className="max-h-full max-w-full rounded-xl object-contain"
+                />
+              ) : (
+                <span className="text-sm font-black tracking-wide text-pink-600">{initials}</span>
+              )}
+            </div>
+            <p className="mt-2 w-full truncate text-center text-xs font-bold text-gray-800 transition-colors group-hover:text-pink-600 sm:text-[13px]">
+              {brand.name}
+            </p>
+          </Link>
+        )
+      })}
+    </div>
+  )
+})
+
 function ProductImageFallback() {
   return (
     <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300">
       <ShoppingBag size={30} />
-    </div>
-  )
-}
-
-function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addLabel, addToCartLabel, soldOutLabel }) {
-  if (!available) {
-    return (
-      <span className="flex h-[42px] w-full items-center justify-center rounded-xl bg-gray-100 text-[13px] font-semibold text-gray-400 sm:h-12 sm:text-sm">
-        {soldOutLabel}
-      </span>
-    )
-  }
-
-  if (qty === 0) {
-    return (
-      <button
-        onClick={onAdd}
-        className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold leading-none text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:px-4 sm:text-sm"
-      >
-        <ShoppingCart size={17} />
-        <span className="sm:hidden">{addLabel}</span>
-        <span className="hidden sm:inline">{addToCartLabel}</span>
-      </button>
-    )
-  }
-
-  return (
-    <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
-      <button onClick={onDecrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-        {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
-      </button>
-      <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
-      <button onClick={onIncrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-        <Plus size={16} />
-      </button>
     </div>
   )
 }
@@ -232,9 +355,6 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
 
   const currentPrice = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
-  const discountPct = oldPrice > currentPrice
-    ? Math.round((1 - currentPrice / oldPrice) * 100)
-    : null
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
 
   const handleAdd = (e) => {
@@ -276,14 +396,11 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
       onClick={() => navigate(`/product/${product.id}`)}
     >
       {/* Badges */}
-      <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
-        {badge && (
+      {badge && (
+        <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
           <span className="rounded-full bg-pink-600 px-2 py-1 text-xs font-black tracking-wide text-white shadow-sm">{badge}</span>
-        )}
-        {discountPct && (
-          <span className="rounded-full bg-pink-600 px-3.5 py-1.5 text-xs font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">-{discountPct}%</span>
-        )}
-      </div>
+        </div>
+      )}
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
@@ -303,35 +420,36 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
         ) : (
           <ProductImageFallback />
         )}
+        <ProductImageAddButton
+          available={available}
+          qty={qty}
+          onAdd={handleAdd}
+          onIncrease={handleIncrease}
+          onDecrease={handleDecrease}
+          soldOutLabel={t('common.soldOut')}
+        />
       </div>
       {/* Info */}
-      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
             <Star size={13} className="fill-yellow-400 text-yellow-400" />{product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
           </span>
         </div>
-        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
-          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-sm text-gray-950">{product.name}</h3>
-          <div className="shrink-0 text-right">
-            <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
-            {oldPrice > currentPrice && <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span><span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">{t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}</span></span>}
-          </div>
+        <h3 className="khmer-title mt-1 line-clamp-2 text-sm text-gray-950">{product.name}</h3>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
+          {oldPrice > currentPrice && (
+            <>
+              <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
+              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">
+                {t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}
+              </span>
+            </>
+          )}
         </div>
         <FlashSaleTimer item={product} />
-        <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
-          <ProductCardButton
-            available={available}
-            qty={qty}
-            onAdd={handleAdd}
-            onIncrease={handleIncrease}
-            onDecrease={handleDecrease}
-            addLabel={t('common.add')}
-            addToCartLabel={t('common.addToCart')}
-            soldOutLabel={t('common.soldOut')}
-          />
-        </div>
       </div>
     </article>
   )
@@ -936,44 +1054,7 @@ export default function Home() {
                 {t('common.viewAll')} <ChevronRight size={13} strokeWidth={3} />
               </Link>
             </div>
-            {/* Desktop Responsive Grid (md: and lg: screens) */}
-            <div className="hidden gap-3 md:grid md:grid-cols-3 xl:grid-cols-4">
-              {brands.slice(0, 12).map((brand) => (
-                <Link
-                  key={brand.id}
-                  to={`/shop?brand=${brand.id}`}
-                  className="group flex min-w-0 items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-pink-300 hover:bg-pink-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
-                >
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
-                    <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="break-words text-base font-semibold leading-6 text-gray-900 transition-colors group-hover:text-pink-600">
-                      {brand.name}
-                    </p>
-                  </div>
-                  <ChevronRight size={18} className="shrink-0 text-gray-400 group-hover:text-pink-600" aria-hidden="true" />
-                </Link>
-              ))}
-            </div>
-
-            {/* Mobile Swipeable Carousel (< md screens) */}
-            <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 scroll-smooth [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden md:hidden">
-              {brands.map((brand) => (
-                <Link
-                  key={brand.id}
-                  to={`/shop?brand=${brand.id}`}
-                  className="group flex w-[104px] shrink-0 snap-start flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-2.5 py-3 transition-colors hover:border-pink-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
-                >
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-100 bg-white p-1">
-                    <BrandLogo brand={brand} size="lg" className="h-full w-full rounded-full ring-0 [&>img]:rounded-full [&>img]:object-cover" />
-                  </div>
-                  <p className="w-full break-words text-center text-xs font-semibold leading-5 text-gray-900 group-hover:text-pink-600">
-                    {brand.name}
-                  </p>
-                </Link>
-              ))}
-            </div>
+            <BrandCarousel brands={brands} />
           </div>
         )}
 

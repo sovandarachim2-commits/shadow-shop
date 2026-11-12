@@ -610,6 +610,73 @@ class TelegramService:
 
         return sent_to_customer
 
+    def _customer_telegram_notifications_enabled(self, order) -> bool:
+        customer = getattr(order, 'customer', None)
+        user = getattr(customer, 'user', None) if customer else None
+        if user and getattr(user, 'telegram_id', None):
+            return bool(getattr(user, 'telegram_notifications_enabled', True))
+        seller = getattr(order, 'seller', None)
+        if seller and getattr(seller, 'role', '') == 'customer' and getattr(seller, 'telegram_id', None):
+            return bool(getattr(seller, 'telegram_notifications_enabled', True))
+        return False
+
+    def notify_customer_order_status(self, order, new_status: str) -> bool:
+        """Send a private Telegram DM to the customer when their order status changes."""
+        status_map = {
+            'confirmed': ('✅', 'Order Confirmed', 'ការបញ្ជាទិញត្រូវបានបញ្ជាក់'),
+            'printed': ('🧾', 'Order Confirmed', 'ការបញ្ជាទិញត្រូវបានបញ្ជាក់'),
+            'preparing': ('📦', 'Preparing Your Order', 'កំពុងរៀបចំទំនិញ'),
+            'packed': ('📦', 'Order Packed', 'បានវេចខ្ចប់រួចរាល់'),
+            'shipped': ('🚚', 'Order Shipped', 'កំពុងដឹកជញ្ជូន'),
+            'completed': ('🎉', 'Order Delivered', 'ដឹកជញ្ជូនបានជោគជ័យ'),
+            'delivered': ('🎉', 'Order Delivered', 'ដឹកជញ្ជូនបានជោគជ័យ'),
+            'cancelled': ('❌', 'Order Cancelled', 'ការបញ្ជាទិញត្រូវបានលុបចោល'),
+        }
+        info = status_map.get(new_status)
+        if not info:
+            return False
+
+        telegram_id = self._get_customer_telegram_id(order)
+        if not telegram_id or not self._customer_telegram_notifications_enabled(order):
+            return False
+
+        if not self.config:
+            self.config = TelegramConfig.objects.filter(is_active=True).first()
+        if not self.config:
+            return False
+
+        emoji, en_title, km_title = info
+        frontend = str(getattr(settings, 'FRONTEND_URL', '') or '').rstrip('/')
+        track_url = f'{frontend}/my-orders/{order.id}' if frontend else ''
+
+        lines = [
+            f'{emoji} <b>{en_title}</b>',
+            f'{km_title}',
+            '',
+            f'Order: <code>#{order.order_number}</code>',
+            f'Total: <b>${order.grand_total}</b>',
+        ]
+        if track_url:
+            lines.extend(['', f'🔗 <a href="{track_url}">Track Order</a>'])
+
+        return self.send_message(
+            '\n'.join(lines),
+            event_type=f'customer_order_{new_status}',
+            chat_id=telegram_id,
+            reference=order.order_number,
+            disable_web_page_preview=True,
+        )
+
+    @classmethod
+    def notify_customer_order_status_async(cls, order_id, new_status: str) -> None:
+        def send():
+            from apps.orders.models import Order
+            order = Order.objects.select_related('customer__user', 'seller').filter(pk=order_id).first()
+            if order:
+                cls().notify_customer_order_status(order, new_status)
+
+        cls._run_async(send)
+
     def _contact_sales_customer_message(self, order, action: str) -> str:
         customer_name = escape(order.customer.name or 'អតិថិជន')
         items_text = self._format_order_items(order)

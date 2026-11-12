@@ -7,7 +7,7 @@ import {
   Package, Heart, CheckCircle2, Pencil, Lock, Loader2, Truck, ShoppingBag,
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
-  Home, Headphones, Eye, EyeOff, Clock, Share2, Crown,
+  Home, Headphones, Eye, EyeOff, Clock, Share2, Crown, Copy, Check,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { getMemberTierImage } from '@/assets/member_shoppee'
 import { cn, formatCurrency, formatDate } from '@/utils/helpers'
+import { useUnreadNotificationCount } from '@/utils/notifications'
 import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { formatAddressLocationKhmer, formatAddressRecordKhmer } from '@/utils/addressHelpers'
 import './ProfileEditor.css'
@@ -34,7 +35,7 @@ const ACCOUNT_MENU_ITEMS = [
   { icon: MapPin, labelKey: 'profile.addresses', descKey: 'profile.menuAddressesDesc', view: 'addresses', path: '/address-book' },
   { icon: Gift, labelKey: 'profile.exchangeRewards', descKey: 'profile.menuRewardsDesc', view: 'rewards', path: '/profile/rewards' },
   { icon: Percent, labelKey: 'profile.coupons', descKey: 'profile.menuCouponsDesc', view: 'coupons', path: '/profile/rewards/coupons' },
-  { icon: Bell, labelKey: 'profile.notifications', descKey: 'profile.menuNotificationsDesc', view: 'notifications' },
+  { icon: Bell, labelKey: 'profile.notifications', descKey: 'profile.menuNotificationsDesc', view: 'notifications', path: '/notifications' },
   { icon: Heart, labelKey: 'profile.wishlist', descKey: 'profile.menuWishlistDesc', view: 'wishlist', path: '/wishlist' },
   { icon: Shield, labelKey: 'profile.password', descKey: 'profile.menuPasswordDesc', view: 'password' },
 ]
@@ -233,7 +234,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
       {/* Header */}
       <div className={cn(
         'sticky top-0 z-20 flex items-center justify-between border-b border-gray-100 bg-white/95 px-5 py-3 backdrop-blur',
-        asPage ? 'pt-[calc(0.5rem+env(safe-area-inset-top))] md:pt-4' : 'pt-4'
+        asPage ? 'pt-[calc(0.5rem+var(--page-safe-top))] md:pt-4' : 'pt-4'
       )}>
         <button
           type="button"
@@ -329,7 +330,7 @@ function EditProfileModal({ user, addresses = [], onEditAddress, onClose, onSave
             {user.referred_by ? (
               <div>
                 <ProfileField
-                  label={t('completeProfile.referralCodeOptional')}
+                  label={t('rewardsPage.referral.usedInviteCode')}
                   value={user.referred_by_code || ''}
                   readOnly
                   icon={Gift}
@@ -754,6 +755,7 @@ export default function Profile() {
   const { user, logout, fetchMe } = useAuthStore()
   const openAuthModal = useUiStore((s) => s.openAuthModal)
   const wishlistItems = useWishlistStore((s) => s.items)
+  const unreadNotificationCount = useUnreadNotificationCount()
   const [confirm, ConfirmDialog] = useConfirm()
   const [activeModal, setActiveModal] = useState(null)
   const [activeView, setActiveView] = useState('profile')
@@ -879,6 +881,15 @@ export default function Profile() {
   const progressPct = rewardsSummary?.progress_pct ?? Math.min(100, Math.round((rewardPoints / nextTierPoints) * 100))
   const rewardRedemptions = rewardsSummary?.redemptions ?? []
 
+  const [copiedInviteCode, setCopiedInviteCode] = useState(false)
+  const copyInviteCode = () => {
+    if (!user?.referral_code) return
+    navigator.clipboard?.writeText(user.referral_code)
+    setCopiedInviteCode(true)
+    toast.success(t('rewardsPage.toast.codeCopied', { defaultValue: 'Referral code copied!' }))
+    setTimeout(() => setCopiedInviteCode(false), 1800)
+  }
+
   const mobileQuickActions = [
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders'), color: 'text-emerald-500' },
     { icon: Percent, labelKey: 'profile.coupons', action: () => navigate('/profile/rewards/coupons'), color: 'text-rose-400' },
@@ -892,7 +903,7 @@ export default function Profile() {
     { icon: MapPin, labelKey: 'profile.myAddress', action: () => navigate('/address-book') },
     { icon: Gift, labelKey: 'profile.exchangeRewards', action: () => navigate('/profile/rewards') },
     { icon: Percent, labelKey: 'profile.coupons', action: () => navigate('/profile/rewards/coupons') },
-    { icon: Bell, labelKey: 'profile.notifications', action: () => setActiveView('notifications') },
+    { icon: Bell, labelKey: 'profile.notifications', action: () => navigate('/notifications') },
   ]
 
   const mobileOtherSettings = [
@@ -909,26 +920,27 @@ export default function Profile() {
       {/* ═══════════════════════════════════════════
           MOBILE FULL REDESIGN
       ═══════════════════════════════════════════ */}
-      <div className="min-h-screen bg-white px-5 pb-6 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-black text-[#202A44]">{t('profile.title')}</h1>
+      <div className="min-h-screen bg-white px-5 pb-6 pt-[calc(0.75rem+var(--page-safe-top))] md:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-black tracking-tight text-gray-950">{t('profile.title')}</h1>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
                 onClick={() => setIsLanguageMenuOpen((open) => !open)}
-                className="flex h-9 items-center gap-1.5 rounded-full bg-white px-2 text-sm font-black text-gray-700 transition active:scale-95"
+                className="flex h-9 items-center gap-1.5 rounded-full border border-gray-200/80 bg-gray-50/90 px-2.5 text-xs font-black text-gray-700 transition hover:bg-gray-100 active:scale-95"
                 aria-expanded={isLanguageMenuOpen}
                 aria-label={t('profile.chooseLanguage')}
               >
-                <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-50 text-base">
+                <span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-gray-200/60 bg-white">
                   <img
                     src={currentLanguage.flag}
                     alt={currentLanguage.label}
                     className="h-full w-full object-cover"
                   />
                 </span>
+                <span>{isKhmer ? 'KH' : 'EN'}</span>
                 <ChevronDown
-                  size={14}
+                  size={13}
                   className={cn('text-gray-500 transition-transform', isLanguageMenuOpen && 'rotate-180')}
                 />
               </button>
@@ -967,18 +979,22 @@ export default function Profile() {
               type="button"
               onClick={() => navigate('/my-orders')}
               aria-label="Messages"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition active:scale-90"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200/80 bg-gray-50/90 text-gray-700 transition hover:bg-gray-100 active:scale-90"
             >
-              <Mail size={18} />
+              <Mail size={17} />
             </button>
             <button
               type="button"
-              onClick={() => setActiveView('notifications')}
+              onClick={() => navigate('/notifications')}
               aria-label="Notifications"
-              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition active:scale-90"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-gray-200/80 bg-gray-50/90 text-gray-700 transition hover:bg-gray-100 active:scale-90"
             >
-              <Bell size={18} />
-              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-rose-500 ring-2 ring-white" />
+              <Bell size={17} />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-pink-600 px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -1054,6 +1070,41 @@ export default function Profile() {
             ))}
           </div>
         </div>
+
+        {(user.referral_code || !user.referred_by || user.referred_by_code) && (
+          <div className="mt-5 rounded-2xl border border-pink-100 bg-pink-50/40 p-3.5">
+            {user.referral_code && (
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-black uppercase tracking-wide text-gray-400">
+                    {t('rewardsPage.referral.yourCode')}
+                  </p>
+                  <p className="mt-0.5 font-mono text-sm font-black tracking-wider text-pink-600">
+                    {user.referral_code}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={copyInviteCode}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm active:scale-95"
+                >
+                  {copiedInviteCode ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedInviteCode ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}</span>
+                </button>
+              </div>
+            )}
+            <div className={user.referral_code ? 'mt-3 border-t border-pink-100 pt-2' : ''}>
+              {user.referred_by ? (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-500">{t('rewardsPage.referral.usedInviteCode')}</span>
+                  <span className="font-mono font-black text-emerald-700">{user.referred_by_code || 'Saved'}</span>
+                </div>
+              ) : (
+                <FriendReferralCodeEditor t={t} compact />
+              )}
+            </div>
+          </div>
+        )}
 
         <MobileSettingsGroup title={t('profile.generalSetting')}>
           {mobileGeneralSettings.map((item) => (
@@ -1313,10 +1364,17 @@ export default function Profile() {
           )}
 
           {/* ══ COUPONS ══ */}
-          {activeView === 'coupons' && (
+          {activeView === 'coupons' && (() => {
+            const activeRewardCoupons = rewardRedemptions.filter((item) => {
+              if (!item.coupon_code) return false
+              if (item.status && item.status !== 'active') return false
+              const expiresAt = item.ends_at || item.expires_at
+              return !(expiresAt && new Date(expiresAt).getTime() < Date.now())
+            })
+            return (
             <div className="space-y-4">
               <h2 className="text-xl font-black text-gray-950">{t('profile.myCoupons')}</h2>
-              {rewardRedemptions.filter((item) => item.coupon_code).length === 0 ? (
+              {activeRewardCoupons.length === 0 ? (
                 <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center shadow-sm">
                   <Percent size={36} className="mx-auto mb-3 text-gray-200" />
                   <p className="font-semibold text-gray-400">{t('profile.noCoupons')}</p>
@@ -1331,7 +1389,7 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="grid gap-3 md:grid-cols-2">
-                  {rewardRedemptions.filter((item) => item.coupon_code).map((item) => (
+                  {activeRewardCoupons.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -1351,7 +1409,8 @@ export default function Profile() {
                 </div>
               )}
             </div>
-          )}
+            )
+          })()}
 
           {/* ══ REVIEWS ══ */}
           {activeView === 'reviews' && (
@@ -1602,12 +1661,36 @@ function DesktopProfileOverview({
         
         {/* Card 1: Personal Information */}
         <DesktopProfileCard title={t('profile.personalInfo')} icon={User}>
+          {user.referral_code && (
+            <div className="mb-1 flex items-center justify-between gap-2 rounded-xl bg-pink-50/60 px-3 py-2.5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-pink-600 shadow-sm">
+                  <Share2 size={16} />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs font-extrabold text-gray-500">{t('rewardsPage.referral.yourCode')}</div>
+                  <div className="font-mono text-sm font-black tracking-wider text-pink-600">{user.referral_code}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(user.referral_code)
+                  toast.success(t('rewardsPage.toast.codeCopied', { defaultValue: 'Referral code copied!' }))
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-xs font-black text-pink-600 transition hover:bg-pink-50 active:scale-95"
+              >
+                <Copy size={13} />
+                <span>{t('common.copy', 'Copy')}</span>
+              </button>
+            </div>
+          )}
           <DesktopInfoRow icon={User} label={t('profile.fullName')} value={displayName} />
           <DesktopInfoRow icon={IdCard} label={t('auth.username')} value={usernameDisplay} />
           <DesktopInfoRow icon={Mail} label={t('profile.emailAddress')} value={email} />
           <DesktopInfoRow icon={Phone} label={t('profile.phoneNumber')} value={phone} />
           {user.referred_by ? (
-            <DesktopInfoRow icon={Gift} label={t('completeProfile.referralCodeOptional')} value={user.referred_by_code || 'Saved'} />
+            <DesktopInfoRow icon={Gift} label={t('rewardsPage.referral.usedInviteCode')} value={user.referred_by_code || 'Saved'} />
           ) : (
             <FriendReferralCodeEditor t={t} />
           )}
@@ -1710,7 +1793,7 @@ function DesktopProfileCard({ title, icon: Icon, children }) {
   )
 }
 
-function FriendReferralCodeEditor({ t }) {
+function FriendReferralCodeEditor({ t, compact = false }) {
   const [code, setCode] = useState('')
   const updateUser = useAuthStore((state) => state.updateUser)
   const saveCode = useMutation({
@@ -1736,16 +1819,18 @@ function FriendReferralCodeEditor({ t }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl px-3 py-3 transition hover:bg-pink-50/40">
-      <label htmlFor="profile-friend-referral-code" className="mb-2 flex items-center gap-3 text-sm font-extrabold text-gray-500">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-400">
-          <Gift size={16} />
-        </span>
+    <form onSubmit={handleSubmit} className={compact ? 'py-1' : 'rounded-xl px-3 py-3 transition hover:bg-pink-50/40'}>
+      <label htmlFor={compact ? 'mobile-friend-referral-code' : 'profile-friend-referral-code'} className={cn('mb-2 flex items-center gap-2 text-xs font-extrabold text-gray-500', !compact && 'gap-3 text-sm')}>
+        {!compact && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-400">
+            <Gift size={16} />
+          </span>
+        )}
         {t('completeProfile.referralCodeOptional')}
       </label>
-      <div className="ml-12 flex h-11 overflow-hidden rounded-lg border border-gray-200 bg-white focus-within:border-pink-400 focus-within:ring-2 focus-within:ring-pink-100">
+      <div className={cn('flex h-10 overflow-hidden rounded-lg border border-gray-200 bg-white focus-within:border-pink-400 focus-within:ring-2 focus-within:ring-pink-100', !compact && 'ml-12 h-11')}>
         <input
-          id="profile-friend-referral-code"
+          id={compact ? 'mobile-friend-referral-code' : 'profile-friend-referral-code'}
           value={code}
           onChange={(event) => setCode(event.target.value.toUpperCase())}
           placeholder={t('completeProfile.referralCodePlaceholder')}

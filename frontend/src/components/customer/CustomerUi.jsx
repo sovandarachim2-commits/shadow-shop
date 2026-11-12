@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ShoppingBag, Star } from 'lucide-react'
+import { Minus, Plus, ShoppingBag, Star, Trash2 } from 'lucide-react'
 import { cn } from '@/utils/helpers'
 
 const PALETTES = {
@@ -133,6 +133,56 @@ export function EmptyState({ icon: Icon = ShoppingBag, title, description, actio
       <h2 className="text-xl font-black text-gray-950">{title}</h2>
       <p className="mt-2 max-w-sm text-sm text-gray-500">{description}</p>
       {action}
+    </div>
+  )
+}
+
+export function ProductImageAddButton({ available, qty, onAdd, onIncrease, onDecrease, soldOutLabel }) {
+  if (!available) {
+    return (
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gray-950/35 backdrop-blur-[1px]">
+        <span className="rounded-full bg-gray-900/85 px-3 py-1.5 text-[11px] font-black tracking-wide text-white shadow-md sm:text-xs">
+          {soldOutLabel}
+        </span>
+      </div>
+    )
+  }
+
+  if (qty === 0) {
+    return (
+      <button
+        type="button"
+        onClick={onAdd}
+        aria-label="Add to cart"
+        className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-pink-600 text-white shadow-md shadow-pink-500/30 ring-2 ring-white transition hover:bg-pink-700 active:scale-95 sm:h-9 sm:w-9"
+      >
+        <Plus size={17} strokeWidth={2.75} />
+      </button>
+    )
+  }
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className="absolute bottom-2 right-2 z-10 flex h-9 items-center gap-1 rounded-full bg-pink-600 px-1 text-white shadow-md shadow-pink-500/30 ring-2 ring-white sm:h-10 sm:gap-1.5 sm:px-1.5"
+    >
+      <button
+        type="button"
+        onClick={onDecrease}
+        aria-label="Decrease quantity"
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-8 sm:w-8"
+      >
+        {qty === 1 ? <Trash2 size={14} /> : <Minus size={14} strokeWidth={2.5} />}
+      </button>
+      <span className="min-w-[20px] text-center text-sm font-black text-white sm:min-w-[22px]">{qty}</span>
+      <button
+        type="button"
+        onClick={onIncrease}
+        aria-label="Increase quantity"
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-8 sm:w-8"
+      >
+        <Plus size={15} strokeWidth={2.75} />
+      </button>
     </div>
   )
 }

@@ -27,12 +27,17 @@ import {
   LayoutDashboard,
   Loader2,
   CalendarCheck,
+  Phone,
+  Mail,
+  Send,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { useLiveStorefront } from '@/utils/storefrontSync'
+import { useUnreadNotificationCount, useUnseenReferralClaim } from '@/utils/notifications'
+import ReferralBonusModal from '@/components/rewards/ReferralBonusModal'
 import { cn, formatCurrency } from '@/utils/helpers'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
@@ -45,6 +50,7 @@ import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
 import AnnouncementBar from '@/components/customer/AnnouncementBar'
 import BottomNavigation from '@/components/BottomNavigation'
+import useScrollNavVisible from '@/hooks/useScrollNavVisible'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 import AuthModal from '@/components/customer/AuthModal'
 import abaKhqrAcceptedLogo from '@/assets/aba/ABA KHQR We Accept Logo.svg'
@@ -250,11 +256,19 @@ export default function CustomerLayout() {
   const [isSearching, setIsSearching] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchRef = useRef(null)
+  const mobileSearchRef = useRef(null)
   const [showMobileSearch, setShowMobileSearch] = useState(false)
+  const [isAnnouncementVisible, setIsAnnouncementVisible] = useState(false)
+  const scrollNavVisible = useScrollNavVisible({
+    enabled: !showMobileSearch && !showSuggestions,
+    resetKey: location.pathname,
+  })
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
+      const inDesktop = searchRef.current?.contains(event.target)
+      const inMobile = mobileSearchRef.current?.contains(event.target)
+      if (!inDesktop && !inMobile) {
         setShowSuggestions(false)
       }
     }
@@ -272,13 +286,15 @@ export default function CustomerLayout() {
 
   useEffect(() => {
     const q = headerSearch.trim()
+    let suggestTimer
+    let liveTimer
 
-    // 1. Suggestions logic (for all pages)
-    if (!q || q.length < 2) {
+    // 1. Suggestions logic (skip on /shop where the main grid already live-filters)
+    if (!q || location.pathname === '/shop') {
       setSearchSuggestions([])
       setShowSuggestions(false)
     } else {
-      const suggestTimer = setTimeout(async () => {
+      suggestTimer = setTimeout(async () => {
         setIsSearching(true)
         try {
           const { data } = await productsApi.products.list({ search: q, limit: 8 })
@@ -290,12 +306,11 @@ export default function CustomerLayout() {
           setIsSearching(false)
         }
       }, 300)
-      return () => clearTimeout(suggestTimer)
     }
 
     // 2. Live Query logic (only if on shop page)
     if (location.pathname === '/shop') {
-      const liveTimer = setTimeout(() => {
+      liveTimer = setTimeout(() => {
         const params = new URLSearchParams(location.search)
         const currentSearch = params.get('search') || ''
         if (q !== currentSearch) {
@@ -304,9 +319,13 @@ export default function CustomerLayout() {
           navigate(`/shop?${params.toString()}`, { replace: true })
         }
       }, 400) // Debounce URL update to avoid excessive re-renders
-      return () => clearTimeout(liveTimer)
     }
-  }, [headerSearch, location.pathname, navigate])
+
+    return () => {
+      if (suggestTimer) clearTimeout(suggestTimer)
+      if (liveTimer) clearTimeout(liveTimer)
+    }
+  }, [headerSearch, location.pathname, location.search, navigate])
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false)
   const { t, i18n } = useTranslation()
   const { user, isAuthenticated, logout } = useAuthStore()
@@ -337,6 +356,8 @@ export default function CustomerLayout() {
   const totalItems = useCartStore((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
   const subtotal = useCartStore((s) => s.items.reduce((sum, i) => sum + (i.product?.retail_price || 0) * i.quantity, 0))
   const wishlistCount = useWishlistStore((s) => s.items.length)
+  const unreadNotificationCount = useUnreadNotificationCount()
+  const { unseenClaim: unseenReferralClaim, markClaimSeen: markReferralClaimSeen } = useUnseenReferralClaim()
   const isKhmer = Boolean(i18n.language?.startsWith('km'))
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
   const languageOptions = useMemo(() => [
@@ -401,6 +422,7 @@ export default function CustomerLayout() {
     location.pathname === '/shop' ||
     location.pathname === '/search' ||
     location.pathname === '/wishlist' ||
+    location.pathname === '/notifications' ||
     (location.pathname === '/cart' && hasCartItems) ||
     (location.pathname === '/checkout' && hasCheckoutItems) ||
     location.pathname.startsWith('/profile') ||
@@ -408,7 +430,7 @@ export default function CustomerLayout() {
     location.pathname.startsWith('/product/') ||
     location.pathname.startsWith('/product-set/') ||
     location.pathname.startsWith('/my-orders/')
-  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/search' || location.pathname === '/wishlist' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname === '/profile/complete' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
+  const hideMobileBottomNav = location.pathname === '/cart' || location.pathname === '/search' || location.pathname === '/wishlist' || location.pathname === '/notifications' || location.pathname === '/checkout' || location.pathname === '/address-book' || location.pathname === '/profile/edit' || location.pathname === '/profile/complete' || location.pathname.startsWith('/product/') || location.pathname.startsWith('/product-set/')
   const mobileActiveTab = location.pathname === '/shop'
     ? 'products'
     : location.pathname.startsWith('/profile/rewards')
@@ -440,11 +462,92 @@ export default function CustomerLayout() {
     navigate(`/shop?search=${encodeURIComponent(q)}`)
   }
 
+  const renderSearchSuggestionsBody = () => {
+    if (isSearching && searchSuggestions.length === 0) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={32} className="animate-spin text-pink-500" />
+        </div>
+      )
+    }
+
+    return (
+      <>
+        <div className="mb-3 flex items-center justify-between px-6">
+          <div className="text-[11px] font-black uppercase tracking-wider text-gray-400">
+            {t('common.products')}
+          </div>
+          {searchSuggestions.length > 0 && (
+            <button
+              type="button"
+              onClick={submitSearch}
+              className="text-[11px] font-black text-pink-600 hover:underline"
+            >
+              {t('common.viewAll')} ({searchSuggestions.length}+)
+            </button>
+          )}
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto px-4 pb-2 md:max-h-[520px]">
+          {searchSuggestions.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {searchSuggestions.map((product) => (
+                <Link
+                  key={product.id}
+                  to={`/product/${product.id}`}
+                  onClick={() => {
+                    setShowSuggestions(false)
+                    setShowMobileSearch(false)
+                  }}
+                  className="group flex flex-col overflow-hidden rounded-2xl border border-gray-50 bg-white p-2 transition hover:border-pink-100 hover:shadow-soft"
+                >
+                  <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-50">
+                    {product.primary_image ? (
+                      <img
+                        src={product.primary_image}
+                        alt={product.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.target.src = 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=cosmetic+product+placeholder&image_size=square'
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gray-300">
+                        <ShoppingBag size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-1 flex-col">
+                    <p className="khmer-title line-clamp-2 text-[11px] text-gray-950 group-hover:text-pink-600">{product.name}</p>
+                    <div className="mt-auto flex items-center justify-between pt-1.5">
+                      <span className="text-xs font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
+                      {product.brand_name && (
+                        <span className="max-w-[50px] truncate text-[9px] font-bold text-gray-400">
+                          {product.brand_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <ShoppingBag size={40} className="mb-3 text-gray-100" />
+              <p className="text-sm font-bold text-gray-400">{t('common.noResults')}</p>
+            </div>
+          )}
+        </div>
+      </>
+    )
+  }
+
   return (
     <div className={cn('flex min-h-screen flex-col bg-white text-gray-950 md:pb-0', hideMobileBottomNav ? '' : 'pb-[calc(104px+max(16px,env(safe-area-inset-bottom)))]')}>
-      <AnnouncementBar />
+      <AnnouncementBar onVisibilityChange={setIsAnnouncementVisible} />
       <header className={cn(
-        'sticky top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur',
+        'sticky top-0 z-40 border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur transition-[transform,opacity] duration-300 ease-out will-change-transform motion-reduce:transition-none md:translate-y-0 md:opacity-100 md:pointer-events-auto md:transition-none',
+        !scrollNavVisible && 'pointer-events-none -translate-y-full opacity-0',
         hideMobileHeader && 'hidden md:block'
       )}>
         <div className="hidden md:block">
@@ -490,77 +593,9 @@ export default function CustomerLayout() {
               </form>
 
               {/* Search Suggestions Dropdown */}
-              {showSuggestions && (searchSuggestions.length > 0 || isSearching) && (
+              {showSuggestions && location.pathname !== '/shop' && (searchSuggestions.length > 0 || isSearching || headerSearch.trim()) && (
                 <div className="absolute left-0 top-full z-[60] mt-2 w-full overflow-hidden rounded-[24px] border border-gray-100 bg-white py-4 shadow-[0_20px_50px_rgba(15,23,42,0.2)] md:left-1/2 md:w-[680px] md:-translate-x-1/2 lg:w-[820px]">
-                  {isSearching && searchSuggestions.length === 0 ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 size={32} className="animate-spin text-pink-500" />
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mb-3 flex items-center justify-between px-6">
-                        <div className="text-[11px] font-black uppercase tracking-wider text-gray-400">
-                          {t('common.products')}
-                        </div>
-                        {searchSuggestions.length > 0 && (
-                          <button
-                            onClick={submitSearch}
-                            className="text-[11px] font-black text-pink-600 hover:underline"
-                          >
-                            {t('common.viewAll')} ({searchSuggestions.length}+)
-                          </button>
-                        )}
-                      </div>
-                      
-                      <div className="max-h-[520px] overflow-y-auto px-4 pb-2">
-                        {searchSuggestions.length > 0 ? (
-                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                            {searchSuggestions.map((product) => (
-                              <Link
-                                key={product.id}
-                                to={`/product/${product.id}`}
-                                onClick={() => setShowSuggestions(false)}
-                                className="group flex flex-col overflow-hidden rounded-2xl border border-gray-50 bg-white p-2 transition hover:border-pink-100 hover:shadow-soft"
-                              >
-                                <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-50">
-                                  {product.primary_image ? (
-                                    <img 
-                                      src={product.primary_image} 
-                                      alt={product.name} 
-                                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105" 
-                                      onError={(e) => {
-                                        e.target.src = 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=cosmetic+product+placeholder&image_size=square'
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-gray-300">
-                                      <ShoppingBag size={24} />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="mt-2 flex flex-1 flex-col">
-                                  <p className="khmer-title line-clamp-2 text-[11px] text-gray-950 group-hover:text-pink-600">{product.name}</p>
-                                  <div className="mt-auto pt-1.5 flex items-center justify-between">
-                                    <span className="text-xs font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
-                                    {product.brand_name && (
-                                      <span className="text-[9px] font-bold text-gray-400 truncate max-w-[50px]">
-                                        {product.brand_name}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </Link>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <ShoppingBag size={40} className="mb-3 text-gray-100" />
-                            <p className="text-sm font-bold text-gray-400">{t('common.noResults')}</p>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
+                  {renderSearchSuggestionsBody()}
                 </div>
               )}
             </div>
@@ -616,6 +651,21 @@ export default function CustomerLayout() {
                   </div>
                 )}
               </div>
+              <Link
+                to="/notifications"
+                className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-gray-700 transition hover:border-pink-100 hover:bg-pink-50 hover:text-pink-600"
+                title={t('notificationsPage.title')}
+                aria-label={t('notificationsPage.title')}
+              >
+                <span className="relative">
+                  <Bell size={18} />
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-500 px-0.5 text-[10px] font-bold text-white ring-1 ring-white">
+                      {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                    </span>
+                  )}
+                </span>
+              </Link>
               <Link
                 to="/wishlist"
                 className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-transparent text-gray-700 transition hover:border-pink-100 hover:bg-pink-50 hover:text-pink-600 2xl:w-auto 2xl:px-3"
@@ -861,7 +911,13 @@ export default function CustomerLayout() {
         </div>
 
         {!hideMobileHeader && (
-          <div className={cn('px-3 pb-2.5 pt-[calc(0.5rem+env(safe-area-inset-top))] md:hidden', isMyOrdersPage && 'px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]')}>
+          <div
+            className={cn(
+              'px-3 pb-2.5 md:hidden',
+              isAnnouncementVisible ? 'pt-2' : 'pt-[calc(0.5rem+env(safe-area-inset-top))]',
+              isMyOrdersPage && (isAnnouncementVisible ? 'px-4 pb-3 pt-3' : 'px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]')
+            )}
+          >
             {isMyOrdersPage ? (
               <div className="space-y-3">
                 <div className="flex min-h-[48px] items-center justify-between gap-3">
@@ -935,30 +991,126 @@ export default function CustomerLayout() {
               </div>
             )}
             {showMobileSearch && (
-              <form onSubmit={submitSearch} className="mt-2 flex items-center gap-2 rounded-2xl bg-gray-100 px-3 py-2.5 shadow-inner">
-                <Search size={16} className="shrink-0 text-gray-400" />
-                <input
-                  type="text"
-                  value={headerSearch}
-                  onChange={(e) => setHeaderSearch(e.target.value)}
-                  placeholder={t('header.searchPlaceholder')}
-                  autoFocus
-                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-800 outline-none placeholder:text-gray-400"
-                />
-                <button type="submit" className="rounded-full bg-pink-600 px-4 py-1.5 text-xs font-black text-white">
-                  {t('common.search')}
-                </button>
-              </form>
+              <div ref={mobileSearchRef} className="relative mt-2">
+                <form onSubmit={submitSearch} className="flex items-center gap-2 rounded-2xl bg-gray-100 px-3 py-2.5 shadow-inner">
+                  <Search size={16} className="shrink-0 text-gray-400" />
+                  <input
+                    type="text"
+                    value={headerSearch}
+                    onFocus={() => {
+                      if (location.pathname !== '/shop' && headerSearch.trim() && searchSuggestions.length > 0) setShowSuggestions(true)
+                    }}
+                    onChange={(e) => setHeaderSearch(e.target.value)}
+                    placeholder={t('header.searchPlaceholder')}
+                    autoFocus
+                    className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-800 outline-none placeholder:text-gray-400"
+                  />
+                  {headerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeaderSearch('')
+                        setSearchSuggestions([])
+                        setShowSuggestions(false)
+                      }}
+                      className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                  <button type="submit" className="rounded-full bg-pink-600 px-4 py-1.5 text-xs font-black text-white">
+                    {t('common.search')}
+                  </button>
+                </form>
+                {showSuggestions && location.pathname !== '/shop' && (searchSuggestions.length > 0 || isSearching || headerSearch.trim()) && (
+                  <div className="absolute left-0 right-0 top-full z-[60] mt-2 overflow-hidden rounded-[24px] border border-gray-100 bg-white py-3 shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
+                    {renderSearchSuggestionsBody()}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
       </header>
 
-      <main className={cn('flex-1 mx-auto w-full max-w-[1500px]', isHome || location.pathname === '/address-book' || location.pathname.startsWith('/profile') ? '' : 'px-5 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1 mx-auto w-full max-w-[1500px]', isHome || location.pathname === '/address-book' || location.pathname === '/notifications' || location.pathname.startsWith('/profile') ? '' : 'px-5 py-4 md:px-6 md:py-6')}>
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>
       </main>
+
+      {isHome && (
+        <footer className="border-t border-gray-100 bg-white px-5 pt-7 pb-5 md:hidden">
+          <div className="grid grid-cols-[1.15fr_0.85fr] items-start gap-6">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={storeName} className="h-10 w-10 shrink-0 rounded-xl object-contain shadow-sm" />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-sm shadow-pink-200">
+                    <ShoppingBag size={18} />
+                  </div>
+                )}
+                <p className="truncate text-base font-black uppercase tracking-tight text-gray-950">{storeName}</p>
+              </div>
+              <p className="mt-2.5 text-[13px] leading-relaxed text-gray-500">
+                {t('footer.tagline')}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-gray-500">{t('footer.acceptPayments')}</span>
+                <img src={abaKhqrAcceptedLogo} alt="ABA KHQR accepted" className="h-5 w-auto" />
+              </div>
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-[13px] font-black uppercase tracking-wide text-gray-950">
+                {t('footer.contactUs')}
+              </h4>
+              <div className="mt-3 space-y-2.5 text-[13px] text-gray-600">
+                {storePhone && (
+                  <a
+                    href={`tel:${storePhone.replace(/\s+/g, '')}`}
+                    className="flex items-center gap-2 transition hover:text-pink-600"
+                  >
+                    <Phone size={15} className="shrink-0 text-pink-600" />
+                    <span className="truncate">{storePhone}</span>
+                  </a>
+                )}
+                {storeEmail && (
+                  <a
+                    href={`mailto:${storeEmail}`}
+                    className="flex items-center gap-2 transition hover:text-pink-600"
+                  >
+                    <Mail size={15} className="shrink-0 text-pink-600" />
+                    <span className="truncate">Email</span>
+                  </a>
+                )}
+                {socialLinks.map((item) => {
+                  const Icon = item.platform === 'telegram' ? Send : (SOCIAL_ICON_MAP[item.platform] || Send)
+                  return (
+                    <a
+                      key={item.platform}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 transition hover:text-pink-600"
+                    >
+                      {item.icon_url ? (
+                        <img src={item.icon_url} alt={item.label} className="h-4 w-4 shrink-0 object-contain" />
+                      ) : (
+                        <Icon size={15} className="shrink-0 text-pink-600" />
+                      )}
+                      <span className="truncate">{item.label}</span>
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 border-t border-gray-100 pt-4 text-center text-xs text-gray-400">
+            © 2026 {storeName}. {t('footer.rights')}.
+          </div>
+        </footer>
+      )}
 
       <footer className="hidden bg-[#08172f] text-white md:block">
         <div className="mx-auto grid max-w-[1500px] grid-cols-4 gap-10 px-6 py-10">
@@ -1071,6 +1223,7 @@ export default function CustomerLayout() {
         <BottomNavigation
           activeTab={mobileActiveTab}
           onChange={handleMobileNavChange}
+          hidden={!scrollNavVisible}
           labels={{
             home: t('nav.home'),
             products: t('nav.shop'),
@@ -1093,6 +1246,21 @@ export default function CustomerLayout() {
         isOpen={showCheckinSuccess}
         onClose={() => setShowCheckinSuccess(false)}
         points={rewardsSummary?.earning_rules?.daily_checkin_bonus}
+      />
+
+      <ReferralBonusModal
+        isOpen={Boolean(unseenReferralClaim)}
+        points={unseenReferralClaim?.points}
+        note={unseenReferralClaim?.note}
+        onClose={() => markReferralClaimSeen(unseenReferralClaim?.id, false)}
+        onClaim={() => {
+          markReferralClaimSeen(unseenReferralClaim?.id, true)
+          navigate('/profile/rewards/referral')
+        }}
+        onViewNotifications={() => {
+          markReferralClaimSeen(unseenReferralClaim?.id, false)
+          navigate('/notifications')
+        }}
       />
       
       <AuthModal

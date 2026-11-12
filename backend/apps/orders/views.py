@@ -352,6 +352,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         if new_status == Order.STATUS_COMPLETED and order.payment_status == 'paid':
             award_points_for_paid_order(order)
 
+        if new_status != old_status:
+            from apps.notifications.services import TelegramService
+            transaction.on_commit(
+                lambda oid=order.pk, st=new_status: TelegramService.notify_customer_order_status_async(oid, st)
+            )
+
         if request.query_params.get('compact') in ('1', 'true', 'yes'):
             return Response({
                 'id': order.id,

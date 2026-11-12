@@ -6,17 +6,17 @@ import { ChevronLeft, Gift, HelpCircle, Loader2, Percent, Ticket, Truck } from '
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
 import useCartStore from '@/store/cartStore'
-import { cn, formatDate } from '@/utils/helpers'
-
-const FILTER_KEYS = ['all', 'active', 'used', 'expired']
+import { cn } from '@/utils/cn'
+import { formatDate } from '@/utils/helpers'
 
 function isExpired(coupon) {
-  return coupon.ends_at && new Date(coupon.ends_at).getTime() < Date.now()
+  const expiresAt = coupon?.ends_at || coupon?.expires_at
+  return Boolean(expiresAt && new Date(expiresAt).getTime() < Date.now())
 }
 
 function couponStatus(coupon) {
   if (isExpired(coupon)) return 'expired'
-  if (coupon.status === 'used') return 'used'
+  if (coupon?.status && coupon.status !== 'active') return 'used'
   return 'active'
 }
 
@@ -32,11 +32,12 @@ function expiryText(coupon, t) {
   return formatDate(coupon.ends_at)
 }
 
-function CouponCard({ coupon, onApply, t }) {
+function CouponCard({ coupon, onApply, isApplied, t }) {
   const visual = couponVisual(coupon, t)
   const Icon = visual.icon
   const status = couponStatus(coupon)
   const active = status === 'active'
+  const disabled = isApplied || !active
 
   return (
     <article className="rounded-2xl border border-gray-100 bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
@@ -71,14 +72,24 @@ function CouponCard({ coupon, onApply, t }) {
           </div>
           <button
             type="button"
-            disabled={!active}
+            disabled={disabled}
             onClick={() => onApply(coupon)}
             className={cn(
-              'mt-2 min-w-[70px] rounded-lg px-3 py-1.5 text-xs font-black text-white',
-              active ? 'bg-pink-600 shadow-sm shadow-pink-100 active:scale-95' : 'cursor-not-allowed bg-gray-300'
+              'mt-2 min-w-[70px] rounded-lg px-3 py-1.5 text-xs font-black',
+              isApplied
+                ? 'cursor-default bg-emerald-50 text-emerald-600'
+                : active
+                  ? 'bg-pink-600 text-white shadow-sm shadow-pink-100 active:scale-95'
+                  : 'cursor-not-allowed bg-gray-300 text-white'
             )}
           >
-            {active ? t('rewardsPage.coupons.apply') : status === 'used' ? t('rewardsPage.status.used') : t('rewardsPage.status.expired')}
+            {isApplied
+              ? t('rewardsPage.coupons.applied')
+              : active
+                ? t('rewardsPage.coupons.apply')
+                : status === 'used'
+                  ? t('rewardsPage.status.used')
+                  : t('rewardsPage.status.expired')}
           </button>
         </div>
       </div>
@@ -89,8 +100,10 @@ function CouponCard({ coupon, onApply, t }) {
 export default function MyCoupons() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [filter, setFilter] = useState('all')
   const applyCoupon = useCartStore((state) => state.applyCoupon)
-  const [activeFilter, setActiveFilter] = useState('all')
+  const appliedCoupon = useCartStore((state) => state.appliedCoupon)
+  const appliedCode = appliedCoupon?.coupon_code?.trim().toUpperCase() || ''
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -102,9 +115,9 @@ export default function MyCoupons() {
     [data?.redemptions]
   )
   const filteredCoupons = useMemo(() => {
-    if (activeFilter === 'all') return coupons
-    return coupons.filter((coupon) => couponStatus(coupon) === activeFilter)
-  }, [activeFilter, coupons])
+    if (filter === 'all') return coupons
+    return coupons.filter((item) => couponStatus(item) === filter)
+  }, [coupons, filter])
 
   const handleApply = (coupon) => {
     applyCoupon({
@@ -125,7 +138,7 @@ export default function MyCoupons() {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
-        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
+        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
           <button 
             type="button" 
             onClick={() => navigate(-1)} 
@@ -139,18 +152,25 @@ export default function MyCoupons() {
           <div className="md:hidden" />
         </div>
 
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {FILTER_KEYS.map((key) => (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { id: 'all', label: t('common.all') },
+            { id: 'active', label: t('rewardsPage.status.active') },
+            { id: 'used', label: t('rewardsPage.status.used') },
+            { id: 'expired', label: t('rewardsPage.status.expired') },
+          ].map((tab) => (
             <button
-              key={key}
+              key={tab.id}
               type="button"
-              onClick={() => setActiveFilter(key)}
+              onClick={() => setFilter(tab.id)}
               className={cn(
-                'shrink-0 rounded-lg px-4 py-2 text-xs font-black transition',
-                activeFilter === key ? 'bg-pink-600 text-white shadow-sm shadow-pink-100' : 'bg-gray-100 text-gray-500'
+                'rounded-full px-4 py-1.5 text-xs font-black transition',
+                filter === tab.id
+                  ? 'bg-pink-600 text-white shadow-sm shadow-pink-100'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
               )}
             >
-              {t(`rewardsPage.filter.${key}`)}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -165,7 +185,10 @@ export default function MyCoupons() {
           </div>
         ) : (
           <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {filteredCoupons.map((coupon) => <CouponCard key={coupon.id} coupon={coupon} onApply={handleApply} t={t} />)}
+            {filteredCoupons.map((coupon) => {
+              const isApplied = Boolean(appliedCode && coupon.coupon_code?.trim().toUpperCase() === appliedCode)
+              return <CouponCard key={coupon.id} coupon={coupon} onApply={handleApply} isApplied={isApplied} t={t} />
+            })}
           </section>
         )}
       </div>

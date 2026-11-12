@@ -201,6 +201,62 @@ export default function AnnouncementEditor({ announcement, onBack, onSaved, canE
     })
   }
 
+  const translateMutation = useMutation({
+    mutationFn: (payload) => productsApi.announcements.translate(payload),
+    onSuccess: (res, variables) => {
+      const data = res.data || {}
+      if (variables.direction === 'km_to_en') {
+        setForm((prev) => ({
+          ...prev,
+          message_en: data.message_en || prev.message_en,
+          mobile_message_en: data.mobile_message_en || prev.mobile_message_en,
+          link_text: data.link_text || prev.link_text,
+        }))
+        toast.success('Translated Khmer to English')
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          message_km: data.message_km || prev.message_km,
+          mobile_message_km: data.mobile_message_km || prev.mobile_message_km,
+          link_text_km: data.link_text_km || prev.link_text_km,
+        }))
+        toast.success('Translated English to Khmer')
+      }
+    },
+    onError: (err) => {
+      toast.error(extractApiError(err))
+    },
+  })
+
+  const handleAutoTranslate = (direction = 'en_to_km') => {
+    if (!canEdit || translateMutation.isPending) return
+    if (direction === 'km_to_en') {
+      const payload = {
+        direction,
+        message_km: String(form.message_km || '').trim(),
+        mobile_message_km: String(form.mobile_message_km || '').trim(),
+        link_text_km: String(form.link_text_km || '').trim(),
+      }
+      if (!payload.message_km && !payload.mobile_message_km && !payload.link_text_km) {
+        toast.error('Enter a Khmer message first')
+        return
+      }
+      translateMutation.mutate(payload)
+      return
+    }
+    const payload = {
+      direction: 'en_to_km',
+      message_en: String(form.message_en || '').trim(),
+      mobile_message_en: String(form.mobile_message_en || '').trim(),
+      link_text: String(form.link_text || '').trim(),
+    }
+    if (!payload.message_en && !payload.mobile_message_en && !payload.link_text) {
+      toast.error('Enter an English message first')
+      return
+    }
+    translateMutation.mutate(payload)
+  }
+
   const saveMutation = useMutation({
     mutationFn: ({ payload }) =>
       isEditing
@@ -432,7 +488,20 @@ export default function AnnouncementEditor({ announcement, onBack, onSaved, canE
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="label">Message (English) *</label>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <label className="label mb-0">Message (English) *</label>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleAutoTranslate('km_to_en')}
+                          disabled={translateMutation.isPending}
+                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] font-bold text-purple-700 transition hover:bg-purple-100 disabled:opacity-50"
+                        >
+                          <Wand2 size={12} />
+                          {translateMutation.isPending ? 'Translating...' : 'Auto-Translate KM → EN'}
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       rows={3}
                       value={form.message_en}
@@ -442,7 +511,20 @@ export default function AnnouncementEditor({ announcement, onBack, onSaved, canE
                     />
                   </div>
                   <div>
-                    <label className="label">Message (Khmer)</label>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <label className="label mb-0">Message (Khmer)</label>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleAutoTranslate('en_to_km')}
+                          disabled={translateMutation.isPending}
+                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] font-bold text-purple-700 transition hover:bg-purple-100 disabled:opacity-50"
+                        >
+                          <Wand2 size={12} />
+                          {translateMutation.isPending ? 'Translating...' : 'Auto-Translate EN → KM'}
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       rows={3}
                       value={form.message_km}

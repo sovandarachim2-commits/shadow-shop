@@ -288,7 +288,7 @@ export default function CompleteProfile() {
         {/* Background page - matches AddressBook style */}
         <div className="mx-auto min-h-screen max-w-lg bg-white">
           {/* Header with back button and step progress */}
-          <div className="border-b border-gray-100 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+          <div className="border-b border-gray-100 px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))]">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -338,7 +338,7 @@ export default function CompleteProfile() {
       <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col bg-white lg:min-h-0 lg:rounded-[28px] lg:border lg:border-gray-200 lg:shadow-[0_24px_70px_rgba(17,24,39,0.08)]">
         <form
           onSubmit={onFormSubmit}
-          className="relative mx-auto flex w-full flex-1 flex-col bg-white px-5 pb-0 pt-[max(1.25rem,calc(env(safe-area-inset-top)+0.75rem))] sm:px-8 lg:px-10 lg:py-10"
+          className="relative mx-auto flex w-full flex-1 flex-col bg-white px-5 pb-0 pt-[max(1.25rem,calc(var(--page-safe-top)+0.75rem))] sm:px-8 lg:px-10 lg:py-10"
         >
           <div className="flex items-center justify-between gap-3">
             <button

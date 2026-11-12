@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect, useCallback, useRef, startTransition, memo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, Trash2, Plus, Minus, ChevronDown, Gift, ChevronLeft, SlidersHorizontal, Clock3 } from 'lucide-react'
+import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, ChevronDown, Gift, ChevronLeft, SlidersHorizontal, Clock3 } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
+import { ProductImageAddButton } from '@/components/customer/CustomerUi'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { cn, formatCurrency } from '@/utils/helpers'
 import { getFlashSaleTimerState, hasFlashSaleTimer } from '@/utils/flashSale'
@@ -33,12 +34,11 @@ function ProductCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
       <div className="aspect-square animate-pulse bg-gray-100" />
-      <div className="space-y-2 p-3">
+      <div className="space-y-2 p-2.5 sm:p-3">
         <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
         <div className="h-5 w-16 animate-pulse rounded bg-gray-100" />
-        <div className="mt-3 h-[42px] w-full animate-pulse rounded-xl bg-gray-100 sm:h-12" />
       </div>
     </div>
   )
@@ -58,41 +58,6 @@ function ProductImageFallback() {
 
 function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
-}
-
-function ProductCardButton({ available, qty, onAdd, onIncrease, onDecrease, addLabel, addToCartLabel, soldOutLabel }) {
-  if (!available) {
-    return (
-      <span className="flex h-[42px] w-full items-center justify-center rounded-xl bg-gray-100 text-[13px] font-semibold text-gray-400 sm:h-12 sm:text-sm">
-        {soldOutLabel}
-      </span>
-    )
-  }
-
-  if (qty === 0) {
-    return (
-      <button
-        onClick={onAdd}
-        className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold leading-none text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:px-4 sm:text-sm"
-      >
-        <ShoppingCart size={17} />
-        <span className="sm:hidden">{addLabel}</span>
-        <span className="hidden sm:inline">{addToCartLabel}</span>
-      </button>
-    )
-  }
-
-  return (
-    <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
-      <button onClick={onDecrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-        {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
-      </button>
-      <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
-      <button onClick={onIncrease} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-        <Plus size={16} />
-      </button>
-    </div>
-  )
 }
 
 function FlashSaleTimer({ item, compact = false }) {
@@ -163,9 +128,6 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
 
   const currentPrice = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
-  const discountPct = oldPrice > currentPrice
-    ? Math.round((1 - currentPrice / oldPrice) * 100)
-    : null
 
   useEffect(() => {
     setImageLoaded(false)
@@ -181,11 +143,6 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
       className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
       onClick={() => navigate(`/product/${product.id}`)}
     >
-      {discountPct && (
-        <span className="absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-3.5 py-1.5 text-xs font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">
-          -{discountPct}%
-        </span>
-      )}
       <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
           <>
@@ -204,34 +161,35 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
         ) : (
           <ProductImageFallback />
         )}
+        <ProductImageAddButton
+          available={available}
+          qty={qty}
+          onAdd={handleAdd}
+          onIncrease={handleIncrease}
+          onDecrease={handleDecrease}
+          soldOutLabel={t('common.soldOut')}
+        />
       </div>
-      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
             <Star size={13} className="fill-yellow-400 text-yellow-400" />{product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
           </span>
         </div>
-        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
-          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-sm text-gray-950">{product.name}</h3>
-          <div className="shrink-0 text-right">
-            <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
-            {oldPrice > currentPrice && <span className="mt-1 flex flex-wrap items-center justify-end gap-1.5"><span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span><span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">{t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}</span></span>}
-          </div>
+        <h3 className="khmer-title mt-1 line-clamp-2 text-sm text-gray-950">{product.name}</h3>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
+          {oldPrice > currentPrice && (
+            <>
+              <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
+              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">
+                {t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}
+              </span>
+            </>
+          )}
         </div>
         <FlashSaleTimer item={product} />
-        <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
-          <ProductCardButton
-            available={available}
-            qty={qty}
-            onAdd={handleAdd}
-            onIncrease={handleIncrease}
-            onDecrease={handleDecrease}
-            addLabel={t('common.add')}
-            addToCartLabel={t('common.addToCart')}
-            soldOutLabel={t('common.soldOut')}
-          />
-        </div>
       </div>
     </article>
   )
@@ -332,17 +290,23 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
         <span className="absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-xs font-black text-pink-600 shadow-sm">
           {t('product.productSetBadge')}
         </span>
+        <ProductImageAddButton
+          available={setStock > 0}
+          qty={qty}
+          onAdd={handleAdd}
+          onIncrease={handleIncrease}
+          onDecrease={handleDecrease}
+          soldOutLabel={t('common.soldOut')}
+        />
       </div>
-      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{t('product.productSet')}</span>
         </div>
-        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
-          <h3 className="line-clamp-2 min-w-0 flex-1 text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
-          <span className="shrink-0 text-right">
-            <span className="text-base font-black leading-none text-pink-600">{formatCurrency(price)}</span>
-            {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-          </span>
+        <h3 className="mt-1 line-clamp-2 text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
+          <span className="text-base font-black leading-none text-pink-600">{formatCurrency(price)}</span>
+          {oldPrice > price && <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
         </div>
         <div className="mt-2 flex items-center gap-1">
           <Gift size={14} className="text-pink-500" />
@@ -351,18 +315,6 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
           </span>
         </div>
         <FlashSaleTimer item={productSet} />
-        <div className="mt-3 pt-1 sm:mt-auto sm:pt-3">
-          <ProductCardButton
-            available={setStock > 0}
-            qty={qty}
-            onAdd={handleAdd}
-            onIncrease={handleIncrease}
-            onDecrease={handleDecrease}
-            addLabel={t('common.add')}
-            addToCartLabel={t('common.addToCart')}
-            soldOutLabel={t('common.soldOut')}
-          />
-        </div>
       </div>
     </article>
   )
@@ -491,7 +443,7 @@ export default function ProductList() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="-mx-4 -mt-4 mb-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm md:hidden">
+      <div className="-mx-4 -mt-4 mb-3 border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] shadow-sm md:hidden">
         <div className={isSearchResult ? 'grid grid-cols-[42px_1fr_auto] items-center gap-2.5' : 'flex min-h-[48px] items-center justify-between gap-3'}>
           {isSearchResult ? (
             <>

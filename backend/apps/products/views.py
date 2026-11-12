@@ -796,6 +796,21 @@ class HomeFeedView(generics.GenericAPIView):
         return Response(payload)
 
 
+def _translate_text(text, source_lang='en', target_lang='km'):
+    cleaned = str(text or '').strip()
+    if not cleaned:
+        return ''
+    import requests
+    response = requests.get(
+        'https://translate.googleapis.com/translate_a/single',
+        params={'client': 'gtx', 'sl': source_lang, 'tl': target_lang, 'dt': 't', 'q': cleaned},
+        timeout=5,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return ''.join(part[0] for part in (data[0] or []) if part and part[0]).strip()
+
+
 class AnnouncementViewSet(viewsets.ModelViewSet):
     queryset = Announcement.objects.all().select_related('created_by', 'updated_by').order_by('priority', 'id')
     serializer_class = AnnouncementSerializer
@@ -812,6 +827,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
         'unpublish': 'edit',
         'toggle_active': 'edit',
         'reorder': 'edit',
+        'translate': 'view',
         'destroy': 'delete',
     }
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -836,8 +852,46 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             object_type='Announcement',
         )
 
+    def _autofill_translations(self, announcement):
+        lang_rule = (announcement.language_rule or 'all').lower()
+        pairs = []
+        if lang_rule != 'en':
+            pairs.extend([
+                ('message_en', 'message_km', 'en', 'km'),
+                ('mobile_message_en', 'mobile_message_km', 'en', 'km'),
+                ('link_text', 'link_text_km', 'en', 'km'),
+            ])
+        if lang_rule != 'km':
+            pairs.extend([
+                ('message_km', 'message_en', 'km', 'en'),
+                ('mobile_message_km', 'mobile_message_en', 'km', 'en'),
+                ('link_text_km', 'link_text', 'km', 'en'),
+            ])
+        update_fields = []
+        for src_field, dst_field, src_lang, dst_lang in pairs:
+            src_val = str(getattr(announcement, src_field, '') or '').strip()
+            dst_val = str(getattr(announcement, dst_field, '') or '').strip()
+            if src_val and not dst_val:
+                try:
+                    translated = _translate_text(src_val, src_lang, dst_lang)
+                except Exception:
+                    translated = ''
+                if translated:
+                    setattr(announcement, dst_field, translated)
+                    update_fields.append(dst_field)
+        if not update_fields:
+            return
+        if isinstance(announcement.published_snapshot, dict):
+            snapshot = dict(announcement.published_snapshot)
+            for field in update_fields:
+                snapshot[field] = getattr(announcement, field)
+            announcement.published_snapshot = snapshot
+            update_fields.append('published_snapshot')
+        announcement.save(update_fields=update_fields)
+
     def perform_create(self, serializer):
         announcement = serializer.save()
+        self._autofill_translations(announcement)
         if announcement.status == Announcement.STATUS_PUBLISHED:
             bump_storefront_cache()
         self._log('create', announcement, f'Created announcement "{announcement}"')
@@ -845,6 +899,7 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         was_published = serializer.instance.status == Announcement.STATUS_PUBLISHED
         announcement = serializer.save()
+        self._autofill_translations(announcement)
         if announcement.status == Announcement.STATUS_PUBLISHED and not announcement.has_unpublished_changes:
             bump_storefront_cache()
         elif was_published and announcement.status != Announcement.STATUS_PUBLISHED:
@@ -905,6 +960,50 @@ class AnnouncementViewSet(viewsets.ModelViewSet):
             bump_storefront_cache()
         self._log('update', announcement, f'{"Enabled" if announcement.is_active else "Disabled"} announcement "{announcement}"')
         return Response(self.get_serializer(announcement).data)
+
+    @action(detail=False, methods=['post'])
+    def translate(self, request):
+        direction = str(request.data.get('direction') or 'en_to_km').strip().lower()
+        if direction == 'km_to_en':
+            message_km = str(request.data.get('message_km') or '').strip()
+            mobile_message_km = str(request.data.get('mobile_message_km') or '').strip()
+            link_text_km = str(request.data.get('link_text_km') or '').strip()
+            if not (message_km or mobile_message_km or link_text_km):
+                return Response(
+                    {'detail': 'Enter a Khmer message first.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                return Response({
+                    'message_en': _translate_text(message_km, 'km', 'en') if message_km else '',
+                    'mobile_message_en': _translate_text(mobile_message_km, 'km', 'en') if mobile_message_km else '',
+                    'link_text': _translate_text(link_text_km, 'km', 'en') if link_text_km else '',
+                })
+            except Exception:
+                return Response(
+                    {'detail': 'Auto-translation service is temporarily unavailable.'},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+        message_en = str(request.data.get('message_en') or '').strip()
+        mobile_message_en = str(request.data.get('mobile_message_en') or '').strip()
+        link_text = str(request.data.get('link_text') or '').strip()
+        if not (message_en or mobile_message_en or link_text):
+            return Response(
+                {'detail': 'Enter an English message first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            return Response({
+                'message_km': _translate_text(message_en, 'en', 'km') if message_en else '',
+                'mobile_message_km': _translate_text(mobile_message_en, 'en', 'km') if mobile_message_en else '',
+                'link_text_km': _translate_text(link_text, 'en', 'km') if link_text else '',
+            })
+        except Exception:
+            return Response(
+                {'detail': 'Auto-translation service is temporarily unavailable.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):

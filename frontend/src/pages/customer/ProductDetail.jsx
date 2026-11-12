@@ -13,11 +13,12 @@ import { getFlashSaleTimerState } from '@/utils/flashSale'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
-import { CosmeticArt } from '@/components/customer/CustomerUi'
+import { CosmeticArt, ProductImageAddButton } from '@/components/customer/CustomerUi'
 import { showCartAddedToast, handleCartAdd, showStockLimitToast } from '@/components/customer/CartAddedToast'
 import { showWishlistToast } from '@/components/customer/WishlistToast'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
+import useScrollNavVisible from '@/hooks/useScrollNavVisible'
 import useUiStore from '@/store/uiStore'
 
 function cleanProductText(value) {
@@ -48,7 +49,6 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
   const available = isAvailableForSale(product)
   const price = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
-  const discountPct = oldPrice > price ? Math.round((1 - price / oldPrice) * 100) : null
   const saleTimer = getFlashSaleTimerState(product, Date.now())
 
   useEffect(() => {
@@ -101,11 +101,6 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
       >
         <Heart size={17} className={wishlisted ? 'fill-pink-500' : ''} />
       </button>
-      {discountPct && (
-        <span className="absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black leading-none text-white shadow-lg shadow-pink-200 ring-2 ring-white">
-          -{discountPct}%
-        </span>
-      )}
       <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
           <>
@@ -124,8 +119,16 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-300"><ShoppingBag size={30} /></div>
         )}
+        <ProductImageAddButton
+          available={available}
+          qty={qty}
+          onAdd={handleAdd}
+          onIncrease={(e) => handleUpdateQty(e, qty + 1)}
+          onDecrease={(e) => handleUpdateQty(e, qty - 1)}
+          soldOutLabel={t('common.soldOut')}
+        />
       </div>
-      <div className="flex min-h-0 flex-col p-2.5 sm:min-h-[166px] sm:p-3">
+      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-sm font-semibold text-gray-400 sm:text-xs">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-gray-500 sm:text-xs">
@@ -133,33 +136,12 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
             {product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
           </span>
         </div>
-        <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
-          <h3 className="khmer-title line-clamp-2 min-w-0 flex-1 text-base font-bold leading-snug text-gray-950 sm:min-h-[48px] sm:text-sm">{product.name}</h3>
-          <div className="shrink-0 text-right">
-            <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
-            {oldPrice > price && <span className="mt-1 block text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
-          </div>
+        <h3 className="khmer-title mt-1 line-clamp-2 text-base font-bold leading-snug text-gray-950 sm:text-sm">{product.name}</h3>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
+          <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
+          {oldPrice > price && <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
         </div>
         {saleTimer?.value && <div className="mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 text-[11px] font-black leading-none text-pink-600"><Zap size={12} /><span>{saleTimer.label} {saleTimer.value}</span></div>}
-        <div className="mt-auto pt-3 sm:pt-4">
-          {!available ? (
-            <span className="flex h-10 w-full items-center justify-center rounded-xl bg-gray-100 text-xs font-black text-gray-400">{t('common.soldOut')}</span>
-          ) : qty === 0 ? (
-            <button onClick={handleAdd} className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-3 text-[13px] font-semibold text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 active:scale-[0.99] sm:h-12 sm:gap-2 sm:text-sm">
-              <ShoppingCart size={17} /> <span className="sm:hidden">{t('common.add')}</span><span className="hidden sm:inline">{t('common.addToCart')}</span>
-            </button>
-          ) : (
-            <div onClick={(e) => e.stopPropagation()} className="flex h-[42px] w-full items-center justify-between rounded-xl bg-pink-600 px-1.5 sm:h-12 sm:px-2">
-              <button onClick={(e) => handleUpdateQty(e, qty - 1)} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-                {qty === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
-              </button>
-              <span className="min-w-[34px] text-center text-[13px] font-semibold text-white sm:min-w-[40px] sm:text-sm">{qty}</span>
-              <button onClick={(e) => handleUpdateQty(e, qty + 1)} className="flex h-8 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-9 sm:w-10">
-                <Plus size={16} />
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </article>
   )
@@ -200,6 +182,7 @@ export default function ProductDetail() {
   const clearSelection = useCartStore((s) => s.clearSelection)
   const toggleSelected = useCartStore((s) => s.toggleSelected)
   const loggedIn = useAuthStore((s) => s.isAuthenticated)
+  const mobileHeaderVisible = useScrollNavVisible({ resetKey: id })
 
   const onAuthRequired = (type) => {
     openAuthModal(type)
@@ -296,7 +279,7 @@ export default function ProductDetail() {
     setActiveTab('description')
     if (galleryScrollRef.current) galleryScrollRef.current.scrollLeft = 0
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [product?.id])
+  }, [id])
 
   useEffect(() => {
     // Preload nearby images for smoother swipes
@@ -410,7 +393,11 @@ export default function ProductDetail() {
 
   return (
     <div className="product-detail-view bg-white pb-24 md:pb-0">
-      <div className="-mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:hidden">
+      <div
+        className={`sticky top-0 z-30 -mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] backdrop-blur transition-[transform,opacity] duration-300 ease-out will-change-transform motion-reduce:transition-none md:hidden ${
+          mobileHeaderVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'
+        }`}
+      >
         <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
         </button>

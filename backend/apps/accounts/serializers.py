@@ -103,6 +103,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name',
             'full_name', 'role', 'phone', 'gender',
             'telegram_id', 'telegram_username', 'telegram_photo_url', 'telegram_auth_date',
+            'telegram_notifications_enabled',
             'google_id', 'google_picture_url',
             'referral_code', 'referrals_count', 'successful_referrals_count',
             'referred_by_code',

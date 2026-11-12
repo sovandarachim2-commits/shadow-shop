@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, startTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Minus, Plus, ShoppingCart, ArrowRight, ChevronLeft, Gift, Loader2, Percent, Ticket, TicketPercent, Truck, X } from 'lucide-react'
 import useCartStore from '@/store/cartStore'
@@ -21,6 +22,29 @@ const DEFAULT_PROVINCE_FEES = {
 }
 
 const getCartKey = (item) => item.product.cart_key || item.product.id
+
+const COUPON_ERROR_KEYS = {
+  'Enter a promo code.': 'cart.couponErrors.enterCode',
+  'This promo code has already been used or is no longer active.': 'cart.couponErrors.usedOrInactive',
+  'This reward cannot be used as a promo code.': 'cart.couponErrors.cannotUse',
+  'This promo code is not currently available.': 'cart.couponErrors.notAvailable',
+  'Promo code was not found.': 'cart.couponErrors.notFound',
+  'This promo code is for new customers only.': 'cart.couponErrors.newCustomersOnly',
+  'This promo code is for staff only.': 'cart.couponErrors.staffOnly',
+  'This promo code has reached its usage limit.': 'cart.couponErrors.usageLimitReached',
+  'You already reached the usage limit for this promo code.': 'cart.couponErrors.customerLimitReached',
+}
+
+function translateCouponError(detail, t) {
+  if (!detail) return t('cart.promoApplyFailed')
+  const key = COUPON_ERROR_KEYS[detail]
+  if (key) return t(key)
+  const minOrderMatch = /^Minimum order amount is \$([0-9.]+)\.$/.exec(detail)
+  if (minOrderMatch) {
+    return t('cart.couponErrors.minOrder', { amount: minOrderMatch[1] })
+  }
+  return detail
+}
 
 function getDefaultDeliveryFee(siteSettings) {
   const fees = (siteSettings?.delivery_fees && Object.keys(siteSettings.delivery_fees).length > 0)
@@ -51,11 +75,16 @@ function getCouponDiscount(coupon, subtotal, deliveryFee) {
 }
 
 function isCouponExpired(coupon) {
-  return coupon.ends_at && new Date(coupon.ends_at).getTime() < Date.now()
+  const expiresAt = coupon?.ends_at || coupon?.expires_at
+  return Boolean(expiresAt && new Date(expiresAt).getTime() < Date.now())
 }
 
 function canUseCoupon(coupon) {
-  return coupon?.coupon_code && coupon.status !== 'used' && !isCouponExpired(coupon)
+  return Boolean(
+    coupon?.coupon_code &&
+    (!coupon.status || coupon.status === 'active') &&
+    !isCouponExpired(coupon)
+  )
 }
 
 function couponVisual(coupon, t) {
@@ -137,11 +166,7 @@ export default function Cart() {
       openAuthModal('coupon')
       return
     }
-    if (selectedCount <= 0) {
-      toast.error(t('cart.selectProductFirst'))
-      return
-    }
-    setShowCoupons(true)
+    startTransition(() => navigate('/profile/rewards/coupons'))
   }
 
   const handleApplyPromo = async (event) => {
@@ -185,7 +210,7 @@ export default function Cart() {
         await new Promise((r) => setTimeout(r, 600 - elapsed))
       }
       clearCoupon()
-      const errorMsg = error?.response?.data?.detail || t('cart.promoApplyFailed')
+      const errorMsg = translateCouponError(error?.response?.data?.detail, t)
       setCouponModal({
         isOpen: true,
         type: 'error',
@@ -223,7 +248,7 @@ export default function Cart() {
       if (elapsed < 600) {
         await new Promise((r) => setTimeout(r, 600 - elapsed))
       }
-      const errorMsg = error?.response?.data?.detail || t('cart.promoApplyFailed')
+      const errorMsg = translateCouponError(error?.response?.data?.detail, t)
       setCouponModal({
         isOpen: true,
         type: 'error',
@@ -256,9 +281,14 @@ export default function Cart() {
 
   return (
     <div className="-mx-4 -mt-4 min-h-[calc(100svh-5rem)] bg-slate-100 px-4 pb-28 pt-4 md:mx-0 md:mt-0 md:min-h-0 md:rounded-[2rem] md:p-6 lg:pb-6">
-      <div className="sticky top-0 z-30 -mx-4 mb-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-slate-100/95 px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mb-5 md:block md:min-h-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+      <div className="sticky top-0 z-30 -mx-4 mb-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-slate-100/95 px-4 pb-2 pt-[max(0.5rem,var(--page-safe-top))] backdrop-blur md:static md:mx-0 md:mb-5 md:block md:min-h-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/shop')} className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-800 shadow-sm active:scale-95 md:hidden">
+          <button
+            type="button"
+            onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/shop'))}
+            aria-label={t('common.back')}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-800 shadow-sm active:scale-95 md:hidden"
+          >
             <ChevronLeft size={22} />
           </button>
           <h1 className="hidden text-xl font-black tracking-tight text-gray-950 md:block">{t('cart.title')} ({items.length})</h1>
@@ -345,7 +375,11 @@ export default function Cart() {
               />
               <button
                 type="submit"
-                disabled={applyingPromo || !promoCode.trim()}
+                disabled={
+                  applyingPromo
+                  || !promoCode.trim()
+                  || Boolean(appliedCoupon?.coupon_code && appliedCoupon.coupon_code.trim().toUpperCase() === promoCode.trim().toUpperCase())
+                }
                 className="flex min-w-[96px] items-center justify-center gap-1.5 rounded-full bg-pink-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-pink-300 active:scale-95"
               >
                 {applyingPromo ? (
@@ -353,6 +387,8 @@ export default function Cart() {
                     <Loader2 size={16} className="animate-spin" />
                     <span className="text-xs">Applying...</span>
                   </>
+                ) : appliedCoupon?.coupon_code && appliedCoupon.coupon_code.trim().toUpperCase() === promoCode.trim().toUpperCase() ? (
+                  t('rewardsPage.coupons.applied')
                 ) : (
                   t('rewardsPage.coupons.apply')
                 )}
@@ -419,25 +455,31 @@ export default function Cart() {
         </button>
       </div>
 
-      {showCoupons && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-gray-950/45 px-0 backdrop-blur-sm md:items-center md:px-4">
-          <div className="flex max-h-[82vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl">
+      {showCoupons && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-gray-950/50 p-0 backdrop-blur-sm md:items-center md:p-4"
+          onClick={() => setShowCoupons(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl md:rounded-3xl"
+          >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-pink-600">{t('cart.myCoupons')}</p>
-                <h2 className="text-lg font-black text-gray-950">{t('rewardsPage.coupons.title')}</h2>
+                <p className="text-[11px] font-black uppercase tracking-wider text-pink-600">{t('profile.rewards')}</p>
+                <h2 className="text-lg font-black text-gray-950">{t('cart.myCoupons')}</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCoupons(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-500 active:scale-95"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition hover:bg-gray-200 active:scale-95"
                 aria-label={t('common.cancel')}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="min-h-[220px] flex-1 overflow-y-auto bg-slate-50 p-4">
+            <div className="flex-1 overflow-y-auto bg-slate-50 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {couponsLoading ? (
                 <div className="flex h-44 items-center justify-center">
                   <Loader2 size={24} className="animate-spin text-pink-600" />
@@ -457,13 +499,17 @@ export default function Cart() {
                   {activeCoupons.map((coupon) => {
                     const visual = couponVisual(coupon, t)
                     const Icon = visual.icon
+                    const isApplied = Boolean(
+                      appliedCoupon?.coupon_code
+                      && coupon.coupon_code?.trim().toUpperCase() === appliedCoupon.coupon_code.trim().toUpperCase()
+                    )
                     return (
                       <button
                         key={coupon.id}
                         type="button"
                         onClick={() => handleApplySavedCoupon(coupon)}
-                        disabled={applyingPromo}
-                        className="grid w-full grid-cols-[52px_1fr_auto] items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-sm transition hover:border-pink-200 active:scale-[0.99] disabled:opacity-60"
+                        disabled={applyingPromo || isApplied}
+                        className="grid w-full grid-cols-[52px_1fr_auto] items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-sm transition hover:border-pink-200 active:scale-[0.99] disabled:cursor-default disabled:opacity-75"
                       >
                         <span className={`flex h-12 w-12 items-center justify-center rounded-xl ${visual.tone}`}>
                           <Icon size={20} />
@@ -475,8 +521,12 @@ export default function Cart() {
                           </span>
                           <span className="mt-1 block font-mono text-xs font-black text-pink-600">{coupon.coupon_code}</span>
                         </span>
-                        <span className="rounded-full bg-pink-600 px-3 py-1.5 text-xs font-black text-white">
-                          {t('rewardsPage.coupons.apply')}
+                        <span
+                          className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                            isApplied ? 'bg-emerald-50 text-emerald-600' : 'bg-pink-600 text-white'
+                          }`}
+                        >
+                          {isApplied ? t('rewardsPage.coupons.applied') : t('rewardsPage.coupons.apply')}
                         </span>
                       </button>
                     )
@@ -485,7 +535,8 @@ export default function Cart() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <CouponStatusModal
         isOpen={couponModal.isOpen}

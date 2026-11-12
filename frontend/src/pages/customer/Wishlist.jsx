@@ -45,7 +45,7 @@ export default function Wishlist() {
 
   return (
     <div className="-mx-4 -mt-4 min-h-[calc(100svh-5rem)] bg-slate-100 px-4 pb-8 pt-4 md:mx-0 md:mt-0 md:min-h-0 md:rounded-[2rem] md:bg-white md:p-0">
-      <div className="sticky top-0 z-30 -mx-4 mb-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-slate-100/95 px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur md:static md:mx-0 md:mb-6 md:block md:min-h-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+      <div className="sticky top-0 z-30 -mx-4 mb-4 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center bg-slate-100/95 px-4 pb-2 pt-[max(0.5rem,var(--page-safe-top))] backdrop-blur md:static md:mx-0 md:mb-6 md:block md:min-h-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}

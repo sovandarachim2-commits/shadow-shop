@@ -27,6 +27,7 @@ class User(AbstractUser):
     telegram_username = models.CharField(max_length=150, blank=True)
     telegram_photo_url = models.URLField(blank=True)
     telegram_auth_date = models.DateTimeField(null=True, blank=True)
+    telegram_notifications_enabled = models.BooleanField(default=True)
     google_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     google_picture_url = models.URLField(blank=True)
     google_auth_date = models.DateTimeField(null=True, blank=True)

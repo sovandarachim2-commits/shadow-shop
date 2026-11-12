@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 from django.core.mail import BadHeaderError
 from django.core.files.storage import default_storage
@@ -1199,6 +1200,62 @@ class TelegramWebhookView(generics.GenericAPIView):
             )
             return Response({'ok': True})
 
+        # Customer notification deep link: /start link_<token>
+        if text.startswith('/start link_'):
+            token = text.replace('/start link_', '', 1).strip()
+            tg_id = str(user.get('id') or '').strip()
+            chat_id = str(chat.get('id') or '').strip()
+            user_id = cache.get(f'tg_connect:{token}') if token else None
+            if not tg_id or not chat_id or str(chat_id).startswith('-'):
+                return Response({'ok': True})
+            if not user_id:
+                service.send_message(
+                    (
+                        "⚠️ <b>Link expired or invalid</b>\n\n"
+                        "Please tap <b>Connect Telegram</b> in Shadow Shop Notifications again."
+                    ),
+                    event_type='telegram_link_expired',
+                    chat_id=chat_id,
+                    disable_web_page_preview=True,
+                )
+                return Response({'ok': True})
+
+            target_user = User.objects.filter(pk=user_id, is_active=True).first()
+            if not target_user:
+                return Response({'ok': True})
+
+            conflict = User.objects.filter(telegram_id=tg_id).exclude(pk=target_user.pk).exists()
+            if conflict:
+                service.send_message(
+                    (
+                        "⚠️ <b>Telegram already linked</b>\n\n"
+                        "This Telegram account is already connected to another Shadow Shop account."
+                    ),
+                    event_type='telegram_link_conflict',
+                    chat_id=chat_id,
+                    disable_web_page_preview=True,
+                )
+                return Response({'ok': True})
+
+            target_user.telegram_id = tg_id
+            target_user.telegram_username = user.get('username') or target_user.telegram_username or ''
+            target_user.telegram_notifications_enabled = True
+            target_user.save(update_fields=['telegram_id', 'telegram_username', 'telegram_notifications_enabled'])
+            cache.delete(f'tg_connect:{token}')
+
+            service.send_message(
+                (
+                    "✅ <b>Shadow Shop Notifications Connected</b>\n\n"
+                    "You will now receive private updates here when your order status changes.\n\n"
+                    "បានភ្ជាប់ដោយជោគជ័យ — អ្នកនឹងទទួលបានសារជូនដំណឹងឯកជននៅទីនេះ "
+                    "រាល់ពេលស្ថានភាពការបញ្ជាទិញរបស់អ្នកត្រូវបានធ្វើបច្ចុប្បន្នភាព។"
+                ),
+                event_type='telegram_link_success',
+                chat_id=chat_id,
+                disable_web_page_preview=True,
+            )
+            return Response({'ok': True})
+
         # Plain /start — required so the bot can later DM order confirmations privately.
         tg_id = str(user.get('id') or '').strip()
         chat_id = str(chat.get('id') or '').strip()
@@ -1233,6 +1290,59 @@ class TelegramWebhookView(generics.GenericAPIView):
                 disable_web_page_preview=True,
             )
         return Response({'ok': True})
+
+
+class TelegramNotificationConnectView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def _serialize(self, user, bot_username='', deep_link=''):
+        return {
+            'connected': bool(user.telegram_id),
+            'telegram_id': user.telegram_id or '',
+            'telegram_username': user.telegram_username or '',
+            'telegram_notifications_enabled': bool(getattr(user, 'telegram_notifications_enabled', True)),
+            'bot_username': bot_username,
+            'deep_link': deep_link,
+        }
+
+    def get(self, request):
+        from apps.notifications.services import TelegramService
+        bot_username = TelegramService().get_bot_username(allow_remote=False)
+        return Response(self._serialize(request.user, bot_username=bot_username))
+
+    def post(self, request):
+        from apps.notifications.services import TelegramService
+        bot_username = TelegramService().get_bot_username(allow_remote=True)
+        if not bot_username:
+            return Response(
+                {'detail': 'Telegram bot is not configured.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        token = secrets.token_urlsafe(16)
+        cache.set(f'tg_connect:{token}', request.user.pk, timeout=15 * 60)
+        deep_link = f'https://t.me/{bot_username}?start=link_{token}'
+        return Response(self._serialize(request.user, bot_username=bot_username, deep_link=deep_link))
+
+    def patch(self, request):
+        enabled = request.data.get('telegram_notifications_enabled')
+        if enabled is None:
+            return Response(
+                {'detail': 'telegram_notifications_enabled is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.telegram_notifications_enabled = bool(enabled)
+        request.user.save(update_fields=['telegram_notifications_enabled'])
+        from apps.notifications.services import TelegramService
+        bot_username = TelegramService().get_bot_username(allow_remote=False)
+        return Response(self._serialize(request.user, bot_username=bot_username))
+
+    def delete(self, request):
+        request.user.telegram_id = None
+        request.user.telegram_username = ''
+        request.user.save(update_fields=['telegram_id', 'telegram_username'])
+        from apps.notifications.services import TelegramService
+        bot_username = TelegramService().get_bot_username(allow_remote=False)
+        return Response(self._serialize(request.user, bot_username=bot_username))
 
 
 class MeView(generics.RetrieveUpdateAPIView):

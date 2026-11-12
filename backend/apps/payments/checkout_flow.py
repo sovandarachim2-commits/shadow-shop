@@ -25,13 +25,16 @@ def preview_checkout_amount(request, checkout_data):
     discount = Decimal('0')
     coupon_code = (validated.get('coupon_code') or '').strip()
     if coupon_code:
-        _, discount = get_coupon_discount(
-            request.user,
-            coupon_code,
-            subtotal,
-            delivery_fee,
-            lock=False,
-        )
+        try:
+            _, discount = get_coupon_discount(
+                request.user,
+                coupon_code,
+                subtotal,
+                delivery_fee,
+                lock=False,
+            )
+        except ValueError as exc:
+            raise ValidationError({'coupon_code': str(exc)}) from exc
 
     return subtotal + delivery_fee - discount
 

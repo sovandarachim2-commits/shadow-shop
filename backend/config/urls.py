@@ -11,11 +11,10 @@ from rest_framework.response import Response
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def api_root(request):
-    return Response({
+    payload = {
         'name': 'Shadow Shop API',
         'version': '1.0',
         'status': 'online',
-        'documentation': request.build_absolute_uri('/api/docs/'),
         'endpoints': {
             'auth': request.build_absolute_uri('/api/auth/'),
             'products': request.build_absolute_uri('/api/products/'),
@@ -26,18 +25,18 @@ def api_root(request):
             'reports': request.build_absolute_uri('/api/reports/'),
             'payments': request.build_absolute_uri('/api/payments/'),
         }
-    })
+    }
+    if settings.ENABLE_API_DOCS:
+        payload['documentation'] = request.build_absolute_uri('/api/docs/')
+    return Response(payload)
 
 def root_redirect(request):
-    return HttpResponseRedirect('/api/docs/')
+    return HttpResponseRedirect('/api/docs/' if settings.ENABLE_API_DOCS else '/api/')
 
 urlpatterns = [
     path('', root_redirect),
     path('django-admin/', admin.site.urls),
     path('api/', api_root, name='api-root'),
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     path('api/auth/', include('apps.accounts.urls')),
     path('api/products/', include('apps.products.urls')),
@@ -49,6 +48,13 @@ urlpatterns = [
     path('api/reports/', include('apps.reports.urls')),
     path('api/payments/', include('apps.payments.urls')),
 ]
+
+if settings.ENABLE_API_DOCS:
+    urlpatterns += [
+        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+        path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

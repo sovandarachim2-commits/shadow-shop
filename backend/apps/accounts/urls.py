@@ -22,6 +22,7 @@ urlpatterns = [
     path('google/config/', views.GoogleLoginConfigView.as_view(), name='google-config'),
     path('google/login/', views.GoogleLoginView.as_view(), name='google-login'),
     path('telegram/config/', views.TelegramLoginConfigView.as_view(), name='telegram-config'),
+    path('telegram/connect/', views.TelegramNotificationConnectView.as_view(), name='telegram-connect'),
     path('telegram/login/', views.TelegramLoginView.as_view(), name='telegram-login'),
     path('telegram/start/', views.TelegramVerificationStartView.as_view(), name='telegram-start'),
     path('telegram/status/', views.TelegramVerificationStatusView.as_view(), name='telegram-status'),

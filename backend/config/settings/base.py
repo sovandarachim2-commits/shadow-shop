@@ -23,6 +23,7 @@ def env_bool(name, default=False):
 
 SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-change-in-prod')
 DEBUG = env_bool('DEBUG', default=True)
+ENABLE_API_DOCS = env_bool('ENABLE_API_DOCS', default=DEBUG)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 DJANGO_APPS = [

@@ -32,6 +32,11 @@ html[lang="km"] textarea {
     --input: 220 13% 91%;
     --ring: 262.1 83.3% 57.8%;
     --radius: 0.75rem;
+    --page-safe-top: env(safe-area-inset-top, 0px);
+  }
+
+  html[data-announcement-visible="true"] {
+    --page-safe-top: 0px;
   }
 }
 
