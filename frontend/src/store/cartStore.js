@@ -112,12 +112,13 @@ const useCartStore = create(
       },
 
       removeItem: (productId) => {
+        const currentItem = get().items.find((i) => getProductId(i) === productId)
         set({
           items: get().items.filter((i) => getProductId(i) !== productId),
           selectedProductIds: get().selectedProductIds.filter((id) => id !== productId),
         })
 
-        if (localStorage.getItem('access_token')) {
+        if (localStorage.getItem('access_token') && !currentItem?.product?.is_free_gift) {
           cartApi.removeItem({ cart_key: productId }).catch(() => {})
         }
       },
@@ -141,7 +142,7 @@ const useCartStore = create(
                 getProductId(i) === productId ? { ...i, quantity: maxQuantity } : i
               ),
             })
-            if (localStorage.getItem('access_token')) {
+            if (localStorage.getItem('access_token') && !currentItem?.product?.is_free_gift) {
               cartApi.setQuantity({ cart_key: productId, quantity: maxQuantity }).catch(() => {})
             }
           }
@@ -154,7 +155,7 @@ const useCartStore = create(
           ),
         })
 
-        if (localStorage.getItem('access_token')) {
+        if (localStorage.getItem('access_token') && !currentItem?.product?.is_free_gift) {
           cartApi.setQuantity({ cart_key: productId, quantity: nextQuantity }).catch(() => {})
         }
 
@@ -254,12 +255,15 @@ const useCartStore = create(
           const localItems = (get().items || []).filter(
             (item) => getProductId(item) && getQuantity(item) > 0
           )
+          const localGifts = localItems.filter((item) => item.product?.is_free_gift)
+          const localPaid = localItems.filter((item) => !item.product?.is_free_gift)
+
           let serverItems = []
-          if (localItems.length > 0) {
+          if (localPaid.length > 0) {
             const payload = {
-              items: localItems.map((item) => ({
+              items: localPaid.map((item) => ({
                 cart_key: getProductId(item),
-                product_id: item.product?.item_type === 'set' ? undefined : item.product?.id,
+                product_id: item.product?.item_type === 'set' ? undefined : (item.product?.product_id || item.product?.id),
                 product_set_id: item.product?.item_type === 'set' ? (item.product?.product_set_id || item.product?.id) : undefined,
                 quantity: getQuantity(item),
               })),
@@ -289,15 +293,24 @@ const useCartStore = create(
               }
             })
 
-            const validKeys = merged.map(getProductId).filter(Boolean)
+            // Retain local free gifts alongside server items
+            const combined = [...merged, ...localGifts]
+            const validKeys = combined.map(getProductId).filter(Boolean)
             const currentSelected = get().selectedProductIds
             const newSelected = currentSelected.length > 0
               ? currentSelected.filter((id) => validKeys.includes(id))
               : validKeys
 
             set({
-              items: merged,
+              items: combined,
               selectedProductIds: newSelected,
+            })
+          } else if (localPaid.length === 0 && localGifts.length > 0) {
+            // Retain free gifts even if server has no paid items
+            const giftKeys = localGifts.map(getProductId)
+            set({
+              items: localGifts,
+              selectedProductIds: giftKeys,
             })
           } else if (localItems.length === 0) {
             set({ items: [], selectedProductIds: [] })

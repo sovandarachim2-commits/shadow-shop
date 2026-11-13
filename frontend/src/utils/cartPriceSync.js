@@ -13,8 +13,8 @@ export function useCartPriceSync() {
   const notified = useRef(new Set())
   const productIds = useMemo(
     () => [...new Set(items
-      .filter((item) => item.product?.item_type !== 'set' && item.product?.id)
-      .map((item) => item.product.id))]
+      .filter((item) => item.product?.item_type !== 'set' && !item.product?.is_free_gift && item.product?.id)
+      .map((item) => item.product.product_id || item.product.id))]
       .sort((a, b) => String(a).localeCompare(String(b))),
     [items],
   )

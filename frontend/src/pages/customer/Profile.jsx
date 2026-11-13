@@ -8,7 +8,10 @@ import {
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
   Home, Headphones, Eye, EyeOff, Clock, Share2, Crown, Copy, Check,
+  QrCode, ScanLine, Download, X, AlertCircle,
 } from 'lucide-react'
+import QRCode from 'qrcode'
+import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
@@ -29,6 +32,29 @@ import './ProfileEditor.css'
 function firstApiMessage(value) {
   if (Array.isArray(value)) return value.find((item) => typeof item === 'string' && item.trim()) || ''
   return typeof value === 'string' ? value : ''
+}
+
+function extractReferralCode(raw) {
+  if (!raw || typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  try {
+    const url = new URL(trimmed)
+    const ref = url.searchParams.get('ref')
+    if (ref) return ref.trim()
+  } catch {
+    const match = /[?&]ref=([a-zA-Z0-9_-]+)/.exec(trimmed)
+    if (match && match[1]) return match[1]
+  }
+  return trimmed
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  const link = document.createElement('a')
+  link.href = dataUrl
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 const ACCOUNT_MENU_ITEMS = [
@@ -768,6 +794,13 @@ export default function Profile() {
   const [activeView, setActiveView] = useState('profile')
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
   const [copiedInviteCode, setCopiedInviteCode] = useState(false)
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [myQrDataUrl, setMyQrDataUrl] = useState('')
+  const [scannerModalOpen, setScannerModalOpen] = useState(false)
+  const [scannerError, setScannerError] = useState('')
+  const [isScanning, setIsScanning] = useState(false)
+  const scanTargetSetterRef = useRef(null)
+  const html5QrRef = useRef(null)
   const { t, i18n } = useTranslation()
   const isKhmer = i18n.language === 'km'
   const toggleLang = () => i18n.changeLanguage(isKhmer ? 'en' : 'km')
@@ -778,6 +811,99 @@ export default function Profile() {
   const selectLanguage = (language) => {
     i18n.changeLanguage(language)
     setIsLanguageMenuOpen(false)
+  }
+
+  const referralLink = `${window.location.origin}/login?mode=register&ref=${user?.referral_code || ''}`
+
+  // Generate My QR Code for profile
+  useEffect(() => {
+    if (user?.referral_code && qrModalOpen) {
+      QRCode.toDataURL(referralLink, {
+        width: 360,
+        margin: 2,
+        color: { dark: '#0f172a', light: '#ffffff' },
+      })
+        .then((url) => setMyQrDataUrl(url))
+        .catch((err) => console.error('Failed to generate QR code', err))
+    }
+  }, [user?.referral_code, qrModalOpen, referralLink])
+
+  // Camera QR Scanner lifecycle
+  useEffect(() => {
+    let active = true
+
+    if (!scannerModalOpen) {
+      if (html5QrRef.current) {
+        stopQrScanner(html5QrRef.current).catch(() => {})
+        html5QrRef.current = null
+      }
+      setIsScanning(false)
+      setScannerError('')
+      return
+    }
+
+    setScannerError('')
+    setIsScanning(true)
+
+    const timer = setTimeout(async () => {
+      try {
+        const qr = await startQrScanner('profile-referral-qr-box', {
+          fps: 12,
+          qrbox: { width: 220, height: 220 },
+          onScan: async (decodedText) => {
+            if (!active) return
+            const code = extractReferralCode(decodedText)
+            if (code) {
+              if (navigator.vibrate) navigator.vibrate(100)
+              if (scanTargetSetterRef.current) {
+                scanTargetSetterRef.current(code.toUpperCase())
+              }
+              toast.success(t('rewardsPage.referral.scannedSuccess', 'Scanned code successfully!'))
+              await stopQrScanner(qr)
+              html5QrRef.current = null
+              setIsScanning(false)
+              setScannerModalOpen(false)
+            } else {
+              toast.error(t('rewardsPage.referral.scannedInvalid', 'Invalid referral QR code'))
+            }
+          },
+        })
+        if (active) {
+          html5QrRef.current = qr
+        } else {
+          stopQrScanner(qr).catch(() => {})
+        }
+      } catch (err) {
+        if (active) {
+          setIsScanning(false)
+          html5QrRef.current = null
+          setScannerError(cameraErrorMessage(err))
+        }
+      }
+    }, 150)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+      if (html5QrRef.current) {
+        stopQrScanner(html5QrRef.current).catch(() => {})
+        html5QrRef.current = null
+      }
+    }
+  }, [scannerModalOpen, t])
+
+  const handleOpenScanner = (setter) => {
+    scanTargetSetterRef.current = setter
+    setScannerModalOpen(true)
+  }
+
+  const handleCloseScanner = async () => {
+    if (html5QrRef.current) {
+      await stopQrScanner(html5QrRef.current).catch(() => {})
+      html5QrRef.current = null
+    }
+    setIsScanning(false)
+    setScannerModalOpen(false)
   }
 
   useEffect(() => {
@@ -1090,14 +1216,25 @@ export default function Profile() {
                     {user.referral_code}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={copyInviteCode}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3.5 py-2 text-sm font-black text-pink-600 shadow-sm active:scale-95"
-                >
-                  {copiedInviteCode ? <Check size={15} /> : <Copy size={15} />}
-                  <span>{copiedInviteCode ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setQrModalOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3 py-2 text-sm font-black text-pink-600 shadow-sm active:scale-95 hover:bg-pink-50 transition"
+                    title={t('rewardsPage.referral.showQr', 'Open QR')}
+                  >
+                    <QrCode size={16} />
+                    <span>{t('rewardsPage.referral.showQr', 'QR')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={copyInviteCode}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3.5 py-2 text-sm font-black text-pink-600 shadow-sm active:scale-95"
+                  >
+                    {copiedInviteCode ? <Check size={15} /> : <Copy size={15} />}
+                    <span>{copiedInviteCode ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}</span>
+                  </button>
+                </div>
               </div>
             )}
             <div className={user.referral_code ? 'mt-3 border-t border-pink-100 pt-2' : ''}>
@@ -1107,7 +1244,7 @@ export default function Profile() {
                   <span className="font-mono font-black text-emerald-700">{user.referred_by_code || 'Saved'}</span>
                 </div>
               ) : (
-                <FriendReferralCodeEditor t={t} compact />
+                <FriendReferralCodeEditor t={t} compact onOpenScanner={handleOpenScanner} />
               )}
             </div>
           </div>
@@ -1167,6 +1304,8 @@ export default function Profile() {
               setActiveView={setActiveView}
               setActiveModal={setActiveModal}
               handleLogout={handleLogout}
+              onOpenQr={() => setQrModalOpen(true)}
+              onOpenScanner={handleOpenScanner}
             />
           )}
           {/* ══ MY ORDERS ══ */}
@@ -1523,6 +1662,183 @@ export default function Profile() {
           onSaved={() => setActiveModal(null)}
         />
       )}
+
+      {/* My Invite QR Modal */}
+      {qrModalOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in"
+          onClick={() => setQrModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="profile-qr-title"
+            className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl transition text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setQrModalOpen(false)}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 mb-3">
+              <QrCode size={24} />
+            </div>
+
+            <h3 id="profile-qr-title" className="text-lg font-black text-slate-900">
+              {t('rewardsPage.referral.myQrTitle', 'Your Invite QR Code')}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 leading-relaxed px-2">
+              {t('rewardsPage.referral.myQrSubtitle', 'Share this QR code with friends to join and earn points together')}
+            </p>
+
+            {/* QR Code Canvas/Image */}
+            <div className="mt-4 mx-auto flex w-60 h-60 items-center justify-center rounded-2xl border-2 border-dashed border-pink-200 bg-slate-50/50 p-3 shadow-inner">
+              {myQrDataUrl ? (
+                <img
+                  src={myQrDataUrl}
+                  alt={`QR Code for ${user.referral_code}`}
+                  className="h-full w-full object-contain rounded-xl"
+                />
+              ) : (
+                <Loader2 size={32} className="animate-spin text-pink-600" />
+              )}
+            </div>
+
+            {/* Code pill */}
+            <div className="mt-3.5 inline-flex items-center gap-2 rounded-xl bg-pink-50/80 px-4 py-2 border border-pink-100">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                {t('rewardsPage.referral.code', 'Code')}:
+              </span>
+              <span className="font-mono text-base font-black text-pink-600 tracking-wider">
+                {user.referral_code}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={!myQrDataUrl}
+                onClick={() => {
+                  if (myQrDataUrl) {
+                    downloadDataUrl(myQrDataUrl, `shadow-shop-invite-${user.referral_code}.png`)
+                    toast.success(t('rewardsPage.referral.downloadSuccess', 'Downloaded QR Code!'))
+                  }
+                }}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white transition hover:bg-slate-800 active:scale-95 disabled:opacity-50"
+              >
+                <Download size={15} />
+                <span>{t('rewardsPage.referral.downloadQr', 'Download QR')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(referralLink)
+                  toast.success(t('rewardsPage.toast.codeCopied', { defaultValue: 'Link copied!' }))
+                }}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-pink-600 px-3 text-xs font-bold text-white transition hover:bg-pink-700 active:scale-95"
+              >
+                <Copy size={15} />
+                <span>{t('rewardsPage.referral.copyLink', 'Copy Link')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Camera Scanner Modal */}
+      {scannerModalOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={handleCloseScanner}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="profile-scanner-title"
+            className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-slate-900 p-6 text-white shadow-2xl transition"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/20 text-pink-400">
+                  <ScanLine size={18} />
+                </div>
+                <div>
+                  <h3 id="profile-scanner-title" className="text-base font-black text-white">
+                    {t('rewardsPage.referral.scanTitle', "Scan Friend's Invite QR")}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {t('rewardsPage.referral.scanInstructions', "Point your camera at your friend's referral QR code")}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseScanner}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Viewfinder Area */}
+            <div className="mt-5 flex flex-col items-center">
+              <div className="relative aspect-square w-64 overflow-hidden rounded-2xl bg-black ring-2 ring-pink-500/50 shadow-2xl">
+                <div id="profile-referral-qr-box" className="h-full w-full" />
+
+                {/* Animated scanner laser bar */}
+                {isScanning && !scannerError && (
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-pink-500 to-transparent shadow-[0_0_15px_#ec4899] animate-bounce" />
+                )}
+
+                {/* Corner guide overlays */}
+                <div className="pointer-events-none absolute inset-4 border-2 border-pink-400/40 rounded-xl" />
+
+                {/* Error overlay inside box */}
+                {scannerError && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 p-4 text-center">
+                    <AlertCircle size={28} className="text-rose-500 mb-2" />
+                    <p className="text-xs text-rose-300 font-medium leading-relaxed">
+                      {scannerError}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScannerError('')
+                        setIsScanning(true)
+                      }}
+                      className="mt-3 rounded-lg bg-pink-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-pink-700 active:scale-95"
+                    >
+                      {t('common.retry', 'Retry')}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <p className="mt-3 text-center text-xs text-slate-400">
+                {t('rewardsPage.referral.scanHint', 'Align QR code inside the box to scan automatically')}
+              </p>
+            </div>
+
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleCloseScanner}
+                className="w-full rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white transition"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {ConfirmDialog}
     </div>
   )
@@ -1553,6 +1869,8 @@ function DesktopProfileOverview({
   setActiveView,
   setActiveModal,
   handleLogout,
+  onOpenQr,
+  onOpenScanner,
 }) {
   const defaultAddress = addresses.find((addr) => addr.is_default) || addresses[0]
   const orderTotal = accountOrders.length
@@ -1679,17 +1997,28 @@ function DesktopProfileOverview({
                   <div className="font-mono text-sm font-black tracking-wider text-pink-600">{user.referral_code}</div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard?.writeText(user.referral_code)
-                  toast.success(t('rewardsPage.toast.codeCopied', { defaultValue: 'Referral code copied!' }))
-                }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-xs font-black text-pink-600 transition hover:bg-pink-50 active:scale-95"
-              >
-                <Copy size={13} />
-                <span>{t('common.copy', 'Copy')}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenQr?.()}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-xs font-black text-pink-600 transition hover:bg-pink-50 active:scale-95"
+                  title={t('rewardsPage.referral.showQr', 'Open QR')}
+                >
+                  <QrCode size={13} />
+                  <span>{t('rewardsPage.referral.showQr', 'QR')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(user.referral_code)
+                    toast.success(t('rewardsPage.toast.codeCopied', { defaultValue: 'Referral code copied!' }))
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-pink-200 bg-white px-2.5 py-1.5 text-xs font-black text-pink-600 transition hover:bg-pink-50 active:scale-95"
+                >
+                  <Copy size={13} />
+                  <span>{t('common.copy', 'Copy')}</span>
+                </button>
+              </div>
             </div>
           )}
           <DesktopInfoRow icon={User} label={t('profile.fullName')} value={displayName} />
@@ -1699,7 +2028,7 @@ function DesktopProfileOverview({
           {user.referred_by ? (
             <DesktopInfoRow icon={Gift} label={t('rewardsPage.referral.usedInviteCode')} value={user.referred_by_code || 'Saved'} />
           ) : (
-            <FriendReferralCodeEditor t={t} />
+            <FriendReferralCodeEditor t={t} onOpenScanner={onOpenScanner} />
           )}
           <DesktopInfoRow icon={Languages} label={t('profile.chooseLanguage')} value={currentLanguage.label} />
           <DesktopInfoRow icon={Home} label={t('profile.memberSince')} value={memberSince} />
@@ -1800,7 +2129,7 @@ function DesktopProfileCard({ title, icon: Icon, children }) {
   )
 }
 
-function FriendReferralCodeEditor({ t, compact = false }) {
+function FriendReferralCodeEditor({ t, compact = false, onOpenScanner }) {
   const [code, setCode] = useState('')
   const updateUser = useAuthStore((state) => state.updateUser)
   const saveCode = useMutation({
@@ -1836,15 +2165,25 @@ function FriendReferralCodeEditor({ t, compact = false }) {
         {t('completeProfile.referralCodeOptional')}
       </label>
       <div className={cn('flex h-10 overflow-hidden rounded-lg border border-gray-200 bg-white focus-within:border-pink-400 focus-within:ring-2 focus-within:ring-pink-100', !compact && 'ml-12 h-11')}>
-        <input
-          id={compact ? 'mobile-friend-referral-code' : 'profile-friend-referral-code'}
-          value={code}
-          onChange={(event) => setCode(event.target.value.toUpperCase())}
-          placeholder={t('completeProfile.referralCodePlaceholder')}
-          maxLength={20}
-          autoComplete="off"
-          className="min-w-0 flex-1 px-3 text-sm font-black uppercase tracking-wider text-gray-900 outline-none placeholder:font-semibold placeholder:normal-case placeholder:tracking-normal placeholder:text-gray-400"
-        />
+        <div className="relative flex flex-1 items-center">
+          <input
+            id={compact ? 'mobile-friend-referral-code' : 'profile-friend-referral-code'}
+            value={code}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            placeholder={t('completeProfile.referralCodePlaceholder')}
+            maxLength={50}
+            autoComplete="off"
+            className="w-full px-3 pr-9 text-sm font-black uppercase tracking-wider text-gray-900 outline-none placeholder:font-semibold placeholder:normal-case placeholder:tracking-normal placeholder:text-gray-400"
+          />
+          <button
+            type="button"
+            onClick={() => onOpenScanner?.(setCode)}
+            title={t('rewardsPage.referral.scanQr', 'Scan QR')}
+            className="absolute right-1 flex h-7 w-7 items-center justify-center rounded-md bg-pink-50 text-pink-600 hover:bg-pink-100 active:scale-95 transition"
+          >
+            <ScanLine size={15} />
+          </button>
+        </div>
         <button
           type="submit"
           disabled={saveCode.isPending || !code.trim()}

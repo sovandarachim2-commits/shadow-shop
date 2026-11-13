@@ -26,6 +26,20 @@ const DEFAULT_PROVINCE_FEES = {
 
 const getCartKey = (item) => item.product.cart_key || item.product.id
 
+const getItemBrandId = (prod) => {
+  if (!prod) return ''
+  const b = prod.promo_brand_id ?? prod.brand
+  if (b && typeof b === 'object') return String(b.id || '')
+  return String(b || '')
+}
+
+const getPromoBrandId = (promo) => {
+  if (!promo) return ''
+  const b = promo.brand
+  if (b && typeof b === 'object') return String(b.id || '')
+  return String(b || '')
+}
+
 const COUPON_ERROR_KEYS = {
   'Enter a promo code.': 'cart.couponErrors.enterCode',
   'This promo code has already been used or is no longer active.': 'cart.couponErrors.usedOrInactive',
@@ -150,17 +164,17 @@ export default function Cart() {
     if (!brandPromos.length || !items.length) return []
 
     return brandPromos.map((promo) => {
-      const brandId = promo.brand
+      const brandId = getPromoBrandId(promo)
       const paidQty = items
-        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .filter((i) => !i.product?.is_free_gift && getItemBrandId(i.product) === brandId)
         .reduce((sum, i) => sum + (i.quantity || 1), 0)
 
       const brandSpent = items
-        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .filter((i) => !i.product?.is_free_gift && getItemBrandId(i.product) === brandId)
         .reduce((sum, i) => sum + (Number(i.product?.retail_price || 0) * (i.quantity || 1)), 0)
 
       const selectedGifts = items
-        .filter((i) => i.product?.is_free_gift && String(i.product?.promo_brand_id) === String(brandId))
+        .filter((i) => i.product?.is_free_gift && getItemBrandId(i.product) === brandId)
         .reduce((sum, i) => sum + (i.quantity || 1), 0)
 
       const buyQty = promo.buy_quantity || 2
@@ -204,13 +218,13 @@ export default function Cart() {
 
     const activePromosByBrand = new Map()
     brandPromos.forEach((p) => {
-      activePromosByBrand.set(String(p.brand), p)
+      activePromosByBrand.set(getPromoBrandId(p), p)
     })
 
     // Group free gifts by brand
     const giftsByBrand = {}
     giftItems.forEach((gift) => {
-      const bId = String(gift.product?.promo_brand_id || gift.product?.brand || '')
+      const bId = getItemBrandId(gift.product)
       if (!giftsByBrand[bId]) giftsByBrand[bId] = []
       giftsByBrand[bId].push(gift)
     })
@@ -228,11 +242,11 @@ export default function Cart() {
 
       // 2. If promo is active, check if customer still qualifies
       const paidQty = items
-        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .filter((i) => !i.product?.is_free_gift && getItemBrandId(i.product) === brandId)
         .reduce((sum, i) => sum + (i.quantity || 1), 0)
 
       const brandSpent = items
-        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .filter((i) => !i.product?.is_free_gift && getItemBrandId(i.product) === brandId)
         .reduce((sum, i) => sum + (Number(i.product?.retail_price || 0) * (i.quantity || 1)), 0)
 
       const minSpend = activePromo.min_spend ? Number(activePromo.min_spend) : null
@@ -248,8 +262,14 @@ export default function Cart() {
         let toRemove = currentGiftCount - earnedGifts
         for (const giftItem of brandGifts) {
           if (toRemove <= 0) break
-          removeItem(getCartKey(giftItem))
-          toRemove -= (giftItem.quantity || 1)
+          const itemQty = Number(giftItem.quantity) || 1
+          if (itemQty > toRemove) {
+            updateQuantity(getCartKey(giftItem), itemQty - toRemove)
+            toRemove = 0
+          } else {
+            removeItem(getCartKey(giftItem))
+            toRemove -= itemQty
+          }
         }
         removedAny = true
       }
@@ -262,7 +282,60 @@ export default function Cart() {
         toast('Promotion is inactive or terms not met. Free gifts were removed from cart.', { icon: 'ℹ️' })
       }
     }
-  }, [items, brandPromos, brandPromosFetched, removeItem, isKhmer])
+  }, [items, brandPromos, brandPromosFetched, removeItem, updateQuantity, isKhmer])
+
+  // Auto-deduplicate any duplicate free gift lines that were added as separate items
+  useEffect(() => {
+    const giftItems = items.filter((i) => i.product?.is_free_gift)
+    if (giftItems.length <= 1) return
+
+    const groups = {}
+    let hasDuplicates = false
+
+    giftItems.forEach((gift) => {
+      const pId = gift.product?.product_id || gift.product?.id
+      const promoId = gift.product?.promo_id || 'default'
+      const key = `${promoId}-${pId}`
+      if (!groups[key]) {
+        groups[key] = []
+      }
+      groups[key].push(gift)
+      if (groups[key].length > 1) {
+        hasDuplicates = true
+      }
+    })
+
+    if (!hasDuplicates) return
+
+    const newItems = [...items]
+    Object.values(groups).forEach((group) => {
+      if (group.length <= 1) return
+      const totalQty = group.reduce((sum, g) => sum + (Number(g.quantity) || 1), 0)
+      const primary = group[0]
+      const canonicalKey = `gift-${primary.product?.promo_id || 'promo'}-${primary.product?.product_id || primary.product?.id}`
+
+      const groupKeys = new Set(group.map((g) => getCartKey(g)))
+      const remainingItems = newItems.filter((i) => !groupKeys.has(getCartKey(i)))
+
+      const consolidatedItem = {
+        ...primary,
+        product: {
+          ...primary.product,
+          id: canonicalKey,
+          cart_key: canonicalKey,
+        },
+        quantity: totalQty,
+      }
+      remainingItems.push(consolidatedItem)
+      newItems.length = 0
+      newItems.push(...remainingItems)
+    })
+
+    useCartStore.setState({
+      items: newItems,
+      selectedProductIds: newItems.map((i) => getCartKey(i)),
+    })
+  }, [items])
 
   const handleSelectFreeGift = (product, promo) => {
     // Check remaining stock if product availability is auto by stock
@@ -285,27 +358,30 @@ export default function Cart() {
       }
     }
 
-    const res = addItem({
-      ...product,
-      id: `gift-${product.id}-${Date.now()}`,
-      cart_key: `gift-${product.id}-${Date.now()}`,
-      product_id: product.id,
-      name: product.name,
-      retail_price: 0,
-      original_price: product.retail_price,
-      is_free_gift: true,
-      promo_id: promo.id,
-      promo_brand_id: promo.brand,
-      item_type: 'product',
-    }, 1)
+    const giftCartKey = `gift-${promo.id}-${product.id}`
+    const existingGift = items.find((i) => {
+      if (!i.product?.is_free_gift) return false
+      const iProdId = i.product?.product_id || i.product?.id
+      const iPromoId = i.product?.promo_id
+      return String(iProdId) === String(product.id) && String(iPromoId) === String(promo.id)
+    })
 
-    if (res?.success === false && res?.reason === 'stock_limit') {
-      if (isKhmer) {
-        toast.error(`ផលិតផល "${product.name}" អស់ពីស្តុកហើយ`)
-      } else {
-        toast.error(`"${product.name}" is out of stock`)
-      }
-      return
+    if (existingGift) {
+      updateQuantity(getCartKey(existingGift), (existingGift.quantity || 1) + 1)
+    } else {
+      addItem({
+        ...product,
+        id: giftCartKey,
+        cart_key: giftCartKey,
+        product_id: product.id,
+        name: product.name,
+        retail_price: 0,
+        original_price: product.retail_price,
+        is_free_gift: true,
+        promo_id: promo.id,
+        promo_brand_id: promo.brand,
+        item_type: 'product',
+      }, 1)
     }
 
     if (isKhmer) {
@@ -325,9 +401,13 @@ export default function Cart() {
       : (isKhmer ? 'តើអ្នកចង់លុបផលិតផលនេះទេ?' : 'Remove Product?')
 
     const desc = isGift
-      ? (isKhmer
-          ? `តើអ្នកប្រាកដជាចង់លុប "${name}" ចេញពីកន្ត្រកមែនទេ? អ្នកអាចជ្រើសរើសកាដូផ្សេងទៀតឡើងវិញបាន។`
-          : `Are you sure you want to remove "${name}" from your cart? You can choose another free gift.`)
+      ? (item.quantity > 1
+          ? (isKhmer
+              ? `តើអ្នកចង់ដកកាដូ "${name}" ចំនួន 1 ចេញពីកន្ត្រកមែនទេ? អ្នកអាចជ្រើសរើសកាដូផ្សេងទៀតឡើងវិញបាន។`
+              : `Do you want to remove 1 free gift "${name}" from your cart? You can choose another free gift.`)
+          : (isKhmer
+              ? `តើអ្នកប្រាកដជាចង់លុប "${name}" ចេញពីកន្ត្រកមែនទេ? អ្នកអាចជ្រើសរើសកាដូផ្សេងទៀតឡើងវិញបាន។`
+              : `Are you sure you want to remove "${name}" from your cart? You can choose another free gift.`))
       : (isKhmer
           ? `តើអ្នកប្រាកដជាចង់លុប "${name}" ចេញពីកន្ត្រករបស់អ្នកមែនទេ?`
           : `Are you sure you want to remove "${name}" from your cart?`)
@@ -339,7 +419,11 @@ export default function Cart() {
     })
 
     if (ok) {
-      removeItem(getCartKey(item))
+      if (isGift && item.quantity > 1) {
+        updateQuantity(getCartKey(item), item.quantity - 1)
+      } else {
+        removeItem(getCartKey(item))
+      }
       if (isKhmer) {
         toast.success(`បានលុប "${name}" ចេញពីកន្ត្រក`)
       } else {
