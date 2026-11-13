@@ -390,9 +390,21 @@ class ProductSetSerializer(serializers.ModelSerializer):
 
 
 class PromotionSerializer(serializers.ModelSerializer):
+    brand_name = serializers.ReadOnlyField(source='brand.name')
+    brand_logo = serializers.SerializerMethodField()
+    specific_reward_product_name = serializers.ReadOnlyField(source='specific_reward_product.name')
+
     class Meta:
         model = Promotion
         fields = '__all__'
+
+    def get_brand_logo(self, obj):
+        if obj.brand and obj.brand.logo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.brand.logo.url)
+            return obj.brand.logo.url
+        return None
 
 
 class BannerSerializer(serializers.ModelSerializer):

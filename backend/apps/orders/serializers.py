@@ -217,7 +217,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = [
             'id', 'product', 'product_set', 'product_name', 'product_code', 'product_image',
-            'quantity', 'unit_price', 'cost_price', 'discount', 'total_price', 'subtotal',
+            'quantity', 'unit_price', 'cost_price', 'discount', 'is_free_gift', 'total_price', 'subtotal',
         ]
         read_only_fields = ['total_price', 'subtotal']
 
@@ -235,7 +235,7 @@ class OrderItemWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['product', 'product_set', 'quantity', 'unit_price', 'cost_price', 'discount']
+        fields = ['product', 'product_set', 'quantity', 'unit_price', 'cost_price', 'discount', 'is_free_gift']
 
     def validate(self, attrs):
         if bool(attrs.get('product')) == bool(attrs.get('product_set')):
@@ -498,6 +498,16 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         subtotal = 0
         for item_data in items_data:
+            if item_data.get('is_free_gift'):
+                item_data['unit_price'] = 0
+            else:
+                product = item_data.get('product')
+                product_set = item_data.get('product_set')
+                if product is not None:
+                    item_data['unit_price'] = product.active_price
+                    item_data['cost_price'] = product.cost_price
+                elif product_set is not None:
+                    item_data['unit_price'] = product_set.active_price
             apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price
@@ -780,6 +790,53 @@ class CustomerCheckoutSerializer(serializers.Serializer):
         errors = validate_order_target_stock(attrs.get('items', []))
         if errors:
             raise serializers.ValidationError({'items': errors})
+
+        # Validate promotional free gifts are backed by an active promotion and qualify
+        from apps.products.models import Promotion
+        from django.utils import timezone
+        now = timezone.now()
+        gift_items = [i for i in attrs.get('items', []) if i.get('is_free_gift')]
+        if gift_items:
+            gifts_by_brand = {}
+            for g in gift_items:
+                product = g.get('product')
+                if not product or not product.brand_id:
+                    raise serializers.ValidationError({'items': 'Invalid free gift item in order.'})
+                b_id = product.brand_id
+                gifts_by_brand[b_id] = gifts_by_brand.get(b_id, 0) + g.get('quantity', 1)
+
+            for b_id, gift_qty in gifts_by_brand.items():
+                active_promo = Promotion.objects.filter(
+                    type='buy_x_get_y',
+                    brand_id=b_id,
+                    is_active=True,
+                    start_date__lte=now,
+                    end_date__gte=now,
+                ).first()
+                if not active_promo:
+                    raise serializers.ValidationError({
+                        'items': 'This brand promotion is no longer active. Please remove the free gift from your cart.'
+                    })
+
+                paid_qty = sum(
+                    i.get('quantity', 1)
+                    for i in attrs.get('items', [])
+                    if not i.get('is_free_gift') and i.get('product') and i.get('product').brand_id == b_id
+                )
+                brand_spend = sum(
+                    (i.get('product').active_price * i.get('quantity', 1))
+                    for i in attrs.get('items', [])
+                    if not i.get('is_free_gift') and i.get('product') and i.get('product').brand_id == b_id
+                )
+                min_spend = active_promo.min_spend
+                meets_spend = min_spend is None or brand_spend >= min_spend
+                earned = (paid_qty // (active_promo.buy_quantity or 2)) * (active_promo.get_quantity or 1) if (paid_qty >= (active_promo.buy_quantity or 2) and meets_spend) else 0
+
+                if gift_qty > earned:
+                    raise serializers.ValidationError({
+                        'items': 'Free gift quantity exceeds earned promotional limit.'
+                    })
+
         method = attrs.get('payment_method')
         province = attrs.get('province', '')
         if method and not is_payment_method_allowed(method, province):
@@ -827,6 +884,16 @@ class CustomerCheckoutSerializer(serializers.Serializer):
 
         subtotal = 0
         for item_data in items_data:
+            if item_data.get('is_free_gift'):
+                item_data['unit_price'] = 0
+            else:
+                product = item_data.get('product')
+                product_set = item_data.get('product_set')
+                if product is not None:
+                    item_data['unit_price'] = product.active_price
+                    item_data['cost_price'] = product.cost_price
+                elif product_set is not None:
+                    item_data['unit_price'] = product_set.active_price
             apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price

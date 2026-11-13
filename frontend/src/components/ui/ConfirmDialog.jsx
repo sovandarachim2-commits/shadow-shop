@@ -23,6 +23,12 @@ function ConfirmDialogUI({
         iconText: 'text-red-500',
         button: 'bg-red-500 hover:bg-red-600',
       }
+    : tone === 'pink'
+    ? {
+        iconBg: 'bg-pink-50',
+        iconText: 'text-pink-600',
+        button: 'bg-pink-600 hover:bg-pink-700',
+      }
     : {
         iconBg: 'bg-purple-50',
         iconText: 'text-purple-600',

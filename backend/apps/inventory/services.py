@@ -107,10 +107,13 @@ def deduct_stock_for_order(order, user):
                 product=item.product,
                 defaults={'quantity': 0}
             )
+            stock.refresh_from_db()
             before_qty = stock.quantity
             stock.quantity = max(0, stock.quantity - item.quantity)
             stock.save()
 
+            is_gift = getattr(item, 'is_free_gift', False)
+            gift_label = f"free gift ({item.product.name})" if is_gift else "Order"
             StockMovement.objects.create(
                 type=StockMovement.TYPE_STOCK_OUT,
                 product=item.product,
@@ -119,7 +122,7 @@ def deduct_stock_for_order(order, user):
                 after_qty=stock.quantity,
                 reference=order.order_number,
                 reference_type='order',
-                notes=f"Stock deducted for Order #{order.order_number}",
+                notes=f"Stock deducted for {gift_label} in Order #{order.order_number}",
                 created_by=user,
             )
 

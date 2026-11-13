@@ -103,6 +103,7 @@ const Banners = lazyWithReload(() => import('@/pages/admin/products/Banners'))
 const AnnouncementBarAdmin = lazyWithReload(() => import('@/pages/admin/marketing/AnnouncementBar'))
 const PosterManagement = lazyWithReload(() => import('@/pages/admin/marketing/PosterManagement'))
 const VideoHighlights = lazyWithReload(() => import('@/pages/admin/marketing/VideoHighlights'))
+const BrandPromotions = lazyWithReload(() => import('@/pages/admin/marketing/BrandPromotions'))
 const StockDashboard = lazyWithReload(() => import('@/pages/admin/inventory/StockDashboard'))
 const StockMovements = lazyWithReload(() => import('@/pages/admin/inventory/StockMovements'))
 const StockTransfers = lazyWithReload(() => import('@/pages/admin/inventory/StockTransfers'))
@@ -157,6 +158,7 @@ const Notifications = lazyWithReload(() => import('@/pages/customer/Notification
 const RewardDetail = lazyWithReload(() => import('@/pages/customer/RewardDetail'))
 const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
 const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
+const About = lazyWithReload(() => import('@/pages/customer/About'))
 
 const QUERY_CACHE_KEY = 'shadow-shop-query-cache'
 const QUERY_CACHE_MAX_AGE_MS = 30 * 60 * 1000
@@ -693,6 +695,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'product_sets', path: '/admin/products/sets' },
   { module: 'product_flash_sale', path: '/admin/products/flash-sale' },
   { module: 'product_banners', path: '/admin/products/banners' },
+  { module: 'marketing_promotions', path: '/admin/marketing/brand-promotions' },
   { module: 'marketing_announcements', path: '/admin/marketing/announcements' },
   { module: 'marketing_posters', path: '/admin/marketing/posters' },
   { module: 'marketing_videos', path: '/admin/marketing/videos' },
@@ -783,6 +786,7 @@ export default function App() {
             <Route index element={<LazyPage><Home /></LazyPage>} />
             <Route path="profile/complete" element={<RequireAuth><CompletionPrompt /></RequireAuth>} />
             <Route path="search" element={<LazyPage><SearchPage /></LazyPage>} />
+            <Route path="about" element={<LazyPage><About /></LazyPage>} />
             <Route path="shop" element={<LazyPage><ProductList /></LazyPage>} />
             <Route path="lucky-box" element={<LazyPage><LuckyBox /></LazyPage>} />
             <Route path="product/:id" element={<LazyPage><ProductDetail /></LazyPage>} />
@@ -921,6 +925,7 @@ export default function App() {
             <Route path="products/banners" element={<LazyPage><Banners /></LazyPage>} />
 
             {/* Marketing */}
+            <Route path="marketing/brand-promotions" element={<LazyPage><BrandPromotions /></LazyPage>} />
             <Route path="marketing/announcements" element={<LazyPage><AnnouncementBarAdmin /></LazyPage>} />
             <Route path="marketing/posters" element={<LazyPage><PosterManagement /></LazyPage>} />
             <Route path="marketing/videos" element={<LazyPage><VideoHighlights /></LazyPage>} />

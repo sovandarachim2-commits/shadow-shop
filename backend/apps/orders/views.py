@@ -1066,6 +1066,8 @@ class CartViewSet(viewsets.ModelViewSet):
                 product_id = None
             except ValueError:
                 pass
+        elif cart_key.startswith('gift-'):
+            return Response({'status': 'ok', 'is_free_gift': True}, status=status.HTTP_200_OK)
         elif cart_key and not product_id and not product_set_id:
             product_id = cart_key
 
@@ -1106,6 +1108,8 @@ class CartViewSet(viewsets.ModelViewSet):
                 product_id = None
             except ValueError:
                 pass
+        elif cart_key.startswith('gift-'):
+            return Response({'status': 'ok', 'is_free_gift': True}, status=status.HTTP_200_OK)
         elif cart_key and not product_id and not product_set_id:
             product_id = cart_key
 

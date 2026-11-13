@@ -65,8 +65,12 @@ export const productsApi = {
     deleteImage: (id, imageId) => client.delete(`/products/sets/${id}/delete_image/${imageId}/`),
   },
   promotions: {
-    list: () => client.get('/products/promotions/'),
-    active: () => client.get('/products/promotions/active/'),
+    list: (params) => client.get('/products/promotions/', { params }),
+    active: (params) => client.get('/products/promotions/active/', { params }),
+    get: (id) => client.get(`/products/promotions/${id}/`),
+    create: (data) => client.post('/products/promotions/', data),
+    update: (id, data) => client.patch(`/products/promotions/${id}/`, data),
+    delete: (id) => client.delete(`/products/promotions/${id}/`),
   },
   banners: {
     list: (params) => client.get('/products/banners/', { params }),

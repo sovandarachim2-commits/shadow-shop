@@ -799,11 +799,11 @@ class ProductSetViewSet(viewsets.ModelViewSet):
 
 
 class PromotionViewSet(viewsets.ModelViewSet):
-    queryset = Promotion.objects.all()
+    queryset = Promotion.objects.all().select_related('brand', 'specific_reward_product').order_by('-created_at')
     serializer_class = PromotionSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'active']:
             return [AllowAny()]
         return [IsAuthenticated(), IsAdminOrSuperAdmin()]
 
@@ -811,7 +811,13 @@ class PromotionViewSet(viewsets.ModelViewSet):
     def active(self, request):
         from django.utils import timezone
         now = timezone.now()
-        promos = Promotion.objects.filter(is_active=True, start_date__lte=now, end_date__gte=now)
+        promos = Promotion.objects.filter(is_active=True, start_date__lte=now, end_date__gte=now).select_related('brand', 'specific_reward_product')
+        promo_type = request.query_params.get('type')
+        if promo_type:
+            promos = promos.filter(type=promo_type)
+        brand_id = request.query_params.get('brand')
+        if brand_id:
+            promos = promos.filter(brand_id=brand_id)
         serializer = self.get_serializer(promos, many=True)
         return Response(serializer.data)
 

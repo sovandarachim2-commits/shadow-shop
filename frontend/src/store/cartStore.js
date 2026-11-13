@@ -28,11 +28,29 @@ function readUserCarts() {
   }
 }
 
-const getMaxQuantity = (product) => {
+const getUnderlyingProductId = (itemOrProduct) => {
+  const p = itemOrProduct?.product || itemOrProduct
+  return p?.product_id || p?.id
+}
+
+const getMaxQuantity = (product, items = [], currentLineKey = null) => {
   const limits = []
-  if (product?.availability_status !== 'available' && typeof product?.current_stock === 'number') {
-    limits.push(Math.max(0, product.current_stock))
+  const isAuto = product?.availability_status !== 'available'
+  const currentStock = typeof product?.current_stock === 'number' ? product.current_stock : null
+
+  if (isAuto && currentStock !== null) {
+    const underlyingId = getUnderlyingProductId(product)
+    const otherCartQty = (items || [])
+      .filter((i) => {
+        const lineKey = getProductId(i)
+        if (lineKey === currentLineKey) return false
+        return String(getUnderlyingProductId(i)) === String(underlyingId)
+      })
+      .reduce((sum, i) => sum + getQuantity(i), 0)
+
+    limits.push(Math.max(0, currentStock - otherCartQty))
   }
+
   const maxFlashQty = Number(product?.flash_sale_max_order_qty || 0)
   if (product?.is_flash_sale_active && maxFlashQty > 0) {
     limits.push(maxFlashQty)
@@ -55,7 +73,7 @@ const useCartStore = create(
         const productKey = product.cart_key || product.id
         const existing = items.find((i) => getProductId(i) === productKey)
         const nextQuantity = Number(quantity) || 1
-        const maxQuantity = getMaxQuantity(product)
+        const maxQuantity = getMaxQuantity(product, items, productKey)
         const currentQty = existing ? getQuantity(existing) : 0
 
         if (currentQty >= maxQuantity) {
@@ -81,10 +99,10 @@ const useCartStore = create(
           })
         }
 
-        if (localStorage.getItem('access_token')) {
+        if (localStorage.getItem('access_token') && !product?.is_free_gift) {
           cartApi.setQuantity({
             cart_key: productKey,
-            product_id: product.item_type === 'set' ? undefined : product.id,
+            product_id: product.item_type === 'set' ? undefined : (product.product_id || product.id),
             product_set_id: product.item_type === 'set' ? (product.product_set_id || product.id) : undefined,
             quantity: targetQty,
           }).catch(() => {})
@@ -106,8 +124,9 @@ const useCartStore = create(
 
       updateQuantity: (productId, quantity) => {
         const nextQuantity = Number(quantity) || 0
-        const currentItem = get().items.find((i) => getProductId(i) === productId)
-        const maxQuantity = getMaxQuantity(currentItem?.product)
+        const items = get().items
+        const currentItem = items.find((i) => getProductId(i) === productId)
+        const maxQuantity = getMaxQuantity(currentItem?.product, items, productId)
         const currentQty = currentItem ? getQuantity(currentItem) : 0
 
         if (nextQuantity <= 0) {
@@ -190,6 +209,7 @@ const useCartStore = create(
         const raised = []
         let changed = false
         const items = get().items.map((item) => {
+          if (item.product?.is_free_gift) return item
           const isSet = item.product?.item_type === 'set'
           const live = isSet ? bySet.get(item.product?.product_set_id) : byProduct.get(item.product?.id)
           if (!live) return item
@@ -217,7 +237,7 @@ const useCartStore = create(
             current_stock: nextStock,
             old_price: live.old_price ?? null,
           }
-          const maxQuantity = getMaxQuantity(product)
+          const maxQuantity = getMaxQuantity(product, currentItems, getProductId(item))
           return {
             ...item,
             product,

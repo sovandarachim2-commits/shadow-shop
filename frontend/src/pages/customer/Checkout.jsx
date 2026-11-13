@@ -348,7 +348,7 @@ export default function Checkout() {
       return zones.includes(zoneKey)
     })
   }, [siteSettings, t, province?.value, info?.province])
-  const subtotal = checkoutItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
+  const subtotal = checkoutItems.reduce((sum, i) => sum + (i.product?.is_free_gift ? 0 : (i.product.retail_price * i.quantity)), 0)
   const deliveryFee = checkoutItems.length > 0 && hasAddress ? Number(province?.fee || 0) : 0
   const couponDiscount = getCouponDiscount(appliedCoupon, subtotal, deliveryFee)
   const grandTotal = subtotal + deliveryFee - couponDiscount
@@ -613,11 +613,12 @@ export default function Checkout() {
     coupon_code: appliedCoupon?.coupon_code || '',
     notes: '',
     items: checkoutItems.map((i) => ({
-      product: i.product.item_type === 'set' ? undefined : i.product.id,
+      product: i.product.item_type === 'set' ? undefined : (i.product.product_id || i.product.id),
       product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
       quantity: i.quantity,
-      unit_price: i.product.retail_price,
+      unit_price: i.product?.is_free_gift ? 0 : i.product.retail_price,
       cost_price: i.product.cost_price || 0,
+      is_free_gift: Boolean(i.product?.is_free_gift),
     })),
   })
 
@@ -953,10 +954,19 @@ export default function Checkout() {
                     <CheckoutItemImage product={item.product} priority={index < 2} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
+                      {item.product?.is_free_gift && (
+                        <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">
+                          FREE GIFT
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
                   </div>
-                  <p className="text-sm font-black text-gray-950">{formatCurrency(item.product.retail_price * item.quantity)}</p>
+                  <p className={`text-sm font-black ${item.product?.is_free_gift ? 'text-emerald-600' : 'text-gray-950'}`}>
+                    {item.product?.is_free_gift ? '$0.00' : formatCurrency(item.product.retail_price * item.quantity)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -972,10 +982,19 @@ export default function Checkout() {
                   <CheckoutItemImage product={item.product} priority={index < 2} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
+                    {item.product?.is_free_gift && (
+                      <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">
+                        FREE GIFT
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400">{t('checkout.qty')} {item.quantity}</p>
                 </div>
-                <p className="text-sm font-black text-gray-950">{formatCurrency(item.product.retail_price * item.quantity)}</p>
+                <p className={`text-sm font-black ${item.product?.is_free_gift ? 'text-emerald-600' : 'text-gray-950'}`}>
+                  {item.product?.is_free_gift ? '$0.00' : formatCurrency(item.product.retail_price * item.quantity)}
+                </p>
               </div>
             ))}
           </div>

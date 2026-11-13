@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState, startTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Minus, Plus, ShoppingCart, ArrowRight, ChevronLeft, Gift, Loader2, Percent, Ticket, TicketPercent, Truck, X } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, ArrowRight, ChevronLeft, Gift, Loader2, Percent, Ticket, TicketPercent, Truck, X, Sparkles, CheckCircle2 } from 'lucide-react'
 import useCartStore from '@/store/cartStore'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
+import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
 import { showStockLimitToast } from '@/components/customer/CartAddedToast'
 import CouponStatusModal from '@/components/rewards/CouponStatusModal'
+import FreeGiftSelectorModal from '@/components/customer/FreeGiftSelectorModal'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { EmptyState, ProductThumb } from '@/components/customer/CustomerUi'
 import toast from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -96,14 +99,16 @@ function couponVisual(coupon, t) {
 
 export default function Cart() {
   useCartPriceSync()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isKhmer = i18n.language === 'km'
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const openAuthModal = useUiStore((s) => s.openAuthModal)
   const {
     items, selectedProductIds, appliedCoupon, updateQuantity, removeItem,
-    selectAll, applyCoupon, clearCoupon,
+    selectAll, applyCoupon, clearCoupon, addItem,
   } = useCartStore()
+  const [confirm, ConfirmDialog] = useConfirm()
   const [promoCode, setPromoCode] = useState(appliedCoupon?.coupon_code || '')
   const [applyingPromo, setApplyingPromo] = useState(false)
   const [showCoupons, setShowCoupons] = useState(false)
@@ -120,12 +125,228 @@ export default function Cart() {
     queryFn: () => ordersApi.rewards.summary().then((response) => response.data),
     enabled: isAuthenticated && showCoupons,
   })
+  const { data: brandPromos = [], isFetched: brandPromosFetched } = useQuery({
+    queryKey: ['active-brand-promotions'],
+    queryFn: async () => {
+      const res = await productsApi.promotions.active({ type: 'buy_x_get_y' })
+      const data = res.data
+      return Array.isArray(data) ? data : (data?.results || [])
+    },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  })
+
+  const [activePromoModal, setActivePromoModal] = useState(null)
+
   const selectedItems = items
   const selectedCount = selectedItems.length
-  const subtotal = selectedItems.reduce((sum, i) => sum + i.product.retail_price * i.quantity, 0)
+  const subtotal = selectedItems.reduce((sum, i) => sum + (i.product?.is_free_gift ? 0 : (i.product.retail_price * i.quantity)), 0)
   const deliveryFee = selectedItems.length > 0 ? getDefaultDeliveryFee(siteSettings) : 0
   const discount = getCouponDiscount(appliedCoupon, subtotal, deliveryFee)
   const total = subtotal + deliveryFee - discount
+
+  // Brand Buy X Get Y Free progress tracker
+  const brandPromoProgress = useMemo(() => {
+    if (!brandPromos.length || !items.length) return []
+
+    return brandPromos.map((promo) => {
+      const brandId = promo.brand
+      const paidQty = items
+        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .reduce((sum, i) => sum + (i.quantity || 1), 0)
+
+      const brandSpent = items
+        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .reduce((sum, i) => sum + (Number(i.product?.retail_price || 0) * (i.quantity || 1)), 0)
+
+      const selectedGifts = items
+        .filter((i) => i.product?.is_free_gift && String(i.product?.promo_brand_id) === String(brandId))
+        .reduce((sum, i) => sum + (i.quantity || 1), 0)
+
+      const buyQty = promo.buy_quantity || 2
+      const getQty = promo.get_quantity || 1
+      const minSpend = promo.min_spend ? Number(promo.min_spend) : null
+      const meetsSpend = minSpend === null || brandSpent >= minSpend
+
+      const earnedGifts = (paidQty >= buyQty && meetsSpend)
+        ? Math.floor(paidQty / buyQty) * getQty
+        : 0
+      const remainingPicks = Math.max(0, earnedGifts - selectedGifts)
+      const progressToNext = paidQty % buyQty
+      const spendRemaining = minSpend ? Math.max(0, minSpend - brandSpent) : 0
+
+      return {
+        promo,
+        brandId,
+        brandName: promo.brand_name || 'Brand',
+        paidQty,
+        brandSpent,
+        minSpend,
+        meetsSpend,
+        spendRemaining,
+        buyQty,
+        getQty,
+        earnedGifts,
+        selectedGifts,
+        remainingPicks,
+        progressToNext,
+        neededForNext: buyQty - progressToNext,
+      }
+    }).filter((p) => p.paidQty > 0 || p.selectedGifts > 0)
+  }, [brandPromos, items])
+
+  // Auto-prune free gifts if promo is turned OFF, expired, or terms are not met
+  useEffect(() => {
+    if (!brandPromosFetched || !items.length) return
+
+    const giftItems = items.filter((i) => i.product?.is_free_gift)
+    if (!giftItems.length) return
+
+    const activePromosByBrand = new Map()
+    brandPromos.forEach((p) => {
+      activePromosByBrand.set(String(p.brand), p)
+    })
+
+    // Group free gifts by brand
+    const giftsByBrand = {}
+    giftItems.forEach((gift) => {
+      const bId = String(gift.product?.promo_brand_id || gift.product?.brand || '')
+      if (!giftsByBrand[bId]) giftsByBrand[bId] = []
+      giftsByBrand[bId].push(gift)
+    })
+
+    let removedAny = false
+    Object.entries(giftsByBrand).forEach(([brandId, brandGifts]) => {
+      const activePromo = activePromosByBrand.get(brandId)
+
+      // 1. If the promotion was turned OFF or does not exist, remove ALL its free gifts!
+      if (!activePromo) {
+        brandGifts.forEach((g) => removeItem(getCartKey(g)))
+        removedAny = true
+        return
+      }
+
+      // 2. If promo is active, check if customer still qualifies
+      const paidQty = items
+        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .reduce((sum, i) => sum + (i.quantity || 1), 0)
+
+      const brandSpent = items
+        .filter((i) => !i.product?.is_free_gift && String(i.product?.brand) === String(brandId))
+        .reduce((sum, i) => sum + (Number(i.product?.retail_price || 0) * (i.quantity || 1)), 0)
+
+      const minSpend = activePromo.min_spend ? Number(activePromo.min_spend) : null
+      const meetsSpend = minSpend === null || brandSpent >= minSpend
+
+      const earnedGifts = (paidQty >= (activePromo.buy_quantity || 2) && meetsSpend)
+        ? Math.floor(paidQty / (activePromo.buy_quantity || 2)) * (activePromo.get_quantity || 1)
+        : 0
+
+      const currentGiftCount = brandGifts.reduce((sum, i) => sum + (i.quantity || 1), 0)
+
+      if (currentGiftCount > earnedGifts) {
+        let toRemove = currentGiftCount - earnedGifts
+        for (const giftItem of brandGifts) {
+          if (toRemove <= 0) break
+          removeItem(getCartKey(giftItem))
+          toRemove -= (giftItem.quantity || 1)
+        }
+        removedAny = true
+      }
+    })
+
+    if (removedAny) {
+      if (isKhmer) {
+        toast('ប្រូម៉ូសិនត្រូវបានបិទ ឬលែងត្រូវលក្ខខណ្ឌ កាដូឥតគិតថ្លៃត្រូវបានដកចេញពីកន្ត្រក', { icon: 'ℹ️' })
+      } else {
+        toast('Promotion is inactive or terms not met. Free gifts were removed from cart.', { icon: 'ℹ️' })
+      }
+    }
+  }, [items, brandPromos, brandPromosFetched, removeItem, isKhmer])
+
+  const handleSelectFreeGift = (product, promo) => {
+    // Check remaining stock if product availability is auto by stock
+    const isAuto = product.availability_status === 'auto'
+    if (isAuto && typeof product.current_stock === 'number') {
+      const cartQty = items
+        .filter((i) => {
+          const iProdId = i.product?.product_id || i.product?.id
+          return String(iProdId) === String(product.id)
+        })
+        .reduce((sum, i) => sum + (Number(i.quantity) || 1), 0)
+
+      if (cartQty >= product.current_stock) {
+        if (isKhmer) {
+          toast.error(`ផលិតផល "${product.name}" អស់ពីស្តុកហើយ មិនអាចជ្រើសរើសបានទេ`)
+        } else {
+          toast.error(`"${product.name}" is out of stock and cannot be added`)
+        }
+        return
+      }
+    }
+
+    const res = addItem({
+      ...product,
+      id: `gift-${product.id}-${Date.now()}`,
+      cart_key: `gift-${product.id}-${Date.now()}`,
+      product_id: product.id,
+      name: product.name,
+      retail_price: 0,
+      original_price: product.retail_price,
+      is_free_gift: true,
+      promo_id: promo.id,
+      promo_brand_id: promo.brand,
+      item_type: 'product',
+    }, 1)
+
+    if (res?.success === false && res?.reason === 'stock_limit') {
+      if (isKhmer) {
+        toast.error(`ផលិតផល "${product.name}" អស់ពីស្តុកហើយ`)
+      } else {
+        toast.error(`"${product.name}" is out of stock`)
+      }
+      return
+    }
+
+    if (isKhmer) {
+      toast.success(`🎉 បានបន្ថែម "${product.name}" ជាកាដូឥតគិតថ្លៃរបស់អ្នក!`)
+    } else {
+      toast.success(`🎉 Added "${product.name}" as your FREE gift!`)
+    }
+    setActivePromoModal(null)
+  }
+
+  const handlePromptRemove = async (item) => {
+    const isGift = Boolean(item.product?.is_free_gift)
+    const name = item.product?.name || (isKhmer ? 'មុខទំនិញ' : 'Item')
+
+    const title = isGift
+      ? (isKhmer ? 'តើអ្នកចង់លុបកាដូឥតគិតថ្លៃនេះទេ?' : 'Remove Free Gift?')
+      : (isKhmer ? 'តើអ្នកចង់លុបផលិតផលនេះទេ?' : 'Remove Product?')
+
+    const desc = isGift
+      ? (isKhmer
+          ? `តើអ្នកប្រាកដជាចង់លុប "${name}" ចេញពីកន្ត្រកមែនទេ? អ្នកអាចជ្រើសរើសកាដូផ្សេងទៀតឡើងវិញបាន។`
+          : `Are you sure you want to remove "${name}" from your cart? You can choose another free gift.`)
+      : (isKhmer
+          ? `តើអ្នកប្រាកដជាចង់លុប "${name}" ចេញពីកន្ត្រករបស់អ្នកមែនទេ?`
+          : `Are you sure you want to remove "${name}" from your cart?`)
+
+    const ok = await confirm(title, desc, {
+      confirmText: isKhmer ? 'លុបចេញ' : 'Remove',
+      cancelText: isKhmer ? 'បោះបង់' : 'Cancel',
+      tone: 'danger',
+    })
+
+    if (ok) {
+      removeItem(getCartKey(item))
+      if (isKhmer) {
+        toast.success(`បានលុប "${name}" ចេញពីកន្ត្រក`)
+      } else {
+        toast.success(`Removed "${name}" from cart`)
+      }
+    }
+  }
   const coupons = useMemo(
     () => (rewardsSummary?.redemptions || []).filter((item) => item.coupon_code),
     [rewardsSummary?.redemptions]
@@ -299,11 +520,171 @@ export default function Cart() {
 
       <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[1fr_380px]">
         <section className="space-y-3">
+          {/* Brand Buy X Get Y Promotion Banners */}
+          {brandPromoProgress.map((prog) => {
+            const defaultBadge = isKhmer
+              ? `ទិញ ${prog.buyQty} ថែម ${prog.getQty} ឥតគិតថ្លៃ`
+              : `Buy ${prog.buyQty} Get ${prog.getQty} Free`
+
+            return (
+              <div
+                key={prog.brandId}
+                className="overflow-hidden rounded-2xl border border-pink-100 bg-pink-50/50 p-4 shadow-xs"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-white shadow-sm">
+                      <Gift className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-pink-700">
+                          {isKhmer ? `ប្រូម៉ូសិនពិសេស ${prog.brandName}` : `${prog.brandName} Special Promo`}
+                        </span>
+                        <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-[11px] font-bold text-pink-700 border border-pink-200">
+                          {prog.promo.badge_text || defaultBadge}
+                        </span>
+                      </div>
+
+                      {prog.earnedGifts > 0 ? (
+                        <p className="mt-0.5 text-xs font-bold text-gray-800">
+                          {isKhmer ? (
+                            <>
+                              🎉 អ្នកទទួលបាន <span className="text-pink-600 font-bold">{prog.earnedGifts} កាដូឥតគិតថ្លៃ</span>!{' '}
+                              {prog.remainingPicks > 0 ? (
+                                <span className="text-emerald-700 font-bold">({prog.remainingPicks} មុខទៀតដើម្បីជ្រើសរើស)</span>
+                              ) : (
+                                <span className="text-emerald-600 font-bold">✅ បានជ្រើសរើសរួចរាល់!</span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              🎉 You earned <span className="text-pink-600 font-bold">{prog.earnedGifts} FREE gift{prog.earnedGifts > 1 ? 's' : ''}</span>!{' '}
+                              {prog.remainingPicks > 0 ? (
+                                <span className="text-emerald-700 font-bold">({prog.remainingPicks} left to pick)</span>
+                              ) : (
+                                <span className="text-emerald-600 font-bold">✅ All claimed!</span>
+                              )}
+                            </>
+                          )}
+                        </p>
+                      ) : !prog.meetsSpend && prog.paidQty >= prog.buyQty ? (
+                        <p className="mt-0.5 text-xs font-bold text-gray-800">
+                          {isKhmer ? (
+                            <>
+                              ទិញផលិតផល {prog.brandName} បន្ថែម <span className="text-pink-600 font-bold">{formatCurrency(prog.spendRemaining)}</span> ទៀត ដើម្បីទទួលបានកាដូឥតគិតថ្លៃ! (ទិញយ៉ាងតិច {formatCurrency(prog.minSpend)})
+                            </>
+                          ) : (
+                            <>
+                              Add <span className="text-pink-600 font-bold">{formatCurrency(prog.spendRemaining)}</span> more of {prog.brandName} to unlock your FREE gift! (Min. spend {formatCurrency(prog.minSpend)})
+                            </>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-xs font-bold text-gray-700">
+                          {isKhmer ? (
+                            <>
+                              ទិញផលិតផល {prog.brandName} បន្ថែម <span className="text-pink-600 font-bold">{prog.neededForNext} មុខទៀត</span>{prog.minSpend ? ` (ទិញយ៉ាងតិច ${formatCurrency(prog.minSpend)})` : ''} ដើម្បីទទួលបាន <span className="text-pink-600 font-bold">{prog.getQty} ឥតគិតថ្លៃ</span>!
+                            </>
+                          ) : (
+                            <>
+                              Add <span className="text-pink-600 font-bold">{prog.neededForNext} more item{prog.neededForNext > 1 ? 's' : ''}</span> from {prog.brandName}{prog.minSpend ? ` (Min. spend ${formatCurrency(prog.minSpend)})` : ''} to get <span className="text-pink-600 font-bold">{prog.getQty} FREE</span>!
+                            </>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {prog.remainingPicks > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setActivePromoModal(prog.promo)}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-pink-700 active:scale-95"
+                    >
+                      <Gift className="h-4 w-4" />
+                      <span>
+                        {isKhmer
+                          ? `ជ្រើសរើសកាដូ (${prog.remainingPicks} ទៀត)`
+                          : `Pick Free Gift (${prog.remainingPicks} left)`}
+                      </span>
+                    </button>
+                  ) : prog.earnedGifts > 0 ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>
+                        {isKhmer
+                          ? `កាដូឥតគិតថ្លៃ ${prog.selectedGifts} ក្នុងកន្ត្រក`
+                          : `${prog.selectedGifts} Free Gifts in Cart`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="w-full sm:w-32">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 mb-1">
+                        <span>{isKhmer ? 'ដំណើរការ' : 'Progress'}</span>
+                        <span>{prog.progressToNext}/{prog.buyQty}</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className="h-full rounded-full bg-pink-600 transition-all duration-300"
+                          style={{ width: `${(prog.progressToNext / prog.buyQty) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
           {items.map((item, index) => {
             const cartKey = getCartKey(item)
+            const isGift = Boolean(item.product?.is_free_gift)
+
+            if (isGift) {
+              return (
+                <article key={cartKey} className="relative rounded-[1.6rem] border-2 border-emerald-100 bg-emerald-50/25 p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft md:p-4">
+                  <button onClick={() => handlePromptRemove(item)} className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-500" aria-label={`Remove ${item.product.name}`}>
+                    <X size={17} />
+                  </button>
+                  <div className="grid grid-cols-[84px_1fr] gap-3 pr-5 md:flex md:gap-4">
+                    <ProductThumb product={item.product} size="lg" priority={index < 6} className="h-20 w-20 shrink-0 rounded-xl md:h-24 md:w-24 border border-emerald-200" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-black text-emerald-700">
+                              <Gift size={12} /> {isKhmer ? 'កាដូឥតគិតថ្លៃ' : 'FREE GIFT (PROMO)'}
+                            </span>
+                          </div>
+                          <p className="khmer-title mt-1 line-clamp-2 text-sm text-gray-950 md:text-base font-bold">{item.product.name}</p>
+                          <p className="mt-0.5 text-xs font-semibold text-emerald-600">
+                            {isKhmer ? 'បានជ្រើសរើសជាកាដូឥតគិតថ្លៃ' : 'Selected as free gift'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-end justify-between gap-3 md:mt-5 md:flex-col md:items-stretch lg:flex-row lg:items-center">
+                        <div>
+                          <p className="text-lg font-black text-emerald-600 md:text-xl">$0.00</p>
+                          <p className="text-xs font-semibold text-gray-400 line-through">
+                            {formatCurrency(item.product.original_price || item.product.retail_price)} {isKhmer ? 'តម្លៃដើម' : 'regular'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 size={14} className="text-emerald-600" />
+                          <span>{isKhmer ? `ចំនួន: ${item.quantity} (កាដូ)` : `Qty: ${item.quantity} (Free Gift)`}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              )
+            }
+
             return (
             <article key={cartKey} className="relative rounded-[1.6rem] bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft md:p-4">
-              <button onClick={() => removeItem(cartKey)} className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-500" aria-label={`Remove ${item.product.name}`}>
+              <button onClick={() => handlePromptRemove(item)} className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-500" aria-label={`Remove ${item.product.name}`}>
                 <X size={17} />
               </button>
               <div className="grid grid-cols-[84px_1fr] gap-3 pr-5 md:flex md:gap-4">
@@ -322,7 +703,16 @@ export default function Cart() {
                       <p className="text-xs font-semibold text-gray-400">{formatCurrency(item.product.retail_price)} {t('cart.each')}</p>
                     </div>
                     <div className="flex w-fit items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
-                      <button onClick={() => updateQuantity(cartKey, item.quantity - 1)} className="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100">
+                      <button
+                        onClick={() => {
+                          if (item.quantity <= 1) {
+                            handlePromptRemove(item)
+                          } else {
+                            updateQuantity(cartKey, item.quantity - 1)
+                          }
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
+                      >
                         <Minus size={15} />
                       </button>
                       <span className="min-w-8 text-center text-sm font-black text-gray-900">{String(item.quantity).padStart(2, '0')}</span>
@@ -545,6 +935,21 @@ export default function Cart() {
         message={couponModal.message}
         couponName={couponModal.name}
       />
+
+      {/* Brand Free Gift Selector Modal */}
+      {activePromoModal && (
+        <FreeGiftSelectorModal
+          isOpen={Boolean(activePromoModal)}
+          onClose={() => setActivePromoModal(null)}
+          promo={activePromoModal}
+          remainingGiftsCount={
+            brandPromoProgress.find((p) => p.promo.id === activePromoModal.id)?.remainingPicks || 1
+          }
+          onSelectGift={(product) => handleSelectFreeGift(product, activePromoModal)}
+        />
+      )}
+
+      {ConfirmDialog}
     </div>
   )
 }

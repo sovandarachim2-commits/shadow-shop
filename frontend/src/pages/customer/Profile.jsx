@@ -575,7 +575,7 @@ function ProfileInfoRow({ label, value }) {
 function ProfileField({ label, value, onChange, type = 'text', readOnly, required, icon: Icon, error, autoComplete, placeholder }) {
   return (
     <label className="block">
-      <span className="mb-2 flex items-center gap-1 text-[13px] font-black text-gray-400">
+      <span className="mb-2 flex items-center gap-1 text-sm font-black text-gray-500">
         {label}
         {required && <span className="text-[#EC197A]">*</span>}
       </span>
@@ -608,7 +608,7 @@ function ProfileField({ label, value, onChange, type = 'text', readOnly, require
 function ProfileSelect({ label, value, onChange, required, icon: Icon, options = [], error, t }) {
   return (
     <label className="block">
-      <span className="mb-2 flex items-center gap-1 text-[13px] font-black text-gray-400">
+      <span className="mb-2 flex items-center gap-1 text-sm font-black text-gray-500">
         {label}
         {required && <span className="text-[#EC197A]">*</span>}
       </span>
@@ -641,7 +641,7 @@ function ProfileSelect({ label, value, onChange, required, icon: Icon, options =
 function MobileSettingsGroup({ title, children }) {
   return (
     <section className="mt-7">
-      <h2 className="mb-3 text-[13px] font-black text-[#202A44]">{title}</h2>
+      <h2 className="mb-3 text-[15px] font-black text-[#202A44]">{title}</h2>
       <div className="space-y-0.5">{children}</div>
     </section>
   )
@@ -652,17 +652,17 @@ function MobileSettingsRow({ icon: Icon, label, action, danger }) {
     <button
       type="button"
       onClick={action}
-      className="flex h-11 w-full items-center gap-3 rounded-lg text-left transition active:bg-slate-50"
+      className="flex h-12 w-full items-center gap-3.5 rounded-xl px-1 text-left transition active:bg-slate-50"
     >
       <Icon
-        size={16}
-        strokeWidth={1.9}
+        size={18}
+        strokeWidth={2}
         className={cn('shrink-0', danger ? 'text-red-500' : 'text-slate-500')}
       />
-      <span className={cn('min-w-0 flex-1 text-[12px] font-black', danger ? 'text-red-500' : 'text-[#202A44]')}>
+      <span className={cn('min-w-0 flex-1 text-[15px] font-black', danger ? 'text-red-500' : 'text-[#202A44]')}>
         {label}
       </span>
-      <ChevronRight size={15} strokeWidth={2.2} className={danger ? 'text-red-200' : 'text-slate-400'} />
+      <ChevronRight size={17} strokeWidth={2.2} className={danger ? 'text-red-200' : 'text-slate-400'} />
     </button>
   )
 }
@@ -1022,8 +1022,8 @@ export default function Profile() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-black text-[#202A44]">{displayName}</p>
-              <p className="mt-1 truncate text-xs font-semibold text-slate-400">{usernameDisplay}</p>
+              <p className="truncate text-lg font-black text-[#202A44]">{displayName}</p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-500">{usernameDisplay}</p>
             </div>
           </button>
         </div>
@@ -1044,22 +1044,22 @@ export default function Profile() {
                 />
               </div>
               <div className="text-left">
-                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/80 px-2 py-0.5 text-[10px] font-black text-pink-700">
-                  <Crown size={10} /> {t('profile.memberLevel', { level: translatedLevel })}
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/80 px-2.5 py-0.5 text-xs font-black text-pink-700">
+                  <Crown size={12} /> {t('profile.memberLevel', { level: translatedLevel })}
                 </span>
-                <p className="mt-0.5 text-xs font-black text-gray-900">
-                  {rewardPoints.toLocaleString()} <span className="text-[11px] font-bold text-gray-400">{t('profile.ptsLabel')}</span>
+                <p className="mt-0.5 text-sm font-black text-gray-900">
+                  {rewardPoints.toLocaleString()} <span className="text-xs font-bold text-gray-500">{t('profile.ptsLabel')}</span>
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-xs font-black text-pink-600">
+            <div className="flex items-center gap-1 text-sm font-black text-pink-600">
               <span>{t('profile.rewards', 'Rewards')}</span>
-              <ChevronRight size={14} />
+              <ChevronRight size={16} />
             </div>
           </button>
         </div>
 
-        <div className="mt-8 overflow-hidden rounded-xl bg-slate-50">
+        <div className="mt-8 overflow-hidden rounded-2xl bg-slate-50">
           <div className="grid grid-cols-4">
             {mobileQuickActions.map(({ icon: Icon, labelKey, action, color }, index) => (
               <button
@@ -1067,12 +1067,12 @@ export default function Profile() {
                 type="button"
                 onClick={action}
                 className={cn(
-                  'flex min-h-[74px] flex-col items-center justify-center gap-1.5 px-1 py-2 transition active:bg-slate-100',
+                  'flex min-h-[80px] flex-col items-center justify-center gap-1.5 px-1 py-2.5 transition active:bg-slate-100',
                   index > 0 && 'border-l border-slate-200'
                 )}
               >
-                <Icon size={20} strokeWidth={1.8} className={color} />
-                <span className="line-clamp-2 text-center text-[10px] font-black leading-tight text-slate-500">{t(labelKey)}</span>
+                <Icon size={22} strokeWidth={2} className={color} />
+                <span className="line-clamp-2 text-center text-xs font-black leading-tight text-slate-600">{t(labelKey)}</span>
               </button>
             ))}
           </div>
@@ -1083,27 +1083,27 @@ export default function Profile() {
             {user.referral_code && (
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-wide text-gray-400">
+                  <p className="text-xs font-black uppercase tracking-wide text-gray-500">
                     {t('rewardsPage.referral.yourCode')}
                   </p>
-                  <p className="mt-0.5 font-mono text-sm font-black tracking-wider text-pink-600">
+                  <p className="mt-0.5 font-mono text-base font-black tracking-wider text-pink-600">
                     {user.referral_code}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={copyInviteCode}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3 py-1.5 text-xs font-black text-pink-600 shadow-sm active:scale-95"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-pink-200 bg-white px-3.5 py-2 text-sm font-black text-pink-600 shadow-sm active:scale-95"
                 >
-                  {copiedInviteCode ? <Check size={14} /> : <Copy size={14} />}
+                  {copiedInviteCode ? <Check size={15} /> : <Copy size={15} />}
                   <span>{copiedInviteCode ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}</span>
                 </button>
               </div>
             )}
             <div className={user.referral_code ? 'mt-3 border-t border-pink-100 pt-2' : ''}>
               {user.referred_by ? (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-gray-500">{t('rewardsPage.referral.usedInviteCode')}</span>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-bold text-gray-600">{t('rewardsPage.referral.usedInviteCode')}</span>
                   <span className="font-mono font-black text-emerald-700">{user.referred_by_code || 'Saved'}</span>
                 </div>
               ) : (
@@ -1125,8 +1125,8 @@ export default function Profile() {
           ))}
         </MobileSettingsGroup>
 
-        <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3">
-          <div className="flex items-center justify-between text-xs">
+        <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3.5">
+          <div className="flex items-center justify-between text-sm">
             <span className="font-black text-slate-500">{t('profile.memberLabel')}</span>
             <span className="font-black text-[#202A44]">{memberSince}</span>
           </div>
@@ -1654,8 +1654,8 @@ function DesktopProfileOverview({
                 <div className={cn('flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-transform duration-300 group-hover:scale-110', bg)}>
                   <Icon size={20} strokeWidth={2.2} />
                 </div>
-                <div className="mt-2.5 text-xl font-black text-gray-950 group-hover:text-pink-600">{value}</div>
-                <div className="mt-0.5 text-[10px] font-black uppercase tracking-wider text-gray-400">{label}</div>
+                <div className="mt-2.5 text-2xl font-black text-gray-950 group-hover:text-pink-600">{value}</div>
+                <div className="mt-0.5 text-xs font-black uppercase tracking-wider text-gray-500">{label}</div>
               </button>
             ))}
           </div>
@@ -1722,15 +1722,15 @@ function DesktopProfileOverview({
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/80 px-2.5 py-0.5 text-[11px] font-black text-pink-700">
-                  <Crown size={11} /> {t('profile.memberLevel', { level: membershipLevel })}
+                <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/80 px-2.5 py-0.5 text-xs font-black text-pink-700">
+                  <Crown size={12} /> {t('profile.memberLevel', { level: membershipLevel })}
                 </span>
-                <p className="mt-1 text-base font-black text-gray-900">
-                  {rewardPoints.toLocaleString()} <span className="text-xs font-bold text-gray-400">{t('profile.ptsLabel')}</span>
+                <p className="mt-1 text-lg font-black text-gray-900">
+                  {rewardPoints.toLocaleString()} <span className="text-xs font-bold text-gray-500">{t('profile.ptsLabel')}</span>
                 </p>
               </div>
             </div>
-            <div className="flex items-center justify-between text-xs font-black text-gray-600">
+            <div className="flex items-center justify-between text-sm font-black text-gray-600">
               <span>{t('profile.progress', 'Progress')}</span>
               <span className="text-pink-600">
                 {rewardPoints.toLocaleString()} {nextTierName ? `/ ${nextTierPoints.toLocaleString()} pt` : 'pt'}
@@ -1742,7 +1742,7 @@ function DesktopProfileOverview({
                 style={{ width: `${progressPct}%` }}
               />
             </div>
-            <p className="mt-2 text-right text-xs font-bold text-gray-400">
+            <p className="mt-2 text-right text-xs font-semibold text-gray-500">
               {nextTierName && ptsToNext > 0
                 ? t('profile.ptsMoreToNext', { count: ptsToNext.toLocaleString(), tier: translatedNextTier })
                 : t('profile.maxTierReached')}
@@ -1792,7 +1792,7 @@ function DesktopProfileCard({ title, icon: Icon, children }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 ring-1 ring-pink-100">
             <Icon size={20} strokeWidth={2.2} />
           </div>
-          <h3 className="text-lg font-black tracking-tight text-gray-950">{title}</h3>
+          <h3 className="text-xl font-black tracking-tight text-gray-950">{title}</h3>
         </div>
         <div className="space-y-1">{children}</div>
       </div>
@@ -1864,7 +1864,7 @@ function DesktopInfoRow({ icon: Icon, label, value, badge = false, success = fal
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-400 transition group-hover:bg-white group-hover:text-pink-600">
           <Icon size={16} />
         </div>
-        <span className="text-sm font-extrabold text-gray-500">{label}</span>
+        <span className="text-[15px] font-bold text-gray-600">{label}</span>
       </div>
       <div className="text-right">
         {badge || success ? (
@@ -1872,7 +1872,7 @@ function DesktopInfoRow({ icon: Icon, label, value, badge = false, success = fal
             {value}
           </span>
         ) : (
-          <span className="text-sm font-black text-gray-900">{value}</span>
+          <span className="text-[15px] font-black text-gray-950">{value}</span>
         )}
       </div>
     </div>

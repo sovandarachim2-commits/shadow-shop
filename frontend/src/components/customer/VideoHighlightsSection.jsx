@@ -99,10 +99,38 @@ export default function VideoHighlightsSection({ videos = [] }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const railRef = useRef(null)
+  const scrollRaf = useRef(0)
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0)
   const [activeVideo, setActiveVideo] = useState(null)
   const [returnFocusEl, setReturnFocusEl] = useState(null)
 
   if (!videos || videos.length === 0) return null
+
+  const handleRailScroll = () => {
+    const el = railRef.current
+    if (!el || videos.length <= 1) return
+    if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current)
+    scrollRaf.current = requestAnimationFrame(() => {
+      const maxScroll = el.scrollWidth - el.clientWidth
+      if (maxScroll <= 0) {
+        setActiveVideoIndex(0)
+        return
+      }
+      const progress = Math.min(1, Math.max(0, el.scrollLeft / maxScroll))
+      const index = Math.round(progress * (videos.length - 1))
+      setActiveVideoIndex((current) => (current === index ? current : index))
+    })
+  }
+
+  const scrollToVideo = (index) => {
+    const el = railRef.current
+    if (!el || videos.length <= 1) return
+    const maxScroll = el.scrollWidth - el.clientWidth
+    if (maxScroll <= 0) return
+    const targetScroll = (index / (videos.length - 1)) * maxScroll
+    el.scrollTo({ left: targetScroll, behavior: 'smooth' })
+    setActiveVideoIndex(index)
+  }
 
   const scrollRail = (direction) => {
     const el = railRef.current
@@ -148,6 +176,7 @@ export default function VideoHighlightsSection({ videos = [] }) {
 
         <div
           ref={railRef}
+          onScroll={handleRailScroll}
           className="no-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1 md:gap-4"
         >
           {videos.map((video) => (
@@ -174,6 +203,23 @@ export default function VideoHighlightsSection({ videos = [] }) {
             </div>
           ))}
         </div>
+
+        {/* Active Indicator Dots */}
+        {videos.length > 1 && (
+          <div className="mt-3.5 flex justify-center gap-1.5">
+            {videos.map((video, i) => (
+              <button
+                key={video.id || i}
+                type="button"
+                onClick={() => scrollToVideo(i)}
+                aria-label={`Go to video ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === activeVideoIndex ? 'w-5 bg-pink-600' : 'w-1.5 bg-gray-200 hover:bg-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <VideoHighlightModal

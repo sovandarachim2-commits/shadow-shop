@@ -49,6 +49,7 @@ const navItems = [
     label: 'Marketing',
     icon: Megaphone,
     children: [
+      { label: 'Brand Promotions', path: '/admin/marketing/brand-promotions', icon: Gift, module: 'marketing_promotions' },
       { label: 'Announcement Bar', path: '/admin/marketing/announcements', icon: Megaphone, module: 'marketing_announcements' },
       { label: 'Poster Management', path: '/admin/marketing/posters', icon: Image, module: 'marketing_posters' },
       { label: 'Video Highlights', path: '/admin/marketing/videos', icon: Film, module: 'marketing_videos' },

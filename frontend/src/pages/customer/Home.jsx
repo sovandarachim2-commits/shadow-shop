@@ -488,6 +488,7 @@ export default function Home() {
 
   const [categoryPage, setCategoryPage] = useState(0)
   const [activeBannerIndex, setActiveBannerIndex] = useState(0)
+  const [activeFlashIndex, setActiveFlashIndex] = useState(0)
   const [isPulling, setIsPulling] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -498,6 +499,7 @@ export default function Home() {
   const bannerResumeTimerRef = useRef(0)
   const bannerPausedRef = useRef(false)
   const flashSaleScrollRef = useRef(null)
+  const flashSaleScrollRaf = useRef(0)
   const bestSellerScrollRef = useRef(null)
   const refreshStart = useRef({ x: 0, y: 0 })
 
@@ -567,6 +569,18 @@ export default function Home() {
     bannerResumeTimerRef.current = window.setTimeout(() => {
       bannerPausedRef.current = false
     }, 4500)
+  }
+
+  const handleBannerMouseEnter = () => {
+    bannerPausedRef.current = true
+    if (bannerResumeTimerRef.current) window.clearTimeout(bannerResumeTimerRef.current)
+  }
+
+  const handleBannerMouseLeave = () => {
+    if (bannerResumeTimerRef.current) window.clearTimeout(bannerResumeTimerRef.current)
+    bannerResumeTimerRef.current = window.setTimeout(() => {
+      bannerPausedRef.current = false
+    }, 2500)
   }
 
   const getBannerStep = (track) => {
@@ -641,6 +655,32 @@ export default function Home() {
 
   const handleBannerPointerDown = () => {
     pauseBannerAutoplay()
+  }
+
+  const handleFlashSaleScroll = () => {
+    const el = flashSaleScrollRef.current
+    if (!el || flashSale.length <= 1) return
+    if (flashSaleScrollRaf.current) cancelAnimationFrame(flashSaleScrollRaf.current)
+    flashSaleScrollRaf.current = requestAnimationFrame(() => {
+      const maxScroll = el.scrollWidth - el.clientWidth
+      if (maxScroll <= 0) {
+        setActiveFlashIndex(0)
+        return
+      }
+      const progress = Math.min(1, Math.max(0, el.scrollLeft / maxScroll))
+      const index = Math.round(progress * (flashSale.length - 1))
+      setActiveFlashIndex((current) => (current === index ? current : index))
+    })
+  }
+
+  const scrollToFlashItem = (index) => {
+    const el = flashSaleScrollRef.current
+    if (!el || flashSale.length <= 1) return
+    const maxScroll = el.scrollWidth - el.clientWidth
+    if (maxScroll <= 0) return
+    const targetScroll = (index / (flashSale.length - 1)) * maxScroll
+    el.scrollTo({ left: targetScroll, behavior: 'smooth' })
+    setActiveFlashIndex(index)
   }
 
   const scrollFlashSale = (direction) => {
@@ -811,7 +851,11 @@ export default function Home() {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
                 
                 {/* Left/Main Track Container (Full Carousel) */}
-                <div className={`relative group ${hasAnySideCard ? 'lg:col-span-8 xl:col-span-9' : 'lg:col-span-12 xl:col-span-12'}`}>
+                <div
+                  className={`relative group ${hasAnySideCard ? 'lg:col-span-8 xl:col-span-9' : 'lg:col-span-12 xl:col-span-12'}`}
+                  onMouseEnter={handleBannerMouseEnter}
+                  onMouseLeave={handleBannerMouseLeave}
+                >
                   {/* Desktop Chevron Left Button */}
                   {banners.length > 1 && (
                     <button
@@ -857,12 +901,12 @@ export default function Home() {
                         to={banner.button_link || '/shop'}
                         className="group/item block w-[90%] min-w-[90%] shrink-0 snap-start lg:w-full lg:min-w-full"
                       >
-                        <div className="aspect-[16/10] min-h-[185px] w-full overflow-hidden isolate rounded-2xl bg-pink-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] sm:aspect-[16/9] sm:min-h-0 md:aspect-[2/1] md:rounded-3xl">
+                        <div className="aspect-[16/9] md:aspect-[2/1] w-full overflow-hidden isolate rounded-2xl bg-gray-50 shadow-[0_2px_14px_rgba(15,23,42,0.08)] transition duration-300 group-active/item:scale-[0.995] md:rounded-3xl">
                           {banner.image_url ? (
                             <img
                               src={banner.image_url}
                               alt={banner.title || 'Promotion'}
-                              className="h-full w-full rounded-2xl object-cover transition-transform duration-500 group-hover/item:scale-105 md:rounded-3xl"
+                              className="h-full w-full rounded-2xl object-cover md:rounded-3xl"
                               loading={idx === 0 ? 'eager' : 'lazy'}
                               decoding="async"
                               fetchpriority={idx === 0 ? 'high' : 'auto'}
@@ -1009,6 +1053,7 @@ export default function Home() {
             </div>
             <div
               ref={flashSaleScrollRef}
+              onScroll={handleFlashSaleScroll}
               className="-mx-2.5 flex snap-x snap-mandatory scroll-px-2.5 gap-2 overflow-x-auto px-2.5 pb-1 scroll-smooth [scrollbar-width:none] sm:-mx-4 sm:scroll-px-4 sm:gap-3 sm:px-4 md:-mx-6 md:gap-4 md:px-6 [&::-webkit-scrollbar]:hidden"
             >
               {showFlashSkeleton
@@ -1034,6 +1079,23 @@ export default function Home() {
                 ))
               }
             </div>
+
+            {/* Active Indicator Dots */}
+            {flashSale.length > 1 && (
+              <div className="mt-3.5 flex justify-center gap-1.5">
+                {flashSale.map((item, i) => (
+                  <button
+                    key={item.id || i}
+                    type="button"
+                    onClick={() => scrollToFlashItem(i)}
+                    aria-label={`Go to flash sale item ${i + 1}`}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      i === activeFlashIndex ? 'w-5 bg-pink-600' : 'w-1.5 bg-gray-200 hover:bg-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 

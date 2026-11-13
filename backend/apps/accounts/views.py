@@ -1900,7 +1900,7 @@ class SiteSettingsManifestView(generics.GenericAPIView):
             'display_override': ['fullscreen', 'standalone', 'minimal-ui'],
             'orientation': 'portrait',
             'background_color': '#ffffff',
-            'theme_color': '#E91E63',
+            'theme_color': '#ffffff',
             'categories': ['shopping', 'lifestyle', 'beauty'],
             'icons': [
                 {

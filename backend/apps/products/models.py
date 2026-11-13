@@ -333,6 +333,11 @@ class Promotion(models.Model):
         ('buy_x_get_y', 'Buy X Get Y'),
         ('bundle', 'Bundle'),
     ]
+    REWARD_SELECTION_CHOICES = [
+        ('brand_choice', 'Any Product from Brand (Customer Choice)'),
+        ('same_product', 'Same Product'),
+        ('specific_product', 'Specific Gift Product'),
+    ]
 
     name = models.CharField(max_length=200)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='banner')
@@ -343,6 +348,14 @@ class Promotion(models.Model):
     end_date = models.DateTimeField()
     is_active = models.BooleanField(default=True)
     products = models.ManyToManyField(Product, blank=True, related_name='promotions')
+    brand = models.ForeignKey('Brand', on_delete=models.CASCADE, null=True, blank=True, related_name='promotions')
+    buy_quantity = models.PositiveIntegerField(default=2)
+    get_quantity = models.PositiveIntegerField(default=1)
+    min_spend = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Minimum spend on brand products to qualify. Blank means unlimited.")
+    reward_selection = models.CharField(max_length=30, choices=REWARD_SELECTION_CHOICES, default='brand_choice')
+    specific_reward_product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, related_name='reward_promotions')
+    badge_text = models.CharField(max_length=100, blank=True, default='Buy 2 Get 1 Free')
+    description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

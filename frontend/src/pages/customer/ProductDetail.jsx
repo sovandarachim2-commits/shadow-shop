@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, memo } from 'react'
+import { useEffect, useRef, useState, useMemo, memo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Heart, ShoppingCart, Zap, Plus, Minus, Check, ShoppingBag,
-  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf, Trash2,
+  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf, Trash2, Gift,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
@@ -31,7 +31,8 @@ function isAvailableForSale(product) {
 }
 
 const RelatedProductCard = memo(function RelatedProductCard({ product, priority = false, onAuthRequired }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isKhmer = i18n.language === 'km'
   const navigate = useNavigate()
   const addItem = useCartStore((s) => s.addItem)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
@@ -162,7 +163,8 @@ function RelatedProductSkeleton() {
 }
 
 export default function ProductDetail() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isKhmer = i18n.language === 'km'
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -238,6 +240,21 @@ export default function ProductDetail() {
   })
   const reviews = reviewData || []
 
+  const { data: brandPromos = [] } = useQuery({
+    queryKey: ['active-brand-promos-detail'],
+    queryFn: async () => {
+      const res = await productsApi.promotions.active({ type: 'buy_x_get_y' })
+      const data = res.data
+      return Array.isArray(data) ? data : (data?.results || [])
+    },
+    staleTime: 60000,
+  })
+
+  const brandPromo = useMemo(() => {
+    if (!product?.brand || !brandPromos.length) return null
+    return brandPromos.find((p) => String(p.brand) === String(product.brand))
+  }, [product?.brand, brandPromos])
+
   const reviewMutation = useMutation({
     mutationFn: (data) => productsApi.reviews.create(data),
     onSuccess: () => {
@@ -248,6 +265,18 @@ export default function ProductDetail() {
     },
     onError: () => toast.error(t('product.reviewSaveFailed')),
   })
+
+  const handleBack = () => {
+    if (window.opener && window.history.length <= 1) {
+      window.close()
+      return
+    }
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1)
+    } else {
+      navigate('/shop')
+    }
+  }
 
   const images = product?.images?.length > 0 ? product.images : []
   const stock = product?.current_stock ?? 0
@@ -398,14 +427,14 @@ export default function ProductDetail() {
           mobileHeaderVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'
         }`}
       >
-        <button onClick={() => navigate(-1)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
+        <button onClick={handleBack} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-50 text-gray-800 active:scale-95">
           <ChevronLeft size={20} />
         </button>
         <h1 className="min-w-0 truncate text-center text-base font-black text-gray-950">{t('product.details')}</h1>
         <HeaderActionIcons />
       </div>
 
-      <button onClick={() => navigate(-1)} className="mb-4 hidden items-center gap-3 text-sm font-black text-gray-600 hover:text-pink-600 md:inline-flex">
+      <button onClick={handleBack} className="mb-4 hidden items-center gap-3 text-sm font-black text-gray-600 hover:text-pink-600 md:inline-flex">
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-700">
           <ChevronLeft size={20} />
         </span>
@@ -523,6 +552,38 @@ export default function ProductDetail() {
           <h1 className="pd-khmer-title mt-1 line-clamp-2 text-[22px] font-bold leading-snug text-gray-950 md:line-clamp-none md:text-3xl lg:text-4xl md:leading-normal">
             {product.name}
           </h1>
+
+          {/* Active Brand Promotion Banner */}
+          {brandPromo && (
+            <div className="mt-3 flex items-center gap-3 rounded-2xl border border-pink-100 bg-pink-50/50 p-3 text-pink-950 shadow-xs">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-white shadow-xs">
+                <Gift size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-pink-700">
+                    {isKhmer ? 'ប្រូម៉ូសិនពិសេស' : 'Brand Special Offer'}
+                  </span>
+                  <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-[11px] font-bold text-pink-700 border border-pink-200">
+                    {brandPromo.badge_text || (isKhmer ? `ទិញ ${brandPromo.buy_quantity} ថែម ${brandPromo.get_quantity} ឥតគិតថ្លៃ` : `Buy ${brandPromo.buy_quantity} Get ${brandPromo.get_quantity} Free`)}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-gray-700 font-medium">
+                  {isKhmer ? (
+                    <>
+                      ទិញផលិតផល {brandPromo.buy_quantity} មុខពី <strong className="font-bold text-gray-950">{product.brand_name}</strong>
+                      {brandPromo.min_spend ? ` (ទិញយ៉ាងតិច $${Number(brandPromo.min_spend).toFixed(2)})` : ''} និងជ្រើសរើស <strong className="font-bold text-pink-600">កាដូឥតគិតថ្លៃ {brandPromo.get_quantity} មុខ</strong> ក្នុងកន្ត្រករបស់អ្នក!
+                    </>
+                  ) : (
+                    <>
+                      Buy {brandPromo.buy_quantity} items from <strong className="font-bold text-gray-950">{product.brand_name}</strong>
+                      {brandPromo.min_spend ? ` (Min. spend $${Number(brandPromo.min_spend).toFixed(2)})` : ''} and pick <strong className="font-bold text-pink-600">{brandPromo.get_quantity} FREE gift</strong> in your cart!
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button

@@ -97,7 +97,7 @@ const DEFAULT_FOOTER_MENUS = {
     title: 'Information',
     title_km: 'ព័ត៌មាន',
     items: [
-      { label: 'About Us', label_km: 'អំពីយើង', labelKey: 'footer.aboutUs', url: 'https://shadowshop.com/about', enabled: true },
+      { label: 'About Us', label_km: 'អំពីយើង', labelKey: 'footer.aboutUs', url: '/about', enabled: true },
       { label: 'Privacy Policy', label_km: 'គោលការណ៍ឯកជនភាព', labelKey: 'footer.privacyPolicy', url: 'https://shadowshop.com/privacy', enabled: true },
       { label: 'Careers', label_km: 'ការងារ', labelKey: 'footer.careers', url: 'https://shadowshop.com/careers', enabled: true },
       { label: 'Blog', label_km: 'ប្លក់', labelKey: 'footer.blog', url: 'https://shadowshop.com/blog', enabled: true },
@@ -203,8 +203,20 @@ function resolveFooterText({ km, en, fallbackKey }, isKhmer, t) {
 
 function FooterMenuItem({ item, children }) {
   if (item.url) {
+    if (item.url.startsWith('/') && !item.url.startsWith('//')) {
+      return (
+        <Link to={item.url} className="block transition hover:text-white">
+          {children}
+        </Link>
+      )
+    }
     return (
-      <a href={item.url} className="block transition hover:text-white">
+      <a
+        href={item.url}
+        target={item.url.startsWith('http') ? '_blank' : undefined}
+        rel={item.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+        className="block transition hover:text-white"
+      >
         {children}
       </a>
     )
@@ -1062,13 +1074,13 @@ export default function CustomerLayout() {
         )}
       </header>
 
-      <main className={cn('flex-1 mx-auto w-full max-w-[1500px]', isHome || location.pathname === '/address-book' || location.pathname === '/notifications' || location.pathname.startsWith('/profile') ? '' : 'px-5 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1 w-full', isHome || location.pathname === '/about' || location.pathname === '/address-book' || location.pathname === '/notifications' || location.pathname.startsWith('/profile') ? '' : 'mx-auto max-w-[1500px] px-5 py-4 md:px-6 md:py-6')}>
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>
       </main>
 
-      {isHome && (
+      {(isHome || location.pathname === '/about') && (
         <footer className="border-t border-gray-100 bg-white px-5 pt-7 pb-5 md:hidden">
           <div className="grid grid-cols-[1.15fr_0.85fr] items-start gap-6">
             <div className="min-w-0">
@@ -1088,6 +1100,11 @@ export default function CustomerLayout() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold text-gray-500">{t('footer.acceptPayments')}</span>
                 <img src={abaKhqrAcceptedLogo} alt="ABA KHQR accepted" className="h-5 w-auto" />
+              </div>
+              <div className="mt-3.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-bold text-gray-500">
+                <Link to="/about" className="transition hover:text-pink-600">{t('footer.aboutUs')}</Link>
+                <span>•</span>
+                <Link to="/shop" className="transition hover:text-pink-600">{t('footer.sitemap')}</Link>
               </div>
             </div>
             <div className="min-w-0">

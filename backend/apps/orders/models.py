@@ -206,6 +206,7 @@ class OrderItem(models.Model):
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_free_gift = models.BooleanField(default=False)
     total_price = models.DecimalField(max_digits=15, decimal_places=2)
 
     class Meta:
