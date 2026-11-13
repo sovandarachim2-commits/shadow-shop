@@ -19,6 +19,8 @@ def generate_pending_checkout_reference():
         next_number = int(last_reference[len(prefix):]) + 1
     except (TypeError, ValueError):
         next_number = PendingCheckout.objects.filter(reference__startswith=prefix).count() + 1
+    while PendingCheckout.objects.filter(reference=f"{prefix}{next_number:04d}").exists():
+        next_number += 1
     return f"{prefix}{next_number:04d}"
 
 

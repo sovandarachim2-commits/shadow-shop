@@ -680,21 +680,18 @@ export default function Checkout() {
             })
             return
           }
-          if (data.status === 'pending' && abaPayment) {
-            setShowAbaPopup(true)
-            return
-          }
           localStorage.removeItem(PENDING_PAYMENT_KEY)
           setPendingReturnPayment(null)
+          setAbaPayment(null)
         } catch {
-          if (abaPayment) {
-            setShowAbaPopup(true)
-            return
-          }
+          localStorage.removeItem(PENDING_PAYMENT_KEY)
+          setPendingReturnPayment(null)
+          setAbaPayment(null)
         }
       } else {
         localStorage.removeItem(PENDING_PAYMENT_KEY)
         setPendingReturnPayment(null)
+        setAbaPayment(null)
       }
     }
 
@@ -719,6 +716,21 @@ export default function Checkout() {
 
       if (ONLINE_PAYMENT_METHODS.includes(paymentMethod)) {
         const pending = result.pending_checkout
+        if (pending?.status === 'paid' || result?.order) {
+          localStorage.removeItem(PENDING_PAYMENT_KEY)
+          setPendingReturnPayment(null)
+          removeSelectedItems()
+          navigate('/order-success', {
+            replace: true,
+            state: {
+              orderId: pending?.order_id || result?.order?.id,
+              orderNumber: pending?.order_number || result?.order?.order_number,
+              paymentMethod,
+            },
+          })
+          return
+        }
+
         if (paymentMethod === 'bakong') {
           const payment = result.bakong_payment
           if (!payment) throw new Error('Missing Bakong payment')

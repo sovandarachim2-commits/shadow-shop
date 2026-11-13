@@ -92,12 +92,14 @@ def prepare_online_checkout(request, checkout_data):
 
     # Prevent duplicate transactions: check whether an existing transaction is still pending or already paid
     if request.user.is_authenticated:
-        existing_pending = PendingCheckout.objects.filter(
+        existing_pendings = PendingCheckout.objects.filter(
             user=request.user,
             payment_method=payment_method,
             status=PendingCheckout.STATUS_PENDING,
             expires_at__gt=timezone.now(),
-        ).order_by('-created_at').first()
+        ).order_by('-created_at')
+
+        existing_pending = existing_pendings.first()
 
         if existing_pending:
             if payment_method == 'aba':
@@ -117,27 +119,20 @@ def prepare_online_checkout(request, checkout_data):
                     'order': OrderDetailSerializer(existing_pending.order, context={'request': request}).data,
                 }
 
-            if existing_pending.status == PendingCheckout.STATUS_PENDING and existing_pending.amount == amount:
-                result = {
-                    'pending_checkout': {
-                        'reference': existing_pending.reference,
-                        'amount': str(existing_pending.amount),
-                        'payment_method': existing_pending.payment_method,
-                        'status': existing_pending.status,
-                        'expires_at': existing_pending.expires_at.isoformat(),
-                    },
-                }
+            # If previous checkout was NOT paid and customer is initiating checkout again,
+            # cancel previous pending checkouts so a fresh transaction ID (tran_id) is generated.
+            # Never reuse an ABA/Bakong tran_id: once a QR or deep-link has been opened or scanned
+            # in the banking app, the payment gateway locks that transaction ID. Reusing it
+            # causes ABA PayWay to show "The QR code was scanned".
+            for old_pending in existing_pendings:
+                old_pending.status = PendingCheckout.STATUS_CANCELLED
+                old_pending.save(update_fields=['status', 'updated_at'])
                 if payment_method == 'aba':
-                    from .aba_services import build_aba_payment_params_for_pending
-                    result['aba_payment'] = build_aba_payment_params_for_pending(existing_pending, request)
-                    return result
+                    from .models import AbaPayment
+                    AbaPayment.objects.filter(tran_id=old_pending.reference, status='pending').update(status='cancelled')
                 elif payment_method == 'bakong':
                     from .models import BakongPayment
-                    payment = BakongPayment.objects.filter(order__isnull=True, status='pending').order_by('-created_at').first()
-                    if payment:
-                        from .serializers import BakongPaymentSerializer
-                        result['bakong_payment'] = BakongPaymentSerializer(payment, context={'request': request}).data
-                        return result
+                    BakongPayment.objects.filter(pending_checkout=old_pending, status='pending').update(status='cancelled')
 
     if payment_method == 'aba':
         expires_minutes = max(int(getattr(settings, 'ABA_PAYWAY_LIFETIME', 10)), 1)
