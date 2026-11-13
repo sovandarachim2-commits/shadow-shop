@@ -8,7 +8,7 @@ import {
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
   Home, Headphones, Eye, EyeOff, Clock, Share2, Crown, Copy, Check,
-  QrCode, ScanLine, Download, X, AlertCircle,
+  QrCode, ScanLine, Download, X, AlertCircle, Sparkles,
 } from 'lucide-react'
 import QRCode from 'qrcode'
 import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
@@ -1751,28 +1751,29 @@ export default function Profile() {
         </div>
       )}
 
-      {/* QR Code Camera Scanner Modal */}
+      {/* QR Code Camera Scanner Modal — Styled to match Shadow Shop brand colors */}
       {scannerModalOpen && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in"
           onClick={handleCloseScanner}
         >
           <div
             role="dialog"
             aria-labelledby="profile-scanner-title"
-            className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-slate-900 p-6 text-white shadow-2xl transition"
+            className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white p-6 shadow-2xl border border-pink-100 transition"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/20 text-pink-400">
-                  <ScanLine size={18} />
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 border border-pink-100 shadow-xs">
+                  <ScanLine size={20} />
                 </div>
                 <div>
-                  <h3 id="profile-scanner-title" className="text-base font-black text-white">
+                  <h3 id="profile-scanner-title" className="text-base font-black text-gray-950">
                     {t('rewardsPage.referral.scanTitle', "Scan Friend's Invite QR")}
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-xs font-medium text-gray-500">
                     {t('rewardsPage.referral.scanInstructions', "Point your camera at your friend's referral QR code")}
                   </p>
                 </div>
@@ -1781,31 +1782,38 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={handleCloseScanner}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition"
                 aria-label="Close"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Viewfinder Area */}
             <div className="mt-5 flex flex-col items-center">
-              <div className="relative aspect-square w-64 overflow-hidden rounded-2xl bg-black ring-2 ring-pink-500/50 shadow-2xl">
+              <div className="relative aspect-square w-64 overflow-hidden rounded-2xl bg-slate-950 border-2 border-pink-200 ring-4 ring-pink-50 shadow-inner">
                 <div id="profile-referral-qr-box" className="h-full w-full" />
 
                 {/* Animated scanner laser bar */}
                 {isScanning && !scannerError && (
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-pink-500 to-transparent shadow-[0_0_15px_#ec4899] animate-bounce" />
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-pink-500 to-transparent shadow-[0_0_12px_#ec4899] animate-bounce" />
                 )}
 
-                {/* Corner guide overlays */}
-                <div className="pointer-events-none absolute inset-4 border-2 border-pink-400/40 rounded-xl" />
+                {/* Stylish Viewfinder Corner Brackets */}
+                <div className="pointer-events-none absolute inset-5">
+                  <span className="absolute left-0 top-0 h-5 w-5 border-l-2 border-t-2 border-pink-500 rounded-tl-lg" />
+                  <span className="absolute right-0 top-0 h-5 w-5 border-r-2 border-t-2 border-pink-500 rounded-tr-lg" />
+                  <span className="absolute bottom-0 left-0 h-5 w-5 border-b-2 border-l-2 border-pink-500 rounded-bl-lg" />
+                  <span className="absolute bottom-0 right-0 h-5 w-5 border-b-2 border-r-2 border-pink-500 rounded-br-lg" />
+                </div>
 
                 {/* Error overlay inside box */}
                 {scannerError && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 p-4 text-center">
-                    <AlertCircle size={28} className="text-rose-500 mb-2" />
-                    <p className="text-xs text-rose-300 font-medium leading-relaxed">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/95 p-4 text-center">
+                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-500">
+                      <AlertCircle size={22} />
+                    </div>
+                    <p className="text-xs text-gray-700 font-semibold leading-relaxed">
                       {scannerError}
                     </p>
                     <button
@@ -1814,7 +1822,7 @@ export default function Profile() {
                         setScannerError('')
                         setIsScanning(true)
                       }}
-                      className="mt-3 rounded-lg bg-pink-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-pink-700 active:scale-95"
+                      className="mt-3 rounded-xl bg-pink-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-pink-700 active:scale-95 transition"
                     >
                       {t('common.retry', 'Retry')}
                     </button>
@@ -1822,18 +1830,21 @@ export default function Profile() {
                 )}
               </div>
 
-              <p className="mt-3 text-center text-xs text-slate-400">
-                {t('rewardsPage.referral.scanHint', 'Align QR code inside the box to scan automatically')}
-              </p>
+              {/* Instructions badge */}
+              <div className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-pink-50/80 px-3.5 py-1 text-[11px] font-bold text-pink-700 border border-pink-100">
+                <Sparkles size={12} className="text-pink-500" />
+                <span>{t('rewardsPage.referral.scanHint', 'Align QR code inside the box to scan automatically')}</span>
+              </div>
             </div>
 
-            <div className="mt-4">
+            {/* Footer action */}
+            <div className="mt-5">
               <button
                 type="button"
                 onClick={handleCloseScanner}
-                className="w-full rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-white transition"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition active:scale-95 shadow-xs"
               >
-                {t('common.cancel')}
+                {t('common.cancel', 'Cancel')}
               </button>
             </div>
           </div>
