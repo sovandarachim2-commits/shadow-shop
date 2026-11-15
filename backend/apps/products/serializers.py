@@ -105,6 +105,10 @@ class ProductReviewSerializer(serializers.ModelSerializer):
 class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     brand_name = serializers.CharField(source='brand.name', read_only=True)
+    store_name = serializers.CharField(source='store.name', read_only=True)
+    store_slug = serializers.CharField(source='store.slug', read_only=True)
+    store_verified = serializers.BooleanField(source='store.is_verified', read_only=True)
+    approval_status = serializers.CharField(read_only=True)
     primary_image = serializers.SerializerMethodField()
     current_stock = serializers.SerializerMethodField()
     is_available_for_sale = serializers.BooleanField(read_only=True)
@@ -119,7 +123,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'code', 'name', 'slug', 'category', 'category_name',
-            'brand', 'brand_name',
+            'brand', 'brand_name', 'store', 'store_name', 'store_slug', 'store_verified', 'approval_status',
             'primary_image', 'wholesale_price', 'retail_price', 'cost_price',
             'display_price', 'old_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
@@ -189,6 +193,9 @@ class ProductListSerializer(serializers.ModelSerializer):
 class ProductDetailSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     brand_name = serializers.CharField(source='brand.name', read_only=True)
+    store_name = serializers.CharField(source='store.name', read_only=True)
+    store_slug = serializers.CharField(source='store.slug', read_only=True)
+    store_verified = serializers.BooleanField(source='store.is_verified', read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
     current_stock = serializers.SerializerMethodField()
     is_available_for_sale = serializers.BooleanField(read_only=True)
@@ -260,8 +267,8 @@ class ProductWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'code', 'barcode', 'name', 'category', 'brand', 'description', 'benefits',
-            'ingredients', 'how_to_use', 'unit', 'weight', 'cost_price',
+            'id', 'code', 'barcode', 'name', 'category', 'brand', 'store', 'approval_status', 'rejection_reason',
+            'description', 'benefits', 'ingredients', 'how_to_use', 'unit', 'weight', 'cost_price',
             'wholesale_price', 'retail_price', 'compare_at_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
             'min_order_qty', 'availability_status', 'is_active',

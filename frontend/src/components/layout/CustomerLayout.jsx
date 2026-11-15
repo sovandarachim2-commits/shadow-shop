@@ -21,15 +21,10 @@ import {
   X,
   ShoppingBag,
   ChevronDown,
-  Facebook,
-  Instagram,
-  Youtube,
   LayoutDashboard,
   Loader2,
   CalendarCheck,
-  Phone,
-  Mail,
-  Send,
+  Store,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -54,7 +49,7 @@ import BottomNavigation from '@/components/BottomNavigation'
 import useScrollNavVisible from '@/hooks/useScrollNavVisible'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
 import AuthModal from '@/components/customer/AuthModal'
-import abaKhqrAcceptedLogo from '@/assets/aba/ABA KHQR We Accept Logo.svg'
+import StorefrontFooter from '@/components/customer/StorefrontFooter'
 
 const DESKTOP_NAV_KEYS = [
   { path: '/', key: 'nav.home', exact: true },
@@ -78,152 +73,6 @@ const LANGUAGE_OPTIONS = [
     flag: 'https://flagcdn.com/kh.svg',
   },
 ]
-
-const DEFAULT_FOOTER_MENUS = {
-  customerService: {
-    titleKey: 'footer.customerService',
-    title: 'Customer Service',
-    title_km: 'សេវាកម្មអតិថិជន',
-    items: [
-      { label: 'Contact Us', label_km: 'ទំនាក់ទំនងយើង', labelKey: 'footer.contactUs', url: 'mailto:hello@shadowshop.com', enabled: true },
-      { label: 'FAQs', label_km: 'សំណួរញឹកញាប់', labelKey: 'footer.faqs', url: '/profile?view=help', enabled: true },
-      { label: 'Shipping Policy', label_km: 'គោលការណ៍ដឹកជញ្ជូន', labelKey: 'footer.shippingPolicy', url: 'https://shadowshop.com/shipping-policy', enabled: true },
-      { label: 'Return & Refund', label_km: 'ការត្រឡប់ & សំណង', labelKey: 'footer.returnRefund', url: 'https://shadowshop.com/return-refund', enabled: true },
-      { label: 'Terms & Conditions', label_km: 'លក្ខខណ្ឌ', labelKey: 'footer.terms', url: 'https://shadowshop.com/terms', enabled: true },
-    ],
-  },
-  information: {
-    titleKey: 'footer.information',
-    title: 'Information',
-    title_km: 'ព័ត៌មាន',
-    items: [
-      { label: 'About Us', label_km: 'អំពីយើង', labelKey: 'footer.aboutUs', url: '/about', enabled: true },
-      { label: 'Privacy Policy', label_km: 'គោលការណ៍ឯកជនភាព', labelKey: 'footer.privacyPolicy', url: 'https://shadowshop.com/privacy', enabled: true },
-      { label: 'Careers', label_km: 'ការងារ', labelKey: 'footer.careers', url: 'https://shadowshop.com/careers', enabled: true },
-      { label: 'Blog', label_km: 'ប្លក់', labelKey: 'footer.blog', url: 'https://shadowshop.com/blog', enabled: true },
-      { label: 'Shop All Products', label_km: 'ទិញផលិតផលទាំងអស់', labelKey: 'footer.sitemap', url: '/shop', enabled: true },
-    ],
-  },
-}
-
-const DEFAULT_SOCIAL_LINKS = [
-  { platform: 'facebook', label: 'Facebook', url: 'https://facebook.com/shadowshop', enabled: true },
-  { platform: 'tiktok', label: 'TikTok', url: 'https://tiktok.com/@shadowshop', enabled: true },
-  { platform: 'instagram', label: 'Instagram', url: 'https://instagram.com/shadowshop', enabled: true },
-  { platform: 'youtube', label: 'YouTube', url: 'https://youtube.com/@shadowshop', enabled: true },
-]
-
-function TikTokIcon({ size = 17, className = '' }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
-      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .56.04.83.1v-3.5a6.37 6.37 0 0 0-.83-.05A6.34 6.34 0 0 0 3.15 15.3a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.73a8.2 8.2 0 0 0 4.76 1.52V6.8a4.84 4.84 0 0 1-1-.11z" />
-    </svg>
-  )
-}
-
-function AppleIcon({ size = 18, className = '' }) {
-  return (
-    <svg viewBox="0 0 384 512" width={size} height={size} fill="currentColor" className={className} aria-hidden="true">
-      <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
-    </svg>
-  )
-}
-
-function GooglePlayIcon({ size = 18, className = '' }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} className={className} aria-hidden="true">
-      <path fill="#4285F4" d="M3.6 1.4L13.8 12 3.6 22.6c-.4-.4-.6-1-.6-1.8V3.2c0-.8.2-1.4.6-1.8z" />
-      <path fill="#FBBC04" d="M17.2 8.6L13.8 12l3.4 3.4 3.9-2.2c1-.6 1-1.7 0-2.3l-3.9-2.3z" />
-      <path fill="#EA4335" d="M3.6 1.4l10.2 10.6 3.4-3.4L6.1.4c-.9-.6-1.9-.3-2.5 1z" />
-      <path fill="#34A853" d="M3.6 22.6l2.5 1c.6.4 1.6.4 2.5-.2l11.1-6.4-3.4-3.4-12.7 9z" />
-    </svg>
-  )
-}
-
-const APP_STORE_DOWNLOADS = [
-  {
-    name: 'App Store',
-    Icon: AppleIcon,
-  },
-  {
-    name: 'Google Play',
-    Icon: GooglePlayIcon,
-  },
-]
-
-const SOCIAL_ICON_MAP = {
-  facebook: Facebook,
-  tiktok: TikTokIcon,
-  instagram: Instagram,
-  youtube: Youtube,
-}
-
-function normalizeFooterMenus(value = {}) {
-  return Object.fromEntries(
-    Object.entries(DEFAULT_FOOTER_MENUS).map(([sectionKey, section]) => {
-      const savedSection = value?.[sectionKey] || {}
-      const savedItems = Array.isArray(savedSection.items) ? savedSection.items : []
-      const items = savedItems.length > 0 ? savedItems : section.items
-
-      return [sectionKey, {
-        title: savedSection.title || section.title || '',
-        title_km: savedSection.title_km || section.title_km || '',
-        titleKey: section.titleKey,
-        items: items.map((item, index) => ({
-          label: item.label || '',
-          label_km: item.label_km || section.items[index]?.label_km || '',
-          labelKey: item.labelKey || section.items[index]?.labelKey || '',
-          url: item.url || section.items[index]?.url || '',
-          enabled: item.enabled !== false,
-        })),
-      }]
-    })
-  )
-}
-
-function normalizeSocialLinks(value = {}) {
-  const saved = Array.isArray(value?.social_links) ? value.social_links : []
-  const source = saved.length > 0 ? saved : DEFAULT_SOCIAL_LINKS
-  return source.map((item, index) => {
-    const defaults = DEFAULT_SOCIAL_LINKS.find((entry) => entry.platform === item.platform) || {}
-    return {
-      platform: item.platform || defaults.platform || `custom_${index + 1}`,
-      label: item.label || defaults.label || 'Social',
-      url: item.url || defaults.url || '',
-      icon_url: item.icon_url || '',
-      enabled: item.enabled !== false,
-    }
-  }).filter((item) => item.enabled !== false && item.url)
-}
-
-function resolveFooterText({ km, en, fallbackKey }, isKhmer, t) {
-  if (isKhmer) return km || en || (fallbackKey ? t(fallbackKey) : '')
-  return en || km || (fallbackKey ? t(fallbackKey) : '')
-}
-
-function FooterMenuItem({ item, children }) {
-  if (item.url) {
-    if (item.url.startsWith('/') && !item.url.startsWith('//')) {
-      return (
-        <Link to={item.url} className="block transition hover:text-white">
-          {children}
-        </Link>
-      )
-    }
-    return (
-      <a
-        href={item.url}
-        target={item.url.startsWith('http') ? '_blank' : undefined}
-        rel={item.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-        className="block transition hover:text-white"
-      >
-        {children}
-      </a>
-    )
-  }
-
-  return <p>{children}</p>
-}
 
 export function Logo({ compact = false, inverse = false, iconOnly = false, logoUrl = null, storeName = 'Shadow Shop' }) {
   return (
@@ -433,10 +282,6 @@ export default function CustomerLayout() {
   })
   const logoUrl = siteSettings?.logo_url || null
   const storeName = siteSettings?.store_name || 'Shadow Shop'
-  const storePhone = siteSettings?.store_phone || ''
-  const storeEmail = siteSettings?.store_email || ''
-  const footerMenus = normalizeFooterMenus(siteSettings?.footer_menus)
-  const socialLinks = normalizeSocialLinks(siteSettings?.footer_menus)
 
   useEffect(() => {
     if (siteSettings?.favicon_url) {
@@ -805,6 +650,31 @@ export default function CustomerLayout() {
                       <>
                         {/* Quick Links */}
                         <div className="px-2">
+                          {user?.assigned_stores?.[0] && (
+                            <Link
+                              to={`/store/${user.assigned_stores[0].store_slug}`}
+                              onClick={() => setIsProfileDropdownOpen(false)}
+                              className="mb-1.5 flex items-center justify-between gap-2 rounded-xl bg-purple-50 px-3 py-2.5 text-xs font-bold text-purple-700 transition hover:bg-purple-100 border border-purple-100"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Store size={16} className="text-purple-600" />
+                                <span>Visit My Store</span>
+                              </span>
+                              <span className="text-[10px] font-semibold text-purple-600 max-w-[110px] truncate">
+                                {user.assigned_stores[0].store_name}
+                              </span>
+                            </Link>
+                          )}
+                          {isStaff && (
+                            <Link
+                              to="/admin"
+                              onClick={() => setIsProfileDropdownOpen(false)}
+                              className="mb-1.5 flex items-center gap-3 rounded-xl bg-purple-50 px-3 py-2.5 text-sm font-bold text-purple-700 transition hover:bg-purple-100 border border-purple-100"
+                            >
+                              <LayoutDashboard size={18} className="text-purple-600" />
+                              <span>Store & Admin Portal</span>
+                            </Link>
+                          )}
                           <Link
                             to="/profile"
                             onClick={() => setIsProfileDropdownOpen(false)}
@@ -1074,183 +944,13 @@ export default function CustomerLayout() {
         )}
       </header>
 
-      <main className={cn('flex-1 w-full', isHome || location.pathname === '/about' || location.pathname === '/address-book' || location.pathname === '/notifications' || location.pathname.startsWith('/profile') ? '' : 'mx-auto max-w-[1500px] px-5 py-4 md:px-6 md:py-6')}>
+      <main className={cn('flex-1 w-full', isHome || location.pathname === '/about' || location.pathname === '/address-book' || location.pathname === '/notifications' || location.pathname.startsWith('/profile') || location.pathname.startsWith('/store') ? '' : 'mx-auto max-w-[1500px] px-5 py-4 md:px-6 md:py-6')}>
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>
       </main>
 
-      {(isHome || location.pathname === '/about') && (
-        <footer className="border-t border-gray-100 bg-white px-5 pt-7 pb-5 md:hidden">
-          <div className="grid grid-cols-[1.15fr_0.85fr] items-start gap-6">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2.5">
-                {logoUrl ? (
-                  <img src={logoUrl} alt={storeName} className="h-10 w-10 shrink-0 rounded-xl object-contain shadow-sm" />
-                ) : (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 text-white shadow-sm shadow-pink-200">
-                    <ShoppingBag size={18} />
-                  </div>
-                )}
-                <p className="truncate text-base font-black uppercase tracking-tight text-gray-950">{storeName}</p>
-              </div>
-              <p className="mt-2.5 text-[13px] leading-relaxed text-gray-500">
-                {t('footer.tagline')}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold text-gray-500">{t('footer.acceptPayments')}</span>
-                <img src={abaKhqrAcceptedLogo} alt="ABA KHQR accepted" className="h-5 w-auto" />
-              </div>
-              <div className="mt-3.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-bold text-gray-500">
-                <Link to="/about" className="transition hover:text-pink-600">{t('footer.aboutUs')}</Link>
-                <span>•</span>
-                <Link to="/shop" className="transition hover:text-pink-600">{t('footer.sitemap')}</Link>
-              </div>
-            </div>
-            <div className="min-w-0">
-              <h4 className="text-[13px] font-black uppercase tracking-wide text-gray-950">
-                {t('footer.contactUs')}
-              </h4>
-              <div className="mt-3 space-y-2.5 text-[13px] text-gray-600">
-                {storePhone && (
-                  <a
-                    href={`tel:${storePhone.replace(/\s+/g, '')}`}
-                    className="flex items-center gap-2 transition hover:text-pink-600"
-                  >
-                    <Phone size={15} className="shrink-0 text-pink-600" />
-                    <span className="truncate">{storePhone}</span>
-                  </a>
-                )}
-                {storeEmail && (
-                  <a
-                    href={`mailto:${storeEmail}`}
-                    className="flex items-center gap-2 transition hover:text-pink-600"
-                  >
-                    <Mail size={15} className="shrink-0 text-pink-600" />
-                    <span className="truncate">Email</span>
-                  </a>
-                )}
-                {socialLinks.map((item) => {
-                  const Icon = item.platform === 'telegram' ? Send : (SOCIAL_ICON_MAP[item.platform] || Send)
-                  return (
-                    <a
-                      key={item.platform}
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 transition hover:text-pink-600"
-                    >
-                      {item.icon_url ? (
-                        <img src={item.icon_url} alt={item.label} className="h-4 w-4 shrink-0 object-contain" />
-                      ) : (
-                        <Icon size={15} className="shrink-0 text-pink-600" />
-                      )}
-                      <span className="truncate">{item.label}</span>
-                    </a>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-          <div className="mt-6 border-t border-gray-100 pt-4 text-center text-xs text-gray-400">
-            © 2026 {storeName}. {t('footer.rights')}.
-          </div>
-        </footer>
-      )}
-
-      <footer className="hidden bg-[#08172f] text-white md:block">
-        <div className="mx-auto grid max-w-[1500px] grid-cols-4 gap-10 px-6 py-10">
-          <div>
-            <Logo inverse logoUrl={logoUrl} storeName={storeName} />
-            <p className="mt-4 max-w-xs text-sm leading-6 text-slate-300">
-              {t('footer.tagline')}
-            </p>
-            {(storePhone || storeEmail) && (
-              <div className="mt-4 space-y-1.5 text-sm text-slate-300">
-                {storePhone ? <p>{storePhone}</p> : null}
-                {storeEmail ? (
-                  <a href={`mailto:${storeEmail}`} className="block transition hover:text-white">
-                    {storeEmail}
-                  </a>
-                ) : null}
-              </div>
-            )}
-            <div className="mt-5 flex gap-3">
-              {socialLinks.map((item) => {
-                const Icon = SOCIAL_ICON_MAP[item.platform] || Facebook
-                return (
-                  <a
-                    key={item.platform}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={item.label}
-                    className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 transition hover:bg-white/10"
-                  >
-                    {item.icon_url ? (
-                      <img src={item.icon_url} alt={item.label} className="h-6 w-6 object-contain" />
-                    ) : (
-                      <Icon size={18} />
-                    )}
-                  </a>
-                )
-              })}
-            </div>
-          </div>
-          {Object.entries(footerMenus).map(([sectionKey, section]) => (
-            <div key={sectionKey}>
-              <h4 className="font-bold">
-                {resolveFooterText(
-                  { km: section.title_km, en: section.title, fallbackKey: section.titleKey },
-                  isKhmer,
-                  t,
-                )}
-              </h4>
-              <div className="mt-4 space-y-2 text-sm text-slate-300">
-                {section.items.filter((item) => item.enabled !== false).map((item, index) => (
-                  <FooterMenuItem key={`${sectionKey}-${index}`} item={item}>
-                    {resolveFooterText(
-                      { km: item.label_km, en: item.label, fallbackKey: item.labelKey },
-                      isKhmer,
-                      t,
-                    )}
-                  </FooterMenuItem>
-                ))}
-              </div>
-            </div>
-          ))}
-          <div>
-            <h4 className="font-bold">{t('footer.downloadApp')}</h4>
-            <p className="mt-4 text-sm text-slate-300">{t('footer.downloadAppText')}</p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              {APP_STORE_DOWNLOADS.map(({ name, Icon }) => (
-                <div
-                  key={name}
-                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm transition hover:border-white/20 hover:bg-white/[0.08]"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white">
-                    <Icon size={18} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold leading-tight tracking-tight text-white">{name}</span>
-                    <span className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-pink-500/25 bg-pink-500/10 px-2 py-0.5 text-[10px] font-semibold leading-none text-pink-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-pink-400 animate-pulse" />
-                      {t('footer.comingSoon')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="col-span-full flex flex-wrap items-center justify-end gap-3 border-t border-white/10 pt-5">
-            <span className="text-xs font-semibold text-slate-300">{t('footer.acceptPayments')}</span>
-            <img src={abaKhqrAcceptedLogo} alt="ABA KHQR accepted" className="h-6 w-auto" />
-          </div>
-        </div>
-        <div className="border-t border-white/10 py-4 text-center text-xs text-slate-400">
-          © 2026 Shadow Shop. {t('footer.rights')}.
-        </div>
-      </footer>
+      <StorefrontFooter siteSettings={siteSettings} mobileVisible={isHome || location.pathname === '/about'} />
 
       {/* Back to Admin button — visible only to staff browsing the storefront */}
       {isStaff && (

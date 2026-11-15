@@ -31,6 +31,7 @@ export function OrderStatusBadge({ status, className }) {
     shipped: { variant: 'orange', label: 'Shipped' },
     completed: { variant: 'success', label: 'Completed' },
     cancelled: { variant: 'danger', label: 'Cancelled' },
+    returned: { variant: 'purple', label: 'Returned' },
   }
   const conf = map[status] || { variant: 'default', label: status }
   return <Badge variant={conf.variant} dot className={className}>{conf.label}</Badge>

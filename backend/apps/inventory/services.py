@@ -9,23 +9,64 @@ def has_stock_deduction_for_order(order):
     ).exists()
 
 
-def default_storage():
-    warehouse = Warehouse.objects.filter(is_default=True).first()
-    if warehouse:
-        return warehouse
-    warehouse = Warehouse.objects.filter(is_active=True).order_by('id').first()
-    if not warehouse:
-        return None
-    warehouse.is_default = True
-    warehouse.save(update_fields=['is_default'])
+def ensure_default_warehouse(store=None):
+    """Ensure a default storage exists for the given store (or official store if store is None)."""
+    qs = Warehouse.objects.filter(store=store) if store is not None else Warehouse.objects.filter(store__isnull=True)
+    existing = qs.filter(is_default=True).first() or qs.filter(is_active=True).first() or qs.first()
+    if existing:
+        if not existing.is_default:
+            existing.is_default = True
+            existing.save(update_fields=['is_default'])
+        return existing
+
+    import uuid
+    if store is not None:
+        store_code = str(store.code or f"STR{store.id}").strip()
+        base_code = f"{store_code[:12]}-ST01"
+        code = base_code
+        idx = 1
+        while Warehouse.objects.filter(code=code).exists():
+            idx += 1
+            code = f"{store_code[:12]}-ST{idx:02d}"
+        warehouse = Warehouse.objects.create(
+            name=f"{store.name} Main Storage",
+            code=code,
+            address=store.address or '',
+            is_active=True,
+            is_default=True,
+            capacity=0,
+            store=store,
+        )
+    else:
+        code = "ST01"
+        idx = 1
+        while Warehouse.objects.filter(code=code).exists():
+            idx += 1
+            code = f"ST{idx:02d}"
+        warehouse = Warehouse.objects.create(
+            name="Main Storage",
+            code=code,
+            address="",
+            is_active=True,
+            is_default=True,
+            capacity=0,
+            store=None,
+        )
+
+    assign_unassigned_stock_to_default(warehouse)
     return warehouse
+
+
+def default_storage(store=None):
+    return ensure_default_warehouse(store)
 
 
 def adjust_storage(product, delta, warehouse=None):
     """Add or remove a product quantity in one storage."""
     if not product or not delta:
         return
-    warehouse = warehouse or default_storage()
+    store = getattr(product, 'store', None)
+    warehouse = warehouse or default_storage(store=store)
     if not warehouse:
         return
     row, _ = WarehouseStock.objects.get_or_create(
@@ -54,7 +95,13 @@ def assign_unassigned_stock_to_default(warehouse=None):
     warehouse = warehouse or default_storage()
     if not warehouse:
         return
-    for stock in Stock.objects.select_related('product').filter(quantity__gt=0):
+    stock_qs = Stock.objects.select_related('product').filter(quantity__gt=0)
+    if warehouse.store_id:
+        stock_qs = stock_qs.filter(product__store_id=warehouse.store_id)
+    else:
+        stock_qs = stock_qs.filter(product__store__isnull=True)
+
+    for stock in stock_qs:
         stored = WarehouseStock.objects.filter(product=stock.product).aggregate(total=Sum('quantity'))['total'] or 0
         gap = int(stock.quantity) - int(stored)
         if gap <= 0:
@@ -131,6 +178,61 @@ def deduct_stock_for_order(order, user):
             if stock.is_low_stock:
                 from apps.notifications.services import TelegramService
                 TelegramService().notify_low_stock(item.product, stock.quantity)
+
+
+def restore_stock_for_order(order, user, reason=''):
+    """Restore stock deducted for an order upon return or cancellation."""
+    if not has_stock_deduction_for_order(order):
+        return
+
+    already_returned = StockMovement.objects.filter(
+        reference=order.order_number,
+        type=StockMovement.TYPE_RETURN,
+        reference_type__in=['order_return', 'order_set_return'],
+    ).exists()
+    if already_returned:
+        return
+
+    for item in order.items.select_related('product', 'product_set').prefetch_related('product_set__items__product').all():
+        if item.product_set:
+            for set_item in item.product_set.items.select_related('product').all():
+                qty = item.quantity * set_item.quantity
+                stock, _ = Stock.objects.get_or_create(product=set_item.product, defaults={'quantity': 0})
+                before_qty = stock.quantity
+                stock.quantity = stock.quantity + qty
+                stock.save(update_fields=['quantity'])
+
+                StockMovement.objects.create(
+                    type=StockMovement.TYPE_RETURN,
+                    product=set_item.product,
+                    quantity=qty,
+                    before_qty=before_qty,
+                    after_qty=stock.quantity,
+                    reference=order.order_number,
+                    reference_type='order_set_return',
+                    notes=f"Stock restored for returned set {item.product_set.name} in Order #{order.order_number}" + (f": {reason}" if reason else ""),
+                    created_by=user,
+                )
+                adjust_storage(set_item.product, qty)
+        elif item.product:
+            qty = item.quantity
+            stock, _ = Stock.objects.get_or_create(product=item.product, defaults={'quantity': 0})
+            before_qty = stock.quantity
+            stock.quantity = stock.quantity + qty
+            stock.save(update_fields=['quantity'])
+
+            StockMovement.objects.create(
+                type=StockMovement.TYPE_RETURN,
+                product=item.product,
+                quantity=qty,
+                before_qty=before_qty,
+                after_qty=stock.quantity,
+                reference=order.order_number,
+                reference_type='order_return',
+                notes=f"Stock restored for returned Order #{order.order_number}" + (f": {reason}" if reason else ""),
+                created_by=user,
+            )
+            adjust_storage(item.product, qty)
 
 
 def add_stock(product, quantity, movement_type, reference='', notes='', user=None, warehouse=None):

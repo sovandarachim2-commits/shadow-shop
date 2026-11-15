@@ -99,6 +99,7 @@ class Order(models.Model):
     STATUS_SHIPPED = 'shipped'
     STATUS_COMPLETED = 'completed'
     STATUS_CANCELLED = 'cancelled'
+    STATUS_RETURNED = 'returned'
 
     STATUS_CHOICES = [
         (STATUS_NEW, 'New'),
@@ -109,6 +110,7 @@ class Order(models.Model):
         (STATUS_SHIPPED, 'Shipped'),
         (STATUS_COMPLETED, 'Completed'),
         (STATUS_CANCELLED, 'Cancelled'),
+        (STATUS_RETURNED, 'Returned'),
     ]
 
     PAYMENT_STATUS_CHOICES = [

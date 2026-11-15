@@ -67,6 +67,16 @@ class DeliveryViewSet(viewsets.ModelViewSet):
     filterset_fields = ['status', 'company', 'assigned_to']
     search_fields = ['order__order_number', 'tracking_number', 'recipient_name']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated and user.role in ['store_owner', 'store_manager']:
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if user_store_ids:
+                return qs.filter(order__items__product__store_id__in=user_store_ids).distinct()
+            return qs.none()
+        return qs
+
     def get_serializer_class(self):
         if self.action == 'create':
             return DeliveryCreateSerializer

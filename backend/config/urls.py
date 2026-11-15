@@ -24,6 +24,7 @@ def api_root(request):
             'notifications': request.build_absolute_uri('/api/notifications/'),
             'reports': request.build_absolute_uri('/api/reports/'),
             'payments': request.build_absolute_uri('/api/payments/'),
+            'stores': request.build_absolute_uri('/api/stores/'),
         }
     }
     if settings.ENABLE_API_DOCS:
@@ -47,6 +48,7 @@ urlpatterns = [
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/reports/', include('apps.reports.urls')),
     path('api/payments/', include('apps.payments.urls')),
+    path('api/stores/', include('apps.stores.urls')),
 ]
 
 if settings.ENABLE_API_DOCS:

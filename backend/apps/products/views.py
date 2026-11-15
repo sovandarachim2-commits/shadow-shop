@@ -20,6 +20,7 @@ from .serializers import (
 from .flash_sale_stats import attach_flash_sale_stats
 from utils.image_optimization import ensure_card_variant, optimize_uploaded_image
 from utils.permissions import IsAdminOrSuperAdmin, IsStaff, HasModulePermission
+from utils.translation import translate_text as _translate_text
 from utils.storefront_cache import (
     ANNOUNCEMENTS_PUBLIC_CACHE_KEY,
     ANNOUNCEMENTS_PUBLIC_TTL,
@@ -68,10 +69,20 @@ class ProductFilter(filters.FilterSet):
     max_price = filters.NumberFilter(field_name='wholesale_price', lookup_expr='lte')
     in_stock = filters.BooleanFilter(method='filter_in_stock')
     active_flash_sale = filters.BooleanFilter(method='filter_active_flash_sale')
+    store = filters.CharFilter(method='filter_store')
 
     class Meta:
         model = Product
-        fields = ['category', 'brand', 'is_active', 'is_featured', 'is_new_arrival', 'is_best_seller', 'unit']
+        fields = ['category', 'brand', 'store', 'approval_status', 'is_active', 'is_featured', 'is_new_arrival', 'is_best_seller', 'unit']
+
+    def filter_store(self, queryset, name, value):
+        val = str(value).strip()
+        val_lower = val.lower()
+        if val_lower in ('direct', 'official', 'null', 'none', '0'):
+            return queryset.filter(store__isnull=True)
+        if val.isdigit():
+            return queryset.filter(store_id=int(val))
+        return queryset.filter(Q(store__slug=val) | Q(store__code__iexact=val))
 
     def filter_in_stock(self, queryset, name, value):
         if value:
@@ -180,11 +191,28 @@ class HomeSectionStyleViewSet(viewsets.ModelViewSet):
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all().select_related('category', 'brand').prefetch_related('images', 'stock')
+    queryset = Product.objects.all().select_related('category', 'brand', 'store').prefetch_related('images', 'stock')
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = ProductFilter
     search_fields = ['name', 'code', 'barcode', 'description', 'brand__name']
     ordering_fields = ['name', 'wholesale_price', 'retail_price', 'created_at', 'rating']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Product.objects.all().select_related('category', 'brand', 'store').prefetch_related('images', 'stock')
+
+        # Public visitors and customers only see approved & active items from active stores
+        if not user.is_authenticated or user.role == 'customer':
+            return qs.filter(is_active=True, approval_status='approved').filter(
+                Q(store__isnull=True) | Q(store__status='active')
+            )
+
+        # Sellers & Store Owners only see their own store's items
+        if user.role in ['seller', 'store_owner', 'store_manager']:
+            return qs.filter(store__memberships__user=user)
+
+        # Super admin and admins see all items
+        return qs
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -196,10 +224,22 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
-        return [IsAuthenticated(), IsAdminOrSuperAdmin()]
+        if self.action in ['approve', 'reject']:
+            return [IsAuthenticated(), IsAdminOrSuperAdmin()]
+        return [IsAuthenticated(), IsStaff()]
 
     def perform_create(self, serializer):
-        product = serializer.save()
+        user = self.request.user
+        extra_kwargs = {}
+        if user.is_authenticated and user.role in ['seller', 'store_owner', 'store_manager']:
+            from apps.stores.models import StoreMembership
+            membership = StoreMembership.objects.filter(user=user, is_active=True).first()
+            if membership:
+                extra_kwargs['store'] = membership.store
+            extra_kwargs['approval_status'] = 'pending'
+            extra_kwargs['is_active'] = False
+
+        product = serializer.save(**extra_kwargs)
         bump_storefront_cache()
         from apps.accounts.activity import log_activity
         log_activity(
@@ -211,6 +251,28 @@ class ProductViewSet(viewsets.ModelViewSet):
             object_id=product.pk,
             object_type='Product',
         )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminOrSuperAdmin])
+    def approve(self, request, pk=None):
+        product = self.get_object()
+        product.approval_status = 'approved'
+        product.is_active = True
+        product.approved_at = timezone.now()
+        product.approved_by = request.user
+        product.rejection_reason = ''
+        product.save()
+        bump_storefront_cache()
+        return Response({'status': 'approved', 'detail': f'Product "{product.name}" is approved and now live!'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsAdminOrSuperAdmin])
+    def reject(self, request, pk=None):
+        product = self.get_object()
+        product.approval_status = 'rejected'
+        product.is_active = False
+        product.rejection_reason = request.data.get('reason', 'Does not meet store requirements.')
+        product.save()
+        bump_storefront_cache()
+        return Response({'status': 'rejected', 'detail': f'Product "{product.name}" rejected.'})
 
     def perform_update(self, serializer):
         product = serializer.save()
@@ -917,21 +979,6 @@ class HomeFeedView(generics.GenericAPIView):
         }
         safe_cache_set(HOME_FEED_CACHE_KEY, payload, HOME_FEED_TTL)
         return Response(payload)
-
-
-def _translate_text(text, source_lang='en', target_lang='km'):
-    cleaned = str(text or '').strip()
-    if not cleaned:
-        return ''
-    import requests
-    response = requests.get(
-        'https://translate.googleapis.com/translate_a/single',
-        params={'client': 'gtx', 'sl': source_lang, 'tl': target_lang, 'dt': 't', 'q': cleaned},
-        timeout=5,
-    )
-    response.raise_for_status()
-    data = response.json()
-    return ''.join(part[0] for part in (data[0] or []) if part and part[0]).strip()
 
 
 class AnnouncementViewSet(viewsets.ModelViewSet):

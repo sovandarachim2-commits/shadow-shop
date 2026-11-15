@@ -1025,16 +1025,17 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
 
             <form onSubmit={handleLogin} autoComplete="off" className="space-y-6">
               <div>
-                <label htmlFor="shop-login-username" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.emailOrUsername')}</label>
-                <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
+                <label htmlFor="shop-login-username" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600 cursor-pointer">{t('auth.emailOrUsername')}</label>
+                <div
+                  onClick={() => document.getElementById('shop-login-username')?.focus()}
+                  className="flex h-12 cursor-text items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300"
+                >
                   <Mail size={20} className="text-slate-400" />
                   <input 
                     type="text" 
                     id="shop-login-username"
                     name="login_identifier"
-                    autoComplete="off"
-                    readOnly
-                    onFocus={(e) => e.target.removeAttribute('readonly')}
+                    autoComplete="username"
                     autoCapitalize="none"
                     spellCheck={false}
                     required
@@ -1047,17 +1048,22 @@ export default function AuthModal({ isOpen, onClose, type = 'cart' }) {
               </div>
 
               <div>
-                <label htmlFor="shop-login-password" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600">{t('auth.password')}</label>
-                <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300">
+                <label htmlFor="shop-login-password" className="mb-2.5 block text-xs font-semibold tracking-normal text-slate-600 cursor-pointer">{t('auth.password')}</label>
+                <div
+                  onClick={(e) => {
+                    if (!e.target.closest('button')) {
+                      document.getElementById('shop-login-password')?.focus()
+                    }
+                  }}
+                  className="flex h-12 cursor-text items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-5 focus-within:border-pink-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-pink-50 transition-all duration-300"
+                >
                   <Lock size={20} className="text-slate-400" />
                   <input 
                     type={showPass ? 'text' : 'password'} 
                     value={lf.password} 
                     id="shop-login-password"
                     name="login_secret"
-                    autoComplete="new-password"
-                    readOnly
-                    onFocus={(e) => e.target.removeAttribute('readonly')}
+                    autoComplete="current-password"
                     required
                     onChange={(e) => setLf(f => ({ ...f, password: e.target.value }))}
                     placeholder={t('auth.passwordPlaceholder')}

@@ -3,9 +3,11 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { Shield, Loader2, Plus, Trash2, CheckSquare, Square, RotateCcw, Save, Pencil, ChevronDown, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
+import useAuthStore from '@/store/authStore'
 
 const PAGE_GROUPS = [
   { key: 'dashboard', label: 'Dashboard', module: 'dashboard' },
+  { key: 'stores', label: 'Stores & Partners', module: 'stores' },
   {
     key: 'sales',
     label: 'Sales',
@@ -30,7 +32,10 @@ const PAGE_GROUPS = [
     key: 'marketing',
     label: 'Marketing',
     children: [
+      { module: 'marketing_promotions', label: 'Brand Promotions' },
       { module: 'marketing_announcements', label: 'Announcement Bar' },
+      { module: 'marketing_posters', label: 'Poster Management' },
+      { module: 'marketing_videos', label: 'Video Highlights' },
     ],
   },
   {
@@ -111,15 +116,30 @@ const PAGE_GROUPS = [
       { module: 'settings_print_logo', label: 'Print Logo' },
       { module: 'settings_login_logo', label: 'Login Logo' },
       { module: 'settings_customer_footer', label: 'Customer Footer' },
+      { module: 'settings_about', label: 'About Us' },
     ],
   },
   { key: 'storefront', label: 'Store Visit', module: 'storefront' },
 ]
+
+export const STORE_OWNER_ALLOWED_MODULES = new Set([
+  'dashboard',
+  'orders', 'customers',
+  'products', 'product_brands', 'product_categories', 'product_sets', 'product_flash_sale', 'product_banners',
+  'marketing_promotions', 'marketing_announcements', 'marketing_posters', 'marketing_videos',
+  'inventory', 'inventory_movements', 'inventory_storage', 'inventory_transfers',
+  'print', 'print_history', 'scanner', 'delivery',
+  'scanner_delivery_config',
+  'finance', 'finance_expenses', 'finance_profit',
+  'reports', 'reports_products', 'reports_inventory',
+  'users', 'users_roles',
+])
+
 const ACTION_ORDER = ['view', 'create', 'edit', 'delete']
 const slugifyRoleKey = (value) => value.trim().toLowerCase().replace(/[^a-z0-9_\s-]/g, '').replace(/[\s-]+/g, '_').slice(0, 20)
 
 // ─── Add Role Modal ───────────────────────────────────────────────────────────
-function AddRoleModal({ onClose, onCreated }) {
+function AddRoleModal({ isStoreOwner, onClose, onCreated }) {
   const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
@@ -142,6 +162,9 @@ function AddRoleModal({ onClose, onCreated }) {
     if (!displayName.trim()) return setError('Display name is required')
     const slug = slugifyRoleKey(name || displayName)
     if (!/^[a-z][a-z0-9_]{1,18}[a-z0-9]$/.test(slug)) return setError('Role key must be 3-20 characters and start with a letter')
+    if (isStoreOwner && ['super_admin', 'admin', 'customer', 'store_owner'].includes(slug)) {
+      return setError('Cannot use this reserved role name')
+    }
     create()
   }
 
@@ -236,6 +259,8 @@ function EditRoleModal({ role, onClose, onSaved }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Roles() {
+  const { user: currentUser } = useAuthStore()
+  const isStoreOwner = currentUser?.role === 'store_owner'
   const [selectedRole, setSelectedRole] = useState(null)
   const [draftGrants, setDraftGrants] = useState({})
   const [showAddModal, setShowAddModal] = useState(false)
@@ -247,12 +272,26 @@ export default function Roles() {
   const { data: roles = [], isLoading: loadingRoles } = useQuery({
     queryKey: ['roles'],
     queryFn: () => authApi.roles.list().then((r) => r.data),
-    onSuccess: (data) => { if (!selectedRole && data.length) setSelectedRole(data[0].name) },
+    onSuccess: (data) => {
+      if (!selectedRole && data.length) {
+        const first = isStoreOwner
+          ? data.find((r) => !['super_admin', 'admin', 'customer', 'store_owner'].includes(r.name))?.name
+          : data[0].name
+        if (first) setSelectedRole(first)
+      }
+    },
   })
 
+  const filteredRoles = useMemo(() => {
+    if (isStoreOwner) {
+      return (roles || []).filter((r) => !['super_admin', 'admin', 'customer', 'store_owner'].includes(r.name))
+    }
+    return roles || []
+  }, [roles, isStoreOwner])
+
   // pick first role once loaded
-  const activeRole = selectedRole ?? roles[0]?.name ?? null
-  const activeRoleRecord = roles.find((r) => r.name === activeRole) || null
+  const activeRole = selectedRole ?? filteredRoles[0]?.name ?? null
+  const activeRoleRecord = filteredRoles.find((r) => r.name === activeRole) || null
 
   const { data: allPerms = [], isLoading: loadingPerms } = useQuery({
     queryKey: ['permissions'],
@@ -314,12 +353,20 @@ export default function Roles() {
   const moduleSet = useMemo(() => new Set(allPerms.map((p) => p.module)), [allPerms])
   const visibleGroups = useMemo(() => (
     PAGE_GROUPS.map((group) => {
-      const children = (group.children || []).filter((child) => moduleSet.has(child.module))
-      const hasParent = group.module && moduleSet.has(group.module)
+      if (isStoreOwner) {
+        const isGroupAllowed = group.module && STORE_OWNER_ALLOWED_MODULES.has(group.module)
+        const hasAllowedChild = (group.children || []).some((c) => STORE_OWNER_ALLOWED_MODULES.has(c.module))
+        if (!isGroupAllowed && !hasAllowedChild) return null
+      }
+      const children = (group.children || []).filter((child) => {
+        if (isStoreOwner && !STORE_OWNER_ALLOWED_MODULES.has(child.module)) return false
+        return moduleSet.has(child.module)
+      })
+      const hasParent = group.module && moduleSet.has(group.module) && (!isStoreOwner || STORE_OWNER_ALLOWED_MODULES.has(group.module))
       if (!hasParent && children.length === 0) return null
       return { ...group, children }
     }).filter(Boolean)
-  ), [moduleSet])
+  ), [moduleSet, isStoreOwner])
 
   const toggle = (module, action) => {
     const key = `${module}_${action}`
@@ -390,7 +437,11 @@ export default function Roles() {
     setBulkPending(true)
     try {
       await authApi.rolePermissionResetDefaults(activeRole)
-      await qc.invalidateQueries({ queryKey: ['role-perms', activeRole] })
+      await qc.invalidateQueries({ queryKey: ['role-perms'] })
+      window.dispatchEvent(new Event('role-permissions-updated'))
+      try {
+        localStorage.setItem('role_perms_updated_at', String(Date.now()))
+      } catch (_) {}
       toast.success('Permissions reset to defaults')
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to reset defaults')
@@ -399,12 +450,28 @@ export default function Roles() {
 
   const grantAll = async () => {
     const next = {}
-    allPerms.forEach((p) => { next[`${p.module}_${p.action}`] = true })
-    setDraftGrants(next)
+    allPerms.forEach((p) => {
+      if (!isStoreOwner || STORE_OWNER_ALLOWED_MODULES.has(p.module)) {
+        next[`${p.module}_${p.action}`] = true
+      }
+    })
+    setDraftGrants((curr) => ({ ...curr, ...next }))
   }
 
   const revokeAll = async () => {
-    setDraftGrants({})
+    if (!isStoreOwner) {
+      setDraftGrants({})
+      return
+    }
+    setDraftGrants((curr) => {
+      const next = { ...curr }
+      allPerms.forEach((p) => {
+        if (STORE_OWNER_ALLOWED_MODULES.has(p.module)) {
+          delete next[`${p.module}_${p.action}`]
+        }
+      })
+      return next
+    })
   }
 
   const discardChanges = () => {
@@ -426,7 +493,11 @@ export default function Roles() {
         })),
         ...toRevoke.map((key) => authApi.rolePermissionDelete(grantedMap[key])),
       ])
-      await qc.invalidateQueries({ queryKey: ['role-perms', activeRole] })
+      await qc.invalidateQueries({ queryKey: ['role-perms'] })
+      window.dispatchEvent(new Event('role-permissions-updated'))
+      try {
+        localStorage.setItem('role_perms_updated_at', String(Date.now()))
+      } catch (_) {}
       toast.success('Permissions saved')
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to save permissions')
@@ -447,6 +518,7 @@ export default function Roles() {
     <div>
       {showAddModal && (
         <AddRoleModal
+          isStoreOwner={isStoreOwner}
           onClose={() => setShowAddModal(false)}
           onCreated={(role) => {
             qc.invalidateQueries({ queryKey: ['roles'] })
@@ -467,8 +539,14 @@ export default function Roles() {
 
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-navy-900">Roles &amp; Permissions</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Click permissions, then press Save to apply changes</p>
+          <h1 className="text-2xl font-bold text-navy-900">
+            {isStoreOwner ? 'Store Roles & Permissions' : 'Roles & Permissions'}
+          </h1>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {isStoreOwner
+              ? 'Configure role permissions for your store staff (displaying your store menus only)'
+              : 'Click permissions, then press Save to apply changes'}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -487,7 +565,7 @@ export default function Roles() {
             Save{hasUnsavedChanges ? ` (${dirtyKeys.length})` : ''}
           </button>
           <button onClick={() => setShowAddModal(true)} className="btn-primary">
-            <Plus size={16} /> Add Role
+            <Plus size={16} /> {isStoreOwner ? 'Create Staff Role' : 'Add Role'}
           </button>
         </div>
       </div>
@@ -504,8 +582,10 @@ export default function Roles() {
             }}
             disabled={loadingRoles}
           >
-            {roles.map((r) => (
-              <option key={r.name} value={r.name}>{r.display_name}</option>
+            {filteredRoles.map((r) => (
+              <option key={r.name} value={r.name}>
+                {r.display_name} {r.user_count !== undefined ? `(${r.user_count})` : ''}
+              </option>
             ))}
           </select>
         </div>
@@ -537,7 +617,7 @@ export default function Roles() {
             </button>
           </div>
         )}
-        {activeRoleRecord && (
+        {activeRoleRecord && (!isStoreOwner || !activeRoleRecord.is_system) && (
           <button
             onClick={() => setEditRole(activeRoleRecord)}
             className="flex items-center gap-1.5 rounded-xl border border-blue-200 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50"

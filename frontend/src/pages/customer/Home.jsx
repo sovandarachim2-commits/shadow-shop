@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, Star, ShoppingBag,
   Gift, Brush, Droplet, SprayCan, RefreshCw, Zap,
@@ -18,6 +18,7 @@ import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 import WelcomeBonusModal from '@/components/rewards/WelcomeBonusModal'
 import VideoHighlightsSection from '@/components/customer/VideoHighlightsSection'
+import DiscoverStoresSection from '@/components/customer/DiscoverStoresSection'
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const HOME_QUERY_OPTIONS = {
@@ -469,6 +470,7 @@ function CardBackdrop({ imageUrl, tintClass }) {
 }
 
 export default function Home() {
+  const queryClient = useQueryClient()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const pendingWelcomeBonus = useAuthStore((s) => s.pendingWelcomeBonus)
@@ -704,7 +706,7 @@ export default function Home() {
     setIsRefreshing(true)
     setPullDistance(78)
     try {
-      await refetchHome()
+      await Promise.all([refetchHome(), queryClient.invalidateQueries({ queryKey: ['public-stores'] })])
     } finally {
       setTimeout(() => { setIsRefreshing(false); setIsPulling(false); setPullDistance(0) }, 350)
     }
@@ -1120,6 +1122,13 @@ export default function Home() {
             <BrandCarousel brands={brands} />
           </div>
         )}
+
+        <div className="h-2 bg-gray-50" />
+
+        {/* ════════════════════════════════════════════
+            DISCOVER OUR STORES
+        ════════════════════════════════════════════ */}
+        <DiscoverStoresSection />
 
         <div className="h-2 bg-gray-50" />
 

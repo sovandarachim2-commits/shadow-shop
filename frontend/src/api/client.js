@@ -24,6 +24,7 @@ const AUTH_FREE_PATHS = [
   '/auth/telegram/confirm/',
   '/auth/telegram/otp-login/',
   '/auth/refresh/',
+  '/stores/inquiries/submit/',
 ]
 
 const PUBLIC_GET_PREFIXES = [
@@ -39,12 +40,15 @@ const PUBLIC_GET_PREFIXES = [
   '/products/offer-posters/public/',
   '/products/video-highlights/public/',
   '/products/revision/',
+  '/stores/public/',
 ]
 
 const STOREFRONT_WRITE_MARKERS = [
+  '/stores/admin/stores/',
   '/products/',
   '/inventory/',
   '/auth/site-settings/',
+  '/auth/about-page/',
 ]
 
 function requestPath(config) {
@@ -123,6 +127,10 @@ async function refreshAccessToken() {
 }
 
 client.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
+
   if (config.skipAuth) {
     delete config.headers.Authorization
     return config

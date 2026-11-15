@@ -34,7 +34,7 @@ const DEFAULT_FOOTER_MENUS = {
     title: 'Information',
     title_km: 'ព័ត៌មាន',
     items: [
-      { label: 'About Us', label_km: 'អំពីយើង', url: 'https://shadowshop.com/about', enabled: true },
+      { label: 'About Us', label_km: 'អំពីយើង', url: '/about', enabled: true },
       { label: 'Privacy Policy', label_km: 'គោលការណ៍ឯកជនភាព', url: 'https://shadowshop.com/privacy', enabled: true },
       { label: 'Careers', label_km: 'ការងារ', url: 'https://shadowshop.com/careers', enabled: true },
       { label: 'Blog', label_km: 'ប្លក់', url: 'https://shadowshop.com/blog', enabled: true },
@@ -65,12 +65,13 @@ const SOCIAL_ICON_MAP = {
   youtube: Youtube,
 }
 
-function normalizeFooterMenus(value = {}) {
+function normalizeFooterMenus(value = {}, contactUrl = '/about') {
   return Object.fromEntries(
     Object.entries(DEFAULT_FOOTER_MENUS).map(([sectionKey, section]) => {
       const savedSection = value?.[sectionKey] || {}
       const savedItems = Array.isArray(savedSection.items) ? savedSection.items : []
-      const items = savedItems.length > 0 ? savedItems : section.items
+      const usingSavedItems = Array.isArray(savedSection.items)
+      const items = usingSavedItems ? savedItems : section.items
 
       return [sectionKey, {
         title: savedSection.title || section.title,
@@ -78,7 +79,7 @@ function normalizeFooterMenus(value = {}) {
         items: items.map((item, index) => ({
           label: item.label || section.items[index]?.label || '',
           label_km: item.label_km || section.items[index]?.label_km || '',
-          url: item.url || section.items[index]?.url || '',
+          url: !usingSavedItems && sectionKey === 'customerService' && index === 0 ? contactUrl : item.url || '',
           enabled: item.enabled !== false,
         })),
       }]
@@ -88,7 +89,7 @@ function normalizeFooterMenus(value = {}) {
 
 function normalizeSocialLinks(value = {}) {
   const saved = Array.isArray(value?.social_links) ? value.social_links : []
-  const source = saved.length > 0 ? saved : DEFAULT_SOCIAL_LINKS
+  const source = Array.isArray(value?.social_links) ? saved : DEFAULT_SOCIAL_LINKS
   return source.map((item, index) => {
     const defaults = DEFAULT_SOCIAL_LINKS.find((entry) => entry.platform === item.platform) || {}
     return {
@@ -336,8 +337,15 @@ export default function Settings({ tab = 'general' }) {
         logo_urls: siteSettings.payment_methods.logo_urls || {},
       }))
     }
-    setFooterMenus(normalizeFooterMenus(siteSettings.footer_menus))
+    setFooterMenus(normalizeFooterMenus(siteSettings.footer_menus,
+      siteSettings.store_email ? `mailto:${siteSettings.store_email}`
+        : normalizeTelegramUrl(siteSettings.payment_methods?.contact_sales_url) || '/about',
+    ))
     setFooterSocialLinks(normalizeSocialLinks(siteSettings.footer_menus))
+    setFooterBrand({
+      description: siteSettings.footer_menus?.brand?.description || '',
+      description_km: siteSettings.footer_menus?.brand?.description_km || '',
+    })
     setSocialIconFiles({})
     setSocialIconPreviews({})
     setPrintLogoSize(siteSettings.print_logo_size || 64)
@@ -425,6 +433,7 @@ export default function Settings({ tab = 'general' }) {
   const [paymentLogoPreviews, setPaymentLogoPreviews] = useState({})
   const [paymentLogoRemovals, setPaymentLogoRemovals] = useState({})
   const [footerMenus, setFooterMenus] = useState(normalizeFooterMenus())
+  const [footerBrand, setFooterBrand] = useState({ description: '', description_km: '' })
   const [footerSocialLinks, setFooterSocialLinks] = useState(normalizeSocialLinks())
   const [socialIconFiles, setSocialIconFiles] = useState({})
   const [socialIconPreviews, setSocialIconPreviews] = useState({})
@@ -605,6 +614,10 @@ export default function Settings({ tab = 'general' }) {
   const saveFooterMutation = useMutation({
     mutationFn: () => {
       const footerPayload = {
+        brand: {
+          description: footerBrand.description.trim(),
+          description_km: footerBrand.description_km.trim(),
+        },
         ...Object.fromEntries(
           Object.entries(footerMenus).map(([sectionKey, section]) => [
             sectionKey,
@@ -1770,8 +1783,22 @@ export default function Settings({ tab = 'general' }) {
         {tab === 'customerFooter' && (
           <div className="space-y-8">
             <div className="rounded-2xl bg-pink-50 p-5 text-base leading-relaxed text-pink-800">
-              Sample English + Khmer footer menus and social icons are pre-filled. Edit labels/URLs, then click Save Customer Footer.
-              Storefront shows Khmer when language is KH.
+              Update your footer introduction, menu links, and social icons, then click Save Customer Footer. English and Khmer content follows the customer's selected language.
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 md:p-6">
+              <h3 className="text-lg font-semibold text-gray-950">Brand Introduction</h3>
+              <p className="mt-1 text-sm leading-6 text-gray-500">A short description below your logo. Leave blank to use the website default.</p>
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
+                <div>
+                  <label htmlFor="footer-description-en" className="label">English introduction</label>
+                  <textarea id="footer-description-en" rows={3} maxLength={600} value={footerBrand.description} onChange={(event) => setFooterBrand((previous) => ({ ...previous, description: event.target.value }))} className="input-field resize-y" placeholder="Tell customers about your shop and services..." />
+                </div>
+                <div>
+                  <label htmlFor="footer-description-km" className="label">Khmer introduction</label>
+                  <textarea id="footer-description-km" lang="km" rows={3} maxLength={600} value={footerBrand.description_km} onChange={(event) => setFooterBrand((previous) => ({ ...previous, description_km: event.target.value }))} className="input-field resize-y" placeholder="ពិពណ៌នាខ្លីៗអំពីហាង និងសេវាកម្មរបស់អ្នក..." />
+                </div>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 md:p-6">

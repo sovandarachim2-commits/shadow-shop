@@ -20,7 +20,18 @@ export function CardBody({ children, className }) {
   return <div className={cn('px-6 py-4', className)}>{children}</div>
 }
 
-export function KpiCard({ title, value, subtitle, icon: Icon, trend, color = 'purple', loading }) {
+export function KpiCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
+  color = 'purple',
+  loading,
+  onClick,
+  className,
+  compact = false,
+}) {
   const colorMap = {
     purple: { bg: 'bg-purple-50', text: 'text-purple-600', icon: 'bg-purple-100' },
     pink: { bg: 'bg-pink-50', text: 'text-pink-600', icon: 'bg-pink-100' },
@@ -32,29 +43,41 @@ export function KpiCard({ title, value, subtitle, icon: Icon, trend, color = 'pu
   const c = colorMap[color] || colorMap.purple
 
   return (
-    <div className="kpi-card">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500 font-medium">{title}</p>
+    <div
+      onClick={onClick}
+      className={cn(
+        compact
+          ? 'bg-white rounded-xl p-3 sm:p-3.5 shadow-card border border-gray-100 transition duration-150'
+          : 'kpi-card',
+        onClick && 'cursor-pointer hover:shadow-md hover:-translate-y-0.5',
+        className
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className={cn(compact ? 'text-xs text-gray-500 font-medium truncate' : 'text-sm text-gray-500 font-medium')}>{title}</p>
           {loading ? (
-            <div className="h-8 w-24 bg-gray-200 rounded-lg animate-pulse mt-1" />
+            <div className={cn('bg-gray-200 rounded-lg animate-pulse mt-1', compact ? 'h-6 w-16' : 'h-8 w-24')} />
           ) : (
-            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            <p className={cn(compact ? 'text-lg sm:text-xl font-bold text-gray-900 mt-0.5 truncate' : 'text-2xl font-bold text-gray-900 mt-1')}>{value}</p>
           )}
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+          {subtitle && <p className={cn(compact ? 'text-[11px] text-gray-400 mt-0.5 truncate' : 'text-xs text-gray-400 mt-1')}>{subtitle}</p>}
           {trend !== undefined && (
-            <div className={cn('flex items-center gap-1 mt-2 text-xs font-medium', trend >= 0 ? 'text-green-600' : 'text-red-600')}>
+            <div className={cn('flex items-center gap-1 mt-1 text-xs font-medium', trend >= 0 ? 'text-green-600' : 'text-red-600')}>
               <span>{trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%</span>
               <span className="text-gray-400">vs last week</span>
             </div>
           )}
         </div>
         {Icon && (
-          <div className={cn('w-11 h-11 rounded-2xl flex items-center justify-center', c.icon)}>
-            <Icon size={22} className={c.text} />
+          <div className={cn('flex shrink-0 items-center justify-center', compact ? 'w-8 h-8 rounded-lg' : 'w-11 h-11 rounded-2xl', c.icon)}>
+            <Icon size={compact ? 16 : 22} className={c.text} />
           </div>
         )}
       </div>
     </div>
   )
 }
+
+export default Card
+

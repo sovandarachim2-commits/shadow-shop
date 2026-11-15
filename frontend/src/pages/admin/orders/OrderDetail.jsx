@@ -64,13 +64,16 @@ function readableApiError(value) {
 export function EditOrderModal({ order, onClose, onSaved }) {
   const currentUser = useAuthStore((state) => state.user)
   const isSeller = currentUser?.role === 'seller'
-  const statusOptions = isSeller ? SELLER_ORDER_STATUS_OPTIONS : ORDER_STATUS_OPTIONS
+  const isStatusLocked = (order?.status === 'new' || !order?.status) && !order?.printed_at
+  const statusOptions = (isSeller ? SELLER_ORDER_STATUS_OPTIONS : ORDER_STATUS_OPTIONS).filter(
+    (option) => option.value !== 'cancelled'
+  )
   const [search, setSearch] = useState('')
   const [customer, setCustomer] = useState({ name: '', phone: '', address: '', province: 'phnom_penh', notes: '' })
   const [orderForm, setOrderForm] = useState({
     status: 'new',
     payment_status: 'unpaid',
-    payment_method: 'cod',
+    payment_method: '',
     transaction_reference: '',
     delivery_fee: 0,
     discount: 0,
@@ -89,11 +92,16 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       province: order.customer_detail?.province || 'phnom_penh',
       notes: order.customer_detail?.notes || '',
     })
+    const initialPaymentStatus = order.payment_status || 'unpaid'
+    let initialPaymentMethod = order.payment_method || ''
+    if (initialPaymentStatus === 'unpaid' && initialPaymentMethod && !['cod', 'contact_sales'].includes(initialPaymentMethod)) {
+      initialPaymentMethod = 'cod'
+    }
     setOrderForm({
       status: order.status || 'new',
-      payment_status: order.payment_status || 'unpaid',
-      payment_method: order.payment_method || 'cod',
-      transaction_reference: '',
+      payment_status: initialPaymentStatus,
+      payment_method: initialPaymentMethod,
+      transaction_reference: order.transaction_reference || '',
       delivery_fee: order.delivery_fee || 0,
       discount: order.discount || 0,
       notes: localizeOrderNote(order.notes || ''),
@@ -191,22 +199,32 @@ export function EditOrderModal({ order, onClose, onSaved }) {
       toast.error('Add at least one product')
       return
     }
-    if (orderForm.status === 'cancelled' && order.status !== 'cancelled') {
-      const reason = await confirm(
-        'Cancel this order?',
-        `Order #${order.order_number} will be marked as cancelled.`,
+    if (orderForm.status !== order.status) {
+      const fromLabel = ORDER_STATUS_OPTIONS.find((s) => s.value === order.status)?.label || order.status
+      const toLabel = ORDER_STATUS_OPTIONS.find((s) => s.value === orderForm.status)?.label || orderForm.status
+      const isCancelled = orderForm.status === 'cancelled'
+
+      const confirmed = await confirm(
+        isCancelled ? 'Cancel this order?' : 'Update Order Status',
+        isCancelled
+          ? `Order #${order.order_number} will be marked as cancelled.`
+          : `Change status of Order #${order.order_number} from "${fromLabel}" to "${toLabel}"?`,
         {
-          confirmText: 'Cancel Order',
-          cancelText: 'Keep Order',
-          tone: 'danger',
-          icon: 'warning',
-          reasonLabel: 'Reason',
-          reasonPlaceholder: 'Why is this order cancelled?',
-          reasonRequired: true,
+          confirmText: isCancelled ? 'Cancel Order' : 'Update Status',
+          cancelText: 'Cancel',
+          tone: isCancelled ? 'danger' : 'purple',
+          icon: isCancelled ? 'warning' : 'check',
+          ...(isCancelled
+            ? {
+                reasonLabel: 'Reason',
+                reasonPlaceholder: 'Why is this order cancelled?',
+                reasonRequired: true,
+              }
+            : {}),
         },
       )
-      if (!reason) return
-      saveMutation.mutate(reason)
+      if (confirmed === false || confirmed === null || confirmed === undefined) return
+      saveMutation.mutate(typeof confirmed === 'string' ? confirmed : '')
       return
     }
     saveMutation.mutate('')
@@ -334,15 +352,69 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                         <Trash2 size={15} />
                       </button>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr_1fr_1fr] sm:items-end">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => updateItem(item.lineKey, { quantity: Math.max(1, Number(item.quantity || 1) - 1) })} className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white"><Minus size={12} /></button>
-                        <input className="w-14 rounded-lg border border-gray-200 bg-white py-1.5 text-center text-sm font-semibold" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(item.lineKey, { quantity: Number(e.target.value || 1) })} />
-                        <button onClick={() => updateItem(item.lineKey, { quantity: Number(item.quantity || 1) + 1 })} className="flex h-8 w-8 items-center justify-center rounded-lg border bg-white"><Plus size={12} /></button>
+                    <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-[auto_1fr_1fr_1fr] sm:items-end">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                          Qty
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => updateItem(item.lineKey, { quantity: Math.max(1, Number(item.quantity || 1) - 1) })}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white transition hover:bg-gray-100"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <input
+                            className="w-14 rounded-lg border border-gray-200 bg-white py-1.5 text-center text-sm font-semibold focus:border-purple-500 focus:outline-none"
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.lineKey, { quantity: Number(e.target.value || 1) })}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateItem(item.lineKey, { quantity: Number(item.quantity || 1) + 1 })}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white transition hover:bg-gray-100"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
                       </div>
-                      <input className="input-field py-1.5 text-sm" type="number" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.lineKey, { unit_price: e.target.value })} />
-                      <input className="input-field py-1.5 text-sm" type="number" step="0.01" value={item.discount} onChange={(e) => updateItem(item.lineKey, { discount: e.target.value })} />
-                      <p className="text-right text-sm font-bold text-gray-900">{formatCurrency((Number(item.unit_price || 0) * Number(item.quantity || 0)) - Number(item.discount || 0))}</p>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                          Unit Price ($)
+                        </label>
+                        <input
+                          className="input-field py-1.5 text-sm"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={item.unit_price}
+                          onChange={(e) => updateItem(item.lineKey, { unit_price: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                          Discount ($)
+                        </label>
+                        <input
+                          className="input-field py-1.5 text-sm"
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={item.discount}
+                          onChange={(e) => updateItem(item.lineKey, { discount: e.target.value })}
+                        />
+                      </div>
+                      <div className="col-span-2 text-right sm:col-span-1">
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                          Total
+                        </label>
+                        <p className="flex h-8 items-center justify-end text-sm font-bold text-gray-900">
+                          {formatCurrency((Number(item.unit_price || 0) * Number(item.quantity || 0)) - Number(item.discount || 0))}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -357,7 +429,12 @@ export function EditOrderModal({ order, onClose, onSaved }) {
               <div className="space-y-3">
                 <div>
                   <label className="label">Status</label>
-                  <select className="select-field" value={orderForm.status} onChange={(e) => setOrderForm({ ...orderForm, status: e.target.value })}>
+                  <select
+                    className={`select-field ${isStatusLocked ? 'cursor-not-allowed bg-gray-100 text-gray-500' : ''}`}
+                    disabled={isStatusLocked}
+                    value={orderForm.status}
+                    onChange={(e) => setOrderForm({ ...orderForm, status: e.target.value })}
+                  >
                     {statusOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
@@ -365,7 +442,18 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                 </div>
                 <div>
                   <label className="label">Payment Status</label>
-                  <select className="select-field" value={orderForm.payment_status} onChange={(e) => setOrderForm({ ...orderForm, payment_status: e.target.value })}>
+                  <select
+                    className="select-field"
+                    value={orderForm.payment_status}
+                    onChange={(e) => {
+                      const nextStatus = e.target.value
+                      let nextMethod = orderForm.payment_method
+                      if (nextStatus === 'unpaid' && !['cod', 'contact_sales'].includes(nextMethod)) {
+                        nextMethod = 'cod'
+                      }
+                      setOrderForm({ ...orderForm, payment_status: nextStatus, payment_method: nextMethod })
+                    }}
+                  >
                     <option value="paid">Paid</option>
                     <option value="unpaid">Unpaid</option>
                     <option value="partial">Partial</option>
@@ -374,15 +462,30 @@ export function EditOrderModal({ order, onClose, onSaved }) {
                 </div>
                 <div>
                   <label className="label">Payment Method</label>
-                  <select className="select-field" value={orderForm.payment_method} onChange={(e) => setOrderForm({ ...orderForm, payment_method: e.target.value })}>
-                    <option value="bakong">Bakong KHQR</option>
-                    <option value="aba">ABA Bank</option>
-                    <option value="acleda">ACLEDA Bank</option>
-                    <option value="wing">Wing</option>
-                    <option value="cod">Cash on Delivery</option>
-                    <option value="cash">Cash</option>
-                    <option value="contact_sales">Contact Sales</option>
-                    <option value="other">Other</option>
+                  <select
+                    className="select-field"
+                    value={orderForm.payment_method || ''}
+                    onChange={(e) => setOrderForm({ ...orderForm, payment_method: e.target.value })}
+                  >
+                    {orderForm.payment_status === 'unpaid' ? (
+                      <>
+                        <option value="">Select payment method</option>
+                        <option value="cod">Cash on Delivery</option>
+                        <option value="contact_sales">Contact Sales</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="">Select payment method</option>
+                        <option value="bakong">Bakong KHQR</option>
+                        <option value="aba">ABA Bank</option>
+                        <option value="acleda">ACLEDA Bank</option>
+                        <option value="wing">Wing</option>
+                        <option value="cod">Cash on Delivery</option>
+                        <option value="cash">Cash</option>
+                        <option value="contact_sales">Contact Sales</option>
+                        <option value="other">Other</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -515,11 +618,9 @@ export default function OrderDetail() {
         breadcrumbs={[{ label: 'Orders', path: '/admin/orders' }, { label: `#${order.order_number}` }]}
         actions={
           <div className="flex gap-2">
-            {!sellerReadOnlyPrinted && (
-              <button onClick={() => setShowEditModal(true)} className="btn-secondary">
-                <Pencil size={15} /> Edit
-              </button>
-            )}
+            <button onClick={() => setShowEditModal(true)} className="btn-secondary">
+              <Pencil size={15} /> Edit
+            </button>
             {!isSeller && (
               <button onClick={() => navigate('/admin/print')} className="btn-secondary">
                 <Printer size={15} /> Print
@@ -553,24 +654,6 @@ export default function OrderDetail() {
             </div>
           ))}
         </div>
-        {order.status !== 'completed' && order.status !== 'cancelled' && !sellerReadOnlyPrinted && (
-          <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-            {visibleStatusFlow.map((s) => (
-              s.key !== order.status && (
-                <button key={s.key} onClick={() => updateStatusMutation.mutate({ status: s.key })}
-                  className="text-xs px-3 py-1.5 bg-gray-50 hover:bg-purple-50 hover:text-purple-700 border border-gray-200 hover:border-purple-300 rounded-lg transition-all">
-                  → {s.label}
-                </button>
-              )
-            ))}
-            {!isSeller && (
-              <button onClick={handleCancelOrder}
-                className="text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-all ml-auto">
-                Cancel Order
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
@@ -689,6 +772,18 @@ export default function OrderDetail() {
                 >
                   {formatDateTime(order.created_at)}
                 </button>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Store</span>
+                {order.store_name ? (
+                  <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 text-xs">
+                    🏪 {order.store_name}
+                  </span>
+                ) : (
+                  <span className="font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 text-xs">
+                    🏢 Official Store
+                  </span>
+                )}
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Seller</span>

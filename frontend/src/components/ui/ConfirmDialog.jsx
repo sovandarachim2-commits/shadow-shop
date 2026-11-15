@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, LogOut, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, LogOut, RefreshCw, Trash2 } from 'lucide-react'
 
 function ConfirmDialogUI({
   message,
@@ -16,7 +16,16 @@ function ConfirmDialogUI({
 }) {
   const [reason, setReason] = useState('')
   const [reasonError, setReasonError] = useState('')
-  const Icon = icon === 'logout' ? LogOut : icon === 'warning' ? AlertTriangle : Trash2
+  const Icon =
+    icon === 'logout'
+      ? LogOut
+      : icon === 'warning'
+      ? AlertTriangle
+      : icon === 'check'
+      ? CheckCircle2
+      : icon === 'refresh'
+      ? RefreshCw
+      : Trash2
   const toneClass = tone === 'danger'
     ? {
         iconBg: 'bg-red-50',

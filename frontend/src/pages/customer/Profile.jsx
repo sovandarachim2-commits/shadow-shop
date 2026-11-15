@@ -8,7 +8,7 @@ import {
   ArrowLeft, Mail, Phone, IdCard, Languages,
   Bell, PackageCheck, Star, Percent, CreditCard, HelpCircle, ClipboardList, Gift,
   Home, Headphones, Eye, EyeOff, Clock, Share2, Crown, Copy, Check,
-  QrCode, ScanLine, Download, X, AlertCircle, Sparkles,
+  QrCode, ScanLine, Download, X, AlertCircle, Sparkles, LayoutDashboard,
 } from 'lucide-react'
 import QRCode from 'qrcode'
 import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
@@ -695,9 +695,22 @@ function MobileSettingsRow({ icon: Icon, label, action, danger }) {
 
 function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang }) {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
+  const navigate = useNavigate()
   return (
     <div className="flex h-full flex-col">
       <nav className="flex-1 space-y-2 p-4">
+        {user?.role && user.role !== 'customer' && (
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className="flex w-full items-center gap-3 rounded-2xl bg-purple-50 px-4 py-3.5 text-left text-sm font-bold text-purple-700 transition hover:bg-purple-100 border border-purple-100 mb-2 shadow-sm"
+          >
+            <LayoutDashboard size={20} className="text-purple-600" />
+            <span className="flex-1">Store Admin Portal</span>
+            <ChevronRight size={16} className="text-purple-400" />
+          </button>
+        )}
         {ACCOUNT_MENU_ITEMS.map((item) => {
           const Icon = item.icon
           const isActive = item.view === activeView
@@ -1031,6 +1044,14 @@ export default function Profile() {
   ]
 
   const mobileGeneralSettings = [
+    ...(user?.role && user.role !== 'customer' ? [
+      {
+        icon: LayoutDashboard,
+        labelKey: 'adminPortal',
+        customLabel: 'Store & Admin Portal',
+        action: () => navigate('/admin'),
+      }
+    ] : []),
     { icon: User, labelKey: 'profile.myAccount', action: () => navigate('/profile/edit') },
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders') },
     { icon: MapPin, labelKey: 'profile.myAddress', action: () => navigate('/address-book') },
@@ -1252,7 +1273,7 @@ export default function Profile() {
 
         <MobileSettingsGroup title={t('profile.generalSetting')}>
           {mobileGeneralSettings.map((item) => (
-            <MobileSettingsRow key={item.labelKey} icon={item.icon} label={t(item.labelKey)} action={item.action} />
+            <MobileSettingsRow key={item.labelKey} icon={item.icon} label={item.customLabel || t(item.labelKey)} action={item.action} />
           ))}
         </MobileSettingsGroup>
 

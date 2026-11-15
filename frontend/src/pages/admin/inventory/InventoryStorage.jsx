@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/Badge'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { inventoryApi } from '@/api/inventory'
+import useAuthStore from '@/store/authStore'
 
-function StorageForm({ storage, onSave, onClose, isSaving }) {
+function StorageForm({ storage, assignedStore, onSave, onClose, isSaving }) {
   const [form, setForm] = useState({
     name: storage?.name || '',
     code: storage?.code || '',
@@ -48,7 +49,7 @@ function StorageForm({ storage, onSave, onClose, isSaving }) {
           className="input-field font-mono uppercase"
           value={form.code}
           onChange={(event) => set('code', event.target.value)}
-          placeholder="ST01"
+          placeholder={assignedStore?.store_code ? `${assignedStore.store_code}-ST02` : "ST01"}
           disabled={Boolean(storage)}
         />
       </label>
@@ -104,6 +105,13 @@ function StorageForm({ storage, onSave, onClose, isSaving }) {
 
 export default function InventoryStorage() {
   const qc = useQueryClient()
+  const currentUser = useAuthStore((state) => state.user)
+  const isStorePartner = ['store_owner', 'store_manager'].includes(currentUser?.role)
+    || (Array.isArray(currentUser?.assigned_stores) && currentUser.assigned_stores.length > 0)
+  const assignedStore = Array.isArray(currentUser?.assigned_stores) && currentUser.assigned_stores.length > 0
+    ? currentUser.assigned_stores[0]
+    : null
+
   const [confirm, ConfirmDialog] = useConfirm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -162,8 +170,10 @@ export default function InventoryStorage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Inventory Storage"
-        subtitle="One storage can be the print default. Printing an order reduces stock there."
+        title={isStorePartner && assignedStore ? `${assignedStore.store_name} Storage` : "Inventory Storage"}
+        subtitle={isStorePartner
+          ? "Storage locations for your store. Printing an order reduces stock here."
+          : "One storage can be the print default. Printing an order reduces stock there."}
         actions={(
           <button type="button" onClick={openCreate} className="btn-primary">
             <Plus size={16} /> Add Storage
@@ -177,6 +187,7 @@ export default function InventoryStorage() {
             <tr>
               <Th>No</Th>
               <Th>Storage</Th>
+              {!isStorePartner && <Th>Store</Th>}
               <Th>Code</Th>
               <Th>Address</Th>
               <Th>Amount of Product</Th>
@@ -187,10 +198,10 @@ export default function InventoryStorage() {
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={9} />}
+            {isLoading && <LoadingRows cols={isStorePartner ? 9 : 10} />}
             {!isLoading && storages.length === 0 && (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={isStorePartner ? 9 : 10}>
                   <EmptyState message="No storage locations yet" icon={Archive} />
                   <div className="pb-8 text-center">
                     <button type="button" onClick={openCreate} className="btn-primary inline-flex">
@@ -209,6 +220,19 @@ export default function InventoryStorage() {
                     {storage.is_default && <Badge variant="primary">Print default</Badge>}
                   </div>
                 </Td>
+                {!isStorePartner && (
+                  <Td>
+                    {storage.store_name ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 whitespace-nowrap">
+                        🏪 {storage.store_name}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 whitespace-nowrap">
+                        🏢 Official Store
+                      </span>
+                    )}
+                  </Td>
+                )}
                 <Td><span className="font-mono text-xs text-gray-500">{storage.code}</span></Td>
                 <Td><span className="text-sm text-gray-500">{storage.address || '—'}</span></Td>
                 <Td><span className="font-medium text-gray-900">{storage.product_count || 0}</span></Td>
@@ -269,6 +293,7 @@ export default function InventoryStorage() {
         <StorageForm
           key={editing?.id || 'new'}
           storage={editing}
+          assignedStore={assignedStore}
           onSave={(payload) => saveMutation.mutate(payload)}
           onClose={() => { setOpen(false); setEditing(null) }}
           isSaving={saveMutation.isPending}

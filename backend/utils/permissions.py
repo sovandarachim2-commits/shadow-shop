@@ -3,6 +3,8 @@ from rest_framework.permissions import BasePermission
 
 ROLE_SUPER_ADMIN = 'super_admin'
 ROLE_ADMIN = 'admin'
+ROLE_STORE_OWNER = 'store_owner'
+ROLE_STORE_MANAGER = 'store_manager'
 ROLE_SELLER = 'seller'
 ROLE_CASHIER = 'cashier'
 ROLE_WAREHOUSE = 'warehouse'
@@ -11,7 +13,8 @@ ROLE_DELIVERY = 'delivery'
 ROLE_CUSTOMER = 'customer'
 
 ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN]
-STAFF_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_SELLER, ROLE_CASHIER, ROLE_WAREHOUSE, ROLE_SCANNER, ROLE_DELIVERY]
+SELLER_ROLES = [ROLE_SELLER, ROLE_STORE_OWNER, ROLE_STORE_MANAGER]
+STAFF_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_STORE_OWNER, ROLE_STORE_MANAGER, ROLE_SELLER, ROLE_CASHIER, ROLE_WAREHOUSE, ROLE_SCANNER, ROLE_DELIVERY]
 
 
 class IsSuperAdmin(BasePermission):
@@ -36,7 +39,7 @@ class IsCustomer(BasePermission):
 
 class IsSeller(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in [ROLE_SELLER, ROLE_ADMIN, ROLE_SUPER_ADMIN]
+        return request.user.is_authenticated and request.user.role in [ROLE_SELLER, ROLE_STORE_OWNER, ROLE_STORE_MANAGER, ROLE_ADMIN, ROLE_SUPER_ADMIN]
 
 
 class IsCashier(BasePermission):

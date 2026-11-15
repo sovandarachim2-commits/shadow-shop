@@ -58,6 +58,7 @@ function lazyNamedWithReload(importer, exportName) {
 
 const AdminLayout = lazyWithReload(() => import('@/components/layout/AdminLayout'))
 const CustomerLayout = lazyWithReload(() => import('@/components/layout/CustomerLayout'))
+const AboutSettings = lazyWithReload(() => import('@/pages/admin/settings/AboutSettings'))
 const Home = lazyWithReload(() => import('@/pages/customer/Home'))
 const DemoBottomNavigation = lazyWithReload(() => import('@/pages/DemoBottomNavigation'))
 
@@ -159,11 +160,15 @@ const RewardDetail = lazyWithReload(() => import('@/pages/customer/RewardDetail'
 const LuckyBox = lazyWithReload(() => import('@/pages/customer/LuckyBox'))
 const SearchPage = lazyWithReload(() => import('@/pages/customer/SearchPage'))
 const About = lazyWithReload(() => import('@/pages/customer/About'))
+const StoreProfile = lazyWithReload(() => import('@/pages/customer/StoreProfile'))
+const Stores = lazyWithReload(() => import('@/pages/customer/Stores'))
+const StoreManagement = lazyWithReload(() => import('@/pages/admin/stores/StoreManagement'))
+const MyStoreInfo = lazyWithReload(() => import('@/pages/admin/stores/MyStoreInfo'))
 
 const QUERY_CACHE_KEY = 'shadow-shop-query-cache'
 const QUERY_CACHE_MAX_AGE_MS = 30 * 60 * 1000
 const QUERY_CACHE_MAX_BYTES = 200 * 1024
-const PERSISTED_QUERY_KEYS = new Set(['site-settings', 'role-perms'])
+const PERSISTED_QUERY_KEYS = new Set(['site-settings'])
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -687,6 +692,8 @@ function AppIconSync() {
 
 const ADMIN_FALLBACK_ROUTES = [
   { module: 'dashboard', path: '/admin' },
+  { module: 'stores', path: '/admin/stores' },
+  { module: 'stores', path: '/admin/store-info' },
   { module: 'orders', path: '/admin/orders' },
   { module: 'customers', path: '/admin/customers' },
   { module: 'products', path: '/admin/products' },
@@ -722,6 +729,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'reports', path: '/admin/reports/sales' },
   { module: 'reports_products', path: '/admin/reports/products' },
   { module: 'reports_inventory', path: '/admin/reports/inventory' },
+  { module: 'reports_inventory', path: '/admin/reports/stock-sold' },
   { module: 'users', path: '/admin/users' },
   { module: 'users', path: '/admin/users/telegram' },
   { module: 'users_roles', path: '/admin/roles' },
@@ -733,6 +741,7 @@ const ADMIN_FALLBACK_ROUTES = [
   { module: 'settings_print_logo', path: '/admin/settings/print-logo' },
   { module: 'settings_login_logo', path: '/admin/settings/login-logo' },
   { module: 'settings_customer_footer', path: '/admin/settings/customer-footer' },
+  { module: 'settings_about', path: '/admin/settings/about' },
 ]
 
 function AdminIndexRedirect() {
@@ -787,6 +796,9 @@ export default function App() {
             <Route path="profile/complete" element={<RequireAuth><CompletionPrompt /></RequireAuth>} />
             <Route path="search" element={<LazyPage><SearchPage /></LazyPage>} />
             <Route path="about" element={<LazyPage><About /></LazyPage>} />
+            <Route path="store/:slug" element={<LazyPage><StoreProfile /></LazyPage>} />
+            <Route path="stores" element={<LazyPage><Stores /></LazyPage>} />
+            <Route path="stores/:slug" element={<LazyPage><StoreProfile /></LazyPage>} />
             <Route path="shop" element={<LazyPage><ProductList /></LazyPage>} />
             <Route path="lucky-box" element={<LazyPage><LuckyBox /></LazyPage>} />
             <Route path="product/:id" element={<LazyPage><ProductDetail /></LazyPage>} />
@@ -978,6 +990,8 @@ export default function App() {
             <Route path="reports/stock-sold" element={<LazyPage><StockSold /></LazyPage>} />
 
             {/* Administration */}
+            <Route path="stores" element={<LazyPage><StoreManagement /></LazyPage>} />
+            <Route path="store-info" element={<LazyPage><MyStoreInfo /></LazyPage>} />
             <Route path="profile" element={<LazyPage><AdminProfile /></LazyPage>} />
             <Route path="users" element={<LazyPage><Users /></LazyPage>} />
             <Route path="users/telegram" element={<LazyPage><TelegramSubscribers /></LazyPage>} />
@@ -992,6 +1006,7 @@ export default function App() {
             <Route path="settings/print-logo" element={<LazyPage><Settings tab="printLogo" /></LazyPage>} />
             <Route path="settings/login-logo" element={<LazyPage><Settings tab="loginSplash" /></LazyPage>} />
             <Route path="settings/customer-footer" element={<LazyPage><Settings tab="customerFooter" /></LazyPage>} />
+            <Route path="settings/about" element={<LazyPage><AboutSettings /></LazyPage>} />
             <Route path="settings/login-splash" element={<Navigate to="/admin/settings/login-logo" replace />} />
           </Route>
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit, Trash2, Package, Image, Upload, X, Award, Star, Images, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -8,6 +9,8 @@ import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/comp
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { productsApi } from '@/api/products'
+import { storesApi } from '@/api/stores'
+import useAuthStore from '@/store/authStore'
 import { formatCurrency } from '@/utils/helpers'
 
 const IMAGE_MAX_SIZE = 1800
@@ -110,7 +113,17 @@ async function optimizeImage(file) {
   }
 }
 
-function ProductForm({ product, categories, brands, onSave, onClose, isSaving, isLoading }) {
+function ProductForm({ product, categories, brands, stores, onSave, onClose, isSaving, isLoading }) {
+  const currentUser = useAuthStore((state) => state.user)
+  const isStorePartner = ['store_owner', 'store_manager'].includes(currentUser?.role)
+  const assignedStore = Array.isArray(currentUser?.assigned_stores) && currentUser.assigned_stores.length > 0
+    ? currentUser.assigned_stores[0]
+    : null
+
+  const initialStoreId = product?.store
+    ? product.store
+    : (isStorePartner && assignedStore ? assignedStore.store_id : '')
+
   const fileInputRef = useRef(null)
   const [selectedFiles, setSelectedFiles] = useState([])
   const [previews, setPreviews] = useState([])
@@ -135,6 +148,7 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
     name: product?.name || '',
     category: product?.category || '',
     brand: product?.brand || '',
+    store: initialStoreId,
     description: product?.description || '',
     benefits: product?.benefits || '',
     ingredients: product?.ingredients || '',
@@ -181,7 +195,9 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
     <form onSubmit={handleSubmit} className="space-y-5 p-5 md:p-6">
       <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
         <h3 className="text-sm font-black text-gray-950">Product Information</h3>
-        <p className="mt-1 text-xs font-semibold text-gray-400">Fill the required fields to create the product.</p>
+        <p className="mt-1 text-xs font-semibold text-gray-400">
+          Fields marked with <span className="text-red-500 font-bold">*</span> are required.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -209,8 +225,52 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
             ))}
           </select>
         </div>
+        <div>
+          <label className="label flex items-center justify-between">
+            <span>Store / Partner</span>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+              isStorePartner && assignedStore
+                ? 'text-blue-700 bg-blue-50 border border-blue-200'
+                : 'text-purple-600 bg-purple-50'
+            }`}>
+              {isStorePartner && assignedStore ? 'Auto-Assigned' : 'Default: Website Store'}
+            </span>
+          </label>
+          {isStorePartner && assignedStore ? (
+            <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-2.5">
+              <span className="text-lg">🏪</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-gray-900 truncate">{assignedStore.store_name}</p>
+                <p className="text-xs text-blue-700 font-semibold">{assignedStore.store_code || assignedStore.store_slug || 'Partner Store'}</p>
+              </div>
+              <span className="text-[11px] font-medium text-gray-500 bg-white/80 px-2 py-0.5 rounded border border-blue-100">
+                Your Store
+              </span>
+            </div>
+          ) : (
+            <>
+              <select
+                className="select-field"
+                value={form.store || ''}
+                onChange={(e) => set('store', e.target.value)}
+              >
+                <option value="">🏢 Shadow Shop (Official Website Store)</option>
+                {(stores || []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    🏪 {s.name} ({s.code || s.slug || 'Partner'})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs font-semibold text-gray-400">
+                Leave blank if this product belongs to the main platform website store.
+              </p>
+            </>
+          )}
+        </div>
         <div className="md:col-span-2">
-          <label className="label">Product Name *</label>
+          <label className="label">
+            Product Name <span className="text-red-500 font-bold">*</span>
+          </label>
           <input className="input-field" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Full product name" />
           {errors.name && <p className="mt-1 text-xs font-semibold text-red-500">{errors.name}</p>}
         </div>
@@ -244,7 +304,9 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
           <input type="number" step="0.01" className="input-field" value={form.wholesale_price} onChange={(e) => set('wholesale_price', e.target.value)} />
         </div>
         <div>
-          <label className="label">Retail Price ($)</label>
+          <label className="label">
+            Retail Price ($) <span className="text-red-500 font-bold">*</span>
+          </label>
           <input type="number" step="0.01" className="input-field" value={form.retail_price} onChange={(e) => set('retail_price', e.target.value)} />
           {errors.retail_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.retail_price}</p>}
         </div>
@@ -323,11 +385,13 @@ function ProductForm({ product, categories, brands, onSave, onClose, isSaving, i
         )}
       </div>
 
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex gap-3 border-t border-gray-100 bg-white p-5 md:-mx-6 md:-mb-6 md:px-6">
-        <button type="submit" disabled={isSaving} className="btn-primary flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-60">
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center justify-end gap-3 border-t border-gray-100 bg-white p-5 md:-mx-6 md:-mb-6 md:px-6">
+        <button type="button" onClick={onClose} disabled={isSaving} className="btn-secondary min-w-[100px] justify-center disabled:opacity-60">
+          Cancel
+        </button>
+        <button type="submit" disabled={isSaving} className="btn-primary min-w-[150px] justify-center disabled:cursor-not-allowed disabled:opacity-60">
           {isSaving ? 'Saving...' : product ? 'Update Product' : 'Create Product'}
         </button>
-        <button type="button" onClick={onClose} disabled={isSaving} className="btn-secondary flex-1 justify-center disabled:opacity-60">Cancel</button>
       </div>
     </form>
   )
@@ -614,9 +678,13 @@ function ImageManagerModal({ product, onClose }) {
 
 export default function Products() {
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((state) => state.user)
+  const isStorePartner = ['store_owner', 'store_manager'].includes(currentUser?.role)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState(searchParams.get('store') || '')
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState(null)
   const [editLoading, setEditLoading] = useState(false)
@@ -627,17 +695,38 @@ export default function Products() {
   const pageSize = 20
 
   useEffect(() => {
+    const fromUrl = searchParams.get('store') || ''
+    if (fromUrl !== storeFilter) {
+      setStoreFilter(fromUrl)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 350)
     return () => clearTimeout(timer)
   }, [search])
 
   useEffect(() => {
     setPage(1)
-  }, [debouncedSearch, categoryFilter])
+  }, [debouncedSearch, categoryFilter, storeFilter])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products', debouncedSearch, categoryFilter, page],
-    queryFn: () => productsApi.products.list({ search: debouncedSearch, category: categoryFilter || undefined, page, page_size: pageSize }).then((r) => r.data),
+    queryKey: ['products', debouncedSearch, categoryFilter, storeFilter, page],
+    queryFn: () =>
+      productsApi.products
+        .list({
+          search: debouncedSearch,
+          category: categoryFilter || undefined,
+          store: storeFilter || undefined,
+          page,
+          page_size: pageSize,
+        })
+        .then((r) => r.data),
+  })
+
+  const { data: storesData } = useQuery({
+    queryKey: ['admin-stores-filter-list'],
+    queryFn: () => storesApi.admin.listStores({ page_size: 200 }).then((r) => r.data?.results || r.data || []),
   })
 
   const { data: categories } = useQuery({
@@ -739,6 +828,7 @@ export default function Products() {
     name: form.name.trim(),
     category: form.category ? Number(form.category) : null,
     brand: form.brand ? Number(form.brand) : null,
+    store: form.store ? Number(form.store) : null,
     min_order_qty: Number(form.min_order_qty) || 1,
     cost_price: Number(form.cost_price) || 0,
     wholesale_price: Number(form.wholesale_price) || 0,
@@ -774,6 +864,13 @@ export default function Products() {
   const products = data?.results || []
   const isSaving = createMutation.isPending || updateMutation.isPending
 
+  const openCreateModal = () => {
+    editRequestId.current += 1
+    setEditLoading(false)
+    setEditProduct(null)
+    setShowModal(true)
+  }
+
   return (
     <div className="animate-fade-in">
       <PageHeader
@@ -781,13 +878,8 @@ export default function Products() {
         subtitle={`${data?.count || 0} products`}
         breadcrumbs={[{ label: 'Products' }]}
         actions={
-          <button onClick={() => {
-            editRequestId.current += 1
-            setEditLoading(false)
-            setEditProduct(null)
-            setShowModal(true)
-          }} className="btn-primary">
-            <Plus size={16} /> Add New
+          <button onClick={openCreateModal} className="btn-primary">
+            <Plus size={16} /> Create Product
           </button>
         }
       />
@@ -799,6 +891,32 @@ export default function Products() {
               <option value="">All Categories</option>
               {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+
+            {!isStorePartner && (
+              <select
+                className="select-field w-48"
+                value={storeFilter}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setStoreFilter(val)
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev)
+                    if (val) next.set('store', val)
+                    else next.delete('store')
+                    return next
+                  })
+                }}
+              >
+                <option value="">All Stores</option>
+                <option value="direct">🏢 Official Website Store</option>
+                {Array.isArray(storesData) &&
+                  storesData.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      🏪 {s.name}
+                    </option>
+                  ))}
+              </select>
+            )}
           </SearchFilter>
         </div>
 
@@ -807,6 +925,7 @@ export default function Products() {
             <tr>
               <Th>No</Th>
               <Th>Product</Th>
+              <Th>Store</Th>
               <Th>Code</Th>
               <Th>Brand</Th>
               <Th>Category</Th>
@@ -819,7 +938,7 @@ export default function Products() {
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={11} />}
+            {isLoading && <LoadingRows cols={12} />}
             {!isLoading && products.map((p, index) => (
               <Tr key={p.id}>
                 <Td>
@@ -838,9 +957,32 @@ export default function Products() {
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 text-sm">{p.name}</p>
-                      <p className="text-xs text-gray-400">{p.unit}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        {p.unit && <span className="text-xs text-gray-400">{p.unit}</span>}
+                        {p.approval_status === 'pending' && (
+                          <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                            Pending Approval
+                          </span>
+                        )}
+                        {p.approval_status === 'rejected' && (
+                          <span className="text-[10px] font-black text-red-700 bg-red-100 px-1.5 py-0.5 rounded" title={p.rejection_reason}>
+                            Rejected
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                </Td>
+                <Td>
+                  {p.store_name ? (
+                    <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 whitespace-nowrap">
+                      🏪 {p.store_name}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 whitespace-nowrap">
+                      🏢 Official Store
+                    </span>
+                  )}
                 </Td>
                 <Td><span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{p.code}</span></Td>
                 <Td>
@@ -900,7 +1042,7 @@ export default function Products() {
               </Tr>
             ))}
             {!isLoading && products.length === 0 && (
-              <tr><td colSpan={11}><EmptyState message="No products found" icon={Package} /></td></tr>
+              <tr><td colSpan={12}><EmptyState message="No products found" icon={Package} /></td></tr>
             )}
           </Tbody>
         </Table>
@@ -922,6 +1064,7 @@ export default function Products() {
           product={editLoading ? null : editProduct}
           categories={categories}
           brands={brands}
+          stores={Array.isArray(storesData) ? storesData : (storesData?.results || [])}
           onSave={handleSave}
           onClose={() => setShowModal(false)}
           isSaving={isSaving}

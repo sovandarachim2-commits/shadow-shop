@@ -127,7 +127,7 @@ export default function RewardDetail() {
           <ChevronLeft size={16} />
           <span>{t('rewardsPage.backToRewards', 'Back to Rewards')}</span>
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 md:hidden">
           <HeaderActionIcons />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, memo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Heart, ShoppingCart, Zap, Plus, Minus, Check, ShoppingBag,
@@ -633,6 +633,31 @@ export default function ProductDetail() {
 
           {flashSaleMaxQty > 0 && (
             <p className="mt-2 text-sm font-medium text-pink-600 md:hidden">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</p>
+          )}
+
+          {product.store_name && (
+            <div className="mt-4 flex items-center justify-between rounded-2xl border border-gray-100 bg-gray-50/80 p-3 shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-700 font-bold text-sm uppercase shadow-xs">
+                  {product.store_name.slice(0, 2)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] text-gray-500 font-medium">Sold & Shipped by</p>
+                  <div className="flex items-center gap-1.5 font-bold text-gray-900 text-sm truncate">
+                    <span>{product.store_name}</span>
+                    {product.store_verified && (
+                      <ShieldCheck size={14} className="text-blue-500 shrink-0" title="Verified Store Partner" />
+                    )}
+                  </div>
+                </div>
+              </div>
+              <Link
+                to={`/store/${product.store_slug}`}
+                className="shrink-0 text-xs font-bold text-pink-600 hover:text-pink-700 px-3 py-1.5 rounded-xl bg-white border border-pink-100 shadow-xs transition hover:bg-pink-50"
+              >
+                Visit Store →
+              </Link>
+            </div>
           )}
 
           <div className="mt-4 grid grid-cols-4 overflow-hidden rounded-2xl bg-gray-50/80 py-3 shadow-sm ring-1 ring-gray-100">

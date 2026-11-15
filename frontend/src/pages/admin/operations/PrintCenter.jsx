@@ -317,6 +317,7 @@ function ReceiptSlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) {
       <div className="mt-1 grid grid-cols-[1fr_58px] items-start gap-2 text-[12px]">
         <div>
           <p><span>អ្នកលក់ </span>{order.seller_name || 'Shadow Shop'}</p>
+          <p><span>ហាង </span>{order.store_name || 'ហាងផ្លូវការ'}</p>
           <p><span>លេខបញ្ជា </span>{order.order_number}</p>
         </div>
         <PrintQr order={order} size={Math.min(printQrSize || 52, 52)} />
@@ -431,6 +432,7 @@ function DeliverySlip({ order, printLogoUrl, printLogoSize, printQrSize = 68 }) 
       <div className="mt-1 grid grid-cols-[1fr_58px] items-start gap-2 text-[12px]">
         <div>
           <p><span>អ្នកលក់ </span>{order.seller_name || 'Shadow Shop'}</p>
+          <p><span>ហាង </span>{order.store_name || 'ហាងផ្លូវការ'}</p>
           <p><span>លេខបញ្ជា </span>{order.order_number}</p>
         </div>
         <PrintQr order={order} size={Math.min(printQrSize || 52, 52)} />

@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
+from .about_settings import AboutPageSettingsView, AboutPageTranslateView
 
 router = DefaultRouter()
 router.register('users', views.UserViewSet, basename='users')
@@ -32,6 +33,7 @@ urlpatterns = [
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', views.LogoutView.as_view(), name='logout'),
     path('me/', views.MeView.as_view(), name='me'),
+    path('avatar-proxy/', views.AvatarProxyView.as_view(), name='avatar-proxy'),
     path('referral/check/', views.ReferralCodeCheckView.as_view(), name='referral-check'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
     path('set-initial-password/', views.SetInitialPasswordView.as_view(), name='set-initial-password'),
@@ -39,6 +41,8 @@ urlpatterns = [
     path('visits/track/', views.WebsiteVisitTrackView.as_view(), name='website-visit-track'),
     path('visits/', views.WebsiteVisitReportView.as_view(), name='website-visit-report'),
     path('site-settings/', views.SiteSettingsView.as_view(), name='site-settings'),
+    path('about-page/', AboutPageSettingsView.as_view(), name='about-page-settings'),
+    path('about-page/translate/', AboutPageTranslateView.as_view(), name='about-page-translate'),
     path('site-settings/app-icon-<int:size>.png', views.SiteSettingsAppIconView.as_view(), name='site-settings-app-icon'),
     path('site-settings/favicon/', views.SiteSettingsFaviconView.as_view(), name='site-settings-favicon'),
     path('site-settings/manifest/', views.SiteSettingsManifestView.as_view(), name='site-settings-manifest'),

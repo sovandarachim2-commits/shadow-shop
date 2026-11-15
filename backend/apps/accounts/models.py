@@ -7,6 +7,8 @@ class User(AbstractUser):
     ROLE_CHOICES = [
         ('super_admin', 'Super Admin'),
         ('admin', 'Admin'),
+        ('store_owner', 'Store Owner'),
+        ('store_manager', 'Store Manager'),
         ('seller', 'Seller'),
         ('cashier', 'Cashier'),
         ('warehouse', 'Warehouse Staff'),
@@ -70,6 +72,7 @@ class Permission(models.Model):
         ('marketing_announcements', 'Marketing - Announcement Bar'),
         ('marketing_posters', 'Marketing - Poster Management'),
         ('marketing_videos', 'Marketing - Video Highlights'),
+        ('stores', 'Stores & Partners'),
         ('inventory', 'Inventory'),
         ('inventory_movements', 'Inventory Movements'),
         ('inventory_storage', 'Inventory Storage'),
@@ -91,6 +94,7 @@ class Permission(models.Model):
         ('settings_print_logo', 'Print Logo'),
         ('settings_login_logo', 'Login Logo'),
         ('settings_customer_footer', 'Customer Footer'),
+        ('settings_about', 'About Us'),
         ('print', 'Print'),
         ('print_history', 'Print History'),
         ('scanner', 'Scanner'),
@@ -312,6 +316,8 @@ class SiteSettings(models.Model):
     delivery_fees = models.JSONField(default=dict, blank=True)
     payment_methods = models.JSONField(default=dict, blank=True)
     footer_menus = models.JSONField(default=dict, blank=True)
+    about_page = models.JSONField(default=dict, blank=True)
+    about_hero_image = models.ImageField(upload_to='site/about/', null=True, blank=True)
 
     class Meta:
         db_table = 'site_settings'

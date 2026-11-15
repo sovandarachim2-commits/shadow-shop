@@ -73,11 +73,17 @@ class StockMovement(models.Model):
 
 class Warehouse(models.Model):
     name = models.CharField(max_length=200)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=50, unique=True)
     address = models.TextField(blank=True)
     manager = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL, null=True, blank=True
+    )
+    store = models.ForeignKey(
+        'stores.Store',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='warehouses'
     )
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
@@ -93,7 +99,10 @@ class Warehouse(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if self.is_default:
-            Warehouse.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+            if self.store_id:
+                Warehouse.objects.filter(store_id=self.store_id).exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+            else:
+                Warehouse.objects.filter(store__isnull=True).exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
 
 
 class WarehouseStock(models.Model):

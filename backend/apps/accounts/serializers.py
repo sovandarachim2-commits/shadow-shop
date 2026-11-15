@@ -3,6 +3,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from .models import Permission, Role, RolePermission, ActivityLog, Address, SiteSettings
 from utils.phone import validate_cambodia_phone
+from .about_page import validate_about_page
 import random
 import string
 import re
@@ -94,7 +95,10 @@ class UserSerializer(serializers.ModelSerializer):
     referrals_count = serializers.SerializerMethodField()
     successful_referrals_count = serializers.SerializerMethodField()
     referred_by_code = serializers.SerializerMethodField()
+    assigned_stores = serializers.SerializerMethodField()
+    store_id = serializers.SerializerMethodField()
     role = serializers.CharField(required=False)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     friend_referral_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -109,9 +113,9 @@ class UserSerializer(serializers.ModelSerializer):
             'referred_by_code',
             'avatar', 'avatar_url', 'is_active', 'created_at',
             'has_usable_password', 'has_address', 'friend_referral_code',
-            'referred_by',
+            'referred_by', 'assigned_stores', 'store_id', 'password',
         ]
-        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'telegram_auth_date', 'google_id', 'google_picture_url', 'created_at', 'referral_code', 'referrals_count', 'referred_by']
+        read_only_fields = ['id', 'telegram_id', 'telegram_username', 'telegram_photo_url', 'telegram_auth_date', 'google_id', 'google_picture_url', 'created_at', 'referral_code', 'referrals_count', 'referred_by', 'assigned_stores', 'store_id']
 
     def to_representation(self, instance):
         # Ensure referral code exists for existing users
@@ -127,12 +131,40 @@ class UserSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
 
+    def get_assigned_stores(self, obj):
+        try:
+            return [
+                {
+                    'store_id': m.store_id,
+                    'store_name': m.store.name,
+                    'store_slug': m.store.slug,
+                    'store_code': m.store.code,
+                    'role': m.role,
+                }
+                for m in obj.store_memberships.filter(is_active=True).select_related('store')
+            ]
+        except Exception:
+            return []
+
+    def get_store_id(self, obj):
+        try:
+            return obj.store_memberships.filter(is_active=True).values_list('store_id', flat=True).first()
+        except Exception:
+            return None
+
     def get_avatar_url(self, obj):
         if obj.avatar:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.avatar.url)
-        return None
+            try:
+                url = obj.avatar.url
+                if url.startswith(('http://', 'https://')):
+                    return url
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(url)
+                return url
+            except Exception:
+                pass
+        return obj.telegram_photo_url or obj.google_picture_url or None
 
     def get_has_usable_password(self, obj):
         return obj.has_usable_password()
@@ -191,6 +223,7 @@ class UserSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
         friend_referral_code = validated_data.pop('friend_referral_code', None)
         referrer = None
         if friend_referral_code is not None and friend_referral_code.strip():
@@ -205,6 +238,9 @@ class UserSerializer(serializers.ModelSerializer):
             validated_data['referred_by'] = referrer
 
         updated_instance = super().update(instance, validated_data)
+        if password:
+            updated_instance.set_password(password)
+            updated_instance.save(update_fields=['password'])
         if referrer:
             try:
                 from apps.orders.rewards import award_referral_bonus
@@ -217,7 +253,7 @@ class UserSerializer(serializers.ModelSerializer):
 class UserCreateSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, allow_blank=False)
-    confirm_password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     role = serializers.CharField(required=False)
 
     class Meta:
@@ -227,8 +263,19 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'password', 'confirm_password', 'role', 'phone',
         ]
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'confirm_password' not in data:
+            if 'confirmPassword' in data:
+                data['confirm_password'] = data['confirmPassword']
+            elif 'password' in data:
+                data['confirm_password'] = data['password']
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
-        if attrs['password'] != attrs.pop('confirm_password'):
+        pw = attrs.get('password')
+        confirm_pw = attrs.pop('confirm_password', None)
+        if pw and confirm_pw and pw != confirm_pw:
             raise serializers.ValidationError({'confirm_password': 'Passwords do not match.'})
         return attrs
 
@@ -323,10 +370,12 @@ class PermissionSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    user_count = serializers.IntegerField(read_only=True, default=0)
+
     class Meta:
         model = Role
-        fields = ['id', 'name', 'display_name', 'is_system']
-        read_only_fields = ['is_system']
+        fields = ['id', 'name', 'display_name', 'is_system', 'user_count']
+        read_only_fields = ['is_system', 'user_count']
 
     def validate_name(self, value):
         value = str(value or '').strip().lower()
@@ -395,6 +444,7 @@ class AddressSerializer(serializers.ModelSerializer):
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):
+    about_hero_image_url = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
     favicon_url = serializers.SerializerMethodField()
     login_logo_url = serializers.SerializerMethodField()
@@ -412,7 +462,8 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
                   'logo_url', 'favicon_url', 'login_logo_url', 'splash_logo_url', 'print_logo_url',
                   'flash_card_background_url', 'rewards_card_background_url',
                   'splash_enabled', 'splash_duration_ms', 'print_logo_size', 'print_qr_size', 'currency', 'timezone',
-                  'delivery_fees', 'payment_methods', 'footer_menus']
+                  'delivery_fees', 'payment_methods', 'footer_menus', 'about_page',
+                  'about_hero_image_url']
         extra_kwargs = {'logo': {'write_only': True, 'required': False},
                         'favicon': {'write_only': True, 'required': False},
                         'login_logo': {'write_only': True, 'required': False},
@@ -462,6 +513,12 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
 
     def get_rewards_card_background_url(self, obj):
         return self._image_url(obj.rewards_card_background)
+
+    def get_about_hero_image_url(self, obj):
+        return self._image_url(obj.about_hero_image)
+
+    def validate_about_page(self, value):
+        return validate_about_page(value)
 
     def update(self, instance, validated_data):
         request = self.context.get('request')

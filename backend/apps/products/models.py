@@ -114,6 +114,36 @@ class Product(models.Model):
         ('pack', 'Pack'),
     ]
 
+    APPROVAL_CHOICES = [
+        ('approved', 'Approved'),
+        ('pending', 'Pending Review'),
+        ('rejected', 'Rejected'),
+    ]
+
+    store = models.ForeignKey(
+        'stores.Store',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='products',
+        help_text="Store owner who uploaded this product. Null if platform product."
+    )
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_CHOICES,
+        default='approved',
+        help_text="Products uploaded by sellers start as pending until Super Admin approves."
+    )
+    rejection_reason = models.TextField(blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_products'
+    )
+
     code = models.CharField(max_length=50, unique=True)
     barcode = models.CharField(max_length=100, blank=True)
     name = models.CharField(max_length=300)
@@ -155,6 +185,8 @@ class Product(models.Model):
             models.Index(fields=['is_active', 'is_featured']),
             models.Index(fields=['is_active', 'category']),
             models.Index(fields=['is_active', 'brand']),
+            models.Index(fields=['approval_status']),
+            models.Index(fields=['store']),
         ]
 
     def __str__(self):

@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { ArrowLeft, Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, Menu, Bell, ChevronDown, Settings, LogOut, UserCircle, Store, Globe } from 'lucide-react'
 import useAuthStore from '@/store/authStore'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useAdminPageHeader } from './AdminPageHeaderContext'
@@ -62,6 +62,7 @@ const ADMIN_ROUTE_TITLES = [
   ['/admin/settings/print-logo', 'Print Settings'],
   ['/admin/settings/login-logo', 'Login Logo'],
   ['/admin/settings/customer-footer', 'Customer Footer'],
+  ['/admin/settings/about', 'About Us'],
   ['/admin/settings', 'Settings'],
   ['/admin', 'Dashboard'],
 ]
@@ -78,14 +79,27 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [confirm, ConfirmDialog] = useConfirm()
+  const queryClient = useQueryClient()
   const { pageHeader } = useAdminPageHeader() || {}
   const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['role-perms'] })
+    }
+    window.addEventListener('role-permissions-updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('role-permissions-updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [queryClient])
 
   const { data: myPerms = [] } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
     enabled: !!user?.role && !isFullAccess,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
   })
 
   const initial = (user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()
@@ -95,8 +109,15 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
 
   const canViewModule = (module) => isFullAccess ||
     myPerms.some((rp) => rp.permission_detail?.module === module && rp.permission_detail?.action === 'view')
-  const canVisitStore = canViewModule('storefront')
+  const canVisitStore = isFullAccess || ['seller', 'store_owner', 'store_manager'].includes(user?.role) || canViewModule('storefront')
   const canOpenSettings = canViewModule('settings')
+
+  const firstStore = Array.isArray(user?.assigned_stores) && user.assigned_stores.length > 0
+    ? user.assigned_stores[0]
+    : null
+  const storeVisitUrl = firstStore?.store_slug
+    ? `/store/${firstStore.store_slug}`
+    : '/'
 
   const handleLogout = async () => {
     const ok = await confirm('Logout?', 'Are you sure you want to sign out of your account?', {
@@ -159,32 +180,56 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
         {showUserMenu && (
           <>
             <button className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-            <div className="absolute right-3 top-14 z-50 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+            <div className="absolute right-3 top-14 z-50 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
               <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-3">
-                <p className="text-sm font-bold text-white">{user?.first_name || user?.username}</p>
-                <p className="text-xs capitalize text-white/70">{user?.role?.replace('_', ' ')}</p>
+                <p className="text-sm font-bold text-white truncate">{user?.first_name || user?.username}</p>
+                <p className="text-xs capitalize text-white/80">{user?.role?.replace('_', ' ')}</p>
               </div>
-              <div className="py-1">
-                <Link to="/admin/profile" onClick={() => setShowUserMenu(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                  <UserCircle size={15} className="text-gray-400" /> My Profile
-                </Link>
-                {canOpenSettings && (
-                  <Link to="/admin/settings" onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                    <Settings size={15} className="text-gray-400" /> Settings
+              <div className="p-2 space-y-1">
+                {firstStore && (
+                  <Link
+                    to={storeVisitUrl}
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-purple-50 px-3 py-2.5 text-xs font-bold text-purple-700 transition hover:bg-purple-100 border border-purple-100"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Store size={15} className="text-purple-600" />
+                      Visit My Store
+                    </span>
+                    <span className="text-[10px] font-semibold text-purple-600 max-w-[90px] truncate">
+                      {firstStore.store_name}
+                    </span>
                   </Link>
                 )}
-                {canVisitStore && (
-                  <Link to="/" onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-purple-600 hover:bg-purple-50">
-                    <Store size={15} className="text-purple-400" /> Visit Store
+                <Link
+                  to="/"
+                  onClick={() => setShowUserMenu(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  <Globe size={16} className="text-gray-400" /> Customer Website
+                </Link>
+                <Link
+                  to="/admin/profile"
+                  onClick={() => setShowUserMenu(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  <UserCircle size={16} className="text-gray-400" /> My Profile
+                </Link>
+                {canOpenSettings && (
+                  <Link
+                    to="/admin/settings"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                  >
+                    <Settings size={16} className="text-gray-400" /> Settings
                   </Link>
                 )}
                 <hr className="my-1 border-gray-100" />
-                <button onClick={handleLogout}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">
-                  <LogOut size={15} /> Logout
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50 rounded-lg"
+                >
+                  <LogOut size={16} /> Logout
                 </button>
               </div>
             </div>
@@ -237,28 +282,58 @@ export default function Header({ onMenuToggle, onMobileMenuToggle, sidebarCollap
             {showUserMenu && (
               <>
                 <button className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-soft">
-                  <Link to="/admin/profile" onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                    <UserCircle size={16} /> My Profile
-                  </Link>
-                  {canOpenSettings && (
-                    <Link to="/admin/settings" onClick={() => setShowUserMenu(false)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
-                      <Settings size={16} /> Settings
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+                    <p className="text-sm font-bold text-gray-900 truncate">{user?.first_name || user?.username}</p>
+                    <p className="text-xs text-gray-500 capitalize">{user?.role?.replace('_', ' ')}</p>
+                  </div>
+                  <div className="p-2 space-y-1">
+                    {firstStore && (
+                      <Link
+                        to={storeVisitUrl}
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-purple-50 px-3 py-2.5 text-xs font-bold text-purple-700 transition hover:bg-purple-100 border border-purple-100"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Store size={15} className="text-purple-600" />
+                          Visit My Store
+                        </span>
+                        <span className="text-[10px] font-semibold text-purple-600 max-w-[90px] truncate">
+                          {firstStore.store_name}
+                        </span>
+                      </Link>
+                    )}
+                    <Link
+                      to="/"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                    >
+                      <Globe size={16} className="text-gray-400" /> Customer Website
                     </Link>
-                  )}
-                  {canVisitStore && (
-                    <Link to="/" onClick={() => setShowUserMenu(false)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-purple-600 hover:bg-purple-50">
-                      <Store size={16} className="text-purple-500" /> Visit Store
+                    <Link
+                      to="/admin/profile"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                    >
+                      <UserCircle size={16} className="text-gray-400" /> My Profile
                     </Link>
-                  )}
-                  <hr className="my-1 border-gray-100" />
-                  <button onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 w-full">
-                    <LogOut size={16} /> Logout
-                  </button>
+                    {canOpenSettings && (
+                      <Link
+                        to="/admin/settings"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                      >
+                        <Settings size={16} className="text-gray-400" /> Settings
+                      </Link>
+                    )}
+                    <hr className="my-1 border-gray-100" />
+                    <button
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg"
+                    >
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </div>
                 </div>
               </>
             )}

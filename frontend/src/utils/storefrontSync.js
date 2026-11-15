@@ -5,6 +5,9 @@ import { productsApi } from '@/api/products'
 const STOREFRONT_CHANNEL = 'shadow-shop-storefront'
 
 const STOREFRONT_QUERY_ROOTS = [
+  ['public-stores'],
+  ['public-store-detail'],
+  ['public-store-products'],
   ['home-feed'],
   ['home-flash-sale-fallback'],
   ['products-list'],

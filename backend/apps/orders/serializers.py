@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
+from django.utils import timezone
 import string
 from .models import (
     Customer, Order, OrderItem, OrderStatusHistory, Wishlist, CartItem, PrepareRecord, OutRecord,
@@ -46,6 +47,37 @@ def first_order_item_image(order, request=None):
     if first.product_set_id:
         return resolve_product_set_image_url(first.product_set, request) or None
     return resolve_product_image_url(first.product, request) or None
+
+
+def resolve_order_store_info(order):
+    """
+    Returns (store_id, store_name, store_code) for an order:
+    1. From order items' product.store (or product_set items' product.store)
+    2. Otherwise strictly Official Store -> (None, None, None)
+    """
+    items = getattr(order, '_prefetched_objects_cache', {}).get('items')
+    if items is None:
+        items = list(order.items.all())
+
+    for item in items:
+        prod = getattr(item, 'product', None)
+        if prod:
+            if getattr(prod, 'store_id', None):
+                store = getattr(prod, 'store', None)
+                if store:
+                    return store.id, store.name, getattr(store, 'code', '')
+        elif getattr(item, 'product_set', None):
+            pset = item.product_set
+            pset_items = getattr(pset, 'items', None)
+            if hasattr(pset_items, 'all'):
+                for set_item in pset_items.all():
+                    set_prod = getattr(set_item, 'product', None)
+                    if set_prod and getattr(set_prod, 'store_id', None):
+                        store = getattr(set_prod, 'store', None)
+                        if store:
+                            return store.id, store.name, getattr(store, 'code', '')
+
+    return None, None, None
 
 
 def display_seller_name(order):
@@ -260,6 +292,9 @@ class OrderListSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
     seller_name = serializers.SerializerMethodField()
+    store_id = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+    store_code = serializers.SerializerMethodField()
     items_count = serializers.SerializerMethodField()
     preview_image = serializers.SerializerMethodField()
     preview_name = serializers.SerializerMethodField()
@@ -278,7 +313,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_number', 'customer', 'customer_name', 'customer_phone',
-            'seller', 'seller_name', 'status', 'payment_status', 'payment_method',
+            'seller', 'seller_name', 'store_id', 'store_name', 'store_code',
+            'status', 'payment_status', 'payment_method',
             'grand_total', 'items_count', 'preview_image', 'preview_name',
             'items_preview', 'is_draft', 'printed_at', 'printed_by_name', 'created_at',
             'updated_at', 'status_changed_by_name', 'status_changed_at',
@@ -289,6 +325,18 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_seller_name(self, obj):
         return display_seller_name(obj)
+
+    def get_store_id(self, obj):
+        sid, _, _ = resolve_order_store_info(obj)
+        return sid
+
+    def get_store_name(self, obj):
+        _, sname, _ = resolve_order_store_info(obj)
+        return sname
+
+    def get_store_code(self, obj):
+        _, _, scode = resolve_order_store_info(obj)
+        return scode
 
     def get_items_count(self, obj):
         items = obj.items.all()
@@ -398,6 +446,9 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     status_history = OrderStatusHistorySerializer(many=True, read_only=True)
     seller_name = serializers.SerializerMethodField()
+    store_id = serializers.SerializerMethodField()
+    store_name = serializers.SerializerMethodField()
+    store_code = serializers.SerializerMethodField()
     profit = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
     payment_at = serializers.SerializerMethodField()
@@ -409,6 +460,18 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
     def get_seller_name(self, obj):
         return display_seller_name(obj)
+
+    def get_store_id(self, obj):
+        sid, _, _ = resolve_order_store_info(obj)
+        return sid
+
+    def get_store_name(self, obj):
+        _, sname, _ = resolve_order_store_info(obj)
+        return sname
+
+    def get_store_code(self, obj):
+        _, _, scode = resolve_order_store_info(obj)
+        return scode
 
     def get_transaction_reference(self, obj):
         revenue = getattr(obj, 'revenue', None)
@@ -574,9 +637,14 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         request = self.context.get('request')
+        order = self.instance
+        if order and order.status == Order.STATUS_NEW and not order.printed_at:
+            new_status = attrs.get('status')
+            if new_status and new_status not in (Order.STATUS_NEW, Order.STATUS_CONFIRMED):
+                raise serializers.ValidationError({'status': 'Order status cannot be edited until the order is printed.'})
+
         if request and getattr(request.user, 'role', None) == 'seller':
             errors = {}
-            order = self.instance
             if attrs.get('transaction_reference'):
                 errors['transaction_reference'] = 'Sellers cannot record payment transaction references.'
             if order and (order.printed_at or order.status == Order.STATUS_PRINTED):
@@ -646,7 +714,7 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
             for field, value in validated_data.items():
                 setattr(order, field, value)
             if (
-                request.user.role == 'seller' and
+                request.user.role in ['seller', 'store_owner', 'store_manager'] and
                 (order.seller_id is None or getattr(order.seller, 'role', None) == 'customer') and
                 order.payment_method == 'contact_sales'
             ):
@@ -694,6 +762,12 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
 
                 if stock_already_deducted:
                     self._adjust_stock(order, old_totals, new_totals, request.user)
+
+            if order.status == Order.STATUS_PRINTED and not order.printed_at:
+                from apps.inventory.services import deduct_stock_for_order
+                deduct_stock_for_order(order, request.user)
+                order.printed_at = timezone.now()
+                order.printed_by = request.user
 
             order.save()
 

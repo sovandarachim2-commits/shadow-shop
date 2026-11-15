@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
 import { ordersApi } from '@/api/orders'
 import { cn } from '@/utils/helpers'
+import { generateReferralPosterDataUrl } from '@/utils/referralCard'
 import { useReferralCodeCheck } from '@/hooks/useReferralCodeCheck'
 import ReferralCodeFeedback from '@/components/customer/ReferralCodeFeedback'
 import { cameraErrorMessage, startQrScanner, stopQrScanner } from '@/utils/qrScanner'
@@ -86,7 +87,8 @@ function getReferralErrorMessage(error, fallback) {
 }
 
 export default function Referral() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isKhmer = i18n?.language === 'km'
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [copiedCode, setCopiedCode] = useState(false)
@@ -95,6 +97,7 @@ export default function Referral() {
   const [showHowItWorks, setShowHowItWorks] = useState(false)
   const [showMyQrModal, setShowMyQrModal] = useState(false)
   const [myQrDataUrl, setMyQrDataUrl] = useState('')
+  const [isDownloadingCard, setIsDownloadingCard] = useState(false)
   const [showScannerModal, setShowScannerModal] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   const [scannerError, setScannerError] = useState('')
@@ -127,15 +130,21 @@ export default function Referral() {
   })
 
   const referralCode = user?.referral_code || ''
-  const referralLink = `${window.location.origin}/login?mode=register&ref=${referralCode}`
+  const siteOrigin = (
+    import.meta.env?.VITE_SITE_URL ||
+    import.meta.env?.VITE_FRONTEND_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
+  ).replace(/\/+$/, '')
+  const referralLink = `${siteOrigin}/login?mode=register&ref=${referralCode}`
   const referralBonus = summary?.earning_rules?.referral_bonus || 100
 
   // Generate My QR Code data URL
   useEffect(() => {
     if (referralLink && referralCode) {
       QRCode.toDataURL(referralLink, {
-        width: 360,
+        width: 480,
         margin: 2,
+        errorCorrectionLevel: 'Q',
         color: {
           dark: '#0f172a',
           light: '#ffffff',
@@ -239,6 +248,34 @@ export default function Referral() {
     setTimeout(() => setCopiedLink(false), 2000)
   }
 
+  const handleDownloadCard = async () => {
+    if (!referralCode) return
+    setIsDownloadingCard(true)
+    try {
+      const displayName = user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'Shadow Shop Member'
+      // Use local avatar proxy to ensure zero CORS issues when drawing onto the download canvas
+      const avatarProxyUrl = user?.id ? `/api/auth/avatar-proxy/?user_id=${user.id}` : null
+      const rawAvatarUrl = user?.avatar_url || user?.avatar || null
+      const posterUrl = await generateReferralPosterDataUrl({
+        qrDataUrl: myQrDataUrl,
+        referralCode,
+        referralLink,
+        userName: displayName,
+        userHandle: user?.username || referralCode,
+        userAvatar: avatarProxyUrl,
+        userAvatarFallback: rawAvatarUrl,
+        storeName: 'Shadow Shop',
+      })
+      downloadDataUrl(posterUrl || myQrDataUrl, `shadow-shop-invite-${referralCode}.png`)
+      toast.success(t('rewardsPage.referral.downloadSuccess') || 'Downloaded invitation card!')
+    } catch (err) {
+      console.error('Failed to download referral card', err)
+      if (myQrDataUrl) downloadDataUrl(myQrDataUrl, `shadow-shop-invite-${referralCode}.png`)
+    } finally {
+      setIsDownloadingCard(false)
+    }
+  }
+
   const handleSaveFriendCode = (event) => {
     event.preventDefault()
     const code = friendReferralCode.trim().toUpperCase()
@@ -267,8 +304,8 @@ export default function Referral() {
 
   return (
     <div className="min-h-screen max-w-full overflow-x-hidden bg-[#f6f7f9] pb-[calc(11rem+env(safe-area-inset-bottom))] md:pb-10">
-      <div className="w-full min-w-0 max-w-full px-4 pb-8 md:px-6 md:pt-6">
-        <div className="-mx-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:px-0 md:pb-0 md:pt-0">
+      <div className="mx-auto w-full max-w-[1500px] min-w-0 px-4 pb-8 md:px-6 md:pt-6">
+        <div className="-mx-4 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0">
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -580,17 +617,20 @@ export default function Referral() {
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={!myQrDataUrl}
-                onClick={() => {
-                  if (myQrDataUrl) {
-                    downloadDataUrl(myQrDataUrl, `shadow-shop-invite-${referralCode}.png`)
-                    toast.success(t('rewardsPage.referral.downloadSuccess') || 'Downloaded QR Code!')
-                  }
-                }}
+                disabled={!myQrDataUrl || isDownloadingCard}
+                onClick={handleDownloadCard}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white transition hover:bg-slate-800 active:scale-95 disabled:opacity-50"
               >
-                <Download size={15} />
-                <span>{t('rewardsPage.referral.downloadQr')}</span>
+                {isDownloadingCard ? (
+                  <Loader2 size={15} className="animate-spin text-pink-400" />
+                ) : (
+                  <Download size={15} />
+                )}
+                <span>
+                  {isDownloadingCard
+                    ? (t('common.downloading') || 'Preparing...')
+                    : (t('rewardsPage.referral.downloadQr') || 'Download Card')}
+                </span>
               </button>
 
               <button

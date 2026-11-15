@@ -8,11 +8,30 @@ from django.db.models import Count, Sum
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 import datetime
-from utils.permissions import IsAdminOrSuperAdmin
+from rest_framework.permissions import BasePermission
+from utils.permissions import IsAdminOrSuperAdmin, user_has_module_permission
+
+
+class CanViewSalesReport(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.role in ['super_admin', 'admin', 'store_owner', 'store_manager']:
+            return True
+        return user_has_module_permission(request.user, 'reports', 'view')
+
+
+class CanViewStockSoldReport(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.role in ['super_admin', 'admin', 'store_owner', 'store_manager']:
+            return True
+        return user_has_module_permission(request.user, 'reports_inventory', 'view')
 
 
 class SalesReportView(generics.GenericAPIView):
-    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    permission_classes = [IsAuthenticated, CanViewSalesReport]
 
     def get(self, request):
         from apps.orders.models import Order, OrderStatusHistory
@@ -54,12 +73,29 @@ class SalesReportView(generics.GenericAPIView):
         ).prefetch_related(
             'items',
             'items__product',
+            'items__product_set',
+            'items__product_set__items__product',
             Prefetch(
                 'status_history',
                 queryset=OrderStatusHistory.objects.select_related('changed_by').order_by('created_at'),
                 to_attr='ordered_status_history',
             ),
         )
+
+        user = request.user
+        is_store_partner = user.is_authenticated and user.role in ['store_owner', 'store_manager']
+        user_store_ids = []
+        if is_store_partner:
+            from apps.stores.models import get_user_store_ids
+            user_store_ids = get_user_store_ids(user)
+            if user_store_ids:
+                qs = qs.filter(
+                    Q(items__product__store_id__in=user_store_ids) |
+                    Q(items__product_set__items__product__store_id__in=user_store_ids)
+                )
+            else:
+                qs = qs.none()
+
         current_tz = timezone.get_current_timezone()
         parsed_from = parse_date(date_from) if date_from else None
         parsed_to = parse_date(date_to) if date_to else None
@@ -123,6 +159,12 @@ class SalesReportView(generics.GenericAPIView):
 
         def matching_items(order):
             items = list(order.items.all())
+            if is_store_partner and user_store_ids:
+                items = [
+                    item for item in items
+                    if (item.product_id and getattr(item.product, 'store_id', None) in user_store_ids) or
+                       (item.product_set_id and item.product_set and item.product_set.items.filter(product__store_id__in=user_store_ids).exists())
+                ]
             if brand_ids:
                 items = [item for item in items if item.product and str(item.product.brand_id or '') in brand_ids]
             if category_ids:
@@ -137,11 +179,13 @@ class SalesReportView(generics.GenericAPIView):
         order_rows = []
 
         for order in qs.order_by('created_at'):
-            period = period_for(order)
             items = matching_items(order)
+            if is_store_partner and not items:
+                continue
+            period = period_for(order)
             amount = (
                 sum((item.total_price for item in items), Decimal('0'))
-                if item_scoped else order.grand_total
+                if (item_scoped or is_store_partner) else order.grand_total
             )
             items_count = sum(item.quantity for item in items)
             grouped[period]['total_orders'] += 1
@@ -285,7 +329,7 @@ class InventoryReportView(generics.GenericAPIView):
 
 
 class StockSoldDetailView(generics.GenericAPIView):
-    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    permission_classes = [IsAuthenticated, CanViewStockSoldReport]
 
     def get(self, request):
         from datetime import datetime, time
@@ -293,6 +337,13 @@ class StockSoldDetailView(generics.GenericAPIView):
         from django.utils import timezone
         from django.utils.dateparse import parse_date
         from apps.orders.models import Order, OrderItem
+
+        user = request.user
+        is_store_partner = user.is_authenticated and user.role in ['store_owner', 'store_manager']
+        user_store_ids = []
+        if is_store_partner:
+            from apps.stores.models import get_user_store_ids
+            user_store_ids = get_user_store_ids(user)
 
         search = (request.query_params.get('search') or '').strip()
         date_from = parse_date(request.query_params.get('date_from') or '')
@@ -305,6 +356,15 @@ class StockSoldDetailView(generics.GenericAPIView):
         orders = Order.objects.filter(is_draft=False).filter(
             Exists(OrderItem.objects.filter(order_id=OuterRef('pk')))
         )
+        if is_store_partner:
+            if user_store_ids:
+                orders = orders.filter(
+                    Q(items__product__store_id__in=user_store_ids) |
+                    Q(items__product_set__items__product__store_id__in=user_store_ids)
+                ).distinct()
+            else:
+                orders = orders.none()
+
         if date_from:
             start = timezone.make_aware(datetime.combine(date_from, time.min))
             orders = orders.filter(created_at__gte=start)
@@ -356,11 +416,30 @@ class StockSoldDetailView(generics.GenericAPIView):
             total_qty = 0
             total_amount = Decimal('0')
             for item in order.items.all():
+                if is_store_partner:
+                    item_store_id = getattr(item.product, 'store_id', None)
+                    if not item_store_id and item.product_set:
+                        has_store_prod = item.product_set.items.filter(product__store_id__in=user_store_ids).exists()
+                        if not has_store_prod:
+                            continue
+                    elif item_store_id not in user_store_ids:
+                        continue
+
                 line_amount = item.total_price or Decimal('0')
-                total_amount += line_amount
-                components = list(item.product_set.items.all()) if expand_sets and item.product_set_id and item.product_set else []
+                components = (
+                    list(item.product_set.items.all())
+                    if expand_sets and item.product_set_id and item.product_set
+                    else []
+                )
                 if components:
-                    parts = [(component, item.quantity * component.quantity) for component in components]
+                    parts = [
+                        (component, item.quantity * component.quantity)
+                        for component in components
+                        if not is_store_partner or component.product.store_id in user_store_ids
+                    ]
+                    if not parts:
+                        continue
+                    total_amount += line_amount
                     weight_total = sum(qty for _, qty in parts) or 1
                     allocated = Decimal('0')
                     for index, (component, qty) in enumerate(parts):
@@ -372,6 +451,8 @@ class StockSoldDetailView(generics.GenericAPIView):
                         amounts[key] = amounts.get(key, Decimal('0')) + share
                         total_qty += qty
                     continue
+
+                total_amount += line_amount
                 if item.product_id:
                     key = f'p-{item.product_id}'
                 elif item.product_set_id:
@@ -384,7 +465,7 @@ class StockSoldDetailView(generics.GenericAPIView):
                 total_qty += item.quantity
             if total_qty <= 0:
                 continue
-            fee = order.delivery_fee or Decimal('0')
+            fee = Decimal('0') if is_store_partner else (order.delivery_fee or Decimal('0'))
             delivery_shares = {}
             amount_total = sum(amounts.values(), Decimal('0'))
             keys = list(quantities.keys())
@@ -411,9 +492,9 @@ class StockSoldDetailView(generics.GenericAPIView):
                 'delivery_shares': delivery_shares,
                 'total_qty': total_qty,
                 'total_amount': total_amount,
-                'sale_discount': order.discount,
-                'delivery_fee': order.delivery_fee,
-                'grand_total': order.grand_total,
+                'sale_discount': order.discount if not is_store_partner else Decimal('0'),
+                'delivery_fee': fee,
+                'grand_total': total_amount + fee if is_store_partner else order.grand_total,
             })
 
         product_columns = [

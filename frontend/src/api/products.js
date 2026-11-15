@@ -38,6 +38,8 @@ export const productsApi = {
     reorderImages: (id, imageIds) => client.post(`/products/items/${id}/reorder_images/`, { image_ids: imageIds }),
     deleteImage: (id, imageId) => client.delete(`/products/items/${id}/delete_image/${imageId}/`),
     searchByCode: (code) => client.get('/products/items/search_by_code/', { params: { code } }),
+    approve: (id) => client.post(`/products/items/${id}/approve/`),
+    reject: (id, reason) => client.post(`/products/items/${id}/reject/`, { reason }),
   },
   reviews: {
     list: (params) => client.get('/products/reviews/', { params }),

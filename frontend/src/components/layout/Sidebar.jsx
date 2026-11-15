@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/utils/helpers'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/api/auth'
@@ -26,11 +26,25 @@ const navItems = [
     module: 'dashboard',
   },
   {
+    label: 'Stores & Partners',
+    path: '/admin/stores',
+    icon: Store,
+    module: 'stores',
+    adminOnly: true,
+  },
+  {
+    label: 'Store Info',
+    path: '/admin/store-info',
+    icon: Store,
+    module: 'stores',
+    storePartnerOnly: true,
+  },
+  {
     label: 'Sales',
     icon: ShoppingCart,
     children: [
       { label: 'Orders',     path: '/admin/orders',     icon: ClipboardList, module: 'orders' },
-      { label: 'Customers',  path: '/admin/customers',  icon: Users,         module: 'customers' },
+      { label: 'Customers',  path: '/admin/customers',  icon: Users,         module: 'customers', adminOnly: true },
     ],
   },
   {
@@ -48,6 +62,7 @@ const navItems = [
   {
     label: 'Marketing',
     icon: Megaphone,
+    adminOnly: true,
     children: [
       { label: 'Brand Promotions', path: '/admin/marketing/brand-promotions', icon: Gift, module: 'marketing_promotions' },
       { label: 'Announcement Bar', path: '/admin/marketing/announcements', icon: Megaphone, module: 'marketing_announcements' },
@@ -80,6 +95,7 @@ const navItems = [
   {
     label: 'Scanner Config',
     icon: UserCheck,
+    adminOnly: true,
     children: [
       { label: 'Delivery By Config', path: '/admin/customer-scanner/delivery-config', icon: Settings, module: 'scanner_delivery_config' },
     ],
@@ -87,6 +103,7 @@ const navItems = [
   {
     label: 'Finance',
     icon: DollarSign,
+    adminOnly: true,
     children: [
       { label: 'Revenue',      path: '/admin/finance/revenue',   icon: TrendingUp, module: 'finance' },
       { label: 'Expenses',     path: '/admin/finance/expenses',  icon: Receipt,    module: 'finance_expenses' },
@@ -97,6 +114,7 @@ const navItems = [
   {
     label: 'Rewards',
     icon: Gift,
+    adminOnly: true,
     children: [
       { label: 'Earning & Tiers', path: '/admin/rewards/settings', icon: Sliders, module: 'rewards_settings' },
       { label: 'Overview', path: '/admin/rewards', icon: LayoutDashboard, module: 'rewards' },
@@ -112,9 +130,9 @@ const navItems = [
     icon: BarChart3,
     children: [
       { label: 'Sales Report',     path: '/admin/reports/sales',     icon: BarChart3, module: 'reports' },
-      { label: 'Website Visits',   path: '/admin/reports/visits',    icon: Globe,     module: 'reports' },
-      { label: 'Product Report',   path: '/admin/reports/products',  icon: Package,   module: 'reports_products' },
-      { label: 'Inventory Report', path: '/admin/reports/inventory', icon: Warehouse, module: 'reports_inventory' },
+      { label: 'Website Visits',   path: '/admin/reports/visits',    icon: Globe,     module: 'reports', adminOnly: true },
+      { label: 'Product Report',   path: '/admin/reports/products',  icon: Package,   module: 'reports_products', adminOnly: true },
+      { label: 'Inventory Report', path: '/admin/reports/inventory', icon: Warehouse, module: 'reports_inventory', adminOnly: true },
       { label: 'Stock Sold Report',      path: '/admin/reports/stock-sold', icon: PackageCheck, module: 'reports_inventory' },
     ],
   },
@@ -123,17 +141,19 @@ const navItems = [
     icon: Shield,
     children: [
       { label: 'Users',              path: '/admin/users',          icon: Users,    module: 'users' },
-      { label: 'Telegram Alerts',    path: '/admin/users/telegram', icon: Send,     module: 'users' },
-      { label: 'Roles & Permissions',path: '/admin/roles',          icon: Shield,   module: 'users_roles' },
-      { label: 'Activity Logs',      path: '/admin/activity', icon: Activity, module: 'users_activity' },
+      { label: 'Telegram Alerts',    path: '/admin/users/telegram', icon: Send,     module: 'users', adminOnly: true },
+      { label: 'Roles & Permissions',path: '/admin/roles',          icon: Shield,   module: 'users_roles', adminOnly: true },
+      { label: 'Activity Logs',      path: '/admin/activity', icon: Activity, module: 'users_activity', adminOnly: true },
     ],
   },
   {
     label: 'Settings',
     icon: Settings,
+    adminOnly: true,
     children: [
       { label: 'General Settings',  path: '/admin/settings',          icon: Sliders,       module: 'settings' },
-      { label: 'Telegram Settings', path: '/admin/settings/telegram', icon: MessageCircle, module: 'settings_telegram' },
+      { label: 'About Us', path: '/admin/settings/about', icon: FileText, module: 'settings_about' },
+      { label: 'Telegram Settings', path: '/admin/settings/telegram', icon: MessageCircle, module: 'settings_telegram', adminOnly: true },
       { label: 'Delivery Settings', path: '/admin/settings/delivery', icon: MapPin,        module: 'settings_delivery' },
       { label: 'Payment Methods',   path: '/admin/settings/payment',  icon: CreditCard,    module: 'settings_payment' },
       { label: 'Print Logo',        path: '/admin/settings/print-logo', icon: Image,       module: 'settings_print_logo' },
@@ -223,18 +243,32 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
   const [confirm, ConfirmDialog] = useConfirm()
   const isFullAccess = ['super_admin', 'admin'].includes(user?.role)
 
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['role-perms'] })
+    }
+    window.addEventListener('role-permissions-updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('role-permissions-updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [queryClient])
+
   const { data: siteSettings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => authApi.siteSettings.get().then((r) => r.data),
     staleTime: 5 * 60 * 1000,
   })
 
-  // Fetch this user's granted permissions
+  // Fetch this user's granted permissions immediately with zero delay
   const { data: myPerms = [], isLoading: permsLoading, isError: permsError } = useQuery({
     queryKey: ['role-perms', user?.role],
     queryFn: () => authApi.rolePermissions(user.role).then((r) => r.data),
     enabled: !!user?.role && !isFullAccess,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
   })
 
   const logoUrl = siteSettings?.logo_url || null
@@ -258,8 +292,10 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
     if (ok) await logout()
   }
 
+  const isStorePartner = ['store_owner', 'store_manager'].includes(user?.role)
+
   // Show all items while loading, on error (fail-open), or for full-access roles
-  const visibleItems = permsLoading || permsError || isFullAccess
+  const rawItems = permsLoading || permsError || isFullAccess
     ? navItems
     : navItems.map((item) => {
         if (item.children) {
@@ -268,6 +304,27 @@ export default function Sidebar({ collapsed, onToggle, onNavigate, className }) 
         }
         return canView(item.module) ? item : null
       }).filter(Boolean)
+
+  const visibleItems = rawItems
+    .map((item) => {
+      if (item.adminOnly && isStorePartner) return null
+      if (item.storePartnerOnly && !isStorePartner) return null
+      if (item.children) {
+        const filteredChildren = item.children.filter((c) => {
+          if (c.adminOnly && isStorePartner) return false
+          if (c.storePartnerOnly && !isStorePartner) return false
+          return true
+        }).map((c) => {
+          if (c.module === 'users' && isStorePartner) {
+            return { ...c, label: 'Store Staff' }
+          }
+          return c
+        })
+        return filteredChildren.length > 0 ? { ...item, children: filteredChildren } : null
+      }
+      return item
+    })
+    .filter(Boolean)
 
   return (
     <aside

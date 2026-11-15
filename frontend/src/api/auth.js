@@ -39,6 +39,7 @@ export const authApi = {
     delete: (id) => client.delete(`/auth/users/${id}/`),
     toggleActive: (id) => client.post(`/auth/users/${id}/toggle_active/`),
     resetPassword: (id, data) => client.post(`/auth/users/${id}/reset_password/`, data),
+    storeCounts: () => client.get('/auth/users/store_counts/'),
   },
   activityLogs: (params) => client.get('/auth/activity-logs/', { params }),
   permissions: { list: () => client.get('/auth/permissions/') },
@@ -62,6 +63,13 @@ export const authApi = {
   siteSettings: {
     get: () => client.get('/auth/site-settings/'),
     update: (data) => client.patch('/auth/site-settings/', data, {
+      headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    }),
+  },
+  aboutPage: {
+    get: () => client.get('/auth/about-page/'),
+    translate: (data) => client.post('/auth/about-page/translate/', data),
+    update: (data) => client.patch('/auth/about-page/', data, {
       headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
     }),
   },

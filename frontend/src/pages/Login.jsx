@@ -792,28 +792,51 @@ export default function Login() {
 
                     <div className="space-y-5">
                     <div>
-                      <label className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.emailOrUsername')}</label>
-                      <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                      <label htmlFor="login-username" className="mb-2 block text-xs font-black uppercase tracking-wider text-[#475569] cursor-pointer">{t('auth.emailOrUsername')}</label>
+                      <div
+                        onClick={() => document.getElementById('login-username')?.focus()}
+                        className="flex h-14 cursor-text items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5"
+                      >
                         <Mail size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
-                        <input type="text" value={lf.username} onChange={(e) => sl('username', e.target.value)}
+                        <input
+                          type="text"
+                          id="login-username"
+                          name="username"
+                          autoComplete="username"
+                          value={lf.username}
+                          onChange={(e) => sl('username', e.target.value)}
                           placeholder={t('auth.emailOrUsernamePlaceholder')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
+                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]"
+                        />
                       </div>
                     </div>
 
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-black uppercase tracking-wider text-[#475569]">{t('auth.password')}</label>
+                        <label htmlFor="login-password" className="block text-xs font-black uppercase tracking-wider text-[#475569] cursor-pointer">{t('auth.password')}</label>
                         <button type="button" onClick={() => navigate('/forgot-password')} className="text-xs font-bold text-[#EC4D97] transition hover:text-[#E53888]">
                           {t('auth.forgotPassword')}
                         </button>
                       </div>
-                      <div className="flex h-14 items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5">
+                      <div
+                        onClick={(e) => {
+                          if (!e.target.closest('button')) {
+                            document.getElementById('login-password')?.focus()
+                          }
+                        }}
+                        className="flex h-14 cursor-text items-center gap-3 rounded-[20px] border border-gray-200 bg-gray-50/30 px-5 transition-all duration-300 focus-within:border-[#EC4D97]/50 focus-within:bg-white focus-within:ring-4 focus-within:ring-[#EC4D97]/5"
+                      >
                         <Lock size={18} className="shrink-0 text-[#64748B]" strokeWidth={2} />
-                        <input type={showPass ? 'text' : 'password'} value={lf.password}
+                        <input
+                          type={showPass ? 'text' : 'password'}
+                          id="login-password"
+                          name="password"
+                          autoComplete="current-password"
+                          value={lf.password}
                           onChange={(e) => sl('password', e.target.value)}
                           placeholder={t('auth.passwordPlaceholder')}
-                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]" />
+                          className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#334155] outline-none placeholder:font-medium placeholder:text-[#94A3B8]"
+                        />
                         <EyeToggle show={showPass} toggle={() => setShowPass((s) => !s)} />
                       </div>
                     </div>

@@ -386,25 +386,46 @@ export default function NewOrder({ embedded = false, onCreated }) {
                       </button>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => updateQty(item.product.id, item.quantity - 1)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100">
-                          <Minus size={12} />
-                        </button>
-                        <input type="number" value={item.quantity} min={1}
-                          onChange={(e) => updateQty(item.product.id, parseInt(e.target.value) || 1)}
-                          className="w-14 rounded-lg border border-gray-200 bg-white py-1.5 text-center text-sm font-semibold" />
-                        <button onClick={() => updateQty(item.product.id, item.quantity + 1)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100">
-                          <Plus size={12} />
-                        </button>
+                    <div className="mt-3 flex flex-wrap items-end justify-end gap-3">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">Qty</label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => updateQty(item.product.id, item.quantity - 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            min={1}
+                            onChange={(e) => updateQty(item.product.id, parseInt(e.target.value) || 1)}
+                            className="w-14 rounded-lg border border-gray-200 bg-white py-1.5 text-center text-sm font-semibold focus:border-purple-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQty(item.product.id, item.quantity + 1)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-right text-[11px] font-bold uppercase tracking-wider text-gray-500">Unit Price ($)</label>
+                        <input
+                          type="number"
+                          value={item.unit_price}
+                          step="0.01"
+                          onChange={(e) => updatePrice(item.product.id, e.target.value)}
+                          className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-right text-sm font-semibold focus:border-purple-500 focus:outline-none"
+                        />
                       </div>
                       <div className="text-right">
-                        <input type="number" value={item.unit_price} step="0.01"
-                          onChange={(e) => updatePrice(item.product.id, e.target.value)}
-                          className="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-right text-sm font-semibold" />
-                        <p className="mt-0.5 text-xs text-gray-400">{formatCurrency(item.unit_price * item.quantity)}</p>
+                        <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-500">Total</label>
+                        <p className="flex h-8 items-center justify-end text-sm font-bold text-gray-900">{formatCurrency(item.unit_price * item.quantity)}</p>
                       </div>
                     </div>
                   </div>
@@ -424,17 +445,25 @@ export default function NewOrder({ embedded = false, onCreated }) {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Delivery Fee</span>
                 <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                  <input type="number" value={delivery_fee} onChange={(e) => setDeliveryFee(e.target.value)}
-                    className="w-24 text-right pl-5 pr-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50" />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    value={delivery_fee}
+                    onChange={(e) => setDeliveryFee(e.target.value)}
+                    className="w-24 text-left pl-6 pr-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Discount</span>
                 <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                  <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)}
-                    className="w-24 text-right pl-5 pr-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50" />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    className="w-24 text-left pl-6 pr-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                 </div>
               </div>
             </div>
@@ -493,16 +522,16 @@ export default function NewOrder({ embedded = false, onCreated }) {
             </div>
 
             {/* Actions */}
-            <div className="pt-4 space-y-2">
+            <div className="pt-4 flex items-center gap-3">
               <button onClick={() => handleSubmit(false)}
                 disabled={createOrderMutation.isPending}
-                className="btn-primary w-full justify-center py-3">
+                className="btn-primary flex-1 justify-center py-3">
                 <Send size={16} />
                 {createOrderMutation.isPending ? 'Creating...' : 'Create Order'}
               </button>
               <button onClick={() => handleSubmit(true)}
                 disabled={createOrderMutation.isPending}
-                className="btn-secondary w-full justify-center py-3">
+                className="btn-secondary flex-1 justify-center py-3">
                 <Save size={16} /> Save as Draft
               </button>
             </div>

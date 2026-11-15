@@ -123,6 +123,8 @@ class WarehouseSerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
     total_quantity = serializers.SerializerMethodField()
     stock_levels = serializers.SerializerMethodField()
+    store_name = serializers.ReadOnlyField(source='store.name')
+    store_code = serializers.ReadOnlyField(source='store.code')
 
     class Meta:
         model = Warehouse

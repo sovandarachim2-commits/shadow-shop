@@ -5,6 +5,7 @@ from apps.accounts.models import Permission, Role, RolePermission
 DEFAULT_ROLES = [
     ('super_admin', 'Super Admin'),
     ('admin', 'Admin'),
+    ('store_owner', 'Store Owner'),
     ('seller', 'Seller'),
     ('cashier', 'Cashier'),
     ('warehouse', 'Warehouse Staff'),
@@ -16,6 +17,24 @@ DEFAULT_ROLES = [
 DEFAULTS = {
     'super_admin': '__all__',
     'admin':       '__all__',
+    'store_owner': [
+        ('dashboard', 'view'),
+        ('orders',    'view'), ('orders',    'create'), ('orders',    'edit'), ('orders',    'delete'), ('orders',    'print'),
+        ('products',  'view'), ('products',  'create'), ('products',  'edit'), ('products',  'delete'),
+        ('inventory', 'view'), ('inventory', 'create'), ('inventory', 'edit'), ('inventory', 'delete'), ('inventory', 'print'),
+        ('inventory_movements', 'view'), ('inventory_movements', 'create'), ('inventory_movements', 'edit'), ('inventory_movements', 'print'),
+        ('inventory_storage', 'view'), ('inventory_storage', 'create'), ('inventory_storage', 'edit'), ('inventory_storage', 'delete'),
+        ('inventory_transfers', 'view'), ('inventory_transfers', 'create'), ('inventory_transfers', 'edit'), ('inventory_transfers', 'print'),
+        ('print',     'view'), ('print',     'print'),
+        ('print_history', 'view'), ('print_history', 'print'),
+        ('scanner',   'view'), ('scanner',   'create'), ('scanner',   'edit'), ('scanner',   'delete'), ('scanner',   'print'),
+        ('delivery',  'view'), ('delivery',  'create'), ('delivery',  'edit'), ('delivery',  'print'),
+        ('stores',    'view'), ('stores',    'edit'),
+        ('storefront', 'view'), ('storefront', 'create'), ('storefront', 'edit'),
+        ('users',     'view'), ('users',     'create'), ('users',     'edit'), ('users',     'delete'),
+        ('reports',   'view'),
+        ('reports_inventory', 'view'),
+    ],
     'seller': [
         ('dashboard', 'view'),
         ('orders',    'view'), ('orders',    'create'), ('orders',    'edit'), ('orders',    'print'),

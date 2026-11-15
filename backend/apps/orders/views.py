@@ -150,6 +150,7 @@ class OrderFilter(filters.FilterSet):
     date_from = filters.DateFilter(field_name='created_at', lookup_expr='date__gte')
     date_to = filters.DateFilter(field_name='created_at', lookup_expr='date__lte')
     delivery_by = filters.CharFilter(method='filter_delivery_by')
+    store = filters.CharFilter(method='filter_store')
 
     def filter_status(self, queryset, name, value):
         statuses = [item.strip() for item in str(value or '').split(',') if item.strip()]
@@ -170,9 +171,38 @@ class OrderFilter(filters.FilterSet):
             Q(out_record_delivery_by__iexact=clean)
         )
 
+    def filter_store(self, queryset, name, value):
+        val = str(value or '').strip()
+        if not val or val.lower() in ('all', ''):
+            return queryset
+        if val.lower() in ('direct', 'official', 'null', '0'):
+            partner_order_ids = Order.objects.filter(
+                Q(items__product__store__isnull=False) |
+                Q(items__product_set__items__product__store__isnull=False)
+            ).values_list('id', flat=True)
+            return queryset.exclude(id__in=partner_order_ids)
+        if val.isdigit():
+            sid = int(val)
+            return queryset.filter(
+                Q(items__product__store_id=sid) |
+                Q(items__product_set__items__product__store_id=sid)
+            ).distinct()
+        from apps.stores.models import Store
+        matched_store_ids = list(Store.objects.filter(
+            Q(name__icontains=val) |
+            Q(code__iexact=val) |
+            Q(slug__iexact=val)
+        ).values_list('id', flat=True))
+        if matched_store_ids:
+            return queryset.filter(
+                Q(items__product__store_id__in=matched_store_ids) |
+                Q(items__product_set__items__product__store_id__in=matched_store_ids)
+            ).distinct()
+        return queryset.none()
+
     class Meta:
         model = Order
-        fields = ['status', 'payment_status', 'payment_method', 'seller', 'is_draft', 'delivery_by']
+        fields = ['status', 'payment_status', 'payment_method', 'seller', 'is_draft', 'delivery_by', 'store']
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -180,9 +210,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         'customer', 'seller', 'bakong_payment', 'aba_payment', 'printed_by'
     ).prefetch_related(
         'items__product__images',
+        'items__product__store',
         'items__product_set',
         'items__product_set__images',
         'items',
+        'seller__store_memberships__store',
         'status_history__changed_by',
     ).annotate(
         out_record_delivery_by=Subquery(
@@ -194,12 +226,12 @@ class OrderViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = OrderFilter
     search_fields = ['order_number', 'customer__name', 'customer__phone']
-    ordering_fields = ['created_at', 'grand_total']
+    ordering_fields = ['created_at', 'grand_total', 'printed_at']
 
     def get_permissions(self):
         if self.action == 'checkout_status':
             return [AllowAny()]
-        if self.action in ('list', 'retrieve', 'checkout'):
+        if self.action in ('list', 'retrieve', 'checkout', 'statistics', 'store_counts'):
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsStaff()]
 
@@ -218,14 +250,25 @@ class OrderViewSet(viewsets.ModelViewSet):
                 return qs.filter(customer__user=user)
             except Exception:
                 return qs.none()
+        if user.is_authenticated and user.role in ['store_owner', 'store_manager']:
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if user_store_ids:
+                return qs.filter(
+                    Q(items__product__store_id__in=user_store_ids) |
+                    Q(items__product_set__items__product__store_id__in=user_store_ids)
+                ).distinct()
+            return qs.none()
+
         if user.role == 'seller':
             qs = qs.filter(
                 Q(seller=user) |
-                Q(
-                    payment_method='contact_sales',
-                    status=Order.STATUS_NEW,
-                ) & (Q(seller__isnull=True) | Q(seller__role='customer'))
-            )
+                (
+                    Q(
+                        payment_method='contact_sales',
+                        status=Order.STATUS_NEW,
+                    ) & (Q(seller__isnull=True) | Q(seller__role='customer'))
+                )
+            ).distinct()
         elif user.role == 'customer':
             try:
                 qs = qs.filter(customer__user=user)
@@ -256,14 +299,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         valid_statuses = [s[0] for s in Order.STATUS_CHOICES]
         if new_status not in valid_statuses:
             return Response({'detail': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
-        if request.user.role == 'seller' and (order.printed_at or order.status == Order.STATUS_PRINTED):
+        if request.user.role == 'seller' and new_status not in (SELLER_ALLOWED_ORDER_STATUSES | {Order.STATUS_CANCELLED}):
             return Response(
-                {'detail': 'Sellers cannot update printed orders.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if request.user.role == 'seller' and new_status not in SELLER_ALLOWED_ORDER_STATUSES:
-            return Response(
-                {'detail': 'Sellers can only set orders to New or Confirmed.'},
+                {'detail': 'Sellers can only set orders to New, Confirmed, or Cancelled.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -349,6 +387,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                 object_id=order.pk,
                 object_type='Order',
             )
+        if new_status in ['returned', 'cancelled']:
+            from apps.inventory.services import restore_stock_for_order
+            restore_stock_for_order(order, request.user, reason=note)
+
         if new_status == Order.STATUS_COMPLETED and order.payment_status == 'paid':
             award_points_for_paid_order(order)
 
@@ -448,6 +490,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                 {'detail': 'Sellers cannot mark orders as paid.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        if request.user.role in ['store_owner', 'store_manager']:
+            from apps.stores.models import get_user_store_ids
+            user_store_ids = set(get_user_store_ids(request.user))
+            order_store_id = order.store_id or order.items.filter(product__store__isnull=False).values_list('product__store_id', flat=True).first()
+            if not order_store_id or order_store_id not in user_store_ids:
+                return Response(
+                    {'detail': 'You can only mark orders from your store as paid.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         payment_method = request.data.get('payment_method', 'cash')
         transaction_reference = request.data.get('transaction_reference', '') or ''
         if not isinstance(transaction_reference, str):
@@ -619,7 +670,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         except (TypeError, ValueError):
             page_size = 100
 
-        base = Order.objects.filter(is_draft=False, printed_at__isnull=False)
+        base = self.get_queryset().filter(is_draft=False, printed_at__isnull=False)
         if search:
             matched_keys = (
                 base.filter(
@@ -731,13 +782,84 @@ class OrderViewSet(viewsets.ModelViewSet):
             data[s] = OrderListSerializer(orders, many=True, context={'request': request}).data
         return Response(data)
 
+    @action(detail=False, methods=['get'], url_path='store_counts')
+    def store_counts(self, request):
+        user = request.user
+        try:
+            from apps.stores.models import Store
+            if user.is_authenticated and user.role in ('store_owner', 'store_manager'):
+                user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+                total = Order.objects.filter(
+                    Q(items__product__store_id__in=user_store_ids) |
+                    Q(items__product_set__items__product__store_id__in=user_store_ids)
+                ).distinct().count()
+                return Response({
+                    'total': total,
+                    'official': 0,
+                    'stores': {sid: total for sid in user_store_ids},
+                })
+
+            total = Order.objects.count()
+            partner_order_ids = set(Order.objects.filter(
+                Q(items__product__store__isnull=False) |
+                Q(items__product_set__items__product__store__isnull=False)
+            ).values_list('id', flat=True))
+            official_count = total - len(partner_order_ids)
+
+            store_counts = {}
+            for s in Store.objects.all():
+                cnt = Order.objects.filter(
+                    Q(items__product__store_id=s.id) |
+                    Q(items__product_set__items__product__store_id=s.id)
+                ).distinct().count()
+                store_counts[s.id] = cnt
+
+            return Response({
+                'total': total,
+                'official': official_count,
+                'stores': store_counts,
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        from django.db.models import Sum, Count, Q
+        qs = self.filter_queryset(self.get_queryset())
+
+        stats = qs.aggregate(
+            total_orders=Count('id', distinct=True),
+            total_revenue=Sum('grand_total'),
+            pending_orders=Count('id', filter=Q(status__in=['new', 'confirmed']), distinct=True),
+            completed_orders=Count('id', filter=Q(status='completed'), distinct=True),
+            unpaid_orders=Count('id', filter=Q(payment_status='unpaid'), distinct=True),
+            unprinted_orders=Count('id', filter=Q(printed_at__isnull=True) & ~Q(status__in=['printed', 'cancelled', 'returned']), distinct=True),
+        )
+        return Response({
+            'total_orders': stats['total_orders'] or 0,
+            'total_revenue': float(stats['total_revenue'] or 0),
+            'pending_orders': stats['pending_orders'] or 0,
+            'completed_orders': stats['completed_orders'] or 0,
+            'unpaid_orders': stats['unpaid_orders'] or 0,
+            'unprinted_orders': stats['unprinted_orders'] or 0,
+        })
+
     @action(detail=False, methods=['get'])
     def operation_summary(self, request):
         today = timezone.now().date()
         qs = self.get_queryset()
-        manual_prepare_qs = PrepareRecord.objects.filter(set_type='not_set', created_at__date=today)
-        set_prepare_qs = PrepareRecord.objects.filter(set_type='set', created_at__date=today)
-        manual_out_qs = OutRecord.objects.filter(created_at__date=today)
+        user = request.user
+        if user.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            store_order_numbers = Order.objects.filter(items__product__store_id__in=user_store_ids).values('order_number')
+            prepare_filter = Q(code__in=store_order_numbers) | Q(created_by__store_memberships__store_id__in=user_store_ids, created_by__store_memberships__is_active=True)
+            manual_prepare_qs = PrepareRecord.objects.filter(prepare_filter, set_type='not_set', created_at__date=today)
+            set_prepare_qs = PrepareRecord.objects.filter(prepare_filter, set_type='set', created_at__date=today)
+            manual_out_qs = OutRecord.objects.filter(prepare_filter, created_at__date=today)
+        else:
+            manual_prepare_qs = PrepareRecord.objects.filter(set_type='not_set', created_at__date=today)
+            set_prepare_qs = PrepareRecord.objects.filter(set_type='set', created_at__date=today)
+            manual_out_qs = OutRecord.objects.filter(created_at__date=today)
         prepared_order_ids = OrderStatusHistory.objects.filter(
             status=Order.STATUS_PREPARING,
             created_at__date=today,
@@ -823,9 +945,40 @@ class PrepareRecordViewSet(viewsets.ModelViewSet):
     search_fields = ['code', 'phone', 'created_by__username', 'created_by__first_name', 'created_by__last_name']
     ordering_fields = ['created_at', 'amount']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+        if user.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if not user_store_ids:
+                return qs.none()
+            store_order_numbers = Order.objects.filter(
+                items__product__store_id__in=user_store_ids
+            ).values_list('order_number', flat=True)
+            other_order_numbers = Order.objects.exclude(
+                items__product__store_id__in=user_store_ids
+            ).values_list('order_number', flat=True)
+
+            return qs.filter(
+                Q(code__in=store_order_numbers) |
+                (
+                    Q(created_by__store_memberships__store_id__in=user_store_ids, created_by__store_memberships__is_active=True)
+                    & ~Q(code__in=other_order_numbers)
+                )
+            ).distinct()
+        return qs
+
     def perform_create(self, serializer):
         code = self.request.data.get('code', '').strip()
+        user = self.request.user
         if code:
+            if user.role in ('store_owner', 'store_manager'):
+                user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+                order = Order.objects.filter(order_number=code).first()
+                if order and not order.items.filter(product__store_id__in=user_store_ids).exists():
+                    raise ValidationError({'code': 'This order does not belong to your store.'})
             if PrepareRecord.objects.filter(code=code).exists():
                 raise ValidationError({'code': 'This QR already saved in Prepare Package.'})
             if Order.objects.filter(order_number=code, status__in=[Order.STATUS_PREPARING, Order.STATUS_SHIPPED]).exists():
@@ -860,10 +1013,44 @@ class OutRecordViewSet(viewsets.ModelViewSet):
     search_fields = ['code', 'phone', 'delivery_by', 'created_by__username', 'created_by__first_name', 'created_by__last_name']
     ordering_fields = ['created_at']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+        if user.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if not user_store_ids:
+                return qs.none()
+            store_order_numbers = Order.objects.filter(
+                items__product__store_id__in=user_store_ids
+            ).values_list('order_number', flat=True)
+            other_order_numbers = Order.objects.exclude(
+                items__product__store_id__in=user_store_ids
+            ).values_list('order_number', flat=True)
+
+            return qs.filter(
+                Q(code__in=store_order_numbers) |
+                (
+                    (
+                        Q(created_by__store_memberships__store_id__in=user_store_ids, created_by__store_memberships__is_active=True) |
+                        Q(prepare_record__created_by__store_memberships__store_id__in=user_store_ids, prepare_record__created_by__store_memberships__is_active=True)
+                    )
+                    & ~Q(code__in=other_order_numbers)
+                )
+            ).distinct()
+        return qs
+
     def perform_create(self, serializer):
         code = self.request.data.get('code', '').strip()
         if not code:
             raise ValidationError({'code': 'Enter Code.'})
+        user = self.request.user
+        if user.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            order = Order.objects.filter(order_number=code).first()
+            if order and not order.items.filter(product__store_id__in=user_store_ids).exists():
+                raise ValidationError({'code': 'This order does not belong to your store.'})
         if OutRecord.objects.filter(code=code).exists() or Order.objects.filter(order_number=code, status=Order.STATUS_SHIPPED).exists():
             raise ValidationError({'code': 'This QR already saved in Out Package.'})
         prepare_record = PrepareRecord.objects.filter(code=code).first()

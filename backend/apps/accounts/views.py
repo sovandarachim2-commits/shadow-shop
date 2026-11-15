@@ -12,7 +12,7 @@ from django.core.mail import BadHeaderError
 from django.core.files.storage import default_storage
 from django.utils.text import get_valid_filename
 from django.db import transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.contrib.auth.hashers import make_password
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -1354,6 +1354,48 @@ class MeView(generics.RetrieveUpdateAPIView):
         return self.request.user
 
 
+class AvatarProxyView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        user_id = request.query_params.get('user_id')
+        user = None
+        if user_id:
+            user = User.objects.filter(id=user_id).first()
+        elif request.user and request.user.is_authenticated:
+            user = request.user
+
+        if not user or not user.avatar:
+            return HttpResponse(status=404)
+
+        cache_key = f"avatar_proxy_{user.id}"
+        cached = cache.get(cache_key)
+        if cached:
+            content, content_type = cached
+            response = HttpResponse(content, content_type=content_type)
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Cache-Control'] = 'public, max-age=86400'
+            return response
+
+        try:
+            avatar_url = user.avatar.url
+            if avatar_url.startswith(('http://', 'https://')):
+                res = requests.get(avatar_url, timeout=12)
+                content_type = res.headers.get('content-type', 'image/png')
+                content = res.content
+            else:
+                content = user.avatar.read()
+                content_type = 'image/png'
+
+            cache.set(cache_key, (content, content_type), timeout=86400)
+            response = HttpResponse(content, content_type=content_type)
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Cache-Control'] = 'public, max-age=86400'
+            return response
+        except Exception:
+            return HttpResponse(status=500)
+
+
 class ChangePasswordView(generics.UpdateAPIView):
     serializer_class = ChangePasswordSerializer
     permission_classes = [IsAuthenticated]
@@ -1388,7 +1430,8 @@ class SetInitialPasswordView(generics.GenericAPIView):
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-created_at')
-    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_module = 'users'
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['role', 'is_active']
     search_fields = ['username', 'first_name', 'last_name', 'email', 'phone', 'telegram_username', 'telegram_id']
@@ -1398,10 +1441,36 @@ class UserViewSet(viewsets.ModelViewSet):
         qs = User.objects.annotate(
             annotated_has_address=Exists(Address.objects.filter(user_id=OuterRef('pk')))
         ).order_by('-created_at')
-        tg_connected = self.request.query_params.get('telegram_connected')
+        user = self.request.user
+        params = getattr(self.request, 'query_params', None)
+        if params is None:
+            params = getattr(self.request, 'GET', {})
+
+        if user.is_authenticated and user.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if user_store_ids:
+                qs = qs.filter(
+                    store_memberships__store_id__in=user_store_ids,
+                    store_memberships__is_active=True
+                ).exclude(role='customer').distinct()
+            else:
+                qs = qs.none()
+        else:
+            store_filter = params.get('store')
+            if store_filter:
+                clean_store = str(store_filter).strip()
+                if clean_store in ('direct', 'official', 'null', '0'):
+                    qs = qs.filter(
+                        Q(store_memberships__isnull=True) |
+                        Q(store_memberships__is_active=False)
+                    ).exclude(store_memberships__is_active=True).distinct()
+                elif clean_store.isdigit():
+                    qs = qs.filter(store_memberships__store_id=int(clean_store), store_memberships__is_active=True).distinct()
+
+        tg_connected = params.get('telegram_connected')
         if str(tg_connected).lower() in ('1', 'true', 'yes'):
             qs = qs.filter(telegram_id__isnull=False).exclude(telegram_id='')
-        tg_enabled = self.request.query_params.get('telegram_notifications_enabled')
+        tg_enabled = params.get('telegram_notifications_enabled')
         if str(tg_enabled).lower() in ('1', 'true', 'yes'):
             qs = qs.filter(telegram_notifications_enabled=True)
         elif str(tg_enabled).lower() in ('0', 'false', 'no'):
@@ -1415,6 +1484,23 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = serializer.save()
+        creator = self.request.user
+        store_id = self.request.data.get('store') or self.request.data.get('store_id')
+        if not store_id and creator.is_authenticated and creator.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(creator.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if user_store_ids:
+                store_id = user_store_ids[0]
+        if store_id:
+            try:
+                from apps.stores.models import StoreMembership
+                StoreMembership.objects.filter(user=user).exclude(store_id=int(store_id)).update(is_active=False)
+                StoreMembership.objects.update_or_create(
+                    user=user,
+                    store_id=int(store_id),
+                    defaults={'is_active': True, 'role': user.role}
+                )
+            except Exception:
+                pass
         from .activity import log_activity
         log_activity(
             user=self.request.user,
@@ -1428,6 +1514,18 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         user = serializer.save()
+        if 'store' in self.request.data or 'store_id' in self.request.data:
+            store_id = self.request.data.get('store') or self.request.data.get('store_id')
+            from apps.stores.models import StoreMembership
+            if store_id and str(store_id).strip() not in ('', '0', 'null', 'None'):
+                StoreMembership.objects.filter(user=user).exclude(store_id=int(store_id)).update(is_active=False)
+                StoreMembership.objects.update_or_create(
+                    user=user,
+                    store_id=int(store_id),
+                    defaults={'is_active': True, 'role': user.role}
+                )
+            else:
+                StoreMembership.objects.filter(user=user).update(is_active=False)
         from .activity import log_activity
         log_activity(
             user=self.request.user,
@@ -1442,6 +1540,8 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
         user = self.get_object()
+        if user.role == 'store_owner':
+            return Response({'detail': 'Store Owner account status cannot be deactivated.'}, status=status.HTTP_400_BAD_REQUEST)
         user.is_active = not user.is_active
         user.save()
         from .activity import log_activity
@@ -1476,6 +1576,45 @@ class UserViewSet(viewsets.ModelViewSet):
         )
         return Response({'detail': 'Password reset successfully.'})
 
+    @action(detail=False, methods=['get'])
+    def store_counts(self, request):
+        user = request.user
+        try:
+            from apps.stores.models import StoreMembership
+            from django.db.models import Count
+
+            if user.is_authenticated and user.role in ('store_owner', 'store_manager'):
+                user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+                staff_qs = User.objects.filter(
+                    store_memberships__store_id__in=user_store_ids,
+                    store_memberships__is_active=True
+                ).exclude(role='customer').distinct()
+                total = staff_qs.count()
+                return Response({
+                    'total': total,
+                    'official': 0,
+                    'stores': {sid: total for sid in user_store_ids},
+                })
+
+            partner_user_ids = StoreMembership.objects.filter(is_active=True).values_list('user_id', flat=True)
+            official_count = User.objects.exclude(id__in=partner_user_ids).count()
+            total = User.objects.count()
+
+            counts_list = (
+                StoreMembership.objects.filter(is_active=True)
+                .values('store_id')
+                .annotate(cnt=Count('user_id', distinct=True))
+            )
+            store_counts = {item['store_id']: item['cnt'] for item in counts_list}
+
+            return Response({
+                'total': total,
+                'official': official_count,
+                'stores': store_counts,
+            })
+        except Exception:
+            return Response({'total': 0, 'official': 0, 'stores': {}})
+
     def destroy(self, request, *args, **kwargs):
         user = self.get_object()
         email = str(user.email or '').strip().lower()
@@ -1507,13 +1646,81 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
     pagination_class = None
 
+    def get_permissions(self):
+        return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        name = request.data.get('name', '').strip().lower()
+        if request.user.role == 'store_owner' and name in ['super_admin', 'admin', 'customer', 'store_owner']:
+            return Response({'detail': f'Cannot create role named "{name}".'}, status=status.HTTP_400_BAD_REQUEST)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        role = self.get_object()
+        if request.user.role == 'store_owner' and role.name in ['super_admin', 'admin', 'customer', 'store_owner']:
+            return Response({'detail': 'Cannot modify this role.'}, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        role = self.get_object()
+        if request.user.role == 'store_owner' and role.name in ['super_admin', 'admin', 'customer', 'store_owner']:
+            return Response({'detail': 'Cannot modify this role.'}, status=status.HTTP_403_FORBIDDEN)
+        return super().partial_update(request, *args, **kwargs)
+
+    def get_queryset(self):
+        from apps.accounts.models import User
+        from django.db.models import Count, OuterRef, Subquery, Value
+        from django.db.models.functions import Coalesce
+
+        user = self.request.user
+        qs = Role.objects.all()
+        if user.is_authenticated and user.role in ('store_owner', 'store_manager'):
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            qs = qs.exclude(name__in=['super_admin', 'admin', 'customer', 'store_owner'])
+            return qs.annotate(
+                user_count=Coalesce(
+                    Subquery(
+                        User.objects.filter(
+                            role=OuterRef('name'),
+                            store_memberships__store_id__in=user_store_ids,
+                            store_memberships__is_active=True
+                        )
+                        .values('role')
+                        .annotate(cnt=Count('id'))
+                        .values('cnt')[:1]
+                    ),
+                    Value(0)
+                )
+            ).order_by('name')
+
+        return qs.annotate(
+            user_count=Coalesce(
+                Subquery(
+                    User.objects.filter(role=OuterRef('name'))
+                    .values('role')
+                    .annotate(cnt=Count('id'))
+                    .values('cnt')[:1]
+                ),
+                Value(0)
+            )
+        ).order_by('name')
+
     def destroy(self, request, *args, **kwargs):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         role = self.get_object()
         if role.is_system:
             return Response({'detail': 'System roles cannot be deleted.'}, status=400)
+        if request.user.role == 'store_owner' and role.name in ['super_admin', 'admin', 'customer', 'store_owner']:
+            return Response({'detail': 'Cannot delete this role.'}, status=status.HTTP_403_FORBIDDEN)
         RolePermission.objects.filter(role=role.name).delete()
         return super().destroy(request, *args, **kwargs)
 
@@ -1524,14 +1731,14 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
     filterset_fields = ['role']
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'by_role']:
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAdminOrSuperAdmin()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
         if user.role in ['super_admin', 'admin']:
             return RolePermission.objects.all().select_related('permission')
+        if user.role == 'store_owner':
+            return RolePermission.objects.exclude(role__in=['super_admin', 'admin', 'customer']).select_related('permission')
         # Non-admin staff can only read their own role's permissions
         return RolePermission.objects.filter(role=user.role).select_related('permission')
 
@@ -1539,7 +1746,10 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
     def by_role(self, request):
         role = request.query_params.get('role')
         if role:
-            if request.user.role not in ['super_admin', 'admin'] and role != request.user.role:
+            if request.user.role == 'store_owner':
+                if role in ['super_admin', 'admin', 'customer']:
+                    return Response({'detail': 'You cannot view permissions for this role.'}, status=status.HTTP_403_FORBIDDEN)
+            elif request.user.role not in ['super_admin', 'admin'] and role != request.user.role:
                 return Response({'detail': 'You can only view your own role permissions.'}, status=403)
             perms = RolePermission.objects.filter(role=role, granted=True).select_related('permission')
             serializer = self.get_serializer(perms, many=True)
@@ -1547,15 +1757,38 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
         return Response([])
 
     def create(self, request, *args, **kwargs):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         role = request.data.get('role')
         permission_id = request.data.get('permission')
         granted = request.data.get('granted', True)
         if not role or not permission_id:
             return Response({'detail': 'role and permission are required.'}, status=400)
-        try:
-            permission = Permission.objects.get(pk=permission_id)
-        except Permission.DoesNotExist:
-            return Response({'permission': ['Invalid permission.']}, status=400)
+
+        if request.user.role == 'store_owner':
+            if role in ['super_admin', 'admin', 'customer', 'store_owner']:
+                return Response({'detail': f'Cannot modify permissions for {role}.'}, status=status.HTTP_403_FORBIDDEN)
+            STORE_OWNER_MODULES = {
+                'dashboard', 'orders', 'customers', 'products', 'product_brands',
+                'product_categories', 'product_sets', 'product_flash_sale', 'product_banners',
+                'marketing_promotions', 'marketing_announcements', 'marketing_posters', 'marketing_videos',
+                'inventory', 'inventory_movements', 'inventory_storage', 'inventory_transfers',
+                'print', 'print_history', 'scanner', 'delivery', 'scanner_delivery_config',
+                'finance', 'finance_expenses', 'finance_profit',
+                'reports', 'reports_products', 'reports_inventory',
+                'users', 'users_roles',
+            }
+            try:
+                permission = Permission.objects.get(pk=permission_id)
+            except Permission.DoesNotExist:
+                return Response({'permission': ['Invalid permission.']}, status=400)
+            if permission.module not in STORE_OWNER_MODULES:
+                return Response({'detail': f'Permission module "{permission.module}" is not accessible to store owners.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            try:
+                permission = Permission.objects.get(pk=permission_id)
+            except Permission.DoesNotExist:
+                return Response({'permission': ['Invalid permission.']}, status=400)
 
         role_permission, _ = RolePermission.objects.update_or_create(
             role=role,
@@ -1565,12 +1798,24 @@ class RolePermissionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(role_permission)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        instance = self.get_object()
+        if request.user.role == 'store_owner' and instance.role in ['super_admin', 'admin', 'customer', 'store_owner']:
+            return Response({'detail': 'Cannot modify permissions for this role.'}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=['post'])
     def reset_defaults(self, request):
+        if request.user.role not in ['super_admin', 'admin', 'store_owner']:
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         from apps.accounts.management.commands.seed_role_permissions import DEFAULTS
         role = request.data.get('role')
         if not role:
             return Response({'detail': 'role is required.'}, status=400)
+        if request.user.role == 'store_owner' and role in ['super_admin', 'admin', 'customer', 'store_owner']:
+            return Response({'detail': 'Cannot reset defaults for this role.'}, status=status.HTTP_403_FORBIDDEN)
 
         RolePermission.objects.filter(role=role).delete()
 

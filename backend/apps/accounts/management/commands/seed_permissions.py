@@ -14,7 +14,7 @@ MODULES = [
     'reports', 'reports_products', 'reports_inventory',
     'users', 'users_roles', 'users_activity',
     'settings', 'settings_telegram', 'settings_delivery', 'settings_payment',
-    'settings_print_logo', 'settings_login_logo', 'settings_customer_footer',
+    'settings_print_logo', 'settings_login_logo', 'settings_customer_footer', 'settings_about',
     'print', 'print_history',
     'scanner', 'scanner_delivery_config',
     'storefront',

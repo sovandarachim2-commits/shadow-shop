@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, Filter, RefreshCw, Pencil, Package, X, Printer, Clock, Check, Truck, DollarSign, CreditCard } from 'lucide-react'
+import { Plus, Eye, Filter, RefreshCw, Pencil, Package, X, Printer, Clock, Check, Truck, DollarSign, CreditCard, MoreVertical, RotateCcw, Ban, ShoppingCart, CheckCircle2, AlertCircle } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
+import { KpiCard } from '@/components/ui/Card'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Badge, OrderStatusBadge, PaymentStatusBadge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { ordersApi } from '@/api/orders'
 import { authApi } from '@/api/auth'
+import { storesApi } from '@/api/stores'
 import useAuthStore from '@/store/authStore'
 import { formatCurrency, formatDateTime } from '@/utils/helpers'
 import { localizeOrderNote, provinceKhmerLabel } from '@/utils/addressHelpers'
@@ -18,6 +20,7 @@ import { OrderHistoryModal, PaymentHistoryModal, PaymentMethodButton, paymentMet
 import ContactSalesReceiptModal from '@/components/orders/ContactSalesReceiptModal'
 import NewOrder from './NewOrder'
 import { EditOrderModal } from './OrderDetail'
+import { PrintPreview } from '@/pages/admin/operations/PrintCenter'
 import toast from 'react-hot-toast'
 
 const STATUS_OPTIONS = [
@@ -30,6 +33,7 @@ const STATUS_OPTIONS = [
   { value: 'shipped', label: 'Shipped' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'returned', label: 'Returned' },
 ]
 
 const PAGE_SIZE_OPTIONS = [100, 500, 1000]
@@ -65,16 +69,20 @@ export default function OrderList() {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((state) => state.user)
   const isSeller = currentUser?.role === 'seller'
+  const isStorePartner = ['store_owner', 'store_manager'].includes(currentUser?.role)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [paymentStatus, setPaymentStatus] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [deliveryBy, setDeliveryBy] = useState('')
+  const [storeFilter, setStoreFilter] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(100)
   const [showNewOrder, setShowNewOrder] = useState(false)
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
+  const [actionDropdownId, setActionDropdownId] = useState(null)
+  const [receiptOrder, setReceiptOrder] = useState(null)
   const [payOrder, setPayOrder] = useState(null)
   const [paymentHistoryOrder, setPaymentHistoryOrder] = useState(null)
   const [orderHistoryOrder, setOrderHistoryOrder] = useState(null)
@@ -83,14 +91,43 @@ export default function OrderList() {
   const [transactionReference, setTransactionReference] = useState('')
   const [confirm, ConfirmDialog] = useConfirm()
 
+  useEffect(() => {
+    if (!actionDropdownId) return
+    const handleClickOutside = () => setActionDropdownId(null)
+    window.addEventListener('click', handleClickOutside)
+    return () => window.removeEventListener('click', handleClickOutside)
+  }, [actionDropdownId])
+
+  const { data: storesData } = useQuery({
+    queryKey: ['admin-stores-filter'],
+    queryFn: () => storesApi.admin.listStores({ page_size: 200 }).then((r) => r.data?.results || r.data || []),
+    enabled: !isStorePartner,
+  })
+  const stores = Array.isArray(storesData) ? storesData : (storesData?.results || [])
+
+  const { data: storeCountsData } = useQuery({
+    queryKey: ['orders-store-counts'],
+    queryFn: () => ordersApi.orders.storeCounts().then((r) => r.data),
+    enabled: !isStorePartner,
+  })
+
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['orders-stats', search, storeFilter],
+    queryFn: () => ordersApi.orders.statistics({
+      search: search || undefined,
+      store: storeFilter || undefined,
+    }).then((r) => r.data),
+  })
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['orders', search, status, paymentStatus, paymentMethod, deliveryBy, page, pageSize],
+    queryKey: ['orders', search, status, paymentStatus, paymentMethod, deliveryBy, storeFilter, page, pageSize],
     queryFn: () => ordersApi.orders.list({
       search,
       status: status || undefined,
       payment_status: paymentStatus || undefined,
       payment_method: paymentMethod || undefined,
       delivery_by: deliveryBy || undefined,
+      store: storeFilter || undefined,
       page,
       page_size: pageSize,
     }).then((r) => r.data),
@@ -112,6 +149,12 @@ export default function OrderList() {
     queryKey: ['order', orderHistoryOrder?.id, 'order-history'],
     queryFn: () => ordersApi.orders.get(orderHistoryOrder.id).then((r) => r.data),
     enabled: !!orderHistoryOrder?.id,
+  })
+
+  const { data: receiptDetail, isLoading: isReceiptLoading } = useQuery({
+    queryKey: ['order', receiptOrder?.id, 'receipt-detail'],
+    queryFn: () => ordersApi.orders.get(receiptOrder.id).then((r) => r.data),
+    enabled: !!receiptOrder?.id,
   })
 
   const { data: siteSettings } = useQuery({
@@ -143,6 +186,8 @@ export default function OrderList() {
     mutationFn: ({ id, status, note }) => ordersApi.orders.updateStatus(id, { status, note }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['order', variables.id] })
+      queryClient.invalidateQueries({ queryKey: ['orders-store-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['orders-stats'] })
       refetch()
       toast.success('Status updated')
     },
@@ -156,8 +201,10 @@ export default function OrderList() {
     }),
     onSuccess: (_, { order }) => {
       queryClient.invalidateQueries({ queryKey: ['order', order.id] })
+      queryClient.invalidateQueries({ queryKey: ['orders-store-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['orders-stats'] })
       setPayOrder(null)
-          setTransactionReference('')
+      setTransactionReference('')
       refetch()
       toast.success('Payment recorded')
     },
@@ -182,8 +229,27 @@ export default function OrderList() {
     updateStatusMutation.mutate({ id: order.id, status: 'cancelled', note: reason })
   }
 
+  const handleReturnOrder = async (order) => {
+    const reason = await confirm(
+      'Return this order?',
+      `Order #${order.order_number} will be marked as returned and items will be restored to inventory.`,
+      {
+        confirmText: 'Confirm Return',
+        cancelText: 'Keep Order',
+        tone: 'warning',
+        icon: 'warning',
+        reasonLabel: 'Return Reason',
+        reasonPlaceholder: 'Why is this order being returned?',
+        reasonRequired: false,
+      },
+    )
+    if (reason === false || reason === null) return
+    const note = typeof reason === 'string' && reason.trim() ? reason.trim() : 'Customer returned order'
+    updateStatusMutation.mutate({ id: order.id, status: 'returned', note })
+  }
+
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-4">
       <PageHeader
         title="Orders"
         subtitle={`${total} total orders`}
@@ -194,6 +260,76 @@ export default function OrderList() {
           </button>
         }
       />
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiCard
+          compact
+          title="Total Orders"
+          value={statsData?.total_orders ?? total}
+          subtitle={storeFilter ? 'Filtered store' : (isStorePartner ? 'Your store' : 'All stores')}
+          icon={ShoppingCart}
+          color="blue"
+          loading={statsLoading}
+          onClick={() => {
+            setStatus('')
+            setPaymentStatus('')
+            setPage(1)
+          }}
+          className={!status && !paymentStatus ? 'ring-2 ring-blue-500/20' : ''}
+        />
+        <KpiCard
+          compact
+          title="Total Revenue"
+          value={formatCurrency(statsData?.total_revenue || 0)}
+          subtitle="Gross sales"
+          icon={DollarSign}
+          color="green"
+          loading={statsLoading}
+        />
+        <KpiCard
+          compact
+          title="Pending Orders"
+          value={statsData?.pending_orders ?? 0}
+          subtitle={statsData?.unprinted_orders ? `${statsData.unprinted_orders} awaiting print` : 'New & confirmed'}
+          icon={Clock}
+          color="yellow"
+          loading={statsLoading}
+          onClick={() => {
+            setStatus(status === 'new' ? '' : 'new')
+            setPage(1)
+          }}
+          className={status === 'new' ? 'ring-2 ring-yellow-500/20' : ''}
+        />
+        <KpiCard
+          compact
+          title="Completed"
+          value={statsData?.completed_orders ?? 0}
+          subtitle="Delivered & fulfilled"
+          icon={CheckCircle2}
+          color="purple"
+          loading={statsLoading}
+          onClick={() => {
+            setStatus(status === 'completed' ? '' : 'completed')
+            setPage(1)
+          }}
+          className={status === 'completed' ? 'ring-2 ring-purple-500/20' : ''}
+        />
+        <KpiCard
+          compact
+          title="Unpaid Orders"
+          value={statsData?.unpaid_orders ?? 0}
+          subtitle="Payment pending"
+          icon={AlertCircle}
+          color="pink"
+          loading={statsLoading}
+          onClick={() => {
+            setPaymentStatus(paymentStatus === 'unpaid' ? '' : 'unpaid')
+            setPage(1)
+          }}
+          className={paymentStatus === 'unpaid' ? 'ring-2 ring-pink-500/20' : ''}
+        />
+      </div>
 
       <div className="bg-white rounded-2xl shadow-card border border-gray-100">
         {/* Filters */}
@@ -206,6 +342,17 @@ export default function OrderList() {
             }}
             placeholder="Search orders, customers..."
           >
+            {!isStorePartner && (
+              <select className="select-field w-56 shrink-0" value={storeFilter} onChange={(e) => { setStoreFilter(e.target.value); setPage(1) }}>
+                <option value="">All Stores ({storeCountsData?.total ?? orders.length})</option>
+                <option value="official">🏢 Official Store ({storeCountsData?.official ?? 0})</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    🏪 {s.name} ({storeCountsData?.stores?.[s.id] ?? storeCountsData?.stores?.[String(s.id)] ?? 0})
+                  </option>
+                ))}
+              </select>
+            )}
             <select className="select-field w-36" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}>
               {visibleStatusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -237,10 +384,12 @@ export default function OrderList() {
             <tr>
               <Th>No</Th>
               <Th>Order Code</Th>
+              {!isStorePartner && <Th>Store</Th>}
               <Th>Customer Name</Th>
               <Th>Customer Phone</Th>
               <Th>Seller</Th>
               <Th>Print Status</Th>
+              <Th>Print Date</Th>
               <Th>Amount</Th>
               <Th>Payment Method</Th>
               <Th>Payment Status</Th>
@@ -251,10 +400,14 @@ export default function OrderList() {
             </tr>
           </Thead>
           <Tbody>
-            {isLoading && <LoadingRows cols={13} />}
+            {isLoading && <LoadingRows cols={!isStorePartner ? 15 : 14} />}
             {!isLoading && orders.map((order, index) => {
               const needsSellerConfirm = isNewContactSalesOrder(order)
               const sellerReadOnlyPrinted = isSeller && isPrintedOrder(order)
+              const isOrderPrinted = Boolean(order.printed_at || ['printed', 'preparing', 'packed', 'shipped', 'completed'].includes(order.status) || isPrintedOrder(order))
+              const isNearBottom = orders.length > 2 && index >= orders.length - 2
+              const canCancel = !isOrderPrinted && !['completed', 'cancelled', 'returned'].includes(order.status)
+              const canReturn = isOrderPrinted && order.status !== 'returned' && order.status !== 'cancelled'
               return (
               <Tr
                 key={order.id}
@@ -263,9 +416,34 @@ export default function OrderList() {
               >
                 <Td><span className="text-sm font-semibold text-gray-500">{(page - 1) * pageSize + index + 1}</span></Td>
                 <Td>
-                  <span className={`font-mono text-sm font-semibold ${needsSellerConfirm ? 'text-red-700' : 'text-purple-700'}`}>#{order.order_number}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setReceiptOrder(order)
+                    }}
+                    className={`font-mono text-sm font-semibold transition hover:underline underline-offset-2 ${
+                      needsSellerConfirm ? 'text-red-700 hover:text-red-800' : 'text-purple-700 hover:text-purple-900'
+                    }`}
+                    title="Click to view receipt"
+                  >
+                    #{order.order_number}
+                  </button>
                   {order.is_draft && <span className="ml-2 text-xs text-gray-400">(Draft)</span>}
                 </Td>
+                {!isStorePartner && (
+                  <Td>
+                    {order.store_name ? (
+                      <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 whitespace-nowrap">
+                        🏪 {order.store_name}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 whitespace-nowrap">
+                        🏢 Official Store
+                      </span>
+                    )}
+                  </Td>
+                )}
                 <Td><span className="text-sm font-medium text-gray-900">{order.customer_name}</span></Td>
                 <Td>
                   <span className="text-sm text-gray-600">{order.customer_phone}</span>
@@ -276,6 +454,15 @@ export default function OrderList() {
                     <Badge variant="indigo" dot>Printed</Badge>
                   ) : (
                     <Badge variant="warning" dot>Unprinted</Badge>
+                  )}
+                </Td>
+                <Td>
+                  {order.printed_at ? (
+                    <span className="text-xs font-semibold text-gray-600">
+                      {formatDateTime(order.printed_at)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-gray-400">-</span>
                   )}
                 </Td>
                 <Td><span className="font-semibold">{formatCurrency(order.grand_total)}</span></Td>
@@ -307,7 +494,7 @@ export default function OrderList() {
                   </button>
                 </Td>
                 <Td>
-                  <div className="flex items-center gap-1.5">
+                  <div className="relative flex items-center gap-1.5">
                     {!isSeller && order.payment_status !== 'paid' && (
                       <button
                         type="button"
@@ -337,27 +524,80 @@ export default function OrderList() {
                     >
                       <Eye size={16} />
                     </button>
-                    {!sellerReadOnlyPrinted && (
+                    <div className="relative">
                       <button
                         type="button"
-                        title="Edit"
-                        aria-label="Edit order"
+                        title="More actions"
+                        aria-label="More actions"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setEditOrder(order)
+                          setActionDropdownId(actionDropdownId === order.id ? null : order.id)
                         }}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
+                          actionDropdownId === order.id
+                            ? 'border-purple-300 bg-purple-50 text-purple-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
                       >
-                        <Pencil size={16} />
+                        <MoreVertical size={16} />
                       </button>
-                    )}
+                      {actionDropdownId === order.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute right-0 z-50 w-36 overflow-hidden rounded-xl border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black/5 ${
+                            isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setActionDropdownId(null)
+                              setEditOrder(order)
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+                          >
+                            <Pencil size={14} className="text-blue-600" />
+                            <span>Edit</span>
+                          </button>
+                          {canReturn && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setActionDropdownId(null)
+                                handleReturnOrder(order)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-amber-600 transition hover:bg-amber-50"
+                            >
+                              <RotateCcw size={14} className="text-amber-600" />
+                              <span>Return</span>
+                            </button>
+                          )}
+                          {canCancel && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setActionDropdownId(null)
+                                handleCancelOrder(order)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                            >
+                              <Ban size={14} className="text-red-600" />
+                              <span>Cancel</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Td>
               </Tr>
               )
             })}
             {!isLoading && orders.length === 0 && (
-              <tr><td colSpan={13}><EmptyState message="No orders found" icon={Filter} /></td></tr>
+              <tr><td colSpan={!isStorePartner ? 15 : 14}><EmptyState message="No orders found" icon={Filter} /></td></tr>
             )}
           </Tbody>
         </Table>
@@ -394,19 +634,17 @@ export default function OrderList() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-xl font-black text-gray-950">Order #{popupOrder.order_number}</h2>
               <div className="flex flex-wrap items-center gap-2">
-                {!(isSeller && isPrintedOrder(popupOrder)) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setViewOrder(null)
-                      setEditOrder(popupOrder)
-                    }}
-                    className="btn-secondary py-2"
-                  >
-                    <Pencil size={15} />
-                    Edit
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewOrder(null)
+                    setEditOrder(popupOrder)
+                  }}
+                  className="btn-secondary py-2"
+                >
+                  <Pencil size={15} />
+                  Edit
+                </button>
                 {!isSeller && (
                   <button type="button" onClick={() => navigate('/admin/print')} className="btn-secondary py-2">
                     <Printer size={15} />
@@ -443,31 +681,6 @@ export default function OrderList() {
                       </div>
                     ))}
                   </div>
-                  {popupOrder.status !== 'completed' && popupOrder.status !== 'cancelled' && !(isSeller && isPrintedOrder(popupOrder)) && (
-                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-                      {visibleStatusFlow.filter((s) => s.key !== popupOrder.status).map((s) => (
-                        <button
-                          key={s.key}
-                          type="button"
-                          onClick={() => updateStatusMutation.mutate({ id: popupOrder.id, status: s.key })}
-                          disabled={updateStatusMutation.isPending}
-                          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-700 disabled:opacity-60"
-                        >
-                          → {s.label}
-                        </button>
-                      ))}
-                      {!isSeller && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancelOrder(popupOrder)}
-                          disabled={updateStatusMutation.isPending}
-                          className="ml-auto rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60"
-                        >
-                          Cancel Order
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-3">
@@ -726,6 +939,50 @@ export default function OrderList() {
         queued={contactSalesReceipt?.queued}
         onClose={() => setContactSalesReceipt(null)}
       />
+      {receiptOrder && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/50 p-4 backdrop-blur-sm"
+          onClick={() => setReceiptOrder(null)}
+        >
+          <div
+            className="max-h-[92vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="no-print flex items-center justify-between border-b border-gray-100 px-5 py-3.5">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Receipt Preview</h3>
+                <p className="text-xs font-mono font-semibold text-purple-700">#{receiptOrder.order_number}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReceiptOrder(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="print-preview-window flex max-h-[calc(92vh-64px)] flex-col items-center overflow-auto bg-gray-50 p-4 text-gray-950">
+              {isReceiptLoading || !receiptDetail ? (
+                <div className="w-full rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center">
+                  <Printer size={28} className="mx-auto mb-2 text-gray-300 animate-pulse" />
+                  <p className="text-sm font-semibold text-gray-500">Loading receipt...</p>
+                </div>
+              ) : (
+                <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100">
+                  <PrintPreview
+                    order={receiptDetail}
+                    type="receipt"
+                    printLogoUrl={siteSettings?.print_logo_url || null}
+                    printLogoSize={siteSettings?.print_logo_size || 64}
+                    printQrSize={siteSettings?.print_qr_size || 68}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {ConfirmDialog}
     </div>
   )

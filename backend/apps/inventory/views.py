@@ -48,18 +48,43 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['product__name', 'product__code']
     ordering_fields = ['quantity', 'updated_at']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+        user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+        if user_store_ids:
+            return qs.filter(product__store_id__in=user_store_ids)
+        elif user.role in ['store_owner', 'store_manager']:
+            return qs.none()
+        return qs
+
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
         from apps.products.models import Product
-        total_products = Product.objects.filter(is_active=True).count()
-        total_stock = Stock.objects.aggregate(total=Sum('quantity'))['total'] or 0
-        low_stock = Stock.objects.filter(quantity__gt=0, quantity__lte=5).count()
-        out_of_stock = Stock.objects.filter(quantity__lte=0).count()
+        user = request.user
+        user_store_ids = []
+        if user.is_authenticated:
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
 
-        from apps.products.models import Product
+        prod_qs = Product.objects.filter(is_active=True)
+        stock_qs = Stock.objects.all()
+        if user_store_ids:
+            prod_qs = prod_qs.filter(store_id__in=user_store_ids)
+            stock_qs = stock_qs.filter(product__store_id__in=user_store_ids)
+        elif user.is_authenticated and user.role in ['store_owner', 'store_manager']:
+            prod_qs = prod_qs.none()
+            stock_qs = stock_qs.none()
+
+        total_products = prod_qs.count()
+        total_stock = stock_qs.aggregate(total=Sum('quantity'))['total'] or 0
+        low_stock = stock_qs.filter(quantity__gt=0, quantity__lte=5).count()
+        out_of_stock = stock_qs.filter(quantity__lte=0).count()
+
         stock_value = sum(
             float(s.product.cost_price) * s.quantity
-            for s in Stock.objects.select_related('product').filter(quantity__gt=0)
+            for s in stock_qs.select_related('product').filter(quantity__gt=0)
         )
 
         return Response({
@@ -72,13 +97,13 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def low_stock(self, request):
-        stocks = with_sold_qty(Stock.objects.filter(quantity__gt=0, quantity__lte=5).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images'))
+        stocks = with_sold_qty(self.get_queryset().filter(quantity__gt=0, quantity__lte=5))
         serializer = self.get_serializer(stocks, many=True, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def out_of_stock(self, request):
-        stocks = with_sold_qty(Stock.objects.filter(quantity__lte=0).select_related('product').prefetch_related('product__warehouse_stocks__warehouse', 'product__images'))
+        stocks = with_sold_qty(self.get_queryset().filter(quantity__lte=0))
         serializer = self.get_serializer(stocks, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -124,6 +149,18 @@ class StockMovementViewSet(viewsets.ModelViewSet):
     search_fields = ['product__name', 'reference', 'notes']
     ordering_fields = ['created_at']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+        user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+        if user_store_ids:
+            return qs.filter(product__store_id__in=user_store_ids)
+        elif user.role in ['store_owner', 'store_manager']:
+            return qs.none()
+        return qs
+
     def get_serializer_class(self):
         if self.action == 'create':
             return StockMovementCreateSerializer
@@ -134,12 +171,69 @@ class StockMovementViewSet(viewsets.ModelViewSet):
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
-    queryset = Warehouse.objects.prefetch_related('stocks').annotate(
-        product_count=Count('stocks', filter=Q(stocks__quantity__gt=0), distinct=True),
-        total_quantity=Coalesce(Sum('stocks__quantity', filter=Q(stocks__quantity__gt=0)), 0),
-    )
     serializer_class = WarehouseSerializer
-    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    permission_classes = [IsAuthenticated, IsStaff]
+
+    def get_queryset(self):
+        from .services import ensure_default_warehouse
+        from apps.stores.models import Store
+
+        user = self.request.user
+        qs = Warehouse.objects.prefetch_related('stocks').annotate(
+            product_count=Count('stocks', filter=Q(stocks__quantity__gt=0), distinct=True),
+            total_quantity=Coalesce(Sum('stocks__quantity', filter=Q(stocks__quantity__gt=0)), 0),
+        )
+
+        if not user or not user.is_authenticated:
+            return qs.none()
+
+        # Check if user is staff belonging to a partner store
+        user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+        if user_store_ids:
+            for store_id in user_store_ids:
+                try:
+                    store = Store.objects.filter(id=store_id).first()
+                    if store:
+                        ensure_default_warehouse(store=store)
+                except Exception:
+                    pass
+            return qs.filter(store_id__in=user_store_ids).order_by('id')
+
+        if user.role in ('super_admin', 'admin'):
+            params = getattr(self.request, 'query_params', None) or getattr(self.request, 'GET', {})
+            store_filter = params.get('store')
+            if store_filter:
+                clean = str(store_filter).strip()
+                if clean in ('direct', 'official', 'null', '0'):
+                    ensure_default_warehouse(store=None)
+                    return qs.filter(store__isnull=True).order_by('id')
+                elif clean.isdigit():
+                    store = Store.objects.filter(id=int(clean)).first()
+                    if store:
+                        ensure_default_warehouse(store=store)
+                    return qs.filter(store_id=int(clean)).order_by('id')
+
+            ensure_default_warehouse(store=None)
+            return qs.order_by('id')
+
+        # Other staff without store membership (e.g. official store staff)
+        ensure_default_warehouse(store=None)
+        return qs.filter(store__isnull=True).order_by('id')
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        store = None
+        if user.is_authenticated:
+            user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+            if user_store_ids:
+                from apps.stores.models import Store
+                store = Store.objects.filter(id=user_store_ids[0]).first()
+            elif user.role in ('super_admin', 'admin'):
+                store_id = self.request.data.get('store') or self.request.data.get('store_id')
+                if store_id and str(store_id).isdigit():
+                    from apps.stores.models import Store
+                    store = Store.objects.filter(id=int(store_id)).first()
+        serializer.save(store=store)
 
 
 class StockTransferViewSet(viewsets.ModelViewSet):
@@ -151,6 +245,21 @@ class StockTransferViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status']
     search_fields = ['transfer_number']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+        user_store_ids = list(user.store_memberships.filter(is_active=True).values_list('store_id', flat=True))
+        if user_store_ids:
+            return qs.filter(
+                Q(from_warehouse__store_id__in=user_store_ids) |
+                Q(to_warehouse__store_id__in=user_store_ids)
+            ).distinct()
+        elif user.role in ['store_owner', 'store_manager']:
+            return qs.none()
+        return qs
 
     def perform_create(self, serializer):
         import datetime
