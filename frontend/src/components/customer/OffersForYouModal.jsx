@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  ExternalLink,
-  Sparkles,
-  Store,
-  X,
-} from 'lucide-react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import useAuthStore from '@/store/authStore'
 import { cn } from '@/utils/helpers'
@@ -88,7 +80,6 @@ export default function OffersForYouModal({
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
-  const [dontShowAgain, setDontShowAgain] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 640 : false
   )
@@ -109,10 +100,20 @@ export default function OffersForYouModal({
     refetchOnWindowFocus: false,
   })
 
+  const isStaffOrAdmin = Boolean(
+    user?.role === 'admin' ||
+    user?.role === 'staff' ||
+    user?.is_staff ||
+    user?.is_superuser
+  )
+
   const eligiblePosters = useMemo(() => {
     if (previewMode) return Array.isArray(previewPosters) ? previewPosters : []
-    return fetchedPosters.filter((p) => !isPosterSuppressed(p))
-  }, [previewMode, previewPosters, fetchedPosters])
+    if (isStaffOrAdmin) return fetchedPosters
+    // For customers: if any active poster has not been suppressed, show all active posters so the carousel has all slides
+    const hasUnseen = fetchedPosters.some((p) => !isPosterSuppressed(p))
+    return hasUnseen ? fetchedPosters : []
+  }, [previewMode, previewPosters, fetchedPosters, isStaffOrAdmin])
 
   // Open automatically when eligible posters exist in storefront mode
   useEffect(() => {
@@ -130,6 +131,16 @@ export default function OffersForYouModal({
   const openState = previewMode ? Boolean(isOpenOverride) : isOpen
   const posters = eligiblePosters
   const currentPoster = posters[activeIndex] || posters[0] || null
+
+  const handlePrev = useCallback((e) => {
+    e?.stopPropagation()
+    setActiveIndex((prev) => (prev - 1 + posters.length) % posters.length)
+  }, [posters.length])
+
+  const handleNext = useCallback((e) => {
+    e?.stopPropagation()
+    setActiveIndex((prev) => (prev + 1) % posters.length)
+  }, [posters.length])
 
   // Countdown tick every second when modal is open and active poster has end_at
   useEffect(() => {
@@ -152,16 +163,38 @@ export default function OffersForYouModal({
       onCloseOverride?.()
       return
     }
-    posters.forEach((p) => markPosterSeen(p, dontShowAgain))
+    posters.forEach((p) => markPosterSeen(p))
     setIsOpen(false)
-    setDontShowAgain(false)
-  }, [previewMode, onCloseOverride, posters, dontShowAgain])
+  }, [previewMode, onCloseOverride, posters])
+
+  // Keyboard navigation (Arrow keys + Escape)
+  useEffect(() => {
+    if (!openState || posters.length <= 1) return undefined
+    const onKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') handlePrev()
+      if (e.key === 'ArrowRight') handleNext()
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [openState, posters.length, handlePrev, handleNext, handleClose])
+
+  const [touchStartX, setTouchStartX] = useState(null)
+  const handleTouchStart = (e) => setTouchStartX(e.targetTouches[0].clientX)
+  const handleTouchEnd = (e) => {
+    if (touchStartX === null) return
+    const touchEndX = e.changedTouches[0].clientX
+    const diff = touchStartX - touchEndX
+    if (diff > 45) handleNext()
+    else if (diff < -45) handlePrev()
+    setTouchStartX(null)
+  }
 
   const handleActionClick = () => {
     if (!currentPoster) return
     const target = currentPoster.resolved_action_url || currentPoster.action_url || '/shop'
     if (!previewMode) {
-      posters.forEach((p) => markPosterSeen(p, dontShowAgain))
+      posters.forEach((p) => markPosterSeen(p))
       setIsOpen(false)
     } else {
       onCloseOverride?.()
@@ -179,136 +212,66 @@ export default function OffersForYouModal({
   const posterSrc = useMobileImage
     ? currentPoster.mobile_image_url || currentPoster.image_url
     : currentPoster.image_url || currentPoster.mobile_image_url
-  const countdown = formatCountdown(currentPoster.end_at)
-  const isExternal = /^https?:\/\//i.test(currentPoster.resolved_action_url || currentPoster.action_url || '')
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-5"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label="Offers for You"
+      aria-label={currentPoster.title || 'Special Offer'}
     >
       <div
         className={cn(
-          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-pink-100/80 transition-all',
-          previewMode && previewDevice === 'mobile' ? 'max-w-[380px]' : 'max-w-[540px]',
+          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl transition-all sm:rounded-3xl',
+          previewMode && previewDevice === 'mobile' ? 'max-w-[360px]' : 'max-w-[480px]',
         )}
         onClick={(e) => e.stopPropagation()}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-pink-100/80 bg-gradient-to-r from-pink-50 via-white to-rose-50/70 px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#EC197A] to-[#FF5CA8] text-white shadow-sm shadow-pink-500/25">
-              <Sparkles size={14} />
-            </span>
-            <h2 className="text-base font-black tracking-tight text-slate-900">
-              Offers for You
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label="Close offers popup"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-50/80 text-slate-500 transition hover:bg-pink-100 hover:text-[#EC197A]"
+        {/* Top-Right Circular Close Button */}
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Close offers popup"
+          className="absolute right-3.5 top-3.5 z-40 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow-md transition hover:bg-white hover:text-black hover:scale-105 active:scale-95"
+        >
+          <X size={18} strokeWidth={2.5} />
+        </button>
+
+        {/* Poster Image (Clickable) */}
+        {posterSrc && (
+          <div
+            onClick={handleActionClick}
+            className="group relative flex cursor-pointer items-center justify-center overflow-hidden bg-gray-50"
           >
-            <X size={16} />
-          </button>
-        </div>
+            <img
+              key={currentPoster.id || activeIndex}
+              src={posterSrc}
+              alt={currentPoster.title}
+              className="max-h-[85vh] w-full object-contain transition-all duration-300 animate-fade-in group-hover:scale-[1.01]"
+            />
 
-        {/* Scrollable Body */}
-        <div className="overflow-y-auto">
-          {/* Poster Image Container (preserves original aspect ratio without stretching) */}
-          {posterSrc && (
-            <div className="relative flex items-center justify-center bg-pink-50/30">
-              <img
-                src={posterSrc}
-                alt={currentPoster.title}
-                className="max-h-[46vh] w-full object-contain"
-              />
+            {/* Slide Indicators: dots on mobile, clean < ▬ · · > controls on desktop */}
+            {posters.length > 1 && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="absolute bottom-3.5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 sm:gap-2 rounded-full bg-black/55 px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-lg backdrop-blur-md"
+              >
+                {/* Arrow Left (Desktop only - removed on small devices) */}
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  aria-label="Previous slide"
+                  className="hidden sm:flex h-5 w-5 items-center justify-center rounded-full text-white/80 transition hover:text-white hover:scale-110 active:scale-90"
+                >
+                  <ChevronLeft size={15} strokeWidth={2.5} />
+                </button>
 
-              {posters.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setActiveIndex((prev) => (prev - 1 + posters.length) % posters.length)}
-                    aria-label="Previous offer"
-                    className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-md backdrop-blur transition hover:bg-white"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveIndex((prev) => (prev + 1) % posters.length)}
-                    aria-label="Next offer"
-                    className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-md backdrop-blur transition hover:bg-white"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Content */}
-          <div className="space-y-3 p-5">
-            <div className="flex flex-wrap items-center gap-2">
-              {currentPoster.store_name && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-2.5 py-1 text-[11px] font-bold text-[#EC197A] ring-1 ring-pink-200/70">
-                  <Store size={12} />
-                  {currentPoster.store_name}
-                </span>
-              )}
-              {countdown && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 ring-1 ring-rose-200/70">
-                  <Clock size={12} />
-                  Ends in {countdown}
-                </span>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-lg font-extrabold leading-snug text-slate-900">
-                {currentPoster.title}
-              </h3>
-              {currentPoster.description && (
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                  {currentPoster.description}
-                </p>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleActionClick}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#EC197A] to-[#F43F8E] px-5 text-sm font-bold text-white shadow-lg shadow-pink-500/25 transition hover:from-[#d8146e] hover:to-[#e63280] active:scale-[0.99]"
-            >
-              <span>{currentPoster.button_label || 'Shop Now'}</span>
-              {isExternal && <ExternalLink size={15} />}
-            </button>
-
-            {/* Pagination Dots + Don't show again */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              {!previewMode ? (
-                <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-500 select-none">
-                  <input
-                    type="checkbox"
-                    checked={dontShowAgain}
-                    onChange={(e) => setDontShowAgain(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-pink-300 text-[#EC197A] focus:ring-[#EC197A]"
-                  />
-                  <span>Don&apos;t show this offer again</span>
-                </label>
-              ) : (
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Preview ({previewDevice})
-                </span>
-              )}
-
-              {posters.length > 1 && (
-                <div className="flex items-center gap-1.5">
+                {/* Point / Dots Indicators */}
+                <div className="flex items-center gap-1.5 px-0.5">
                   {posters.map((p, idx) => (
                     <button
                       key={p.id || idx}
@@ -316,16 +279,28 @@ export default function OffersForYouModal({
                       onClick={() => setActiveIndex(idx)}
                       aria-label={`Go to offer ${idx + 1}`}
                       className={cn(
-                        'h-2 rounded-full transition-all',
-                        idx === activeIndex ? 'w-5 bg-[#EC197A]' : 'w-2 bg-pink-100 hover:bg-pink-200',
+                        'h-2 rounded-full transition-all duration-300',
+                        idx === activeIndex
+                          ? 'w-5 bg-white shadow-sm'
+                          : 'w-2 bg-white/45 hover:bg-white/80',
                       )}
                     />
                   ))}
                 </div>
-              )}
-            </div>
+
+                {/* Arrow Right (Desktop only - removed on small devices) */}
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  aria-label="Next slide"
+                  className="hidden sm:flex h-5 w-5 items-center justify-center rounded-full text-white/80 transition hover:text-white hover:scale-110 active:scale-90"
+                >
+                  <ChevronRight size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

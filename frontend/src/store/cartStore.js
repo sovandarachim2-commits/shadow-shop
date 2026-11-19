@@ -66,7 +66,9 @@ const useCartStore = create(
       appliedCoupon: null,
 
       addItem: (product, quantity = 1) => {
-        if (!product?.id) return { success: false, reason: 'invalid' }
+        if (!product?.id || product.variants_enabled || (product.variant_parent && product.is_available_for_sale === false)) {
+          return { success: false, reason: 'invalid' }
+        }
 
         const items = get().items
         const selectedProductIds = get().selectedProductIds
@@ -133,6 +135,11 @@ const useCartStore = create(
         if (nextQuantity <= 0) {
           get().removeItem(productId)
           return { success: true, quantity: 0 }
+        }
+
+        if (nextQuantity > currentQty && (currentItem?.product?.variants_enabled ||
+          (currentItem?.product?.variant_parent && currentItem.product.is_available_for_sale === false))) {
+          return { success: false, reason: 'stock_limit', maxQuantity: 0, currentQuantity: currentQty }
         }
 
         if (nextQuantity > maxQuantity) {
@@ -209,11 +216,21 @@ const useCartStore = create(
         const bySet = new Map(sets.map((productSet) => [productSet.id, productSet]))
         const raised = []
         let changed = false
-        const items = get().items.map((item) => {
+        const currentItems = get().items
+        const items = currentItems.map((item) => {
           if (item.product?.is_free_gift) return item
           const isSet = item.product?.item_type === 'set'
           const live = isSet ? bySet.get(item.product?.product_set_id) : byProduct.get(item.product?.id)
           if (!live) return item
+          if (live.unavailable) {
+            if (!item.product.variant_parent || item.product.is_available_for_sale === false) return item
+            changed = true
+            return { ...item, product: { ...item.product, is_available_for_sale: false } }
+          }
+          if (!isSet && Boolean(live.variants_enabled) !== Boolean(item.product.variants_enabled)) {
+            changed = true
+            return { ...item, product: { ...item.product, variants_enabled: Boolean(live.variants_enabled) } }
+          }
           const nextPrice = Number(isSet
             ? (live.display_price || live.discount_price || live.price || 0)
             : (live.display_price || live.retail_price || 0))
@@ -225,7 +242,11 @@ const useCartStore = create(
           const sameSale = Boolean(item.product?.is_flash_sale_active) === nextActive
           const sameMax = (item.product?.flash_sale_max_order_qty ?? null) === nextMax
           const sameStock = Number(item.product?.current_stock || 0) === nextStock
-          if (samePrice && sameSale && sameMax && sameStock) return item
+          const sameVariant = !item.product?.variant_parent || (
+            item.product.code === live.code && item.product.is_available_for_sale === live.is_available_for_sale &&
+            item.product.availability_status === live.availability_status
+          )
+          if (samePrice && sameSale && sameMax && sameStock && sameVariant) return item
           changed = true
           if (currentPrice < nextPrice) {
             raised.push({ id: getProductId(item), name: item.product?.name, price: nextPrice })
@@ -237,6 +258,11 @@ const useCartStore = create(
             flash_sale_max_order_qty: nextMax,
             current_stock: nextStock,
             old_price: live.old_price ?? null,
+            ...(item.product.variant_parent && {
+              code: live.code,
+              is_available_for_sale: live.is_available_for_sale,
+              availability_status: live.availability_status,
+            }),
           }
           const maxQuantity = getMaxQuantity(product, currentItems, getProductId(item))
           return {

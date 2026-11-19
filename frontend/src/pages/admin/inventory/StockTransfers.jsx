@@ -43,7 +43,7 @@ function TransferForm({ onSave, onClose }) {
 
   const { data: products = [] } = useQuery({
     queryKey: ['transfer-products'],
-    queryFn: () => productsApi.products.list({ page_size: 500, is_active: true }).then((r) => getListResults(r.data)),
+    queryFn: () => productsApi.products.list({ page_size: 500, stock_items: true }).then((r) => getListResults(r.data)),
   })
 
   const activeWarehouses = warehouses.filter((w) => w.is_active !== false)

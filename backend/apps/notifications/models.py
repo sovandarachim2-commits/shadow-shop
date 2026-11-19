@@ -20,6 +20,8 @@ class TelegramConfig(models.Model):
     notify_delivery = models.BooleanField(default=True)
     notify_daily_summary = models.BooleanField(default=True)
     notify_staff_login = models.BooleanField(default=True)
+    notify_store_inquiry = models.BooleanField(default=False)
+    notify_product_review = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

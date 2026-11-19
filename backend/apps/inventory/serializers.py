@@ -86,6 +86,19 @@ class StockMovementCreateSerializer(serializers.ModelSerializer):
         model = StockMovement
         fields = ['type', 'product', 'quantity', 'reference', 'notes', 'warehouse']
 
+    def validate(self, attrs):
+        from .services import validate_variant_warehouse
+
+        product = attrs['product']
+        if product.variant_parent_id:
+            validate_variant_warehouse(product, attrs.get('warehouse'))
+            user = self.context['request'].user
+            if user.role in ['seller', 'store_owner', 'store_manager'] and not user.store_memberships.filter(
+                store_id=product.store_id, is_active=True,
+            ).exists():
+                raise serializers.ValidationError({'product': 'This variant belongs to another store.'})
+        return attrs
+
     def create(self, validated_data):
         from .services import add_stock
         product = validated_data['product']
@@ -218,6 +231,19 @@ class StockTransferSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({'detail': f'{product.name} is listed more than once.'})
                 seen.add(product_id)
                 source = attrs.get('from_warehouse') or getattr(self.instance, 'from_warehouse', None)
+                if product.variant_parent_id:
+                    from .services import validate_variant_warehouse
+
+                    destination = attrs.get('to_warehouse') or getattr(self.instance, 'to_warehouse', None)
+                    validate_variant_warehouse(product, source)
+                    validate_variant_warehouse(product, destination)
+                    if not source or not destination or source == destination:
+                        raise serializers.ValidationError({'detail': 'Choose different source and destination warehouses for a variant transfer.'})
+                    user = self.context['request'].user
+                    if user.role in ['seller', 'store_owner', 'store_manager'] and not user.store_memberships.filter(
+                        store_id=product.store_id, is_active=True,
+                    ).exists():
+                        raise serializers.ValidationError({'product': 'This variant belongs to another store.'})
                 stored = WarehouseStock.objects.filter(warehouse=source, product=product).first() if source else None
                 available = int(stored.quantity) if stored else 0
                 if item['requested_qty'] > available:

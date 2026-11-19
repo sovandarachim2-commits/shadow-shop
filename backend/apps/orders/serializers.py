@@ -22,6 +22,8 @@ def resolve_product_image_url(product, request=None):
     img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
     if img and img.image:
         return card_variant_url(img.image, request)
+    if product.variant_parent_id:
+        return resolve_product_image_url(product.variant_parent, request)
     return ''
 
 
@@ -97,13 +99,16 @@ def display_seller_name(order):
     return seller.get_full_name() or seller.username
 
 
-def price_checkout_items(items):
-    """Customer checkout pays the price that is active now, not a price saved in the cart."""
+def price_checkout_items(items, paid_variant_snapshot=False):
+    """Price order lines, retaining the validated price of an already paid variant."""
     for item in items:
         product = item.get('product')
         product_set = item.get('product_set')
-        if product is not None:
-            item['unit_price'] = product.active_price
+        if item.get('is_free_gift'):
+            item['unit_price'] = 0
+        elif product is not None:
+            if not (paid_variant_snapshot and product.variant_parent_id):
+                item['unit_price'] = product.active_price
             item['cost_price'] = product.cost_price
         elif product_set is not None:
             item['unit_price'] = product_set.active_price
@@ -143,7 +148,7 @@ def get_product_set_stock(product_set):
 
     available_sets = []
     for item in items:
-        if not item.product.is_available_for_sale:
+        if item.product.variants_enabled or not item.product.is_available_for_sale:
             return 0
         if item.product.availability_status == Product.AVAILABILITY_AVAILABLE:
             continue
@@ -194,6 +199,13 @@ def validate_order_target_stock(items, old_product_totals=None, old_set_totals=N
 
     for product in combined_products:
         quantity = requested_products.get(product, 0) + requested_components.get(product, 0)
+        if product.variants_enabled:
+            errors.append(f'Select a size and color for {product.name}.')
+            continue
+        sold_separately = requested_products.get(product, 0)
+        if product.variant_parent_id and 0 < sold_separately < product.min_order_qty:
+            errors.append(f'{product.name} requires an order of at least {product.min_order_qty}.')
+            continue
         if not product.is_available_for_sale:
             errors.append(f'{product.name} is out of stock.')
             continue
@@ -220,7 +232,7 @@ def apply_order_item_snapshot(item_data, request=None):
     product_set = item_data.get('product_set')
     if product:
         item_data['product_name'] = product.name
-        item_data['product_code'] = product.code
+        item_data['product_code'] = item_data.pop('ordered_variant_sku', product.code)
         item_data['cost_price'] = item_data.get('cost_price', product.cost_price)
         item_data['product_image'] = resolve_product_image_url(product, request)
     else:
@@ -243,6 +255,8 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_image = serializers.SerializerMethodField()
+    variant_id = serializers.SerializerMethodField()
+    variant_sku = serializers.SerializerMethodField()
     subtotal = serializers.DecimalField(source='total_price', max_digits=15, decimal_places=2, read_only=True)
 
     class Meta:
@@ -250,8 +264,15 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'product', 'product_set', 'product_name', 'product_code', 'product_image',
             'quantity', 'unit_price', 'cost_price', 'discount', 'is_free_gift', 'total_price', 'subtotal',
+            'variant_id', 'variant_sku',
         ]
         read_only_fields = ['total_price', 'subtotal']
+
+    def get_variant_id(self, obj):
+        return obj.product_id if obj.product and obj.product.variant_parent_id else None
+
+    def get_variant_sku(self, obj):
+        return obj.product_code if self.get_variant_id(obj) else None
 
     def get_product_image(self, obj):
         if obj.product_image:
@@ -264,14 +285,27 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderItemWriteSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), required=False, allow_null=True)
     product_set = serializers.PrimaryKeyRelatedField(queryset=ProductSet.objects.all(), required=False, allow_null=True)
+    variant_id = serializers.IntegerField(required=False, min_value=1, write_only=True)
+    variant_sku = serializers.CharField(max_length=50, required=False, write_only=True)
 
     class Meta:
         model = OrderItem
-        fields = ['product', 'product_set', 'quantity', 'unit_price', 'cost_price', 'discount', 'is_free_gift']
+        fields = ['product', 'product_set', 'quantity', 'unit_price', 'cost_price', 'discount', 'is_free_gift', 'variant_id', 'variant_sku']
 
     def validate(self, attrs):
         if bool(attrs.get('product')) == bool(attrs.get('product_set')):
             raise serializers.ValidationError('Provide either product or product_set.')
+        variant_id = attrs.pop('variant_id', None)
+        variant_sku = attrs.pop('variant_sku', None)
+        if variant_id or variant_sku:
+            product = attrs.get('product')
+            if not product or not product.variant_parent_id or (variant_id and variant_id != product.pk):
+                raise serializers.ValidationError({'variant_id': 'The selected variant does not match this order item.'})
+            if variant_sku:
+                if self.context.get('paid_variant_snapshot'):
+                    attrs['ordered_variant_sku'] = variant_sku
+                elif variant_sku != product.code:
+                    raise serializers.ValidationError({'variant_sku': 'The variant SKU changed. Refresh your cart and try again.'})
         return attrs
 
 
@@ -550,6 +584,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         # Admin create is allowed without stock checks so staff can sell/print quickly.
         # Stock is still deducted when the order is printed.
+        for item in attrs['items']:
+            product = item.get('product')
+            if product and product.variants_enabled:
+                raise serializers.ValidationError({'items': f'Select a size and color for {product.name}.'})
         return attrs
 
     def create(self, validated_data):
@@ -560,17 +598,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         order = Order.objects.create(**validated_data)
 
         subtotal = 0
-        for item_data in items_data:
-            if item_data.get('is_free_gift'):
-                item_data['unit_price'] = 0
-            else:
-                product = item_data.get('product')
-                product_set = item_data.get('product_set')
-                if product is not None:
-                    item_data['unit_price'] = product.active_price
-                    item_data['cost_price'] = product.cost_price
-                elif product_set is not None:
-                    item_data['unit_price'] = product_set.active_price
+        for item_data in price_checkout_items(items_data):
             apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price
@@ -638,6 +666,10 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context.get('request')
         order = self.instance
+        if attrs.get('items') is not None:
+            parent_ids = {item['product'].pk for item in attrs['items'] if item.get('product') and item['product'].variants_enabled}
+            if parent_ids and (not order or parent_ids.difference(order.items.values_list('product_id', flat=True))):
+                raise serializers.ValidationError({'items': 'Select a size and color for each new clothing order item.'})
         if order and order.status == Order.STATUS_NEW and not order.printed_at:
             new_status = attrs.get('status')
             if new_status and new_status not in (Order.STATUS_NEW, Order.STATUS_CONFIRMED):
@@ -663,6 +695,11 @@ class OrderAdminUpdateSerializer(serializers.Serializer):
         for product in products:
             delta = new_totals.get(product, 0) - old_totals.get(product, 0)
             if delta == 0:
+                continue
+            if product.variant_parent_id:
+                from apps.inventory.services import move_variant_stock
+                movement_type = StockMovement.TYPE_STOCK_OUT if delta > 0 else StockMovement.TYPE_RETURN
+                move_variant_stock(product, -delta, movement_type, order.order_number, 'order_edit', user=user)
                 continue
 
             stock, _ = Stock.objects.get_or_create(product=product, defaults={'quantity': 0})
@@ -957,17 +994,7 @@ class CustomerCheckoutSerializer(serializers.Serializer):
         )
 
         subtotal = 0
-        for item_data in items_data:
-            if item_data.get('is_free_gift'):
-                item_data['unit_price'] = 0
-            else:
-                product = item_data.get('product')
-                product_set = item_data.get('product_set')
-                if product is not None:
-                    item_data['unit_price'] = product.active_price
-                    item_data['cost_price'] = product.cost_price
-                elif product_set is not None:
-                    item_data['unit_price'] = product_set.active_price
+        for item_data in price_checkout_items(items_data, self.context.get('paid_variant_snapshot', False)):
             apply_order_item_snapshot(item_data, request)
             item = OrderItem.objects.create(order=order, **item_data)
             subtotal += item.total_price
@@ -1021,12 +1048,13 @@ class WishlistSerializer(serializers.ModelSerializer):
     slug = serializers.CharField(source='product.slug', read_only=True, default='')
     stock_quantity = serializers.SerializerMethodField()
     is_in_stock = serializers.SerializerMethodField()
+    variants_enabled = serializers.BooleanField(source='product.variants_enabled', read_only=True)
 
     class Meta:
         model = Wishlist
         fields = [
             'id', 'product', 'product_name', 'product_price', 'product_image',
-            'category_name', 'slug', 'stock_quantity', 'is_in_stock', 'created_at'
+            'category_name', 'slug', 'stock_quantity', 'is_in_stock', 'variants_enabled', 'created_at'
         ]
 
     def get_product_image(self, obj):
@@ -1046,10 +1074,23 @@ class WishlistSerializer(serializers.ModelSerializer):
             return 0
 
     def get_is_in_stock(self, obj):
+        if obj.product.variants_enabled:
+            return obj.product.is_available_for_sale
         try:
             return obj.product.stock.quantity > 0
         except Exception:
             return True
+
+
+def validate_cart_product(product, quantity):
+    if product.variants_enabled:
+        raise serializers.ValidationError({'detail': f'Select a size and color for {product.name}.'})
+    if not product.variant_parent_id:
+        return
+    if not product.is_available_for_sale:
+        raise serializers.ValidationError({'detail': f'{product.name} is unavailable.'})
+    if product.availability_status != Product.AVAILABILITY_AVAILABLE and quantity > product.current_stock:
+        raise serializers.ValidationError({'detail': f'{product.name} has only {product.current_stock} in stock.'})
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -1063,21 +1104,31 @@ class CartItemSerializer(serializers.ModelSerializer):
     item_type = serializers.SerializerMethodField()
     product_details = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
+    variant_id = serializers.SerializerMethodField()
+    variant_sku = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
         fields = [
             'id', 'product', 'product_set', 'product_name', 'product_code',
             'product_price', 'product_image', 'quantity', 'subtotal',
-            'cart_key', 'item_type', 'product_details', 'updated_at',
+            'cart_key', 'item_type', 'product_details', 'updated_at', 'variant_id', 'variant_sku',
         ]
 
     def validate(self, attrs):
-        product = attrs.get('product')
+        product = attrs.get('product', getattr(self.instance, 'product', None))
         product_set = attrs.get('product_set')
         if not product and not product_set and not self.instance:
             raise serializers.ValidationError('Either product or product_set is required.')
+        if product:
+            validate_cart_product(product, attrs.get('quantity', getattr(self.instance, 'quantity', 1)))
         return attrs
+
+    def get_variant_id(self, obj):
+        return obj.product_id if obj.product and obj.product.variant_parent_id else None
+
+    def get_variant_sku(self, obj):
+        return obj.product.code if self.get_variant_id(obj) else None
 
     def get_product_name(self, obj):
         if obj.product:

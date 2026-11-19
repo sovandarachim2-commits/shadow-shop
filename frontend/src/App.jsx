@@ -150,6 +150,7 @@ const OrderTracking = lazyWithReload(() => import('@/pages/customer/OrderTrackin
 const OrderReceipt = lazyWithReload(() => import('@/pages/customer/OrderReceipt'))
 const AddressBook = lazyWithReload(() => import('@/pages/customer/AddressBook'))
 const ExchangeRewards = lazyWithReload(() => import('@/pages/customer/ExchangeRewards'))
+const MemberTiers = lazyWithReload(() => import('@/pages/customer/MemberTiers'))
 const EarnPoints = lazyWithReload(() => import('@/pages/customer/EarnPoints'))
 const PointsHistory = lazyWithReload(() => import('@/pages/customer/PointsHistory'))
 const RedeemRewards = lazyWithReload(() => import('@/pages/customer/RedeemRewards'))
@@ -693,6 +694,8 @@ function AppIconSync() {
 const ADMIN_FALLBACK_ROUTES = [
   { module: 'dashboard', path: '/admin' },
   { module: 'stores', path: '/admin/stores' },
+  { module: 'stores', path: '/admin/stores/payouts' },
+  { module: 'stores', path: '/admin/stores/approvals' },
   { module: 'stores', path: '/admin/store-info' },
   { module: 'orders', path: '/admin/orders' },
   { module: 'customers', path: '/admin/customers' },
@@ -836,6 +839,11 @@ export default function App() {
             <Route path="profile/rewards" element={
               <RequireRewardsAuth>
                 <ExchangeRewards />
+              </RequireRewardsAuth>
+            } />
+            <Route path="profile/rewards/tiers" element={
+              <RequireRewardsAuth>
+                <MemberTiers />
               </RequireRewardsAuth>
             } />
             <Route path="profile/rewards/redeem" element={
@@ -989,8 +997,10 @@ export default function App() {
             <Route path="reports/inventory" element={<LazyPage><InventoryReport /></LazyPage>} />
             <Route path="reports/stock-sold" element={<LazyPage><StockSold /></LazyPage>} />
 
-            {/* Administration */}
-            <Route path="stores" element={<LazyPage><StoreManagement /></LazyPage>} />
+            {/* Store Management & Partner Services */}
+            <Route path="stores" element={<LazyPage><StoreManagement initialTab="stores" /></LazyPage>} />
+            <Route path="stores/payouts" element={<LazyPage><StoreManagement initialTab="payouts" /></LazyPage>} />
+            <Route path="stores/approvals" element={<LazyPage><StoreManagement initialTab="approvals" /></LazyPage>} />
             <Route path="store-info" element={<LazyPage><MyStoreInfo /></LazyPage>} />
             <Route path="profile" element={<LazyPage><AdminProfile /></LazyPage>} />
             <Route path="users" element={<LazyPage><Users /></LazyPage>} />

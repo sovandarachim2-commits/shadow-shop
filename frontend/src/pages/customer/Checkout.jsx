@@ -323,6 +323,9 @@ export default function Checkout() {
 
   const info = useMemo(() => buildDeliveryInfo(addresses, user), [addresses, user])
   const checkoutItems = items.filter((item) => selectedProductIds.includes(getCartKey(item)))
+  const hasUnavailableVariant = checkoutItems.some(({ product }) => product.variants_enabled ||
+    product.availability_status === 'coming_soon' ||
+    (product.variant_parent && product.is_available_for_sale === false))
   const hasAddress = Boolean(info.name && info.phone && (info.address || info.address_line1))
   const province = hasAddress
     ? (provinces.find((p) => p.value === info.province) || provinces.find((p) => p.is_default) || provinces[0])
@@ -614,6 +617,8 @@ export default function Checkout() {
     notes: '',
     items: checkoutItems.map((i) => ({
       product: i.product.item_type === 'set' ? undefined : (i.product.product_id || i.product.id),
+      variant_id: i.product.variant_parent ? i.product.id : undefined,
+      variant_sku: i.product.variant_parent ? i.product.code : undefined,
       product_set: i.product.item_type === 'set' ? i.product.product_set_id : undefined,
       quantity: i.quantity,
       unit_price: i.product?.is_free_gift ? 0 : i.product.retail_price,
@@ -644,6 +649,11 @@ export default function Checkout() {
   const handlePlaceOrder = async (options = {}) => {
     const codConfirmed = options?.codConfirmed === true
     const abaConfirmed = options?.abaConfirmed === true
+
+    if (hasUnavailableVariant) {
+      toast.error(t('product.chooseAvailableOptions'))
+      return
+    }
 
     if (!hasAddress) {
       toast.error(t('checkout.addAddressFirst', 'Please add a delivery address first'), {
@@ -956,6 +966,7 @@ export default function Checkout() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
+                      {item.product.variant_parent && <p className="text-xs text-gray-500">{t('product.variantSku', { sku: item.product.code })}</p>}
                       {item.product?.is_free_gift && (
                         <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">
                           FREE GIFT
@@ -984,6 +995,7 @@ export default function Checkout() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <p className="khmer-title truncate text-sm text-gray-950">{item.product.name}</p>
+                    {item.product.variant_parent && <p className="text-xs text-gray-500">{t('product.variantSku', { sku: item.product.code })}</p>}
                     {item.product?.is_free_gift && (
                       <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">
                         FREE GIFT

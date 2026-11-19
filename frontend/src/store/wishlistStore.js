@@ -28,6 +28,7 @@ export function normalizeWishlistItem(entry) {
     category_name: entry.category_name || '',
     stock_quantity: entry.stock_quantity ?? entry.current_stock ?? 0,
     is_in_stock: entry.is_in_stock ?? true,
+    variants_enabled: Boolean(entry.variants_enabled),
     slug: entry.slug || '',
     item_type: entry.item_type || 'product',
   }

@@ -85,7 +85,7 @@ function SetForm({ set, onSave, onClose, saving }) {
 
   const { data: allProducts = [] } = useQuery({
     queryKey: ['all-products-for-set'],
-    queryFn: () => productsApi.products.list({ page_size: 200, is_active: true }).then((r) => r.data.results ?? r.data),
+    queryFn: () => productsApi.products.list({ page_size: 200, is_active: true, sellable: true }).then((r) => r.data.results ?? r.data),
   })
 
   const f = (k, v) => setForm((s) => ({ ...s, [k]: v }))

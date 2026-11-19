@@ -14,9 +14,11 @@ echo "2. Backend: Install dependencies..."
 source $APP_DIR/venv/bin/activate
 pip install -r $BACKEND_DIR/requirements.txt
 
-echo "3. Backend: Run migrations..."
+echo "3. Backend: Run migrations and seed roles/permissions..."
 cd $BACKEND_DIR
 python manage.py migrate --settings=config.settings.production
+python manage.py seed_permissions --settings=config.settings.production
+python manage.py seed_role_permissions --settings=config.settings.production
 
 echo "4. Backend: Collect static files..."
 python manage.py collectstatic --noinput --settings=config.settings.production

@@ -1,7 +1,7 @@
 import re
 from urllib.parse import urlparse
 from rest_framework import serializers
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 from .models import (
@@ -9,6 +9,7 @@ from .models import (
     Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster, VideoHighlight,
 )
 from utils.image_optimization import card_variant_url, optimize_uploaded_image
+from .variants import VariantInputSerializer, combination, save_variants, serialize_variants
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -26,6 +27,11 @@ class CategorySerializer(serializers.ModelSerializer):
         if annotated is not None:
             return annotated
         return obj.children.count()
+
+    def validate_product_type(self, value):
+        if value != 'clothing' and self.instance and self.instance.products.filter(variants_enabled=True).exists():
+            raise serializers.ValidationError('Disable variants on products in this category before changing its type.')
+        return value
 
     def get_products_count(self, obj):
         annotated = getattr(obj, 'annotated_products_count', None)
@@ -107,6 +113,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     brand_name = serializers.CharField(source='brand.name', read_only=True)
     store_name = serializers.CharField(source='store.name', read_only=True)
     store_slug = serializers.CharField(source='store.slug', read_only=True)
+    store_logo = serializers.SerializerMethodField()
     store_verified = serializers.BooleanField(source='store.is_verified', read_only=True)
     approval_status = serializers.CharField(read_only=True)
     primary_image = serializers.SerializerMethodField()
@@ -123,7 +130,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'code', 'name', 'slug', 'category', 'category_name',
-            'brand', 'brand_name', 'store', 'store_name', 'store_slug', 'store_verified', 'approval_status',
+            'brand', 'brand_name', 'store', 'store_name', 'store_slug', 'store_logo', 'store_verified', 'approval_status',
             'primary_image', 'wholesale_price', 'retail_price', 'cost_price',
             'display_price', 'old_price', 'flash_sale_price',
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
@@ -131,7 +138,108 @@ class ProductListSerializer(serializers.ModelSerializer):
             'is_flash_sale_active',
             'flash_sale_order_count', 'flash_sale_quantity_sold', 'flash_sale_remaining_stock',
             'is_new_arrival', 'is_best_seller', 'rating', 'created_at',
+            'variants_enabled', 'variant_parent', 'variant_size', 'variant_color',
         ]
+
+    def get_store_logo(self, obj):
+        if obj.store and obj.store.logo:
+            url = obj.store.logo.url
+            request = self.context.get('request')
+            if request and url.startswith('/'):
+                return request.build_absolute_uri(url)
+            return url
+        return None
+
+    def get_primary_image(self, obj):
+        images = list(obj.images.all())
+        img = next((image for image in images if image.is_primary), None) or (images[0] if images else None)
+        if img and img.image:
+            return card_variant_url(img.image, self.context.get('request'))
+        if obj.variant_parent_id:
+            return self.get_primary_image(obj.variant_parent)
+        return None
+
+    def get_current_stock(self, obj):
+        return obj.current_stock
+
+    def get_display_price(self, obj):
+        return obj.active_price
+
+    def get_old_price(self, obj):
+        if obj.is_flash_sale_active:
+            return obj.retail_price
+        if obj.compare_at_price and obj.compare_at_price > obj.active_price:
+            return obj.compare_at_price
+        return None
+
+    def _flash_sale_items(self, obj):
+        if not obj.flash_sale_price or not obj.is_flash_sale_active:
+            return obj.order_items.none()
+        qs = obj.order_items.filter(
+            unit_price=obj.flash_sale_price,
+            order__is_draft=False,
+        ).exclude(order__status='cancelled')
+        if obj.flash_sale_starts_at:
+            qs = qs.filter(order__created_at__gte=obj.flash_sale_starts_at)
+        if obj.flash_sale_ends_at:
+            qs = qs.filter(order__created_at__lte=obj.flash_sale_ends_at)
+        return qs
+
+    def get_flash_sale_order_count(self, obj):
+        if hasattr(obj, '_flash_sale_order_count'):
+            return obj._flash_sale_order_count
+        if not obj.is_flash_sale_active:
+            return 0
+        return self._flash_sale_items(obj).values('order_id').distinct().count()
+
+    def get_flash_sale_quantity_sold(self, obj):
+        if hasattr(obj, '_flash_sale_quantity_sold'):
+            return obj._flash_sale_quantity_sold
+        if not obj.is_flash_sale_active:
+            return 0
+        return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
+
+    def get_flash_sale_remaining_stock(self, obj):
+        if obj.flash_sale_stock is None:
+            return None
+        sold = self.get_flash_sale_quantity_sold(obj)
+        return max(0, int(obj.flash_sale_stock) - int(sold or 0))
+
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    variants = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    brand_name = serializers.CharField(source='brand.name', read_only=True)
+    store_name = serializers.CharField(source='store.name', read_only=True)
+    store_slug = serializers.CharField(source='store.slug', read_only=True)
+    store_logo = serializers.SerializerMethodField()
+    store_verified = serializers.BooleanField(source='store.is_verified', read_only=True)
+    primary_image = serializers.SerializerMethodField()
+    images = ProductImageSerializer(many=True, read_only=True)
+    current_stock = serializers.SerializerMethodField()
+    is_available_for_sale = serializers.BooleanField(read_only=True)
+    display_price = serializers.SerializerMethodField()
+    old_price = serializers.SerializerMethodField()
+    is_flash_sale_active = serializers.BooleanField(read_only=True)
+    flash_sale_order_count = serializers.SerializerMethodField()
+    flash_sale_quantity_sold = serializers.SerializerMethodField()
+    flash_sale_remaining_stock = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        exclude = ['variant_archived', 'variant_retail_price', 'variant_cost_price']
+
+    def get_variants(self, obj):
+        return serialize_variants(obj, self.context.get('request'))
+
+    def get_store_logo(self, obj):
+        if obj.store and obj.store.logo:
+            url = obj.store.logo.url
+            request = self.context.get('request')
+            if request and url.startswith('/'):
+                return request.build_absolute_uri(url)
+            return url
+        return None
 
     def get_primary_image(self, obj):
         images = list(obj.images.all())
@@ -190,79 +298,15 @@ class ProductListSerializer(serializers.ModelSerializer):
         return max(0, int(obj.flash_sale_stock) - int(sold or 0))
 
 
-class ProductDetailSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    brand_name = serializers.CharField(source='brand.name', read_only=True)
-    store_name = serializers.CharField(source='store.name', read_only=True)
-    store_slug = serializers.CharField(source='store.slug', read_only=True)
-    store_verified = serializers.BooleanField(source='store.is_verified', read_only=True)
-    images = ProductImageSerializer(many=True, read_only=True)
-    current_stock = serializers.SerializerMethodField()
-    is_available_for_sale = serializers.BooleanField(read_only=True)
-    display_price = serializers.SerializerMethodField()
-    old_price = serializers.SerializerMethodField()
-    is_flash_sale_active = serializers.BooleanField(read_only=True)
-    flash_sale_order_count = serializers.SerializerMethodField()
-    flash_sale_quantity_sold = serializers.SerializerMethodField()
-    flash_sale_remaining_stock = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Product
-        fields = '__all__'
-
-    def get_current_stock(self, obj):
-        try:
-            return obj.stock.quantity
-        except Exception:
-            return 0
-
-    def get_display_price(self, obj):
-        return obj.active_price
-
-    def get_old_price(self, obj):
-        if obj.is_flash_sale_active:
-            return obj.retail_price
-        if obj.compare_at_price and obj.compare_at_price > obj.active_price:
-            return obj.compare_at_price
-        return None
-
-    def _flash_sale_items(self, obj):
-        if not obj.flash_sale_price or not obj.is_flash_sale_active:
-            return obj.order_items.none()
-        qs = obj.order_items.filter(
-            unit_price=obj.flash_sale_price,
-            order__is_draft=False,
-        ).exclude(order__status='cancelled')
-        if obj.flash_sale_starts_at:
-            qs = qs.filter(order__created_at__gte=obj.flash_sale_starts_at)
-        if obj.flash_sale_ends_at:
-            qs = qs.filter(order__created_at__lte=obj.flash_sale_ends_at)
-        return qs
-
-    def get_flash_sale_order_count(self, obj):
-        if hasattr(obj, '_flash_sale_order_count'):
-            return obj._flash_sale_order_count
-        if not obj.is_flash_sale_active:
-            return 0
-        return self._flash_sale_items(obj).values('order_id').distinct().count()
-
-    def get_flash_sale_quantity_sold(self, obj):
-        if hasattr(obj, '_flash_sale_quantity_sold'):
-            return obj._flash_sale_quantity_sold
-        if not obj.is_flash_sale_active:
-            return 0
-        return self._flash_sale_items(obj).aggregate(total=Sum('quantity'))['total'] or 0
-
-    def get_flash_sale_remaining_stock(self, obj):
-        if obj.flash_sale_stock is None:
-            return None
-        sold = self.get_flash_sale_quantity_sold(obj)
-        return max(0, int(obj.flash_sale_stock) - int(sold or 0))
-
-
 class ProductWriteSerializer(serializers.ModelSerializer):
     code = serializers.CharField(max_length=50, required=False, allow_blank=True)
     is_flash_sale_active = serializers.BooleanField(read_only=True)
+    variants = serializers.SerializerMethodField()
+    variant_rows = VariantInputSerializer(many=True, required=False, write_only=True, max_length=100)
+    clothing_gender = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    clothing_type = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    clothing_material = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    clothing_fit = serializers.CharField(max_length=40, required=False, allow_blank=True)
 
     class Meta:
         model = Product
@@ -273,8 +317,13 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             'flash_sale_starts_at', 'flash_sale_ends_at', 'flash_sale_max_order_qty', 'flash_sale_stock',
             'min_order_qty', 'availability_status', 'is_active',
             'is_featured', 'is_flash_sale_active', 'is_new_arrival', 'is_best_seller',
+            'clothing_gender', 'clothing_type', 'clothing_material', 'clothing_fit',
+            'variants_enabled', 'variants', 'variant_rows',
         ]
         read_only_fields = ['id', 'is_flash_sale_active']
+
+    def get_variants(self, obj):
+        return serialize_variants(obj, self.context.get('request'))
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -282,13 +331,47 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         retail_price = attrs.get('retail_price', getattr(self.instance, 'retail_price', None))
         if compare_at_price is not None and retail_price is not None and compare_at_price <= retail_price:
             raise serializers.ValidationError({'compare_at_price': 'Old price must be higher than the retail price.'})
+
+        enabled = attrs.get('variants_enabled', getattr(self.instance, 'variants_enabled', False))
+        category = attrs.get('category', getattr(self.instance, 'category', None))
+        if enabled and (not category or category.product_type != 'clothing'):
+            raise serializers.ValidationError({'category': 'Variants require a Clothing category.'})
+
+        rows = attrs.get('variant_rows')
+        existing = list(self.instance.variants.all()) if self.instance else []
+        if existing and 'store' in attrs and attrs['store'] != self.instance.store:
+            raise serializers.ValidationError({'store': 'A product with variant inventory cannot be moved to another store.'})
+        if enabled and (rows == [] or (rows is None and not any(not v.variant_archived for v in existing))):
+            raise serializers.ValidationError({'variant_rows': 'Add at least one size and color combination.'})
+        if rows and not enabled:
+            raise serializers.ValidationError({'variant_rows': 'Enable variants before adding combinations.'})
+        if rows:
+            self._validate_variant_rows(rows, existing, attrs.get('code') or getattr(self.instance, 'code', ''))
         return attrs
 
-    def _generate_product_code(self):
+    def _validate_variant_rows(self, rows, existing, parent_code):
+        stored = {combination(v.variant_size, v.variant_color): v for v in existing}
+        seen_combinations = set()
+        seen_codes = {parent_code.casefold()}
+        for row in rows:
+            key = combination(row['size'], row['color'])
+            if key in seen_combinations:
+                raise serializers.ValidationError({'variant_rows': 'Each size and color combination must be unique.'})
+            seen_combinations.add(key)
+            variant = stored.get(key)
+            code = row.get('sku') or (variant.code if variant else '')
+            if code:
+                if code.casefold() in seen_codes or Product.objects.filter(code__iexact=code).exclude(pk=getattr(variant, 'pk', None)).exists():
+                    raise serializers.ValidationError({'variant_rows': f'SKU {code} is already used.'})
+                seen_codes.add(code.casefold())
+            if variant and row.get('initial_stock'):
+                raise serializers.ValidationError({'variant_rows': 'Use Inventory to adjust stock for an existing variant.'})
+
+    def _generate_product_code(self, reserved=()):
         next_number = (Product.objects.order_by('-id').values_list('id', flat=True).first() or 0) + 1
         while True:
             code = f"SKU{next_number:03d}"
-            if not Product.objects.filter(code=code).exists():
+            if code.casefold() not in reserved and not Product.objects.filter(code__iexact=code).exists():
                 return code
             next_number += 1
 
@@ -300,19 +383,31 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'name': 'A product with a similar name already exists.'})
         raise serializers.ValidationError({'detail': 'Could not save product due to a conflict.'})
 
+    @transaction.atomic
     def create(self, validated_data):
+        rows = validated_data.pop('variant_rows', None)
         if not validated_data.get('code'):
-            validated_data['code'] = self._generate_product_code()
+            reserved = {row['sku'].casefold() for row in rows or [] if row.get('sku')}
+            validated_data['code'] = self._generate_product_code(reserved)
         try:
-            return super().create(validated_data)
+            product = super().create(validated_data)
+            if rows:
+                save_variants(product, rows, self._generate_product_code, self.context['request'].user)
+            return product
         except IntegrityError as exc:
             self._raise_integrity_error(exc)
 
+    @transaction.atomic
     def update(self, instance, validated_data):
+        rows = validated_data.pop('variant_rows', None)
         if 'code' in validated_data and not validated_data.get('code'):
             validated_data.pop('code')
         try:
-            return super().update(instance, validated_data)
+            previous = Product.objects.select_for_update().get(pk=instance.pk)
+            product = super().update(previous, validated_data)
+            if product.variants_enabled or product.variants.exists():
+                save_variants(product, rows, self._generate_product_code, self.context['request'].user)
+            return product
         except IntegrityError as exc:
             self._raise_integrity_error(exc)
 
@@ -379,7 +474,7 @@ class ProductSetSerializer(serializers.ModelSerializer):
 
         available_sets = []
         for item in items:
-            if not item.product.is_available_for_sale:
+            if item.product.variants_enabled or not item.product.is_available_for_sale:
                 return 0
             if item.product.availability_status == Product.AVAILABILITY_AVAILABLE:
                 continue

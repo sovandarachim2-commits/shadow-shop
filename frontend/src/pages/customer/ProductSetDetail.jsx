@@ -76,6 +76,7 @@ const RelatedSetCard = memo(function RelatedSetCard({ item, priority = false, on
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (!isSet && item.variants_enabled) return navigate(path)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -85,6 +86,7 @@ const RelatedSetCard = memo(function RelatedSetCard({ item, priority = false, on
 
   const handleIncrease = (e) => {
     e.stopPropagation()
+    if (!isSet && item.variants_enabled) return navigate(path)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -410,22 +412,6 @@ export default function ProductSetDetail() {
             <span className="absolute left-4 top-4 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-pink-600 shadow-sm">
               {t('product.productSet').toUpperCase()}
             </span>
-            {galleryImages.length > 1 && (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/80 px-2 py-1 shadow-sm">
-                <div className="pointer-events-auto flex max-w-[180px] gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {galleryImages.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => showImageAt(i)}
-                      aria-label={`Show product set image ${i + 1}`}
-                      className={`h-1.5 shrink-0 rounded-full transition-all duration-300 ${i === activeImg ? 'w-5 bg-pink-600' : 'w-1.5 bg-pink-200'}`}
-                    />
-                  ))}
-                </div>
-                <span className="text-[11px] font-medium tabular-nums text-pink-600">{activeImg + 1}/{galleryImages.length}</span>
-              </div>
-            )}
           </div>
           {galleryImages.length > 1 && (
             <div className="mt-3 hidden gap-2.5 overflow-x-auto scroll-smooth px-4 py-0 md:flex md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

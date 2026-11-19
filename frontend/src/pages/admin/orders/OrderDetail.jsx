@@ -125,7 +125,7 @@ export function EditOrderModal({ order, onClose, onSaved }) {
 
   const { data: products = [], isLoading: searching } = useQuery({
     queryKey: ['edit-order-products', search],
-    queryFn: () => productsApi.products.list({ search, page_size: 20, is_active: true }).then((r) => r.data.results ?? r.data ?? []),
+    queryFn: () => productsApi.products.list({ search, page_size: 20, is_active: true, sellable: true }).then((r) => r.data.results ?? r.data ?? []),
     enabled: true,
   })
 

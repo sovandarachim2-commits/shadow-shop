@@ -820,9 +820,9 @@ export default function StockSold() {
             <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
-                  <th className="max-lg:static lg:sticky left-0 z-20 w-14 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">No</th>
-                  <th className="max-lg:static lg:sticky left-14 z-20 min-w-[170px] bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Order Date</th>
-                  <th className="max-lg:static lg:sticky left-[226px] z-20 min-w-[180px] border-r border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Customer Name</th>
+                  <th className="w-14 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">No</th>
+                  <th className="min-w-[170px] bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Order Date</th>
+                  <th className="min-w-[180px] border-r border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Customer Name</th>
                   {products.map((product, productIndex) => {
                     const [headerClass] = productColor(productIndex)
                     return (
@@ -841,13 +841,13 @@ export default function StockSold() {
                       </th>
                     )
                   })}
-                  <th className="max-lg:static lg:sticky right-[870px] z-20 w-[100px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Total Qty</th>
-                  <th className="max-lg:static lg:sticky right-[730px] z-20 w-[140px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Payment Status</th>
-                  <th className="max-lg:static lg:sticky right-[590px] z-20 w-[140px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Method</th>
-                  <th className="max-lg:static lg:sticky right-[450px] z-20 w-[140px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Total Amount</th>
-                  <th className="max-lg:static lg:sticky right-[310px] z-20 w-[140px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Sale Discount</th>
-                  <th className="max-lg:static lg:sticky right-[180px] z-20 w-[130px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Delivery Fee</th>
-                  <th className="max-lg:static lg:sticky right-0 z-20 w-[180px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Grand Total</th>
+                  <th className="w-[100px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Total Qty</th>
+                  <th className="w-[130px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Payment Status</th>
+                  <th className="w-[130px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Method</th>
+                  <th className="w-[140px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Total Amount</th>
+                  <th className="w-[140px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Sale Discount</th>
+                  <th className="w-[130px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Delivery Fee</th>
+                  <th className="w-[160px] border-l border-gray-100 bg-gray-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-black">Grand Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -855,9 +855,9 @@ export default function StockSold() {
                   const stripe = index % 2 === 1 ? 'bg-slate-100' : 'bg-white'
                   return (
                     <tr key={order.id}>
-                      <td className={`max-lg:static lg:sticky left-0 z-10 border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-black ${stripe}`}>{index + 1}</td>
-                      <td className={`max-lg:static lg:sticky left-14 z-10 whitespace-nowrap border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-black ${stripe}`}>{formatDateTime(order.order_date)}</td>
-                      <td className={`max-lg:static lg:sticky left-[226px] z-10 border-r border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-black ${stripe}`}>{order.customer_name || '—'}</td>
+                      <td className={`border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-black ${stripe}`}>{index + 1}</td>
+                      <td className={`whitespace-nowrap border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-black ${stripe}`}>{formatDateTime(order.order_date)}</td>
+                      <td className={`border-r border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-black ${stripe}`}>{order.customer_name || '—'}</td>
                       {products.map((product, productIndex) => {
                         const qty = order.quantities?.[product.id] || 0
                         const [, oddClass, evenClass, textClass] = productColor(productIndex)
@@ -867,20 +867,28 @@ export default function StockSold() {
                           </td>
                         )
                       })}
-                      <td className={`max-lg:static lg:sticky right-[870px] z-10 w-[100px] border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-orange-600 ${stripe}`}>{order.total_qty}</td>
-                      <td className={`max-lg:static lg:sticky right-[730px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold ${stripe}`}><span className={`inline-flex rounded-full px-2.5 py-1 ${PAYMENT_STATUS_TW[order.payment_status] || 'bg-slate-100 text-slate-700'}`}>{PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status || '�'}</span></td>
-                      <td className={`max-lg:static lg:sticky right-[590px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold ${stripe}`}><span className={`inline-flex rounded-full px-2.5 py-1 ${PAYMENT_METHOD_COLORS[order.payment_method] || 'bg-slate-100 text-slate-700'}`}>{order.payment_method_display || '�'}</span></td>
-                      <td className={`max-lg:static lg:sticky right-[450px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700 ${stripe}`}>{formatCurrency(order.total_amount)}</td>
-                      <td className={`max-lg:static lg:sticky right-[310px] z-10 w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-rose-600 ${stripe}`}>{formatCurrency(order.sale_discount)}</td>
-                      <td className={`max-lg:static lg:sticky right-[180px] z-10 w-[130px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-sky-700 ${stripe}`}>{formatCurrency(order.delivery_fee)}</td>
-                      <td className={`max-lg:static lg:sticky right-0 z-10 w-[180px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700 ${stripe}`}>{formatCurrency(order.grand_total)}</td>
+                      <td className={`w-[100px] border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-orange-600 ${stripe}`}>{order.total_qty}</td>
+                      <td className={`w-[130px] whitespace-nowrap border-l border-t border-white px-2.5 py-2.5 text-center align-middle ${stripe}`}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_TW[order.payment_status] || 'bg-slate-100 text-slate-700'}`}>
+                          {PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status || '—'}
+                        </span>
+                      </td>
+                      <td className={`w-[130px] whitespace-nowrap border-l border-t border-white px-2.5 py-2.5 text-center align-middle ${stripe}`}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_COLORS[order.payment_method] || 'bg-slate-100 text-slate-700'}`}>
+                          {order.payment_method_display || '—'}
+                        </span>
+                      </td>
+                      <td className={`w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700 ${stripe}`}>{formatCurrency(order.total_amount)}</td>
+                      <td className={`w-[140px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-rose-600 ${stripe}`}>{formatCurrency(order.sale_discount)}</td>
+                      <td className={`w-[130px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-semibold text-sky-700 ${stripe}`}>{formatCurrency(order.delivery_fee)}</td>
+                      <td className={`w-[160px] whitespace-nowrap border-l border-t border-white px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700 ${stripe}`}>{formatCurrency(order.grand_total)}</td>
                     </tr>
                   )
                 })}
               </tbody>
               <tfoot>
                 <tr>
-                  <td className="max-lg:static lg:sticky left-0 z-10 border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-gray-900" colSpan={3}>Total</td>
+                  <td className="border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-gray-900" colSpan={3}>Total</td>
                   {products.map((product, productIndex) => {
                     const [headerClass, , , textClass] = productColor(productIndex)
                     return (
@@ -889,13 +897,13 @@ export default function StockSold() {
                       </td>
                     )
                   })}
-                  <td className="max-lg:static lg:sticky right-[870px] z-10 w-[100px] border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-orange-600">{ordersQty}</td>
-                  <td className="max-lg:static lg:sticky right-[730px] z-10 w-[140px] border-l border-t border-gray-200 bg-gray-50 px-3 py-3" />
-                  <td className="max-lg:static lg:sticky right-[590px] z-10 w-[140px] border-l border-t border-gray-200 bg-gray-50 px-3 py-3" />
-                  <td className="max-lg:static lg:sticky right-[450px] z-10 w-[140px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700">{formatCurrency(ordersAmount)}</td>
-                  <td className="max-lg:static lg:sticky right-[310px] z-10 w-[140px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-rose-600">{formatCurrency(saleDiscount)}</td>
-                  <td className="max-lg:static lg:sticky right-[180px] z-10 w-[130px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-sky-700">{formatCurrency(deliveryFee)}</td>
-                  <td className="max-lg:static lg:sticky right-0 z-10 w-[180px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700">{formatCurrency(grandTotal)}</td>
+                  <td className="w-[100px] border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-orange-600">{ordersQty}</td>
+                  <td className="w-[130px] border-l border-t border-gray-200 bg-gray-50 px-3 py-3" />
+                  <td className="w-[130px] border-l border-t border-gray-200 bg-gray-50 px-3 py-3" />
+                  <td className="w-[140px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700">{formatCurrency(ordersAmount)}</td>
+                  <td className="w-[140px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-rose-600">{formatCurrency(saleDiscount)}</td>
+                  <td className="w-[130px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-sky-700">{formatCurrency(deliveryFee)}</td>
+                  <td className="w-[160px] whitespace-nowrap border-l border-t border-gray-200 bg-gray-50 px-3 py-3 text-center align-middle text-sm font-bold text-emerald-700">{formatCurrency(grandTotal)}</td>
                 </tr>
               </tfoot>
             </table>

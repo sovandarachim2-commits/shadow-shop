@@ -7,6 +7,7 @@ import {
   BadgeCheck,
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   Crown,
   Gift,
   HelpCircle,
@@ -21,8 +22,9 @@ import {
   Truck,
 } from 'lucide-react'
 import { ordersApi } from '@/api/orders'
+import useAuthStore from '@/store/authStore'
 import RewardRedeemedDialog from '@/components/customer/RewardRedeemedDialog'
-import MemberTiersModal from '@/components/customer/MemberTiersModal'
+import MembershipVisaCard from '@/components/customer/MembershipVisaCard'
 import { getMemberTierImage } from '@/assets/member_shoppee'
 import { cn, formatDate } from '@/utils/helpers'
 
@@ -214,13 +216,15 @@ function PointActivityList({ transactions, onViewAll, t }) {
 
 export default function ExchangeRewards() {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [exchangingId, setExchangingId] = useState(null)
   const [activeCategory, setActiveCategory] = useState('all')
   const [redeemedCoupon, setRedeemedCoupon] = useState(null)
-  const [showTierModal, setShowTierModal] = useState(false)
   const typeMeta = getTypeMeta(t)
+
+  const displayName = user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'VALUED MEMBER'
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -292,27 +296,31 @@ export default function ExchangeRewards() {
   }
 
   const quickActions = [
-    { title: t('rewardsPage.main.earnPoints'), text: t('rewardsPage.main.earnPointsDesc'), icon: Star, action: () => navigate('/profile/rewards/earn') },
-    { title: t('rewardsPage.main.redeemPoints'), text: t('rewardsPage.main.redeemPointsDesc'), icon: Gift, action: () => navigate('/profile/rewards/redeem') },
-    { title: t('rewardsPage.main.myCoupons'), text: t('rewardsPage.main.myCouponsDesc'), icon: Ticket, action: () => navigate('/profile/rewards/coupons') },
-    { title: t('rewardsPage.main.pointHistory'), text: t('rewardsPage.main.pointHistoryDesc'), icon: History, action: () => navigate('/profile/rewards/history') },
+    {
+      title: t('rewardsPage.main.redeemShort', 'Redeem'),
+      text: t('rewardsPage.main.redeemShortDesc', 'Use points'),
+      icon: Gift,
+      action: () => navigate('/profile/rewards/redeem'),
+    },
+    {
+      title: t('rewardsPage.main.couponsShort', 'Coupons'),
+      text: t('rewardsPage.main.couponsShortDesc', 'My coupons'),
+      icon: Ticket,
+      action: () => navigate('/profile/rewards/coupons'),
+    },
+    {
+      title: t('rewardsPage.main.historyShort', 'History'),
+      text: t('rewardsPage.main.historyShortDesc', 'Point activity'),
+      icon: History,
+      action: () => navigate('/profile/rewards/history'),
+    },
   ]
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 md:pb-6">
       <RewardRedeemedDialog redemption={redeemedCoupon} onClose={() => setRedeemedCoupon(null)} />
-      <MemberTiersModal
-        isOpen={showTierModal}
-        onClose={() => setShowTierModal(false)}
-        currentLevel={memberLevel}
-        currentPoints={currentPoints}
-        tierThresholds={data?.tier_thresholds || {}}
-        tierDescriptions={data?.tier_descriptions || {}}
-        tierDescriptionsKm={data?.tier_descriptions_km || {}}
-        t={t}
-      />
       <div className="mx-auto flex w-full max-w-[1500px] flex-col px-5 pb-6 md:px-6 md:pt-6">
-        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0">
+        <div className="-mx-5 mb-3.5 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-2.5 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mb-5 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0">
           <button 
             type="button" 
             onClick={() => navigate('/profile')} 
@@ -326,7 +334,7 @@ export default function ExchangeRewards() {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => setShowTierModal(true)}
+              onClick={() => navigate('/profile/rewards/tiers')}
               className="flex h-11 w-11 items-center justify-center rounded-full bg-pink-50 text-pink-600 transition hover:bg-pink-100 active:scale-95 md:h-10 md:w-auto md:gap-2 md:rounded-xl md:border md:border-pink-200 md:bg-pink-50/70 md:px-3.5 md:py-2"
               title={t('rewardsPage.viewTierDetails', 'View Level Details')}
             >
@@ -336,81 +344,35 @@ export default function ExchangeRewards() {
           </div>
         </div>
 
-        <section className="relative mt-2 overflow-hidden rounded-[22px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-4 md:rounded-[22px] md:p-5">
-          <div className="absolute right-5 top-8 h-28 w-28 rotate-45 rounded-3xl bg-white/10" />
-          <Sparkles className="absolute right-32 top-6 text-white/20" size={24} />
-          <Sparkles className="absolute bottom-20 right-36 text-white/15" size={20} />
-          <div className="relative z-10 flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-white/90 md:text-sm">{t('rewardsPage.yourPoints')}</p>
-              <div className="mt-2 flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white shadow-lg shadow-pink-950/20 ring-[3px] ring-white/30 md:h-11 md:w-11">
-                  <Star size={20} fill="currentColor" />
-                </span>
-                <div className="flex items-end gap-1.5">
-                  <span className="text-[32px] font-black leading-none tracking-tight md:text-[36px]">{currentPoints.toLocaleString()}</span>
-                  <span className="pb-0.5 text-xs font-black md:pb-1 md:text-sm">{t('rewardsPage.pts')}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTierModal(true)}
-                className="group mt-4 inline-flex items-center gap-2 rounded-xl bg-white/85 px-3 py-1.5 text-gray-950 shadow-sm backdrop-blur transition hover:bg-white active:scale-95 md:mt-4 md:px-3.5 md:py-1.5"
-              >
-                <span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-white p-0.5 shadow-sm md:h-6 md:w-6">
-                  <img src={getMemberTierImage(memberLevel)} alt="" className="h-full w-full object-contain" />
-                </span>
-                <span className="text-xs font-black md:text-sm">{t('profile.memberLevel', { level: translatedLevel })}</span>
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition group-hover:bg-pink-200">
-                  <Info size={11} />
-                </span>
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowTierModal(true)}
-              aria-label={t('rewardsPage.viewTierDetails', 'View Level Details')}
-              className="group absolute right-5 top-8 flex h-20 w-20 shrink-0 items-center justify-center opacity-95 transition hover:scale-105 active:scale-95 sm:relative sm:right-auto sm:top-auto sm:mt-2 sm:h-24 sm:w-24"
-            >
-              <div className="absolute inset-0 rotate-12 rounded-[28px] bg-white/20 shadow-2xl transition group-hover:rotate-45" />
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-[22px] border-[3px] border-white/80 bg-white/95 p-1.5 shadow-xl sm:h-20 sm:w-20 sm:rounded-[24px] sm:border-4">
-                <img
-                  src={getMemberTierImage(memberLevel)}
-                  alt={translatedLevel}
-                  className="h-full w-full object-contain"
-                />
-              </div>
-              <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-pink-600 text-white shadow-md">
-                <Info size={12} />
-              </span>
-            </button>
-          </div>
-          <div className="relative z-10 mt-5 md:mt-6">
-            <div className="mb-2 flex items-center justify-between gap-3 text-xs font-black md:mb-2.5">
-              {nextMemberLevelRaw ? (
-                <>
-                  <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextMemberLevel })}</span></span>
-                  <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
-                </>
-              ) : (
-                <span>{t('profile.maxTierReached')}</span>
-              )}
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2">
-              <div className="h-full rounded-full bg-yellow-300 transition-all" style={{ width: `${progressPct}%` }} />
-            </div>
-            <p className="mt-2.5 text-xs font-black md:mt-3 md:text-sm">{t('rewardsPage.ptsProgress', { current: currentPoints.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>
-          </div>
-        </section>
+        <div className="mt-0 md:mt-1">
+          <MembershipVisaCard
+            tier={memberLevel}
+            memberName={displayName}
+            points={currentPoints}
+            nextTierPoints={nextTierPoints}
+            nextTierName={nextMemberLevelRaw}
+            pointsToNext={pointsToNext}
+            progressPct={progressPct}
+            showStatus={false}
+            showProgress={true}
+            interactive={true}
+            onClick={() => navigate('/profile/rewards/tiers')}
+          />
+        </div>
 
-        <section className="mt-3 grid grid-cols-2 gap-2.5 md:mt-4 md:grid-cols-4 md:gap-3">
+        <section className="mt-3 grid grid-cols-3 gap-2.5 md:mt-4 md:gap-3">
           {quickActions.map((item) => {
             const Icon = item.icon
             return (
-              <button type="button" onClick={item.action} key={item.title} className="flex min-h-[86px] flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.05)] active:scale-[0.98] md:min-h-[104px] md:p-3">
-                <Icon size={24} className="text-pink-600 md:h-7 md:w-7" fill={item.icon === Star ? 'currentColor' : 'none'} />
-                <span className="mt-1.5 text-[12px] font-black text-gray-950 md:mt-2 md:text-sm">{item.title}</span>
-                <span className="mt-0.5 text-[10px] font-semibold text-gray-500 md:text-xs">{item.text}</span>
+              <button
+                type="button"
+                onClick={item.action}
+                key={item.title}
+                className="flex min-h-[86px] flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-2.5 text-center shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition hover:shadow-md active:scale-[0.98] md:min-h-[104px] md:p-3"
+              >
+                <Icon size={24} className="text-pink-600 md:h-7 md:w-7" />
+                <span className="mt-1.5 text-xs font-black text-gray-950 md:mt-2 md:text-sm">{item.title}</span>
+                <span className="mt-0.5 truncate text-[10px] font-semibold text-gray-500 md:text-xs">{item.text}</span>
               </button>
             )
           })}

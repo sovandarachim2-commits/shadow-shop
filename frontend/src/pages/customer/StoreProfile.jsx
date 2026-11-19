@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useState, useEffect, memo } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -10,6 +10,126 @@ import toast from 'react-hot-toast'
 import { storesApi } from '@/api/stores'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
+import useCartStore from '@/store/cartStore'
+import useAuthStore from '@/store/authStore'
+import useUiStore from '@/store/uiStore'
+import { ProductImageAddButton } from '@/components/customer/CustomerUi'
+import { handleCartAdd } from '@/components/customer/CartAddedToast'
+
+function isAvailableForSale(product) {
+  return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
+}
+
+const StoreProductCard = memo(function StoreProductCard({ product }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const qty = useCartStore((s) => {
+    const item = s.items.find((i) => (i.product?.cart_key || i.product?.id) === (product.cart_key || product.id))
+    return item?.quantity || 0
+  })
+  const loggedIn = useAuthStore((s) => s.isAuthenticated)
+  const openAuthModal = useUiStore((s) => s.openAuthModal)
+
+  const coverImage = (typeof product.primary_image === 'string' ? product.primary_image : product.primary_image?.image)
+    || product.images?.[0]?.image
+    || product.image
+  const isComingSoon = product?.availability_status === 'coming_soon'
+  const currentPrice = Number(product.display_price ?? product.retail_price ?? product.price ?? 0)
+  const oldPrice = Number(product.old_price ?? product.compare_at_price ?? 0)
+  const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
+  const available = !isComingSoon && isAvailableForSale(product)
+
+  const handleAdd = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (isComingSoon) return
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
+    if (!loggedIn) {
+      openAuthModal('cart')
+      return
+    }
+    handleCartAdd(addItem, saleProduct, navigate, 1)
+  }
+
+  const handleIncrease = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
+    if (!loggedIn) {
+      openAuthModal('cart')
+      return
+    }
+    handleCartAdd(addItem, saleProduct, navigate, 1)
+  }
+
+  const handleDecrease = (e) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (!loggedIn) {
+      openAuthModal('cart')
+      return
+    }
+    updateQuantity(product.id, qty - 1)
+  }
+
+  return (
+    <article
+      className="group relative cursor-pointer flex flex-col overflow-hidden rounded-2xl bg-white border border-gray-100 p-2.5 shadow-sm transition hover:shadow-md hover:border-pink-200 active:scale-[0.99]"
+      onClick={() => navigate(`/product/${product.id}`)}
+    >
+      <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-50 mb-2.5">
+        {isComingSoon && (
+          <span className="absolute left-2.5 top-2.5 z-10 rounded-full bg-pink-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Coming Soon
+          </span>
+        )}
+        {coverImage ? (
+          <img
+            src={coverImage}
+            alt={product.name}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-pink-50/50 text-pink-300">
+            <Package size={28} />
+          </div>
+        )}
+        <ProductImageAddButton
+          available={available}
+          qty={qty}
+          onAdd={handleAdd}
+          onIncrease={handleIncrease}
+          onDecrease={handleDecrease}
+          soldOutLabel={t('common.soldOut', 'Sold Out')}
+          comingSoon={isComingSoon}
+        />
+      </div>
+
+      <div className="flex flex-1 flex-col">
+        {product.brand_name && (
+          <span className="truncate text-[11px] font-semibold text-gray-400 mb-0.5">
+            {product.brand_name}
+          </span>
+        )}
+        <h3 className="line-clamp-2 text-xs sm:text-sm font-bold text-gray-800 group-hover:text-pink-600 transition">
+          {product.name}
+        </h3>
+        <div className="mt-auto pt-2 flex items-baseline gap-1.5">
+          <span className="text-sm sm:text-base font-black text-pink-600 font-mono">
+            {formatCurrency(currentPrice)}
+          </span>
+          {oldPrice > currentPrice && (
+            <span className="text-xs text-gray-400 line-through font-mono">
+              {formatCurrency(oldPrice)}
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+})
 
 export default function StoreProfile() {
   const { slug } = useParams()
@@ -26,7 +146,7 @@ export default function StoreProfile() {
   // Fetch Products for this specific store only
   const { data: productsData, isLoading: isProductsLoading } = useQuery({
     queryKey: ['public-store-products', slug, store?.id],
-    queryFn: () => productsApi.list({ store: slug, limit: 100 }).then((r) => r.data),
+    queryFn: () => productsApi.products.list({ store: slug, limit: 100 }).then((r) => r.data),
     enabled: Boolean(slug),
   })
 
@@ -249,43 +369,9 @@ export default function StoreProfile() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {products.map((product) => {
-                const coverImage = product.primary_image?.image || product.images?.[0]?.image || product.image
-                return (
-                  <Link
-                    key={product.id}
-                    to={`/product/${product.id}`}
-                    className="group flex flex-col overflow-hidden rounded-2xl bg-white border border-gray-100 p-2.5 shadow-sm transition hover:shadow-md hover:border-pink-200"
-                  >
-                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-100 mb-2.5">
-                      {coverImage ? (
-                        <img
-                          src={coverImage}
-                          alt={product.name}
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-gray-400">
-                          <Package size={24} />
-                        </div>
-                      )}
-                    </div>
-                    <h3 className="line-clamp-2 text-xs sm:text-sm font-bold text-gray-800 group-hover:text-pink-600 transition">
-                      {product.name}
-                    </h3>
-                    <div className="mt-auto pt-2 flex items-baseline gap-1.5">
-                      <span className="text-sm sm:text-base font-black text-pink-600 font-mono">
-                        {formatCurrency(product.price)}
-                      </span>
-                      {product.compare_at_price && Number(product.compare_at_price) > Number(product.price) && (
-                        <span className="text-xs text-gray-400 line-through font-mono">
-                          {formatCurrency(product.compare_at_price)}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                )
-              })}
+              {products.map((product) => (
+                <StoreProductCard key={product.id} product={product} />
+              ))}
             </div>
           )}
         </div>

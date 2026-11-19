@@ -2,21 +2,44 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Boxes, Plus, Pencil, Trash2, Upload, X } from 'lucide-react'
 import { productsApi } from '@/api/products'
+import { getCategoryImage } from '@/assets/category'
 import toast from 'react-hot-toast'
 import { Badge } from '@/components/ui/Badge'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
+function CategoryStatusSwitch({ active, disabled, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={active}
+      aria-label={active ? 'Turn category off' : 'Turn category on'}
+      className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full px-1.5 text-[10px] font-black uppercase shadow-sm transition disabled:cursor-wait disabled:opacity-70 ${
+        active ? 'justify-start bg-green-600 text-white' : 'justify-end bg-gray-300 text-gray-700'
+      }`}
+    >
+      <span className={active ? 'pr-5' : 'pl-5'}>{active ? 'ON' : 'OFF'}</span>
+      <span
+        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+          active ? 'right-0.5' : 'left-0.5'
+        }`}
+      />
+    </button>
+  )
+}
+
 function CategoryModal({ open, editing, onClose, onSave, saving }) {
   const [form, setForm] = useState(() => editing
-    ? { name: editing.name, description: editing.description || '', parent: editing.parent || '', is_active: editing.is_active !== false }
-    : { name: '', description: '', parent: '', is_active: true }
+    ? { name: editing.name, description: editing.description || '', parent: editing.parent || '', is_active: editing.is_active !== false, product_type: editing.product_type || 'general' }
+    : { name: '', description: '', parent: '', is_active: true, product_type: 'general' }
   )
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const fileInputRef = useRef()
 
-  const currentImage = imagePreview || editing?.image_url || null
+  const currentImage = imagePreview || getCategoryImage({ name: form.name, image_url: editing?.image_url })
 
   const pickImage = (e) => {
     const file = e.target.files?.[0]
@@ -33,6 +56,7 @@ function CategoryModal({ open, editing, onClose, onSave, saving }) {
     fd.append('name', form.name)
     fd.append('description', form.description || '')
     fd.append('is_active', form.is_active ? 'true' : 'false')
+    fd.append('product_type', form.product_type)
     if (form.parent) fd.append('parent', form.parent)
     if (imageFile) fd.append('image', imageFile)
     onSave(fd)
@@ -102,15 +126,21 @@ function CategoryModal({ open, editing, onClose, onSave, saving }) {
               onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
 
-          <label className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <span className="text-sm font-semibold text-gray-700">Active on shop</span>
-            <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => setForm(f => ({ ...f, is_active: e.target.checked }))}
-              className="h-4 w-4 accent-purple-600"
-            />
+          <label className="block">
+            <span className="label">Product Type</span>
+            <select className="select-field" value={form.product_type} onChange={(e) => setForm(f => ({ ...f, product_type: e.target.value }))}>
+              <option value="general">General</option>
+              <option value="clothing">Clothing</option>
+            </select>
           </label>
+
+          <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <span className="text-sm font-semibold text-gray-700">Active on shop</span>
+            <CategoryStatusSwitch
+              active={form.is_active}
+              onToggle={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
+            />
+          </div>
 
           {/* Actions */}
           <div className="flex gap-3 pt-1">
@@ -147,7 +177,7 @@ export default function Categories() {
       setShowModal(false)
       setEditing(null)
     },
-    onError: () => toast.error('Failed to save category'),
+    onError: (error) => toast.error(error.response?.data?.product_type?.[0] || 'Failed to save category'),
   })
 
   const deleteMutation = useMutation({
@@ -159,7 +189,20 @@ export default function Categories() {
     },
   })
 
-  const categories = data ?? []
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, is_active }) => productsApi.categories.update(id, { is_active }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-categories'] })
+      qc.invalidateQueries({ queryKey: ['categories-home'] })
+      toast.success('Category status updated')
+    },
+    onError: () => toast.error('Failed to update category status'),
+  })
+
+  const categories = (data ?? []).map((category) => ({
+    ...category,
+    displayImage: getCategoryImage(category),
+  }))
   const topLevel = categories.filter((c) => !c.parent)
   const rows = topLevel.flatMap((cat) => {
     const children = categories.filter((item) => item.parent === cat.id)
@@ -211,7 +254,7 @@ export default function Categories() {
               <Th>Description</Th>
               <Th>Products</Th>
               <Th>Order</Th>
-              <Th>Status</Th>
+              <Th>Active</Th>
               <Th>Actions</Th>
             </tr>
           </Thead>
@@ -229,8 +272,8 @@ export default function Categories() {
                 <Td><span className="text-sm font-semibold text-gray-500">{index + 1}</span></Td>
                 <Td>
                   <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-purple-50">
-                    {cat.image_url ? (
-                      <img src={cat.image_url} alt={cat.name} className="h-full w-full object-cover" />
+                    {cat.displayImage ? (
+                      <img src={cat.displayImage} alt={cat.name} className="h-full w-full object-cover" />
                     ) : (
                       <Boxes size={17} className="text-purple-400" />
                     )}
@@ -249,9 +292,11 @@ export default function Categories() {
                 <Td><span className="font-semibold">{cat.products_count || 0}</span></Td>
                 <Td><span className="text-sm text-gray-600">{cat.order ?? 0}</span></Td>
                 <Td>
-                  <Badge variant={cat.is_active ? 'success' : 'default'}>
-                    {cat.is_active ? 'Active' : 'Inactive'}
-                  </Badge>
+                  <CategoryStatusSwitch
+                    active={cat.is_active}
+                    disabled={toggleStatusMutation.isPending && toggleStatusMutation.variables?.id === cat.id}
+                    onToggle={() => toggleStatusMutation.mutate({ id: cat.id, is_active: !cat.is_active })}
+                  />
                 </Td>
                 <Td>
                   <div className="flex items-center gap-1.5">

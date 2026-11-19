@@ -108,8 +108,11 @@ class StockViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def adjust(self, request, pk=None):
         stock = self.get_object()
+        if stock.product.variant_parent_id:
+            stock = Stock.objects.select_for_update().get(pk=stock.pk)
         new_qty = request.data.get('quantity')
         notes = request.data.get('notes', 'Manual adjustment')
 
@@ -268,13 +271,14 @@ class StockTransferViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
-        transfer = self.get_object()
-        if transfer.status == 'completed':
-            return Response({'detail': 'Transfer is already completed.'}, status=400)
-        if transfer.status == 'cancelled':
-            return Response({'detail': 'Cancelled transfers cannot be completed.'}, status=400)
         from django.utils import timezone
+        transfer_id = self.get_object().pk
         with transaction.atomic():
+            transfer = StockTransfer.objects.select_for_update().get(pk=transfer_id)
+            if transfer.status == 'completed':
+                return Response({'detail': 'Transfer is already completed.'}, status=400)
+            if transfer.status == 'cancelled':
+                return Response({'detail': 'Cancelled transfers cannot be completed.'}, status=400)
             apply_transfer_to_storage(transfer)
             transfer.status = 'completed'
             transfer.completed_at = timezone.now()
@@ -283,8 +287,9 @@ class StockTransferViewSet(viewsets.ModelViewSet):
         return Response({'status': 'completed'})
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def cancel(self, request, pk=None):
-        transfer = self.get_object()
+        transfer = StockTransfer.objects.select_for_update().get(pk=self.get_object().pk)
         if transfer.status == 'completed':
             return Response({'detail': 'Completed transfers cannot be cancelled.'}, status=400)
         transfer.status = 'cancelled'

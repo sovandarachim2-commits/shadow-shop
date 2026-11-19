@@ -27,6 +27,7 @@ import { isValidCambodiaPhone, normalizeCambodiaPhone } from '@/utils/phone'
 import { formatAddressLocationKhmer, formatAddressRecordKhmer } from '@/utils/addressHelpers'
 import { useReferralCodeCheck } from '@/hooks/useReferralCodeCheck'
 import ReferralCodeFeedback from '@/components/customer/ReferralCodeFeedback'
+import { generateReferralPosterDataUrl } from '@/utils/referralCard'
 import './ProfileEditor.css'
 
 function firstApiMessage(value) {
@@ -704,11 +705,21 @@ function ProfileSidebar({ activeView, onSelect, onLogout, isKhmer, onToggleLang 
           <button
             type="button"
             onClick={() => navigate('/admin')}
-            className="flex w-full items-center gap-3 rounded-2xl bg-purple-50 px-4 py-3.5 text-left text-sm font-bold text-purple-700 transition hover:bg-purple-100 border border-purple-100 mb-2 shadow-sm"
+            className="group relative flex w-full items-center gap-3 rounded-2xl border border-gray-800/80 bg-gradient-to-r from-gray-950 via-slate-900 to-gray-900 px-4 py-3.5 text-left text-white shadow-md shadow-black/20 transition hover:border-pink-500/40 hover:shadow-lg active:scale-95 mb-3 overflow-hidden"
           >
-            <LayoutDashboard size={20} className="text-purple-600" />
-            <span className="flex-1">Store Admin Portal</span>
-            <ChevronRight size={16} className="text-purple-400" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-sm shadow-pink-500/30">
+              <LayoutDashboard size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-black tracking-tight text-white truncate">Store Admin Portal</span>
+                <span className="rounded-full border border-pink-500/30 bg-pink-500/20 px-1.5 py-0.2 text-[9px] font-black uppercase text-pink-300">
+                  {user.role?.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="text-[11px] font-medium text-slate-400">Switch to management</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-pink-400" />
           </button>
         )}
         {ACCOUNT_MENU_ITEMS.map((item) => {
@@ -809,6 +820,8 @@ export default function Profile() {
   const [copiedInviteCode, setCopiedInviteCode] = useState(false)
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [myQrDataUrl, setMyQrDataUrl] = useState('')
+  const [isDownloadingCard, setIsDownloadingCard] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
   const [scannerModalOpen, setScannerModalOpen] = useState(false)
   const [scannerError, setScannerError] = useState('')
   const [isScanning, setIsScanning] = useState(false)
@@ -840,6 +853,34 @@ export default function Profile() {
         .catch((err) => console.error('Failed to generate QR code', err))
     }
   }, [user?.referral_code, qrModalOpen, referralLink])
+
+  const handleDownloadCard = async () => {
+    if (!user?.referral_code) return
+    setIsDownloadingCard(true)
+    try {
+      const displayName = user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'Shadow Shop Member'
+      // Use local avatar proxy to ensure zero CORS issues when drawing onto the download canvas
+      const avatarProxyUrl = user?.id ? `/api/auth/avatar-proxy/?user_id=${user.id}` : null
+      const rawAvatarUrl = user?.avatar_url || user?.avatar || null
+      const posterUrl = await generateReferralPosterDataUrl({
+        qrDataUrl: myQrDataUrl,
+        referralCode: user.referral_code,
+        referralLink,
+        userName: displayName,
+        userHandle: user?.username || user.referral_code,
+        userAvatar: avatarProxyUrl,
+        userAvatarFallback: rawAvatarUrl,
+        storeName: 'Shadow Shop',
+      })
+      downloadDataUrl(posterUrl || myQrDataUrl, `shadow-shop-invite-${user.referral_code}.png`)
+      toast.success(t('rewardsPage.referral.downloadSuccess', 'Downloaded invitation card!'))
+    } catch (err) {
+      console.error('Failed to download referral card', err)
+      if (myQrDataUrl) downloadDataUrl(myQrDataUrl, `shadow-shop-invite-${user.referral_code}.png`)
+    } finally {
+      setIsDownloadingCard(false)
+    }
+  }
 
   // Camera QR Scanner lifecycle
   useEffect(() => {
@@ -1044,14 +1085,6 @@ export default function Profile() {
   ]
 
   const mobileGeneralSettings = [
-    ...(user?.role && user.role !== 'customer' ? [
-      {
-        icon: LayoutDashboard,
-        labelKey: 'adminPortal',
-        customLabel: 'Store & Admin Portal',
-        action: () => navigate('/admin'),
-      }
-    ] : []),
     { icon: User, labelKey: 'profile.myAccount', action: () => navigate('/profile/edit') },
     { icon: ClipboardList, labelKey: 'profile.myOrders', action: () => navigate('/my-orders') },
     { icon: MapPin, labelKey: 'profile.myAddress', action: () => navigate('/address-book') },
@@ -1268,6 +1301,44 @@ export default function Profile() {
                 <FriendReferralCodeEditor t={t} compact onOpenScanner={handleOpenScanner} />
               )}
             </div>
+          </div>
+        )}
+
+        {/* Staff/Admin Portal High-Color Shadow Shop Callout Button */}
+        {user?.role && user.role !== 'customer' && (
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="group relative flex w-full items-center justify-between overflow-hidden rounded-2xl border border-gray-800/80 bg-gradient-to-r from-gray-950 via-slate-900 to-gray-900 p-4 text-white shadow-xl shadow-black/25 transition-all duration-300 hover:border-pink-500/40 active:scale-[0.98]"
+            >
+              {/* Subtle ambient pink accent lighting */}
+              <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-pink-600/15 blur-2xl" />
+              <div className="pointer-events-none absolute -left-8 -bottom-8 h-28 w-28 rounded-full bg-pink-600/10 blur-2xl" />
+
+              <div className="relative z-10 flex items-center gap-3.5 min-w-0">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-md shadow-pink-500/30">
+                  <LayoutDashboard size={20} className="text-white drop-shadow" />
+                </div>
+                <div className="text-left min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm sm:text-base font-black tracking-tight text-white drop-shadow-sm">
+                      Store & Admin Portal
+                    </p>
+                    <span className="shrink-0 rounded-full border border-pink-500/30 bg-pink-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-pink-300">
+                      {user.role?.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+                    Manage orders, products & inventory
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition-all group-hover:border-pink-500/30 group-hover:bg-pink-500/20 group-hover:text-pink-300 group-hover:translate-x-0.5">
+                <ChevronRight size={16} />
+              </div>
+            </button>
           </div>
         )}
 
@@ -1743,29 +1814,34 @@ export default function Profile() {
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={!myQrDataUrl}
-                onClick={() => {
-                  if (myQrDataUrl) {
-                    downloadDataUrl(myQrDataUrl, `shadow-shop-invite-${user.referral_code}.png`)
-                    toast.success(t('rewardsPage.referral.downloadSuccess', 'Downloaded QR Code!'))
-                  }
-                }}
+                disabled={!myQrDataUrl || isDownloadingCard}
+                onClick={handleDownloadCard}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-bold text-white transition hover:bg-slate-800 active:scale-95 disabled:opacity-50"
               >
-                <Download size={15} />
-                <span>{t('rewardsPage.referral.downloadQr', 'Download QR')}</span>
+                {isDownloadingCard ? (
+                  <Loader2 size={15} className="animate-spin text-pink-400" />
+                ) : (
+                  <Download size={15} />
+                )}
+                <span>
+                  {isDownloadingCard
+                    ? (t('common.downloading', 'Preparing...'))
+                    : (t('rewardsPage.referral.downloadQr', 'Download Card'))}
+                </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
                   navigator.clipboard?.writeText(referralLink)
-                  toast.success(t('rewardsPage.toast.codeCopied', { defaultValue: 'Link copied!' }))
+                  setCopiedLink(true)
+                  toast.success(t('rewardsPage.referral.copied', 'Link copied!'), { id: 'profile-ref-copy' })
+                  setTimeout(() => setCopiedLink(false), 2000)
                 }}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-pink-600 px-3 text-xs font-bold text-white transition hover:bg-pink-700 active:scale-95"
               >
-                <Copy size={15} />
-                <span>{t('rewardsPage.referral.copyLink', 'Copy Link')}</span>
+                {copiedLink ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                <span>{copiedLink ? t('rewardsPage.referral.copied', 'Copied') : t('rewardsPage.referral.copyLink', 'Copy Link')}</span>
               </button>
             </div>
           </div>
@@ -1929,14 +2005,29 @@ function DesktopProfileOverview({
           <h1 className="text-3xl font-black tracking-tight text-gray-950">{t('profile.title')}</h1>
           <p className="mt-1 text-sm font-semibold text-gray-500">{t('profile.desktopSubtitle')}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setActiveModal('edit-profile')}
-          className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 px-6 py-3 text-sm font-black text-white shadow-md shadow-pink-200 transition-all hover:shadow-lg hover:shadow-pink-300 hover:scale-[1.02] active:scale-95"
-        >
-          <Pencil size={16} />
-          <span>{t('profile.editProfile')}</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {user?.role && user.role !== 'customer' && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="inline-flex items-center gap-2 rounded-2xl border border-gray-800/80 bg-gradient-to-r from-gray-950 via-slate-900 to-gray-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-black/20 transition-all hover:border-pink-500/40 hover:shadow-pink-500/10 hover:scale-[1.02] active:scale-95"
+            >
+              <LayoutDashboard size={17} className="text-pink-500" />
+              <span>Store Admin Portal</span>
+              <span className="rounded-full border border-pink-500/30 bg-pink-500/20 px-2 py-0.5 text-[10px] font-bold text-pink-300 uppercase">
+                {user.role?.replace(/_/g, ' ')}
+              </span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setActiveModal('edit-profile')}
+            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 px-6 py-3 text-sm font-black text-white shadow-md shadow-pink-200 transition-all hover:shadow-lg hover:shadow-pink-300 hover:scale-[1.02] active:scale-95"
+          >
+            <Pencil size={16} />
+            <span>{t('profile.editProfile')}</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Profile Hero Card */}

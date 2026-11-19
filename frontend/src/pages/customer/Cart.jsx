@@ -459,6 +459,11 @@ export default function Cart() {
 
   const goCheckout = () => {
     if (selectedCount <= 0) return
+    const hasComingSoon = selectedItems.some((item) => item.product?.availability_status === 'coming_soon')
+    if (hasComingSoon) {
+      toast.error('One or more selected items are Coming Soon and not yet available for purchase.')
+      return
+    }
     if (!isAuthenticated) {
       openAuthModal('checkout')
       return
@@ -778,6 +783,17 @@ export default function Cart() {
                     <div className="flex-1">
                       <p className="khmer-title line-clamp-2 text-sm text-gray-950 md:text-base">{item.product.name}</p>
                       <p className="mt-1 text-xs font-semibold text-gray-400">{item.product.item_type === 'set' ? 'Product Set' : item.product.category_name || item.product.code || t('product.cosmetics')}</p>
+                      {item.product.variant_parent && <p className="text-xs text-gray-500">{t('product.variantSku', { sku: item.product.code })}</p>}
+                      {item.product.availability_status === 'coming_soon' ? (
+                        <p className="text-xs font-bold text-pink-600">Coming Soon (Not yet available)</p>
+                      ) : item.product.variant_parent && item.product.is_available_for_sale === false ? (
+                        <p className="text-xs font-semibold text-red-600">{t('common.outOfStock')}</p>
+                      ) : null}
+                      {item.product.variants_enabled && (
+                        <button type="button" className="text-xs font-semibold text-pink-600" onClick={() => navigate(`/product/${item.product.id}`)}>
+                          {t('product.chooseOptions')}
+                        </button>
+                      )}
                     </div>
                   </div>
 

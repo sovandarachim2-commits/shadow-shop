@@ -32,6 +32,7 @@ export default function NewOrder({ embedded = false, onCreated }) {
       search: searchQuery,
       page_size: 20,
       is_active: true,
+      sellable: true,
     }).then((r) => r.data.results),
     enabled: true,
   })

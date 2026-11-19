@@ -5,10 +5,12 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import ImageField
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters import rest_framework as filters
-from django.db.models import Count, F, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils import timezone
 from .models import Brand, Category, Product, ProductImage, ProductReview, ProductSet, ProductSetImage, ProductSetItem, Promotion, Banner, HomeSectionStyle, Announcement, OfferPoster, VideoHighlight
 from .serializers import (
@@ -85,14 +87,26 @@ class ProductFilter(filters.FilterSet):
         return queryset.filter(Q(store__slug=val) | Q(store__code__iexact=val))
 
     def filter_in_stock(self, queryset, name, value):
+        available_variants = Product.objects.filter(
+            variant_parent_id=OuterRef('pk'), variant_archived=False, is_active=True,
+        ).filter(Q(availability_status=Product.AVAILABILITY_AVAILABLE) | Q(
+            availability_status=Product.AVAILABILITY_AUTO, stock__quantity__gt=0,
+        ))
+        queryset = queryset.alias(has_available_variants=Exists(available_variants))
         if value:
             return queryset.filter(
-                Q(availability_status=Product.AVAILABILITY_AVAILABLE) |
-                Q(availability_status=Product.AVAILABILITY_AUTO, stock__quantity__gt=0)
+                Q(variants_enabled=True, has_available_variants=True) |
+                Q(variants_enabled=False) & (
+                    Q(availability_status=Product.AVAILABILITY_AVAILABLE) |
+                    Q(availability_status=Product.AVAILABILITY_AUTO, stock__quantity__gt=0)
+                )
             )
         return queryset.filter(
-            Q(availability_status=Product.AVAILABILITY_OUT_OF_STOCK) |
-            Q(availability_status=Product.AVAILABILITY_AUTO, stock__quantity__lte=0)
+            Q(variants_enabled=True, has_available_variants=False) |
+            Q(variants_enabled=False) & (
+                Q(availability_status=Product.AVAILABILITY_OUT_OF_STOCK) |
+                Q(availability_status=Product.AVAILABILITY_AUTO, stock__quantity__lte=0)
+            )
         )
 
     def filter_active_flash_sale(self, queryset, name, value):
@@ -135,7 +149,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         annotated_children_count=Count('children', distinct=True),
         annotated_products_count=Count(
             'products',
-            filter=Q(products__is_active=True),
+            filter=Q(products__is_active=True, products__variant_parent__isnull=True),
             distinct=True,
         ),
     ).order_by('order', 'name')
@@ -162,7 +176,7 @@ class BrandViewSet(viewsets.ModelViewSet):
     queryset = Brand.objects.all().annotate(
         annotated_products_count=Count(
             'products',
-            filter=Q(products__is_active=True),
+            filter=Q(products__is_active=True, products__variant_parent__isnull=True),
             distinct=True,
         ),
     )
@@ -199,17 +213,39 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Product.objects.all().select_related('category', 'brand', 'store').prefetch_related('images', 'stock')
+        qs = Product.objects.select_related('category', 'brand', 'store', 'variant_parent__store').prefetch_related('images', 'stock')
+        staff = user.is_authenticated and user.role != 'customer'
+        sellable = staff and self.action == 'list' and self.request.query_params.get('sellable') == 'true'
+        stock_items = staff and self.action == 'list' and self.request.query_params.get('stock_items') == 'true'
+        variant_actions = ('retrieve', 'upload_images', 'set_primary_image', 'reorder_images', 'delete_image')
+        if stock_items:
+            qs = qs.filter(variants_enabled=False).filter(Q(is_active=True) | Q(variant_parent__isnull=False))
+        elif sellable:
+            qs = qs.filter(variants_enabled=False, variant_archived=False).filter(
+                Q(variant_parent__isnull=True) | Q(
+                    variant_parent__variants_enabled=True, variant_parent__is_active=True,
+                    variant_parent__approval_status='approved', is_active=True,
+                )
+            )
+        elif self.action not in variant_actions and not (staff and self.action == 'search_by_code'):
+            qs = qs.filter(variant_parent__isnull=True)
+        if not (sellable or stock_items):
+            qs = qs.prefetch_related('variants__stock', 'variants__images')
 
         # Public visitors and customers only see approved & active items from active stores
-        if not user.is_authenticated or user.role == 'customer':
+        if not staff:
             return qs.filter(is_active=True, approval_status='approved').filter(
                 Q(store__isnull=True) | Q(store__status='active')
+            ).filter(
+                Q(variant_parent__isnull=True) | Q(
+                    variant_archived=False, variant_parent__variants_enabled=True,
+                    variant_parent__is_active=True, variant_parent__approval_status='approved',
+                )
             )
 
         # Sellers & Store Owners only see their own store's items
         if user.role in ['seller', 'store_owner', 'store_manager']:
-            return qs.filter(store__memberships__user=user)
+            return qs.filter(store__memberships__user=user, store__memberships__is_active=True).distinct()
 
         # Super admin and admins see all items
         return qs
@@ -236,11 +272,19 @@ class ProductViewSet(viewsets.ModelViewSet):
             membership = StoreMembership.objects.filter(user=user, is_active=True).first()
             if membership:
                 extra_kwargs['store'] = membership.store
+            elif serializer.validated_data.get('variants_enabled'):
+                raise ValidationError({'store': 'Assign a store before creating product variants.'})
             extra_kwargs['approval_status'] = 'pending'
             extra_kwargs['is_active'] = False
 
         product = serializer.save(**extra_kwargs)
         bump_storefront_cache()
+        if getattr(product, 'approval_status', '') == 'pending':
+            try:
+                from apps.notifications.services import TelegramService
+                TelegramService.notify_product_review_async(product.id)
+            except Exception:
+                pass
         from apps.accounts.activity import log_activity
         log_activity(
             user=self.request.user,
@@ -275,6 +319,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response({'status': 'rejected', 'detail': f'Product "{product.name}" rejected.'})
 
     def perform_update(self, serializer):
+        if self.request.user.role in ['seller', 'store_owner', 'store_manager']:
+            if 'approval_status' in serializer.validated_data:
+                raise ValidationError({'approval_status': 'Only an admin can change approval status.'})
+            if 'store' in serializer.validated_data and serializer.validated_data['store'] != serializer.instance.store:
+                raise ValidationError({'store': 'Store staff cannot move a product to another store.'})
         product = serializer.save()
         bump_storefront_cache()
         from apps.accounts.activity import log_activity
@@ -289,6 +338,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
+        if instance.variants.filter(Q(order_items__isnull=False) | Q(stock__quantity__gt=0)).exists():
+            raise ValidationError({'detail': 'Set this product inactive to keep its variant inventory and order history.'})
         name = instance.name
         product_id = instance.pk
         super().perform_destroy(instance)
@@ -339,6 +390,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         images = request.FILES.getlist('images')
         if not images:
             return Response({'detail': 'No images were uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
+        if product.variant_parent_id:
+            images = [ImageField().run_validation(image) for image in images]
 
         is_primary = str(request.data.get('is_primary', False)).lower() in ('1', 'true', 'yes')
         created = []
@@ -592,7 +645,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     def search_by_code(self, request):
         code = request.query_params.get('code', '')
         try:
-            product = Product.objects.get(code=code)
+            product = self.get_queryset().get(code=code)
             serializer = ProductDetailSerializer(product, context={'request': request})
             return Response(serializer.data)
         except Product.DoesNotExist:
@@ -912,12 +965,13 @@ class HomeFeedView(generics.GenericAPIView):
 
         now = timezone.now()
         ctx = {'request': request}
-        product_qs = Product.objects.filter(is_active=True).select_related(
+        product_qs = Product.objects.filter(is_active=True, variant_parent__isnull=True).select_related(
             'category', 'brand'
-        ).prefetch_related('images', 'stock')
+        ).prefetch_related('images', 'stock', 'variants__stock')
 
         flash_qs = list(product_qs.filter(
             is_featured=True,
+            variants_enabled=False,
             flash_sale_price__isnull=False,
             flash_sale_price__lt=F('retail_price'),
         ).filter(
@@ -932,14 +986,14 @@ class HomeFeedView(generics.GenericAPIView):
             annotated_children_count=Count('children', distinct=True),
             annotated_products_count=Count(
                 'products',
-                filter=Q(products__is_active=True),
+                filter=Q(products__is_active=True, products__variant_parent__isnull=True),
                 distinct=True,
             ),
         )
         brands = Brand.objects.filter(is_active=True).annotate(
             annotated_products_count=Count(
                 'products',
-                filter=Q(products__is_active=True),
+                filter=Q(products__is_active=True, products__variant_parent__isnull=True),
                 distinct=True,
             ),
         )

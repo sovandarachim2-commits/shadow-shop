@@ -1099,3 +1099,109 @@ class TelegramService:
                 logger.error(f"Async Telegram staff login notification failed: {e}")
 
         Thread(target=send, daemon=True).start()
+
+    def notify_store_inquiry(self, inquiry) -> bool:
+        configs = self.get_configs_for('notify_store_inquiry')
+        if not configs.exists():
+            return False
+
+        now = timezone.localtime().strftime('%d-%m-%Y %I:%M:%S %p')
+        message = (
+            f"🏪 <b>ពាក្យស្នើសុំបើកហាងថ្មី / New Store Application</b>\n\n"
+            f"🏢 <b>ហាង / Business:</b> {escape(inquiry.business_name)}\n"
+            f"👤 <b>អ្នកតំណាង / Contact:</b> {escape(inquiry.contact_person)}\n"
+            f"📞 <b>ទូរស័ព្ទ / Phone:</b> <code>{escape(inquiry.phone)}</code>\n"
+        )
+        if inquiry.telegram:
+            clean_tg = inquiry.telegram.strip().lstrip('@')
+            message += f"✈️ <b>Telegram:</b> @{escape(clean_tg)}\n"
+        if inquiry.category:
+            message += f"🏷 <b>ប្រភេទ / Category:</b> {escape(inquiry.category)}\n"
+        if inquiry.province:
+            message += f"📍 <b>ខេត្ត-ក្រុង / Province:</b> {escape(inquiry.province)}\n"
+        if inquiry.notes:
+            message += f"📝 <b>កំណត់សម្គាល់ / Notes:</b>\n<i>{escape(inquiry.notes[:300])}</i>\n"
+        message += f"\n🕐 {now}"
+
+        return self.send_to_configs(configs, message, 'store_inquiry', reference=str(inquiry.pk))
+
+    @classmethod
+    def notify_store_inquiry_async(cls, inquiry_id) -> None:
+        def send():
+            try:
+                from apps.stores.models import PartnerInquiry
+                inquiry = PartnerInquiry.objects.get(pk=inquiry_id)
+                cls().notify_store_inquiry(inquiry)
+            except Exception as e:
+                logger.error(f"Async Telegram store inquiry notification failed: {e}")
+
+        Thread(target=send, daemon=True).start()
+
+    def notify_product_review(self, product) -> bool:
+        configs = self.get_configs_for('notify_product_review')
+        if not configs.exists():
+            return False
+
+        now = timezone.localtime().strftime('%d-%m-%Y %I:%M:%S %p')
+        store_name = getattr(product.store, 'name', 'Shadow Shop') if getattr(product, 'store', None) else 'Independent Store'
+        category_name = getattr(product.category, 'name', 'N/A') if getattr(product, 'category', None) else 'N/A'
+        price = f"${float(product.price):.2f}" if getattr(product, 'price', None) is not None else 'N/A'
+        sku = getattr(product, 'sku', '') or getattr(product, 'barcode', '') or f"ID #{product.pk}"
+
+        message = (
+            f"📦 <b>សំណើពិនិត្យផលិតផលថ្មី / Product Review Request</b>\n\n"
+            f"🏷 <b>ផលិតផល / Product:</b> {escape(product.name)}\n"
+            f"🏪 <b>ហាង / Store:</b> {escape(store_name)}\n"
+            f"🔖 <b>កូដ / SKU:</b> <code>{escape(sku)}</code>\n"
+            f"💵 <b>តម្លៃ / Price:</b> {price}\n"
+            f"📂 <b>ប្រភេទ / Category:</b> {escape(category_name)}\n"
+            f"📋 <b>ស្ថានភាព / Status:</b> រង់ចាំការត្រួតពិនិត្យ (Pending Review ⏳)\n"
+            f"\n🕐 {now}"
+        )
+
+        photo_path = None
+        photo_url = None
+        primary_image = None
+        if hasattr(product, 'images'):
+            primary_image = product.images.filter(is_primary=True).first() or product.images.first()
+        elif getattr(product, 'image', None):
+            primary_image = product.image
+
+        if primary_image:
+            img_file = getattr(primary_image, 'image', primary_image)
+            try:
+                if hasattr(img_file, 'path') and os.path.exists(img_file.path):
+                    photo_path = img_file.path
+                elif hasattr(img_file, 'url'):
+                    photo_url = img_file.url
+            except Exception:
+                pass
+
+        if photo_path or photo_url:
+            current_config = self.config
+            sent = False
+            for config in configs:
+                self.config = config
+                sent = self.send_photo(
+                    caption=message,
+                    photo_path=photo_path,
+                    photo_url=photo_url,
+                    event_type='product_review',
+                    reference=str(product.pk),
+                ) or sent
+            self.config = current_config
+            return sent
+
+        return self.send_to_configs(configs, message, 'product_review', reference=str(product.pk))
+
+    @classmethod
+    def notify_product_review_async(cls, product_id) -> None:
+        def send():
+            try:
+                from apps.products.models import Product
+                product = Product.objects.select_related('store', 'category').get(pk=product_id)
+                cls().notify_product_review(product)
+            except Exception as e:
+                logger.error(f"Async Telegram product review notification failed: {e}")
+
+        Thread(target=send, daemon=True).start()

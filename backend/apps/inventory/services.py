@@ -1,4 +1,12 @@
+from collections import defaultdict
+
+from django.db import transaction
+from rest_framework.exceptions import ValidationError
+
 from .models import Stock, StockMovement, Warehouse, WarehouseStock
+
+
+ORDER_VARIANT_MOVEMENTS = {'order', 'order_set', 'order_edit', 'order_return', 'order_set_return'}
 
 
 def has_stock_deduction_for_order(order):
@@ -115,7 +123,74 @@ def assign_unassigned_stock_to_default(warehouse=None):
         row.save(update_fields=['quantity'])
 
 
+def validate_variant_warehouse(product, warehouse):
+    if warehouse is not None and warehouse.store_id != product.store_id:
+        raise ValidationError({'warehouse': 'Choose a warehouse in the same store as the variant.'})
+
+
+@transaction.atomic
+def move_variant_stock(product, quantity, movement_type, reference='', reference_type='', notes='', user=None, warehouse=None):
+    validate_variant_warehouse(product, warehouse)
+    stock, _ = Stock.objects.select_for_update().get_or_create(product=product)
+    before = stock.quantity
+    deltas = defaultdict(int)
+    order_movement = reference_type in ORDER_VARIANT_MOVEMENTS
+
+    if quantity < 0:
+        rows = WarehouseStock.objects.select_for_update().filter(product=product, warehouse__store_id=product.store_id)
+        if warehouse is not None:
+            rows = rows.filter(warehouse=warehouse)
+        remaining = min(-quantity, max(0, before)) if order_movement else -quantity
+        for row in rows.order_by('-warehouse__is_default', 'warehouse_id'):
+            taken = min(remaining, row.quantity)
+            if taken:
+                row.quantity -= taken
+                row.save(update_fields=['quantity'])
+                deltas[row.warehouse_id] -= taken
+                remaining -= taken
+            if not remaining:
+                break
+        if remaining and not order_movement:
+            raise ValidationError({'quantity': f'{product.code} has insufficient stock in the selected storage.'})
+    elif quantity > 0:
+        if order_movement:
+            outstanding = defaultdict(int)
+            order_moves = StockMovement.objects.filter(
+                product=product, reference=reference,
+                reference_type__in=ORDER_VARIANT_MOVEMENTS,
+            )
+            for move in order_moves:
+                for warehouse_id, delta in move.warehouse_deltas.items():
+                    outstanding[int(warehouse_id)] -= delta
+            warehouses = Warehouse.objects.filter(pk__in=outstanding, store_id=product.store_id).in_bulk()
+            for warehouse_id, outstanding_qty in outstanding.items():
+                restored = min(quantity, outstanding_qty)
+                if restored <= 0:
+                    continue
+                # Preserve the original allocation even if its warehouse has since been removed.
+                target = warehouses.get(warehouse_id) or default_storage(product.store)
+                adjust_storage(product, restored, target)
+                deltas[warehouse_id] += restored
+                quantity -= restored
+        else:
+            target = warehouse or default_storage(product.store)
+            adjust_storage(product, quantity, target)
+            deltas[target.pk] += quantity
+
+    actual = sum(deltas.values())
+    if actual:
+        stock.quantity = before + actual
+        stock.save(update_fields=['quantity', 'updated_at'])
+    StockMovement.objects.create(
+        product=product, type=movement_type, quantity=actual, before_qty=before, after_qty=stock.quantity,
+        reference=reference, reference_type=reference_type, notes=notes, created_by=user, warehouse_deltas=dict(deltas),
+    )
+    return stock
+
+
+@transaction.atomic
 def deduct_stock_for_order(order, user):
+    type(order).objects.select_for_update().get(pk=order.pk)
     if has_stock_deduction_for_order(order):
         return
 
@@ -124,6 +199,10 @@ def deduct_stock_for_order(order, user):
             set_items = item.product_set.items.select_related('product').all()
             for set_item in set_items:
                 quantity_to_deduct = item.quantity * set_item.quantity
+                if set_item.product.variant_parent_id:
+                    move_variant_stock(set_item.product, -quantity_to_deduct, StockMovement.TYPE_STOCK_OUT,
+                                       order.order_number, 'order_set', user=user)
+                    continue
                 stock, _ = Stock.objects.get_or_create(
                     product=set_item.product,
                     defaults={'quantity': 0}
@@ -150,6 +229,10 @@ def deduct_stock_for_order(order, user):
                     from apps.notifications.services import TelegramService
                     TelegramService().notify_low_stock(set_item.product, stock.quantity)
         elif item.product:
+            if item.product.variant_parent_id:
+                move_variant_stock(item.product, -item.quantity, StockMovement.TYPE_STOCK_OUT,
+                                   order.order_number, 'order', user=user)
+                continue
             stock, _ = Stock.objects.get_or_create(
                 product=item.product,
                 defaults={'quantity': 0}
@@ -180,8 +263,10 @@ def deduct_stock_for_order(order, user):
                 TelegramService().notify_low_stock(item.product, stock.quantity)
 
 
+@transaction.atomic
 def restore_stock_for_order(order, user, reason=''):
     """Restore stock deducted for an order upon return or cancellation."""
+    type(order).objects.select_for_update().get(pk=order.pk)
     if not has_stock_deduction_for_order(order):
         return
 
@@ -197,6 +282,10 @@ def restore_stock_for_order(order, user, reason=''):
         if item.product_set:
             for set_item in item.product_set.items.select_related('product').all():
                 qty = item.quantity * set_item.quantity
+                if set_item.product.variant_parent_id:
+                    move_variant_stock(set_item.product, qty, StockMovement.TYPE_RETURN,
+                                       order.order_number, 'order_set_return', notes=reason, user=user)
+                    continue
                 stock, _ = Stock.objects.get_or_create(product=set_item.product, defaults={'quantity': 0})
                 before_qty = stock.quantity
                 stock.quantity = stock.quantity + qty
@@ -216,6 +305,10 @@ def restore_stock_for_order(order, user, reason=''):
                 adjust_storage(set_item.product, qty)
         elif item.product:
             qty = item.quantity
+            if item.product.variant_parent_id:
+                move_variant_stock(item.product, qty, StockMovement.TYPE_RETURN,
+                                   order.order_number, 'order_return', notes=reason, user=user)
+                continue
             stock, _ = Stock.objects.get_or_create(product=item.product, defaults={'quantity': 0})
             before_qty = stock.quantity
             stock.quantity = stock.quantity + qty
@@ -236,6 +329,8 @@ def restore_stock_for_order(order, user, reason=''):
 
 
 def add_stock(product, quantity, movement_type, reference='', notes='', user=None, warehouse=None):
+    if product.variant_parent_id:
+        return move_variant_stock(product, quantity, movement_type, reference, notes=notes, user=user, warehouse=warehouse)
     stock, _ = Stock.objects.get_or_create(
         product=product,
         defaults={'quantity': 0}
@@ -266,16 +361,24 @@ def apply_transfer_to_storage(transfer):
         qty = item.actual_qty or item.requested_qty or 0
         if qty <= 0:
             continue
+        if item.product.variant_parent_id:
+            validate_variant_warehouse(item.product, transfer.from_warehouse)
+            validate_variant_warehouse(item.product, transfer.to_warehouse)
+            if not transfer.from_warehouse_id or not transfer.to_warehouse_id or transfer.from_warehouse_id == transfer.to_warehouse_id:
+                raise ValidationError({'detail': 'Choose different source and destination warehouses for a variant transfer.'})
+            Stock.objects.select_for_update().get_or_create(product=item.product)
         if transfer.from_warehouse_id:
-            source, _ = WarehouseStock.objects.get_or_create(
+            source, _ = WarehouseStock.objects.select_for_update().get_or_create(
                 warehouse_id=transfer.from_warehouse_id,
                 product_id=item.product_id,
                 defaults={'quantity': 0},
             )
+            if item.product.variant_parent_id and qty > source.quantity:
+                raise ValidationError({'detail': f'{item.product.code} only has {source.quantity} in the source warehouse.'})
             source.quantity = max(0, source.quantity - qty)
             source.save(update_fields=['quantity'])
         if transfer.to_warehouse_id:
-            destination, _ = WarehouseStock.objects.get_or_create(
+            destination, _ = WarehouseStock.objects.select_for_update().get_or_create(
                 warehouse_id=transfer.to_warehouse_id,
                 product_id=item.product_id,
                 defaults={'quantity': 0},

@@ -156,29 +156,40 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env      # Edit with your settings
 python manage.py migrate
+python manage.py seed_permissions
+python manage.py seed_role_permissions
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-### Run Database Migrations
+### Run Database Migrations & Seed Roles / Permissions
 
-Run this after pulling new backend changes or deploying updates that add database fields, such as the login logo and splash screen settings:
+Run this after pulling new backend changes or deploying updates that add database fields, new roles, or permissions (such as Store Owner and store management):
 
 Local Windows / PowerShell (from the project root):
 
 ```powershell
 cd backend
 .\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py seed_permissions
+.\venv\Scripts\python.exe manage.py seed_role_permissions
 ```
 
-If your terminal is already in `backend`, run only the second command. This uses the backend virtual environment directly, so activation is not required.
+If your terminal is already in `backend`, run only the python commands. This uses the backend virtual environment directly, so activation is not required.
 
 Ubuntu production (from the project root, using the Python 3.12 environment):
 
 ```bash
 cd backend
 ./venv312/bin/python manage.py migrate --settings=config.settings.production
+./venv312/bin/python manage.py seed_permissions --settings=config.settings.production
+./venv312/bin/python manage.py seed_role_permissions --settings=config.settings.production
 ```
+
+> **Note:** If you ever need to reset all system roles back to their default permission sets, add `--reset`:
+> ```bash
+> python manage.py seed_role_permissions --reset
+> ```
 
 Use the virtual environment path configured for your deployed backend if it differs from `venv312`.
 
@@ -188,10 +199,13 @@ cd frontend
 npm install
 npm run dev
 ```
-### backend 
+
+### Backend (Dev Server)
 ```bash
-                     
+cd backend
+venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
 ```
+
 ### Open From Another Device On The Same Wi-Fi
 
 Use your computer IP with the frontend port:
@@ -202,18 +216,17 @@ http://192.168.110.89:5173
 
 Keep both servers running:
 
-```bash
-# Backend
-  
+```powershell
+# Backend (in terminal 1)
+cd "C:\xampp\htdocs\Shadow Shop\backend"
+venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
 
-# Frontend
+# Frontend (in terminal 2)
 cd "C:\xampp\htdocs\Shadow Shop\frontend"
 npm run dev
 ```
-cd "C:\xampp\htdocs\Shadow Shop\backend"
-venv\Scripts\python.exe manage.py runserver 0.0.0.0:8001
-```
-If your computer IP changes, update `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, b   and `FRONTEND_URL` in `backend/.env`.
+
+If your computer IP changes, update `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `FRONTEND_URL` in `backend/.env`.
 
 ### API Documentation
 - Swagger UI: http://localhost:8001/api/docs/
@@ -283,6 +296,3 @@ sudo systemctl restart shadow_shop
 ```
 
 After this, `http://your-domain.com` redirects to `https://your-domain.com`.
-
-cd "c:\xampp\htdocs\Shadow Shop\backend"
-.\venv\Scripts\python.exe manage.py migrate

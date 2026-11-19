@@ -26,6 +26,14 @@ class PublicPartnerInquiryCreateView(generics.CreateAPIView):
     serializer_class = PartnerInquirySerializer
     permission_classes = [AllowAny]
 
+    def perform_create(self, serializer):
+        inquiry = serializer.save()
+        try:
+            from apps.notifications.services import TelegramService
+            TelegramService.notify_store_inquiry_async(inquiry.id)
+        except Exception:
+            pass
+
 
 class PublicStoreListView(generics.ListAPIView):
     """Published and approved stores, with a separate homepage visibility filter."""

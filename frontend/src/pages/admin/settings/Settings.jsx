@@ -813,12 +813,15 @@ export default function Settings({ tab = 'general' }) {
     ['notify_delivery', 'Delivery Updates'],
     ['notify_daily_summary', 'Daily Summary'],
     ['notify_staff_login', 'Staff Login Alerts (every role except customer)'],
+    ['notify_store_inquiry', 'Store Opening Inquiries (ពាក្យស្នើសុំបើកហាង)'],
+    ['notify_product_review', 'Product Review Requests (សំណើពិនិត្យផលិតផលថ្មី)'],
   ]
   const emptyTelegramForm = {
     name: '', bot_username: '', bot_token: '', chat_id: '', topic_id: '', is_active: true,
-    notify_new_order: true, notify_payment: true, notify_contact_sales_copy: true,
-    notify_low_stock: true, notify_delivery: true,
-    notify_daily_summary: true, notify_staff_login: true,
+    notify_new_order: false, notify_payment: false, notify_contact_sales_copy: false,
+    notify_low_stock: false, notify_delivery: false,
+    notify_daily_summary: false, notify_staff_login: false,
+    notify_store_inquiry: false, notify_product_review: false,
     new_order_payment_methods: [],
     payment_received_methods: [],
   }
@@ -830,6 +833,15 @@ export default function Settings({ tab = 'general' }) {
       ...emptyTelegramForm,
       ...config,
       topic_id: config.topic_id || '',
+      notify_new_order: Boolean(config.notify_new_order),
+      notify_payment: Boolean(config.notify_payment),
+      notify_contact_sales_copy: Boolean(config.notify_contact_sales_copy),
+      notify_low_stock: Boolean(config.notify_low_stock),
+      notify_delivery: Boolean(config.notify_delivery),
+      notify_daily_summary: Boolean(config.notify_daily_summary),
+      notify_staff_login: Boolean(config.notify_staff_login),
+      notify_store_inquiry: Boolean(config.notify_store_inquiry),
+      notify_product_review: Boolean(config.notify_product_review),
       new_order_payment_methods: Array.isArray(config.new_order_payment_methods)
         ? config.new_order_payment_methods
         : [],
@@ -846,6 +858,15 @@ export default function Settings({ tab = 'general' }) {
     bot_username: (data.bot_username || '').replace('@', '').trim(),
     chat_id: String(data.chat_id || '').trim(),
     topic_id: data.topic_id === '' || data.topic_id === null ? null : Number(data.topic_id),
+    notify_new_order: Boolean(data.notify_new_order),
+    notify_payment: Boolean(data.notify_payment),
+    notify_contact_sales_copy: Boolean(data.notify_contact_sales_copy),
+    notify_low_stock: Boolean(data.notify_low_stock),
+    notify_delivery: Boolean(data.notify_delivery),
+    notify_daily_summary: Boolean(data.notify_daily_summary),
+    notify_staff_login: Boolean(data.notify_staff_login),
+    notify_store_inquiry: Boolean(data.notify_store_inquiry),
+    notify_product_review: Boolean(data.notify_product_review),
     new_order_payment_methods: Array.isArray(data.new_order_payment_methods)
       ? data.new_order_payment_methods.filter(Boolean)
       : [],
@@ -1222,19 +1243,48 @@ export default function Settings({ tab = 'general' }) {
                   </label>
 
                   <div className="mt-4 space-y-2">
-                    <label className="label">Notifications to send</label>
+                    <div className="flex items-center justify-between pb-1">
+                      <label className="text-sm font-semibold text-gray-700">Notifications to send</label>
+                      <div className="flex items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allEnabled = Object.fromEntries(
+                              TELEGRAM_NOTIFICATION_OPTIONS.map(([k]) => [k, true])
+                            )
+                            setTelegramForm((f) => ({ ...f, ...allEnabled }))
+                          }}
+                          className="font-medium text-purple-600 hover:text-purple-800 hover:underline"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allDisabled = Object.fromEntries(
+                              TELEGRAM_NOTIFICATION_OPTIONS.map(([k]) => [k, false])
+                            )
+                            setTelegramForm((f) => ({ ...f, ...allDisabled }))
+                          }}
+                          className="font-medium text-gray-500 hover:text-gray-700 hover:underline"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    </div>
                     {TELEGRAM_NOTIFICATION_OPTIONS.map(([key, label]) => (
                       <div key={key} className="rounded-xl bg-gray-50 p-3">
                         <label className="flex cursor-pointer items-center gap-3 hover:opacity-90">
                           <input
                             type="checkbox"
-                            checked={telegramForm[key] !== false}
+                            checked={Boolean(telegramForm[key])}
                             onChange={(e) => setTelegramForm((f) => ({ ...f, [key]: e.target.checked }))}
                             className="h-4 w-4 accent-purple-600"
                           />
                           <span className="text-sm">{label}</span>
                         </label>
-                        {key === 'notify_new_order' && telegramForm.notify_new_order !== false && (
+                        {key === 'notify_new_order' && Boolean(telegramForm.notify_new_order) && (
                           <div className="mt-3 border-t border-gray-200 pt-3">
                             <p className="mb-1 text-xs font-semibold text-gray-700">Send to this group by payment method</p>
                             <p className="mb-2 text-xs text-gray-400">
@@ -1255,7 +1305,7 @@ export default function Settings({ tab = 'general' }) {
                             />
                           </div>
                         )}
-                        {key === 'notify_payment' && telegramForm.notify_payment !== false && (
+                        {key === 'notify_payment' && Boolean(telegramForm.notify_payment) && (
                           <div className="mt-3 border-t border-gray-200 pt-3">
                             <p className="mb-1 text-xs font-semibold text-gray-700">Send payment received by payment method</p>
                             <p className="mb-2 text-xs text-gray-400">

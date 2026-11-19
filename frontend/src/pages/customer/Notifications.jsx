@@ -318,7 +318,7 @@ export default function Notifications() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-10">
       <header className="sticky top-0 z-30 border-b border-gray-100 bg-white/95 backdrop-blur">
-        <div className="mx-auto grid min-h-[60px] max-w-[960px] grid-cols-[44px_1fr_auto] items-center gap-2 px-4 pb-2.5 pt-[calc(0.6rem+var(--page-safe-top))] md:px-6 md:pt-2.5">
+        <div className="mx-auto grid min-h-[60px] max-w-[1500px] grid-cols-[44px_1fr_auto] items-center gap-2 px-4 pb-2.5 pt-[calc(0.6rem+var(--page-safe-top))] md:px-6 md:pt-2.5">
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -355,7 +355,7 @@ export default function Notifications() {
           </div>
         </div>
         {isSellerOrStaff && (
-          <div className="mx-auto grid max-w-[960px] grid-cols-2 border-t border-gray-100">
+          <div className="mx-auto grid max-w-[1500px] grid-cols-2 border-t border-gray-100">
             {[
               { key: 'my', label: t('notificationsPage.myNotifications'), badge: myTabBadge },
               { key: 'seller', label: t('notificationsPage.sellerUpdates'), badge: unreadSellerCount },
@@ -386,7 +386,7 @@ export default function Notifications() {
         )}
       </header>
 
-      <div className="mx-auto max-w-[960px] md:px-6 md:pt-5">
+      <div className="mx-auto max-w-[1500px] md:px-6 md:pt-5">
         {isSellerOrStaff && activeTab === 'seller' ? (
           <section className="md:mt-0">
             <div className="flex items-center justify-between px-4 py-2.5 md:px-1">

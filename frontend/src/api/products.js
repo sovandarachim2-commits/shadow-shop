@@ -137,4 +137,5 @@ export const productsApi = {
     remove: (type, id) => client.delete(`/products/${type === 'set' ? 'sets' : 'items'}/${id}/flash-sale/`, { forceAuth: true }),
   },
   revision: () => client.get('/products/revision/'),
+  list: (params) => client.get('/products/items/', { params }),
 }

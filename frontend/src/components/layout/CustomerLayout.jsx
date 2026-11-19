@@ -952,13 +952,12 @@ export default function CustomerLayout() {
 
       <StorefrontFooter siteSettings={siteSettings} mobileVisible={isHome || location.pathname === '/about'} />
 
-      {/* Back to Admin button — visible only to staff browsing the storefront */}
+      {/* Back to Admin button — visible only to staff browsing the storefront on desktop (hidden on mobile) */}
       {isStaff && (
         <button
           type="button"
           onClick={() => startTransition(() => navigate('/admin'))}
-          className="fixed bottom-24 right-4 z-50 flex items-center gap-2 rounded-2xl bg-navy-800 px-4 py-2.5 text-xs font-bold text-white shadow-xl shadow-black/20 transition hover:bg-navy-700 active:scale-95 md:bottom-6"
-          style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom))' }}
+          className="fixed bottom-6 right-6 z-50 hidden md:flex items-center gap-2 rounded-2xl bg-navy-800 px-4 py-2.5 text-xs font-bold text-white shadow-xl shadow-black/20 transition hover:bg-navy-700 active:scale-95"
         >
           <LayoutDashboard size={15} />
           Back to Admin

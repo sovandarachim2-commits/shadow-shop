@@ -40,7 +40,14 @@ export function useCartPriceSync() {
     staleTime: 0,
     queryFn: async () => {
       const [products, sets] = await Promise.all([
-        Promise.all(productIds.map((id) => productsApi.products.get(id).then((response) => response.data))),
+        Promise.all(productIds.map(async (id) => {
+          try {
+            return (await productsApi.products.get(id)).data
+          } catch (error) {
+            if (error.response?.status === 404) return { id, unavailable: true }
+            throw error
+          }
+        })),
         Promise.all(setIds.map((id) => productsApi.sets.get(id).then((response) => response.data))),
       ])
       return { products, sets }

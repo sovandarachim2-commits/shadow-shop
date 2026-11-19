@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Store, Plus, FileText, CheckCircle2, Clock, AlertTriangle,
@@ -13,6 +13,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import SearchFilter from '@/components/shared/SearchFilter'
 import { Table, Thead, Th, Tbody, Tr, Td, LoadingRows, EmptyState } from '@/components/ui/Table'
 import { Badge } from '@/components/ui/Badge'
+import { KpiCard } from '@/components/ui/Card'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { storesApi } from '@/api/stores'
@@ -1388,8 +1389,9 @@ function StoreBrandingHeader({
   )
 }
 
-export default function StoreManagement() {
+export default function StoreManagement({ initialTab }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const currentUser = useAuthStore((state) => state.user)
   const canManageHomepage = ['super_admin', 'admin'].includes(currentUser?.role) || currentUser?.is_superuser
 
@@ -1401,7 +1403,40 @@ export default function StoreManagement() {
 
   const queryClient = useQueryClient()
   const [confirm, ConfirmDialog] = useConfirm()
-  const [activeTab, setActiveTab] = useState('stores') // stores, inquiries, contracts, payouts
+
+  const resolveTab = () => {
+    if (initialTab) return initialTab
+    const p = location.pathname.replace(/\/+$/, '')
+    if (p.endsWith('/leads')) return 'inquiries'
+    if (p.endsWith('/contracts')) return 'contracts'
+    if (p.endsWith('/payouts')) return 'payouts'
+    if (p.endsWith('/approvals')) return 'approvals'
+    const sp = new URLSearchParams(location.search)
+    const tabParam = sp.get('tab')
+    if (tabParam && ['stores', 'inquiries', 'contracts', 'payouts', 'approvals'].includes(tabParam)) {
+      return tabParam
+    }
+    return 'stores'
+  }
+
+  const [activeTab, setActiveTab] = useState(resolveTab)
+
+  useEffect(() => {
+    setActiveTab(resolveTab())
+  }, [location.pathname, location.search, initialTab])
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    if (tab === 'payouts') {
+      if (location.pathname !== '/admin/stores/payouts') navigate('/admin/stores/payouts')
+    } else if (tab === 'approvals') {
+      if (location.pathname !== '/admin/stores/approvals') navigate('/admin/stores/approvals')
+    } else {
+      if (location.pathname !== '/admin/stores') {
+        navigate('/admin/stores')
+      }
+    }
+  }
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -1891,13 +1926,132 @@ export default function StoreManagement() {
     }
   }
 
+  const tabHeaders = {
+    stores: { title: 'Stores & Partners', subtitle: `${stores.length} total stores configured` },
+    inquiries: { title: 'Partner Leads', subtitle: `${inquiries.length} inquiries & applications` },
+    contracts: { title: 'Contracts', subtitle: `${contracts.length} partner contracts` },
+    payouts: { title: 'Payouts', subtitle: `${payouts.length} payout records` },
+    approvals: { title: 'Approval Product', subtitle: `${pendingProducts.length + pendingNameChangeStores.length} awaiting admin review` },
+  }
+  const currentTabHeader = tabHeaders[activeTab] || tabHeaders.stores
+
+  const totalPayoutGross = payouts.reduce((acc, p) => acc + Number(p.gross_sales || p.amount || 0), 0)
+  const totalPayoutNet = payouts.reduce((acc, p) => acc + Number(p.net_payout || p.amount || 0), 0)
+  const pendingPayouts = payouts.filter((p) => p.status === 'pending' || p.status === 'requested')
+  const completedPayouts = payouts.filter((p) => p.status === 'paid' || p.status === 'completed')
+
+  const currentKpis = useMemo(() => {
+    if (activeTab === 'payouts') {
+      return [
+        {
+          title: 'Total Payouts',
+          value: isPayoutsLoading ? '...' : payouts.length,
+          icon: DollarSign,
+          color: 'purple',
+        },
+        {
+          title: 'Pending Requests',
+          value: isPayoutsLoading ? '...' : pendingPayouts.length,
+          icon: Clock,
+          color: pendingPayouts.length > 0 ? 'orange' : 'green',
+        },
+        {
+          title: 'Total Gross Sales',
+          value: isPayoutsLoading ? '...' : formatCurrency(totalPayoutGross),
+          icon: Building2,
+          color: 'blue',
+        },
+        {
+          title: 'Total Net Payouts',
+          value: isPayoutsLoading ? '...' : formatCurrency(totalPayoutNet),
+          icon: CheckCircle2,
+          color: 'green',
+        },
+      ]
+    }
+    if (activeTab === 'approvals') {
+      return [
+        {
+          title: 'Pending Products',
+          value: isPendingProductsLoading ? '...' : pendingProducts.length,
+          icon: PackageCheck,
+          color: pendingProducts.length > 0 ? 'orange' : 'green',
+        },
+        {
+          title: 'Store Name Changes',
+          value: pendingNameChangeStores.length,
+          icon: Building2,
+          color: pendingNameChangeStores.length > 0 ? 'purple' : 'blue',
+        },
+        {
+          title: 'Active Stores',
+          value: isSummaryLoading ? '...' : summary?.active_stores || stores.filter((s) => s.status === 'active').length || 0,
+          icon: Store,
+          color: 'pink',
+        },
+        {
+          title: 'Live Partner Products',
+          value: stores.reduce((acc, s) => acc + (s.products_count || 0), 0),
+          icon: CheckCircle2,
+          color: 'green',
+        },
+      ]
+    }
+    return [
+      {
+        title: 'Total Stores',
+        value: isSummaryLoading ? '...' : summary?.total_stores || stores.length || 0,
+        icon: Building2,
+        color: 'blue',
+        onClick: () => handleTabChange('stores'),
+      },
+      {
+        title: 'Partner Leads',
+        value: isSummaryLoading ? '...' : summary?.new_inquiries || inquiries.length || 0,
+        icon: Mail,
+        color: 'purple',
+        onClick: () => handleTabChange('inquiries'),
+      },
+      {
+        title: 'Active Contracts',
+        value: isSummaryLoading ? '...' : summary?.total_contracts || contracts.length || 0,
+        icon: FileText,
+        color: 'pink',
+        onClick: () => handleTabChange('contracts'),
+      },
+      {
+        title: 'Expired Contracts',
+        value: isSummaryLoading ? '...' : summary?.expired_contracts || 0,
+        icon: AlertTriangle,
+        color: (summary?.expired_contracts || 0) > 0 ? 'orange' : 'green',
+        onClick: () => handleTabChange('contracts'),
+      },
+    ]
+  }, [
+    activeTab,
+    isSummaryLoading,
+    summary,
+    stores,
+    inquiries,
+    contracts,
+    isPayoutsLoading,
+    payouts,
+    completedPayouts.length,
+    pendingPayouts.length,
+    totalPayoutGross,
+    totalPayoutNet,
+    isPendingProductsLoading,
+    pendingProducts.length,
+    pendingNameChangeStores.length,
+  ])
+
   return (
     <div className="animate-fade-in space-y-6">
       {/* Admin System PageHeader */}
       <PageHeader
-        title="Store & Contract Management"
-        subtitle={`${stores.length} total stores configured`}
-        breadcrumbs={[{ label: 'Stores & Partners' }]}
+        title={currentTabHeader.title}
+        subtitle={currentTabHeader.subtitle}
+        breadcrumbs={[{ label: 'Store Management' }, { label: currentTabHeader.title }]}
         actions={
           <button
             type="button"
@@ -1917,166 +2071,95 @@ export default function StoreManagement() {
         }
       />
 
-      {/* Overview Stat Cards (Shadow Shop Admin Standard Card Style) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="stat-card">
-          <div className="flex items-center justify-between text-gray-500 mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Stores</span>
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Building2 size={16} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-navy-900">
-            {isSummaryLoading ? '...' : summary?.total_stores || 0}
-          </div>
-          <div className="text-xs text-green-600 mt-1 font-semibold flex items-center gap-1">
-            <CheckCircle2 size={12} />
-            <span>{summary?.active_stores || 0} active stores</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-center justify-between text-gray-500 mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Expiring in 30 Days</span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-              <AlertTriangle size={16} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-amber-600">
-            {isSummaryLoading ? '...' : summary?.expiring_soon || 0}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">Contracts needing renewal</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-center justify-between text-gray-500 mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Partner Leads</span>
-            <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-              <Mail size={16} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-purple-600">
-            {isSummaryLoading ? '...' : summary?.new_inquiries || 0}
-          </div>
-          <div className="text-xs text-purple-600 mt-1 font-medium">New seller applications</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="flex items-center justify-between text-gray-500 mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Expired Contracts</span>
-            <div className="p-2 rounded-xl bg-red-50 text-red-600">
-              <Clock size={16} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-red-600">
-            {isSummaryLoading ? '...' : summary?.expired_contracts || 0}
-          </div>
-          <div className="text-xs text-gray-400 mt-1">Auto-suspended stores</div>
-        </div>
-
-        <div
-          onClick={() => setActiveTab('approvals')}
-          className="stat-card cursor-pointer hover:border-amber-300 transition group"
-        >
-          <div className="flex items-center justify-between text-gray-500 mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 group-hover:text-amber-600 transition">
-              Pending Approvals
-            </span>
-            <div className="p-2 rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-100 transition">
-              <PackageCheck size={16} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-amber-600">
-            {isPendingProductsLoading ? '...' : pendingProducts.length}
-          </div>
-          <div className="text-xs text-amber-700 mt-1 font-medium">Awaiting admin review</div>
-        </div>
+      {/* Clean KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {currentKpis.map((kpi, idx) => (
+          <KpiCard
+            key={kpi.title || idx}
+            compact
+            title={kpi.title}
+            value={kpi.value}
+            icon={kpi.icon}
+            color={kpi.color}
+            onClick={kpi.onClick}
+          />
+        ))}
       </div>
 
       {/* Admin Card with Tab Navigation */}
       <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
         {/* Sub-Header Tabs */}
-        <div className="border-b border-gray-100 px-6 pt-3 flex items-center gap-2 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('stores')}
-            className={cn(
-              'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
-              activeTab === 'stores'
-                ? 'border-pink-600 text-pink-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            )}
-          >
-            <Store size={15} />
-            <span>All Stores ({stores.length})</span>
-          </button>
+        {!['payouts', 'approvals'].includes(activeTab) ? (
+          <div className="border-b border-gray-100 px-6 pt-3 flex items-center gap-2 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => handleTabChange('stores')}
+              className={cn(
+                'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
+                activeTab === 'stores'
+                  ? 'border-pink-600 text-pink-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-900'
+              )}
+            >
+              <Store size={15} />
+              <span>Stores & Partners ({stores.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('inquiries')}
-            className={cn(
-              'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
-              activeTab === 'inquiries'
-                ? 'border-pink-600 text-pink-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            )}
-          >
-            <Mail size={15} />
-            <span>Partner Leads ({inquiries.length})</span>
-            {summary?.new_inquiries > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-black">
-                {summary.new_inquiries}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('inquiries')}
+              className={cn(
+                'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
+                activeTab === 'inquiries'
+                  ? 'border-pink-600 text-pink-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-900'
+              )}
+            >
+              <Mail size={15} />
+              <span>Partner Leads ({inquiries.length})</span>
+              {summary?.new_inquiries > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-black">
+                  {summary.new_inquiries}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('contracts')}
-            className={cn(
-              'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
-              activeTab === 'contracts'
-                ? 'border-pink-600 text-pink-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            )}
-          >
-            <FileText size={15} />
-            <span>Contracts ({contracts.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('payouts')}
-            className={cn(
-              'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
-              activeTab === 'payouts'
-                ? 'border-pink-600 text-pink-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            )}
-          >
-            <DollarSign size={15} />
-            <span>Payouts ({payouts.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('approvals')}
-            className={cn(
-              'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
-              activeTab === 'approvals'
-                ? 'border-pink-600 text-pink-600'
-                : 'border-transparent text-gray-500 hover:text-gray-900'
-            )}
-          >
-            <PackageCheck size={15} />
-            <span>Approvals Queue ({pendingProducts.length + pendingNameChangeStores.length})</span>
+            <button
+              type="button"
+              onClick={() => handleTabChange('contracts')}
+              className={cn(
+                'pb-3 px-3 text-sm font-bold border-b-2 transition -mb-px flex items-center gap-2 shrink-0',
+                activeTab === 'contracts'
+                  ? 'border-pink-600 text-pink-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-900'
+              )}
+            >
+              <FileText size={15} />
+              <span>Contracts ({contracts.length})</span>
+            </button>
+          </div>
+        ) : activeTab === 'payouts' ? (
+          <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign size={18} className="text-pink-600" />
+              <h3 className="font-bold text-gray-900 text-base">Payout Records & Requests ({payouts.length})</h3>
+            </div>
+          </div>
+        ) : (
+          <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <PackageCheck size={18} className="text-amber-600" />
+              <h3 className="font-bold text-gray-900 text-base">
+                Pending Approvals Queue ({pendingProducts.length + pendingNameChangeStores.length})
+              </h3>
+            </div>
             {(pendingProducts.length > 0 || pendingNameChangeStores.length > 0) && (
-              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black">
-                {pendingProducts.length + pendingNameChangeStores.length}
+              <span className="px-2.5 py-1 rounded-full bg-amber-500 text-white text-xs font-bold">
+                {pendingProducts.length + pendingNameChangeStores.length} Awaiting Review
               </span>
             )}
-          </button>
-        </div>
+          </div>
+        )}
 
         {/* Tab 1: All Stores Content */}
         {activeTab === 'stores' && (
@@ -2750,20 +2833,6 @@ export default function StoreManagement() {
                 </div>
               </div>
             )}
-
-            <div className="px-6 py-3.5 bg-amber-50/60 border-b border-amber-100/80 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700 shrink-0">
-                  <PackageCheck size={16} />
-                </span>
-                <p className="text-xs text-amber-900 font-medium">
-                  <strong className="font-bold">Option B Store Management:</strong> Products submitted by store vendors must be reviewed & approved before appearing on the public website.
-                </p>
-              </div>
-              <span className="text-xs font-bold text-amber-800 bg-amber-100/90 px-2.5 py-1 rounded-full">
-                {pendingProducts.length} pending review
-              </span>
-            </div>
 
             <Table>
               <Thead>

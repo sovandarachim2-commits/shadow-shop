@@ -137,7 +137,11 @@ export function EmptyState({ icon: Icon = ShoppingBag, title, description, actio
   )
 }
 
-export function ProductImageAddButton({ available, qty, onAdd, onIncrease, onDecrease, soldOutLabel }) {
+export function ProductImageAddButton({ available, qty, onAdd, onIncrease, onDecrease, soldOutLabel, comingSoon = false }) {
+  if (comingSoon) {
+    return null
+  }
+
   if (!available) {
     return (
       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gray-950/35 backdrop-blur-[1px]">
@@ -162,9 +166,20 @@ export function ProductImageAddButton({ available, qty, onAdd, onIncrease, onDec
   }
 
   return (
+    <CartQuantityStepper
+      quantity={qty}
+      onIncrease={onIncrease}
+      onDecrease={onDecrease}
+      className="absolute bottom-2 right-2 z-10"
+    />
+  )
+}
+
+export function CartQuantityStepper({ quantity, onIncrease, onDecrease, className }) {
+  return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className="absolute bottom-2 right-2 z-10 flex h-9 items-center gap-1 rounded-full bg-pink-600 px-1 text-white shadow-md shadow-pink-500/30 ring-2 ring-white sm:h-10 sm:gap-1.5 sm:px-1.5"
+      className={cn('flex h-9 items-center gap-1 rounded-full bg-pink-600 px-1 text-white shadow-md shadow-pink-500/30 ring-2 ring-white sm:h-10 sm:gap-1.5 sm:px-1.5', className)}
     >
       <button
         type="button"
@@ -172,9 +187,9 @@ export function ProductImageAddButton({ available, qty, onAdd, onIncrease, onDec
         aria-label="Decrease quantity"
         className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 active:scale-95 sm:h-8 sm:w-8"
       >
-        {qty === 1 ? <Trash2 size={14} /> : <Minus size={14} strokeWidth={2.5} />}
+        {quantity === 1 ? <Trash2 size={14} /> : <Minus size={14} strokeWidth={2.5} />}
       </button>
-      <span className="min-w-[20px] text-center text-sm font-black text-white sm:min-w-[22px]">{qty}</span>
+      <span className="min-w-[20px] text-center text-sm font-black text-white sm:min-w-[22px]">{quantity}</span>
       <button
         type="button"
         onClick={onIncrease}

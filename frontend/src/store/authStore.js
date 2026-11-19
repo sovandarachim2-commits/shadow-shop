@@ -165,4 +165,5 @@ const useAuthStore = create(
   )
 )
 
+export { useAuthStore, useAuthStore as useAuth }
 export default useAuthStore

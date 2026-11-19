@@ -7,6 +7,7 @@ import {
   Sparkles, Clock3,
 } from 'lucide-react'
 import { productsApi } from '@/api/products'
+import { getCategoryImage } from '@/assets/category'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { formatCurrency } from '@/utils/helpers'
 import { formatFlashSaleCountdown, getFlashSaleTimerState, hasFlashSaleTimer, isVisibleFlashSaleItem } from '@/utils/flashSale'
@@ -353,7 +354,8 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
-  const available = isAvailableForSale(product)
+  const isComingSoon = product?.availability_status === 'coming_soon'
+  const available = !isComingSoon && isAvailableForSale(product)
 
   const currentPrice = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
@@ -361,6 +363,8 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (isComingSoon) return
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -369,6 +373,7 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
   }
   const handleIncrease = (e) => { 
     e.stopPropagation()
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -398,11 +403,17 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
       onClick={() => navigate(`/product/${product.id}`)}
     >
       {/* Badges */}
-      {badge && (
+      {isComingSoon ? (
+        <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
+          <span className="rounded-full bg-pink-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Coming Soon
+          </span>
+        </div>
+      ) : badge ? (
         <div className="absolute left-3 top-3 z-10 flex flex-col gap-1">
           <span className="rounded-full bg-pink-600 px-2 py-1 text-xs font-black tracking-wide text-white shadow-sm">{badge}</span>
         </div>
-      )}
+      ) : null}
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-gray-50">
         {product.primary_image && !imageFailed ? (
@@ -429,6 +440,7 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
           onIncrease={handleIncrease}
           onDecrease={handleDecrease}
           soldOutLabel={t('common.soldOut')}
+          comingSoon={isComingSoon}
         />
       </div>
       {/* Info */}
@@ -557,7 +569,7 @@ export default function Home() {
       id: cat.id,
       name: cat.name,
       path: `/shop?category=${cat.id}`,
-      imageUrl: cat.image_url || null,
+      imageUrl: getCategoryImage(cat),
       icon: iconForCategory(cat.name),
       bg: '#F3F4F6',
       color: '#475569',

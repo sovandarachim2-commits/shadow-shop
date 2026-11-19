@@ -8,8 +8,9 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ordersApi } from '@/api/orders'
+import useAuthStore from '@/store/authStore'
 import CheckinSuccessModal from '@/components/rewards/CheckinSuccessModal'
-import MemberTiersModal from '@/components/customer/MemberTiersModal'
+import MembershipVisaCard from '@/components/customer/MembershipVisaCard'
 import { getMemberTierImage } from '@/assets/member_shoppee'
 
 function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, disabled, completed = false }) {
@@ -58,10 +59,12 @@ function EarnRow({ icon: Icon, title, description, reward, action, actionLabel, 
 
 export default function EarnPoints() {
   const { t } = useTranslation()
+  const { user } = useAuthStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showCheckinSuccess, setShowCheckinSuccess] = useState(false)
-  const [showTierModal, setShowTierModal] = useState(false)
+
+  const displayName = user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'VALUED MEMBER'
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['customer-rewards-summary'],
@@ -112,18 +115,8 @@ export default function EarnPoints() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
-      <MemberTiersModal
-        isOpen={showTierModal}
-        onClose={() => setShowTierModal(false)}
-        currentLevel={memberLevel}
-        currentPoints={points}
-        tierThresholds={data?.tier_thresholds || {}}
-        tierDescriptions={data?.tier_descriptions || {}}
-        tierDescriptionsKm={data?.tier_descriptions_km || {}}
-        t={t}
-      />
       <div className="mx-auto w-full max-w-[1500px] px-5 md:px-6 md:pt-6">
-        <div className="-mx-5 mb-5 grid min-h-[64px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0">
+        <div className="-mx-5 mb-3.5 grid min-h-[60px] grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 bg-white px-4 pb-2.5 pt-[calc(0.75rem+var(--page-safe-top))] md:mx-0 md:mb-5 md:mt-0 md:flex md:min-h-0 md:gap-3 md:border-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0">
           <button 
             type="button" 
             onClick={() => navigate(-1)} 
@@ -137,7 +130,7 @@ export default function EarnPoints() {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => setShowTierModal(true)}
+              onClick={() => navigate('/profile/rewards/tiers')}
               className="flex h-11 w-11 items-center justify-center rounded-full bg-pink-50 text-pink-600 transition hover:bg-pink-100 active:scale-95 md:h-10 md:w-auto md:gap-2 md:rounded-xl md:border md:border-pink-200 md:bg-pink-50/70 md:px-3.5 md:py-2"
               title={t('rewardsPage.viewTierDetails', 'View Level Details')}
             >
@@ -147,39 +140,21 @@ export default function EarnPoints() {
           </div>
         </div>
 
-        <section className="relative mt-3 overflow-hidden rounded-[20px] bg-gradient-to-br from-pink-500 via-[#EC3F8F] to-pink-800 p-4 text-white shadow-[0_14px_32px_rgba(236,63,143,0.22)] md:mt-0 md:p-5">
-          <p className="text-xs font-bold text-white/90 md:text-sm">{t('rewardsPage.yourPoints')}</p>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 ring-[3px] ring-white/30"><Star size={20} fill="currentColor" /></span>
-            <span className="text-[28px] font-black leading-none md:text-[32px]">{points.toLocaleString()}</span>
-            <span className="self-end pb-0.5 text-xs font-black md:text-sm">{t('rewardsPage.pts')}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowTierModal(true)}
-            className="group mt-4 inline-flex items-center gap-2 rounded-xl bg-white/85 px-3 py-1.5 text-xs font-black text-gray-950 transition hover:bg-white active:scale-95 md:mt-4 md:px-3.5 md:py-1.5"
-          >
-            <span className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-white p-0.5 shadow-sm">
-              <img src={getMemberTierImage(memberLevel)} alt="" className="h-full w-full object-contain" />
-            </span>
-            <span>{t('profile.memberLevel', { level: translatedLevel })}</span>
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-pink-100 text-pink-600 transition group-hover:bg-pink-200">
-              <Info size={11} />
-            </span>
-          </button>
-          <div className="mt-5 flex justify-between gap-3 text-[11px] font-black md:mt-6 md:text-xs">
-            {nextLevelRaw ? (
-              <>
-                <span>{t('rewardsPage.nextLevel')} <span className="text-yellow-300">{t('profile.memberLevel', { level: nextLevel })}</span></span>
-                <span>{t('rewardsPage.ptsMore', { count: pointsToNext.toLocaleString() })}</span>
-              </>
-            ) : (
-              <span>{t('profile.maxTierReached')}</span>
-            )}
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20 md:h-2"><div className="h-full rounded-full bg-yellow-300" style={{ width: `${progress}%` }} /></div>
-          <p className="mt-2.5 text-xs font-black md:mt-3 md:text-sm">{t('rewardsPage.ptsProgress', { current: points.toLocaleString(), total: nextTierPoints.toLocaleString() })}</p>
-        </section>
+        <div className="mt-0 md:mt-1">
+          <MembershipVisaCard
+            tier={memberLevel}
+            memberName={displayName}
+            points={points}
+            nextTierPoints={nextTierPoints}
+            nextTierName={nextLevelRaw}
+            pointsToNext={pointsToNext}
+            progressPct={progress}
+            showStatus={false}
+            showProgress={true}
+            interactive={true}
+            onClick={() => navigate('/profile/rewards/tiers')}
+          />
+        </div>
 
         <h2 className="mb-2.5 mt-5 text-base font-black text-gray-950 md:text-lg">{t('rewardsPage.earn.waysToEarn')}</h2>
         <section className="grid overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm lg:grid-cols-2">

@@ -27,12 +27,15 @@ def assign_unique_slug(instance, source, *, fallback='item', slug_field='slug'):
 
 
 class Category(models.Model):
+    PRODUCT_TYPE_CHOICES = [('general', 'General'), ('clothing', 'Clothing')]
+
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True, blank=True)
     image = models.ImageField(upload_to='categories/', null=True, blank=True)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children')
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    product_type = models.CharField(max_length=12, choices=PRODUCT_TYPE_CHOICES, default='general')
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -97,10 +100,12 @@ class Product(models.Model):
     AVAILABILITY_AUTO = 'auto'
     AVAILABILITY_AVAILABLE = 'available'
     AVAILABILITY_OUT_OF_STOCK = 'out_of_stock'
+    AVAILABILITY_COMING_SOON = 'coming_soon'
     AVAILABILITY_CHOICES = [
         (AVAILABILITY_AUTO, 'Auto by Stock'),
         (AVAILABILITY_AVAILABLE, 'Available'),
         (AVAILABILITY_OUT_OF_STOCK, 'Out of Stock'),
+        (AVAILABILITY_COMING_SOON, 'Coming Soon'),
     ]
 
     UNIT_CHOICES = [
@@ -112,6 +117,26 @@ class Product(models.Model):
         ('jar', 'Jar'),
         ('sachet', 'Sachet'),
         ('pack', 'Pack'),
+    ]
+
+    CLOTHING_GENDERS = [('men', 'Men'), ('women', 'Women'), ('unisex', 'Unisex'), ('kids', 'Kids')]
+    CLOTHING_TYPES = [
+        ('t-shirt', 'T-Shirt'), ('shirt', 'Shirt'), ('dress', 'Dress'), ('jeans', 'Jeans'),
+        ('trousers', 'Trousers'), ('jacket', 'Jacket'),
+        ('hoodie', 'Hoodie'), ('sweater', 'Sweater'), ('shorts', 'Shorts'), ('skirt', 'Skirt'),
+        ('shoes', 'Shoes'), ('sneakers', 'Sneakers'), ('running-shoes', 'Running Shoes'),
+        ('boots', 'Boots'), ('sandals', 'Sandals'), ('heels', 'Heels'), ('loafers', 'Loafers'),
+        ('slippers', 'Slippers / Slides'), ('other', 'Other'),
+    ]
+    CLOTHING_MATERIALS = [
+        ('cotton', 'Cotton'), ('polyester', 'Polyester'), ('denim', 'Denim'),
+        ('linen', 'Linen'), ('silk', 'Silk'), ('wool', 'Wool'),
+        ('leather', 'Leather'), ('suede', 'Suede'), ('canvas', 'Canvas'),
+        ('mesh', 'Mesh'), ('rubber', 'Rubber'), ('synthetic', 'Synthetic'), ('other', 'Other'),
+    ]
+    CLOTHING_FITS = [
+        ('regular', 'Regular'), ('slim', 'Slim'), ('oversized', 'Oversized'), ('loose', 'Loose'),
+        ('wide', 'Wide Fit'), ('narrow', 'Narrow Fit'), ('standard', 'Standard'),
     ]
 
     APPROVAL_CHOICES = [
@@ -154,6 +179,17 @@ class Product(models.Model):
     benefits = models.TextField(blank=True)
     ingredients = models.TextField(blank=True)
     how_to_use = models.TextField(blank=True)
+    clothing_gender = models.CharField(max_length=30, blank=True)
+    clothing_type = models.CharField(max_length=80, blank=True)
+    clothing_material = models.CharField(max_length=80, blank=True)
+    clothing_fit = models.CharField(max_length=40, blank=True)
+    variants_enabled = models.BooleanField(default=False)
+    variant_parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='variants')
+    variant_size = models.CharField(max_length=40, blank=True)
+    variant_color = models.CharField(max_length=60, blank=True)
+    variant_archived = models.BooleanField(default=False)
+    variant_retail_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    variant_cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default='piece')
     weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -179,6 +215,9 @@ class Product(models.Model):
     class Meta:
         db_table = 'products'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['variant_parent', 'variant_size', 'variant_color'], name='unique_product_variant'),
+        ]
         indexes = [
             models.Index(fields=['is_active', 'is_best_seller']),
             models.Index(fields=['is_active', 'is_new_arrival']),
@@ -214,14 +253,30 @@ class Product(models.Model):
 
     @property
     def is_available_for_sale(self):
+        if self.variant_parent_id:
+            parent = self.variant_parent
+            if (
+                self.variant_archived or not self.is_active or not parent.variants_enabled or
+                not parent.is_active or parent.approval_status != 'approved' or
+                (parent.store_id and parent.store.status != 'active')
+            ):
+                return False
+        if self.variants_enabled:
+            return any(
+                variant.is_available_for_sale
+                for variant in self.variants.all()
+                if variant.is_active and not variant.variant_archived
+            )
         if self.availability_status == self.AVAILABILITY_AVAILABLE:
             return True
-        if self.availability_status == self.AVAILABILITY_OUT_OF_STOCK:
+        if self.availability_status in (self.AVAILABILITY_OUT_OF_STOCK, self.AVAILABILITY_COMING_SOON):
             return False
         return self.current_stock > 0
 
     @property
     def is_flash_sale_active(self):
+        if self.variants_enabled:
+            return False
         if not self.is_featured or not self.flash_sale_price:
             return False
         now = timezone.now()

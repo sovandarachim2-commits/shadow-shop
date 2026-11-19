@@ -1,15 +1,16 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Heart, ShoppingCart, Trash2 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
 import { cn, formatCurrency } from '@/utils/helpers'
-import { ProductThumb } from '@/components/customer/CustomerUi'
+import { CartQuantityStepper, ProductThumb } from '@/components/customer/CustomerUi'
+import { handleCartAdd } from '@/components/customer/CartAddedToast'
 import { showWishlistToast } from '@/components/customer/WishlistToast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 function getProductPrice(product) {
   return Number(product?.retail_price || product?.price || 0)
@@ -19,26 +20,46 @@ export default function Wishlist() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const addItem = useCartStore((s) => s.addItem)
+  const updateQuantity = useCartStore((s) => s.updateQuantity)
+  const cartItems = useCartStore((s) => s.items)
   const items = useWishlistStore((s) => s.items)
   const remove = useWishlistStore((s) => s.remove)
   const syncWithServer = useWishlistStore((s) => s.syncWithServer)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const openAuthModal = useUiStore((s) => s.openAuthModal)
+  const [confirm, confirmDialog] = useConfirm()
 
   useEffect(() => {
     syncWithServer()
   }, [syncWithServer])
 
   const handleAddToCart = (product) => {
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
     if (!isAuthenticated) {
       openAuthModal('cart')
       return
     }
-    addItem(product, 1)
-    toast.success(t('product.addedToCart'))
+    handleCartAdd(addItem, product, navigate)
   }
 
-  const handleRemove = (product) => {
+  const confirmRemoval = (message, name) => confirm(t(message), name, {
+    confirmText: t('cart.remove'),
+    cancelText: t('common.cancel'),
+  })
+
+  const handleDecrease = async (cartKey, quantity, name) => {
+    if (!isAuthenticated) {
+      openAuthModal('cart')
+      return
+    }
+    if (quantity === 1 && !(await confirmRemoval('cart.confirmRemoveItem', name))) return
+
+    updateQuantity(cartKey, quantity - 1)
+  }
+
+  const handleRemove = async (product) => {
+    if (!(await confirmRemoval('wishlist.confirmRemoveItem', product.name))) return
+
     remove(product)
     showWishlistToast(t('product.removedFromWishlist'), false)
   }
@@ -87,8 +108,19 @@ export default function Wishlist() {
           <div className="grid gap-3 md:grid-cols-2 md:gap-4">
             {items.map((product) => {
               const price = getProductPrice(product)
-              const productPath = product.item_type === 'set' ? `/product-set/${product.id}` : `/product/${product.id}`
+              const isSet = product.item_type === 'set'
+              const productPath = isSet ? `/product-set/${product.id}` : `/product/${product.id}`
               const inStock = product.stock_quantity > 0 || product.is_in_stock !== false
+              const cartKey = isSet ? `set-${product.id}` : product.id
+              const cartItem = cartItems.find(({ product: item }) => (item?.cart_key || item?.id) === cartKey)
+              const quantity = cartItem?.quantity || 0
+              const cartAction = t(product.variants_enabled ? 'product.chooseOptions' : 'common.addToCart')
+              const cartProduct = cartItem?.product || {
+                ...product,
+                cart_key: cartKey,
+                ...(isSet && { product_set_id: product.id }),
+                ...(product.stock_quantity > 0 && { current_stock: Number(product.stock_quantity) }),
+              }
 
               return (
                 <article
@@ -116,21 +148,32 @@ export default function Wishlist() {
                         </p>
                       </button>
 
-                      <div className="mt-3 flex items-end justify-between gap-3 md:mt-5">
+                      <div className="mt-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 md:mt-5">
                         <div>
                           <p className="text-lg font-black text-pink-600 md:text-xl">{formatCurrency(price)}</p>
                           <p className={cn('text-xs font-bold', inStock ? 'text-emerald-500' : 'text-gray-400')}>
                             {inStock ? 'IN STOCK' : 'OUT OF STOCK'}
                           </p>
                         </div>
-                        <button
-                          onClick={() => handleAddToCart(product)}
-                          disabled={!inStock}
-                          className="flex h-11 items-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-black text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 disabled:bg-gray-200 disabled:text-gray-400"
-                        >
-                          <ShoppingCart size={16} />
-                          <span className="hidden sm:inline">{t('common.addToCart')}</span>
-                        </button>
+                        {inStock && quantity > 0 && !product.variants_enabled ? (
+                          <CartQuantityStepper
+                            quantity={quantity}
+                            onIncrease={() => handleAddToCart(cartProduct)}
+                            onDecrease={() => handleDecrease(cartKey, quantity, product.name)}
+                            className="ml-auto"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleAddToCart(cartProduct)}
+                            disabled={!inStock && !product.variants_enabled}
+                            aria-label={cartAction}
+                            className="ml-auto flex h-11 items-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-black text-white shadow-sm shadow-pink-100 transition hover:bg-pink-700 disabled:bg-gray-200 disabled:text-gray-400"
+                          >
+                            <ShoppingCart size={16} />
+                            <span className="hidden sm:inline">{cartAction}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -140,6 +183,7 @@ export default function Wishlist() {
           </div>
         )}
       </div>
+      {confirmDialog}
     </div>
   )
 }

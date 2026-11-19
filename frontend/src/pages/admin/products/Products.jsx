@@ -12,6 +12,8 @@ import { productsApi } from '@/api/products'
 import { storesApi } from '@/api/stores'
 import useAuthStore from '@/store/authStore'
 import { formatCurrency } from '@/utils/helpers'
+import { variantKey } from '@/utils/productVariants'
+import ClothingFields from './ClothingFields'
 
 const IMAGE_MAX_SIZE = 1800
 const IMAGE_QUALITY = 0.92
@@ -20,6 +22,7 @@ const AVAILABILITY_OPTIONS = [
   { value: 'auto', label: 'Auto by Stock' },
   { value: 'available', label: 'Always Available' },
   { value: 'out_of_stock', label: 'Out of Stock' },
+  { value: 'coming_soon', label: 'Coming Soon' },
 ]
 
 function ProductStatusSwitch({ active, disabled, onToggle }) {
@@ -113,6 +116,15 @@ async function optimizeImage(file) {
   }
 }
 
+function ProductFormSection({ title, children }) {
+  return (
+    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+      <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
 function ProductForm({ product, categories, brands, stores, onSave, onClose, isSaving, isLoading }) {
   const currentUser = useAuthStore((state) => state.user)
   const isStorePartner = ['store_owner', 'store_manager'].includes(currentUser?.role)
@@ -153,6 +165,16 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
     benefits: product?.benefits || '',
     ingredients: product?.ingredients || '',
     how_to_use: product?.how_to_use || '',
+    clothing_gender: product?.clothing_gender || '',
+    clothing_type: product?.clothing_type || '',
+    clothing_material: product?.clothing_material || '',
+    clothing_fit: product?.clothing_fit || '',
+    variants_enabled: product?.variants_enabled || false,
+    variants: (product?.variants || []).map((row) => ({
+      ...row,
+      retail_price: row.retail_price_override ?? '',
+      cost_price: row.cost_price_override ?? '',
+    })),
     unit: product?.unit || 'piece',
     cost_price: product?.cost_price || '',
     wholesale_price: product?.wholesale_price || '',
@@ -166,6 +188,7 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
   })
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const isClothing = categories?.find((category) => String(category.id) === String(form.category))?.product_type === 'clothing'
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -176,9 +199,16 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
     if (String(form.compare_at_price).trim() && Number(form.compare_at_price) <= Number(form.retail_price)) {
       nextErrors.compare_at_price = 'Old price must be higher than the retail price'
     }
+    if (form.variants_enabled && (!isClothing || !form.variants.length)) {
+      nextErrors.variants = isClothing ? 'Generate at least one variant.' : 'Choose a Clothing category or disable variants.'
+    }
 
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
+    const firstInvalid = Object.keys(nextErrors)[0]
+    if (firstInvalid) {
+      e.currentTarget.elements.namedItem(firstInvalid)?.focus()
+      return
+    }
 
     onSave(form, selectedFiles)
   }
@@ -192,204 +222,230 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 p-5 md:p-6">
-      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-        <h3 className="text-sm font-black text-gray-950">Product Information</h3>
-        <p className="mt-1 text-xs font-semibold text-gray-400">
-          Fields marked with <span className="text-red-500 font-bold">*</span> are required.
-        </p>
-      </div>
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50 p-4 sm:p-6">
+        <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_17rem]">
+          <div className="min-w-0 space-y-4">
+            <ProductFormSection title="Product Information">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="label" htmlFor="product-form-name">
+                    Product Name <span className="font-bold text-red-500">*</span>
+                  </label>
+                  <input
+                    id="product-form-name"
+                    name="name"
+                    className="input-field bg-white aria-[invalid=true]:border-red-500"
+                    value={form.name}
+                    onChange={(e) => set('name', e.target.value)}
+                    placeholder="Full product name"
+                    aria-required="true"
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={errors.name ? 'product-form-name-error' : undefined}
+                  />
+                  {errors.name && <p id="product-form-name-error" className="mt-1 text-xs font-medium text-red-600">{errors.name}</p>}
+                </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="label">Product Code</label>
-          <input className="input-field" value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="Auto generated if empty" />
-          <p className="mt-1 text-xs font-semibold text-gray-400">Leave empty for auto SKU, or type your own product code.</p>
-          {errors.code && <p className="mt-1 text-xs font-semibold text-red-500">{errors.code}</p>}
-        </div>
-        <div>
-          <label className="label">Category</label>
-          <select className="select-field" value={form.category} onChange={(e) => set('category', e.target.value)}>
-            <option value="">Select Category</option>
-            {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label">Brand</label>
-          <select className="select-field" value={form.brand} onChange={(e) => set('brand', e.target.value)}>
-            <option value="">Select Brand</option>
-            {(brands || []).map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}{b.products_count != null ? ` (${b.products_count} products)` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label flex items-center justify-between">
-            <span>Store / Partner</span>
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-              isStorePartner && assignedStore
-                ? 'text-blue-700 bg-blue-50 border border-blue-200'
-                : 'text-purple-600 bg-purple-50'
-            }`}>
-              {isStorePartner && assignedStore ? 'Auto-Assigned' : 'Default: Website Store'}
-            </span>
-          </label>
-          {isStorePartner && assignedStore ? (
-            <div className="flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-2.5">
-              <span className="text-lg">🏪</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-gray-900 truncate">{assignedStore.store_name}</p>
-                <p className="text-xs text-blue-700 font-semibold">{assignedStore.store_code || assignedStore.store_slug || 'Partner Store'}</p>
+                <label>
+                  <span className="label">Product Code</span>
+                  <input className="input-field bg-white" value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="Auto-generated if empty" />
+                </label>
+                <label>
+                  <span className="label">Category</span>
+                  <select className="select-field appearance-auto bg-white" value={form.category} onChange={(e) => set('category', e.target.value)}>
+                    <option value="">Select Category</option>
+                    {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span className="label">Brand</span>
+                  <select className="select-field appearance-auto bg-white" value={form.brand} onChange={(e) => set('brand', e.target.value)}>
+                    <option value="">Select Brand</option>
+                    {(brands || []).map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="min-w-0">
+                  <label className="label" htmlFor={isStorePartner && assignedStore ? undefined : 'product-form-store'}>Store / Partner</label>
+                  {isStorePartner && assignedStore ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="truncate text-sm font-semibold text-slate-900">{assignedStore.store_name}</p>
+                      <p className="text-xs text-slate-500">{assignedStore.store_code || assignedStore.store_slug || 'Assigned partner store'}</p>
+                    </div>
+                  ) : (
+                    <select id="product-form-store" className="select-field appearance-auto bg-white" value={form.store || ''} onChange={(e) => set('store', e.target.value)}>
+                      <option value="">Shadow Shop (Official Website Store)</option>
+                      {(stores || []).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.code || s.slug || 'Partner'})</option>)}
+                    </select>
+                  )}
+                </div>
               </div>
-              <span className="text-[11px] font-medium text-gray-500 bg-white/80 px-2 py-0.5 rounded border border-blue-100">
-                Your Store
-              </span>
-            </div>
-          ) : (
-            <>
-              <select
-                className="select-field"
-                value={form.store || ''}
-                onChange={(e) => set('store', e.target.value)}
+            </ProductFormSection>
+
+            <ProductFormSection title="Pricing">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="product-form-retail">
+                    Retail Price ($) <span className="font-bold text-red-500">*</span>
+                  </label>
+                  <input
+                    id="product-form-retail"
+                    name="retail_price"
+                    type="number"
+                    step="0.01"
+                    className="input-field bg-white aria-[invalid=true]:border-red-500"
+                    value={form.retail_price}
+                    onChange={(e) => set('retail_price', e.target.value)}
+                    placeholder="0.00"
+                    aria-required="true"
+                    aria-invalid={Boolean(errors.retail_price)}
+                    aria-describedby={errors.retail_price ? 'product-form-retail-error' : undefined}
+                  />
+                  {errors.retail_price && <p id="product-form-retail-error" className="mt-1 text-xs font-medium text-red-600">{errors.retail_price}</p>}
+                </div>
+                <div>
+                  <label className="label" htmlFor="product-form-old-price">Old Price ($)</label>
+                  <input
+                    id="product-form-old-price"
+                    name="compare_at_price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input-field bg-white aria-[invalid=true]:border-red-500"
+                    value={form.compare_at_price}
+                    onChange={(e) => set('compare_at_price', e.target.value)}
+                    placeholder="Optional"
+                    aria-invalid={Boolean(errors.compare_at_price)}
+                    aria-describedby="product-form-old-price-hint"
+                  />
+                  <p id="product-form-old-price-hint" className={errors.compare_at_price ? 'mt-1 text-xs font-medium text-red-600' : 'mt-1 text-xs text-slate-500'}>
+                    {errors.compare_at_price || 'Shown crossed out on the shop.'}
+                  </p>
+                </div>
+                <label>
+                  <span className="label">Cost Price ($)</span>
+                  <input type="number" step="0.01" className="input-field bg-white" value={form.cost_price} onChange={(e) => set('cost_price', e.target.value)} placeholder="0.00" />
+                </label>
+                <label>
+                  <span className="label">Wholesale Price ($)</span>
+                  <input type="number" step="0.01" className="input-field bg-white" value={form.wholesale_price} onChange={(e) => set('wholesale_price', e.target.value)} placeholder="0.00" />
+                </label>
+              </div>
+            </ProductFormSection>
+
+            {(isClothing || form.variants_enabled) && (
+              <ClothingFields form={form} set={set} isClothing={isClothing} error={errors.variants} />
+            )}
+
+            <ProductFormSection title="Product Content">
+              <label className="block">
+                <span className="label">Description</span>
+                <textarea className="input-field resize-none bg-white" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} />
+              </label>
+              {!isClothing && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label>
+                      <span className="label">Ingredients</span>
+                      <textarea className="input-field resize-none bg-white" rows={2} value={form.ingredients} onChange={(e) => set('ingredients', e.target.value)} />
+                    </label>
+                    <label>
+                      <span className="label">Benefits</span>
+                      <textarea className="input-field resize-none bg-white" rows={2} value={form.benefits} onChange={(e) => set('benefits', e.target.value)} />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="label">How to Use</span>
+                    <textarea className="input-field resize-none bg-white" rows={3} value={form.how_to_use} onChange={(e) => set('how_to_use', e.target.value)} />
+                  </label>
+                </>
+              )}
+            </ProductFormSection>
+          </div>
+
+          <div className="min-w-0 space-y-4">
+            <ProductFormSection title="Product Images">
+              <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-5 text-center transition hover:border-purple-400 hover:bg-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
               >
-                <option value="">🏢 Shadow Shop (Official Website Store)</option>
-                {(stores || []).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    🏪 {s.name} ({s.code || s.slug || 'Partner'})
-                  </option>
+                <Upload size={19} className="text-purple-600" />
+                <span className="text-sm font-semibold text-slate-800">Upload Images</span>
+                <span className="text-xs text-slate-500">PNG, JPG or WEBP · 1200 × 1200 recommended</span>
+              </button>
+
+              {Boolean(product?.images?.length || previews.length) && (
+                <div className="grid grid-cols-3 gap-2">
+                  {(product?.images || []).map((img) => (
+                    <div key={img.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
+                      <img src={img.image} alt="" className="h-full w-full object-contain" />
+                      {img.is_primary && <span className="absolute inset-x-0 bottom-0 bg-purple-700 px-1 py-0.5 text-center text-[9px] font-medium text-white">Primary</span>}
+                    </div>
+                  ))}
+                  {previews.map((src, i) => (
+                    <div key={src} className="relative aspect-square overflow-hidden rounded-lg border border-purple-200">
+                      <img src={src} alt="" className="h-full w-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => removePreview(i)}
+                        aria-label={'Remove selected image ' + (i + 1)}
+                        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-white text-slate-700 shadow hover:text-red-600"
+                      >
+                        <X size={13} />
+                      </button>
+                      {i === 0 && !product?.images?.length && <span className="absolute inset-x-0 bottom-0 bg-purple-700 px-1 py-0.5 text-center text-[9px] font-medium text-white">Primary</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ProductFormSection>
+
+            <ProductFormSection title="Availability">
+              <div className="grid grid-cols-2 gap-3">
+                <label>
+                  <span className="label">Unit</span>
+                  <select className="select-field appearance-auto bg-white" value={form.unit} onChange={(e) => set('unit', e.target.value)}>
+                    {['piece', 'box', 'set', 'bottle', 'tube', 'jar', 'sachet', 'pack'].map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span className="label">Min Order Qty</span>
+                  <input type="number" className="input-field bg-white" value={form.min_order_qty} onChange={(e) => set('min_order_qty', e.target.value)} min={1} />
+                </label>
+              </div>
+              <label className="block">
+                <span className="label">Customer Availability</span>
+                <select className="select-field appearance-auto bg-white" value={form.availability_status} onChange={(e) => set('availability_status', e.target.value)}>
+                  {AVAILABILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+                <span className="mt-1.5 block text-xs leading-relaxed text-slate-500">
+                  Auto by Stock deducts stock when an order is printed. Always Available allows ordering at any stock level. Coming Soon showcases the product to customers without allowing orders.
+                </span>
+              </label>
+              <div className="divide-y divide-slate-100 border-t border-slate-100 pt-1">
+                {[['is_active', 'Active'], ['is_new_arrival', 'New Arrival'], ['is_best_seller', 'Best Seller']].map(([key, label]) => (
+                  <label key={key} className="flex cursor-pointer items-center justify-between gap-3 py-2.5 text-sm font-medium text-slate-700 last:pb-0">
+                    {label}
+                    <input type="checkbox" checked={form[key]} onChange={(e) => set(key, e.target.checked)} className="h-4 w-4 accent-purple-600" />
+                  </label>
                 ))}
-              </select>
-              <p className="mt-1 text-xs font-semibold text-gray-400">
-                Leave blank if this product belongs to the main platform website store.
-              </p>
-            </>
-          )}
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">
-            Product Name <span className="text-red-500 font-bold">*</span>
-          </label>
-          <input className="input-field" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Full product name" />
-          {errors.name && <p className="mt-1 text-xs font-semibold text-red-500">{errors.name}</p>}
-        </div>
-        <div>
-          <label className="label">Unit</label>
-          <select className="select-field" value={form.unit} onChange={(e) => set('unit', e.target.value)}>
-            {['piece', 'box', 'set', 'bottle', 'tube', 'jar', 'sachet', 'pack'].map((u) => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">Min Order Qty</label>
-          <input type="number" className="input-field" value={form.min_order_qty} onChange={(e) => set('min_order_qty', e.target.value)} min={1} />
-        </div>
-        <div>
-          <label className="label">Customer Availability</label>
-          <select className="select-field" value={form.availability_status} onChange={(e) => set('availability_status', e.target.value)}>
-            {AVAILABILITY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs font-semibold text-gray-400">Auto by Stock reduces when printed. Always Available ignores stock.</p>
-        </div>
-        <div>
-          <label className="label">Cost Price ($)</label>
-          <input type="number" step="0.01" className="input-field" value={form.cost_price} onChange={(e) => set('cost_price', e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Wholesale Price ($)</label>
-          <input type="number" step="0.01" className="input-field" value={form.wholesale_price} onChange={(e) => set('wholesale_price', e.target.value)} />
-        </div>
-        <div>
-          <label className="label">
-            Retail Price ($) <span className="text-red-500 font-bold">*</span>
-          </label>
-          <input type="number" step="0.01" className="input-field" value={form.retail_price} onChange={(e) => set('retail_price', e.target.value)} />
-          {errors.retail_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.retail_price}</p>}
-        </div>
-        <div>
-          <label className="label">Old Price ($)</label>
-          <input type="number" step="0.01" min="0" className="input-field" value={form.compare_at_price} onChange={(e) => set('compare_at_price', e.target.value)} placeholder="Optional" />
-          <p className="mt-1 text-xs font-semibold text-gray-400">Shown crossed out when higher than the current price.</p>
-          {errors.compare_at_price && <p className="mt-1 text-xs font-semibold text-red-500">{errors.compare_at_price}</p>}
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">Description</label>
-          <textarea className="input-field resize-none" rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} />
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">Ingredients</label>
-          <textarea className="input-field resize-none" rows={2} value={form.ingredients} onChange={(e) => set('ingredients', e.target.value)} placeholder="List product ingredients" />
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">Benefits</label>
-          <textarea className="input-field resize-none" rows={2} value={form.benefits} onChange={(e) => set('benefits', e.target.value)} />
-        </div>
-        <div className="md:col-span-2">
-          <label className="label">How to Use</label>
-          <textarea className="input-field resize-none" rows={3} value={form.how_to_use} onChange={(e) => set('how_to_use', e.target.value)} placeholder="Steps or usage instructions for customers" />
-        </div>
-        <div className="flex flex-wrap gap-4 md:col-span-2">
-          {[['is_active', 'Active'], ['is_new_arrival', 'New Arrival'], ['is_best_seller', 'Best Seller']].map(([k, l]) => (
-            <label key={k} className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form[k]} onChange={(e) => set(k, e.target.checked)} className="w-4 h-4 accent-purple-600" />
-              {l}
-            </label>
-          ))}
+              </div>
+            </ProductFormSection>
+          </div>
         </div>
       </div>
 
-      <div>
-        <label className="label">Product Images</label>
-        {product?.images?.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {product.images.map((img) => (
-              <div key={img.id} className="relative">
-                <img src={img.image} alt="" className="h-16 w-16 rounded-xl object-contain border border-gray-200 bg-white p-1" />
-                {img.is_primary && (
-                  <span className="absolute -top-1 -right-1 rounded-full bg-purple-600 px-1.5 py-0.5 text-[9px] font-black text-white">Primary</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-5 text-center hover:border-purple-300 hover:bg-purple-50 transition"
-        >
-          <Upload size={22} className="text-gray-400" />
-          <p className="text-sm font-semibold text-gray-500">Click to upload images</p>
-          <p className="text-xs text-gray-400">PNG, JPG, WEBP — first image becomes primary</p>
-          <p className="text-xs font-semibold text-purple-500">Recommended size: 1200 x 1200 px</p>
-          <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
-        </div>
-        {previews.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {previews.map((src, i) => (
-              <div key={i} className="relative">
-                <img src={src} alt="" className="h-16 w-16 rounded-xl object-contain border border-purple-200 bg-white p-1" />
-                <button
-                  type="button"
-                  onClick={() => removePreview(i)}
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow"
-                >
-                  <X size={11} />
-                </button>
-                {i === 0 && <span className="absolute -bottom-1 left-0 right-0 text-center text-[9px] font-black text-purple-600">Primary</span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex items-center justify-end gap-3 border-t border-gray-100 bg-white p-5 md:-mx-6 md:-mb-6 md:px-6">
-        <button type="button" onClick={onClose} disabled={isSaving} className="btn-secondary min-w-[100px] justify-center disabled:opacity-60">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-2xl border-t border-slate-200 bg-white px-4 py-3 sm:gap-3 sm:px-6">
+        <button type="button" onClick={onClose} disabled={isSaving} className="btn-secondary h-10 justify-center text-sm disabled:opacity-60">
           Cancel
         </button>
-        <button type="submit" disabled={isSaving} className="btn-primary min-w-[150px] justify-center disabled:cursor-not-allowed disabled:opacity-60">
+        <button type="submit" disabled={isSaving} className="btn-primary h-10 justify-center whitespace-nowrap text-sm disabled:cursor-not-allowed disabled:opacity-60">
           {isSaving ? 'Saving...' : product ? 'Update Product' : 'Create Product'}
         </button>
       </div>
@@ -822,7 +878,7 @@ export default function Products() {
     })
   }
 
-  const buildProductPayload = (form) => ({
+  const buildProductPayload = ({ variants, ...form }) => ({
     ...form,
     code: form.code.trim(),
     name: form.name.trim(),
@@ -834,7 +890,25 @@ export default function Products() {
     wholesale_price: Number(form.wholesale_price) || 0,
     retail_price: Number(form.retail_price) || 0,
     compare_at_price: String(form.compare_at_price).trim() ? Number(form.compare_at_price) : null,
+    variant_rows: form.variants_enabled ? variants.map((row) => ({
+      size: row.size,
+      color: row.color,
+      sku: row.sku.trim(),
+      retail_price: row.retail_price === '' ? null : row.retail_price,
+      cost_price: row.cost_price === '' ? null : row.cost_price,
+      initial_stock: row.id ? undefined : Number(row.initial_stock) || 0,
+      is_active: row.is_active,
+    })) : undefined,
   })
+
+  const uploadVariantImages = (savedProduct, form) => {
+    if (!form.variants_enabled) return
+    const filesByCombination = new Map(form.variants.map((row) => [variantKey(row.size, row.color), row.imageFile]))
+    for (const row of savedProduct.variants || []) {
+      const file = filesByCombination.get(variantKey(row.size, row.color))
+      if (file) uploadImagesInBackground(row.id, [file], { setAsPrimary: true })
+    }
+  }
 
   const handleSave = async (form, files) => {
     const payload = buildProductPayload(form)
@@ -847,6 +921,7 @@ export default function Products() {
           setShowModal(false)
           toast.success('Product updated!')
           uploadImagesInBackground(res.data.id, files, { setAsPrimary: !hasImages })
+          uploadVariantImages(res.data, form)
         },
       })
     } else {
@@ -856,6 +931,7 @@ export default function Products() {
           setShowModal(false)
           toast.success('Product created!')
           uploadImagesInBackground(res.data.id, files, { setAsPrimary: true })
+          uploadVariantImages(res.data, form)
         },
       })
     }
@@ -1009,8 +1085,20 @@ export default function Products() {
                       {p.current_stock}
                     </span>
                     {p.availability_status !== 'auto' && (
-                      <p className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-black ${isAvailableForSale(p) ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
-                        {p.availability_status === 'available' ? 'Always Available' : 'Out of Stock'}
+                      <p
+                        className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-black ${
+                          p.availability_status === 'coming_soon'
+                            ? 'bg-pink-50 text-pink-700 ring-1 ring-pink-200'
+                            : isAvailableForSale(p)
+                              ? 'bg-green-50 text-green-600'
+                              : 'bg-red-50 text-red-500'
+                        }`}
+                      >
+                        {p.availability_status === 'coming_soon'
+                          ? 'Coming Soon'
+                          : p.availability_status === 'available'
+                            ? 'Always Available'
+                            : 'Out of Stock'}
                       </p>
                     )}
                   </div>
@@ -1058,7 +1146,14 @@ export default function Products() {
         )}
       </div>
 
-      <Modal isOpen={showModal} onClose={() => !isSaving && !editLoading && setShowModal(false)} title={editProduct ? 'Edit Product' : 'Add New Product'} size="xl">
+      <Modal
+        isOpen={showModal}
+        onClose={() => !isSaving && !editLoading && setShowModal(false)}
+        title={editProduct ? 'Edit Product' : 'Add New Product'}
+        size="xl"
+        className="flex max-h-[calc(100dvh-2rem)] max-w-5xl flex-col overflow-hidden"
+        contentClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
         <ProductForm
           key={editProduct ? `edit-${editProduct.id}-${editLoading ? 'loading' : 'ready'}` : 'new'}
           product={editLoading ? null : editProduct}

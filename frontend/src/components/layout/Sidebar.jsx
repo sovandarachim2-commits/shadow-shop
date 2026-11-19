@@ -26,11 +26,15 @@ const navItems = [
     module: 'dashboard',
   },
   {
-    label: 'Stores & Partners',
-    path: '/admin/stores',
+    label: 'Store Management',
     icon: Store,
     module: 'stores',
     adminOnly: true,
+    children: [
+      { label: 'Stores & Partners', path: '/admin/stores', icon: Store, module: 'stores' },
+      { label: 'Payouts', path: '/admin/stores/payouts', icon: DollarSign, module: 'stores' },
+      { label: 'Approval Product', path: '/admin/stores/approvals', icon: PackageCheck, module: 'stores' },
+    ],
   },
   {
     label: 'Store Info',

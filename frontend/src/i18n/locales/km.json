@@ -121,6 +121,12 @@
     "price": "តម្លៃ",
     "stock": "ស្តុក",
     "quantity": "បរិមាណ",
+    "variantColor": "ពណ៌",
+    "variantSize": "ទំហំ",
+    "variantSku": "លេខកូដ SKU {{sku}}",
+    "variantStock": "មានក្នុងស្តុក {{quantity}}",
+    "chooseOptions": "ជ្រើសរើសជម្រើស",
+    "chooseAvailableOptions": "សូមជ្រើសរើសទំហំ និងពណ៌ដែលមានស្តុកមុនពេលបញ្ជាទិញ។",
     "description": "ការពិពណ៌នា",
     "additionalInfo": "ព័ត៌មានបន្ថែម",
     "benefits": "អត្ថប្រយោជន៍",
@@ -182,6 +188,7 @@
     "total": "សរុបទាំងអស់",
     "checkout": "បំពេញការទិញ",
     "remove": "យកចេញ",
+    "confirmRemoveItem": "យកចេញពីកន្ត្រករបស់អ្នក?",
     "items": "ផលិតផល",
     "clearAll": "លុបទាំងអស់",
     "selectAllProducts": "ជ្រើសផលិតផលទាំងអស់",
@@ -1038,6 +1045,12 @@
       "myCouponsDesc": "មើលគូប៉ុងរបស់អ្នក",
       "pointHistory": "ប្រវត្តិពិន្ទុ",
       "pointHistoryDesc": "មើលសកម្មភាពរបស់អ្នក",
+      "redeemShort": "ប្ដូរពិន្ទុ",
+      "redeemShortDesc": "ប្រើពិន្ទុ",
+      "couponsShort": "គូប៉ុង",
+      "couponsShortDesc": "គូប៉ុងរបស់ខ្ញុំ",
+      "historyShort": "ប្រវត្តិ",
+      "historyShortDesc": "សកម្មភាពពិន្ទុ",
       "promoTitle": "ពិន្ទុច្រើន រង្វាន់ច្រើន!",
       "promoDesc": "រកពិន្ទុបន្ថែម ដើម្បីទទួលបានរង្វាន់អស្ចារ្យ។",
       "earnNow": "រកឥឡូវ",
@@ -1200,7 +1213,8 @@
   "wishlist": {
     "title": "បញ្ជីចូលចិត្ត",
     "empty": "បញ្ជីចូលចិត្តរបស់អ្នកទទេ",
-    "emptyText": "រក្សាទុកផលិតផលដែលអ្នកចូលចិត្ត"
+    "emptyText": "រក្សាទុកផលិតផលដែលអ្នកចូលចិត្ត",
+    "confirmRemoveItem": "យកចេញពីបញ្ជីចូលចិត្តរបស់អ្នក?"
   },
   "installApp": {
     "title": "ដំឡើង Shadow Shop",

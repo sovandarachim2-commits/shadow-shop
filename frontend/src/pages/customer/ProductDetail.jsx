@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Heart, ShoppingCart, Zap, Plus, Minus, Check, ShoppingBag,
-  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf, Trash2, Gift,
+  PackageSearch, Star, Droplet, Sparkles, ShieldCheck, Leaf, Trash2, Gift, ArrowUpRight,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { productsApi } from '@/api/products'
@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 import useAuthStore from '@/store/authStore'
 import useScrollNavVisible from '@/hooks/useScrollNavVisible'
 import useUiStore from '@/store/uiStore'
+import { getColorHex } from '@/utils/colorMap'
 
 function cleanProductText(value) {
   if (typeof value !== 'string') return ''
@@ -28,6 +29,63 @@ function cleanProductText(value) {
 
 function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
+}
+
+const clothingAttributeDictionary = {
+  men: { en: 'Men', km: 'បុរស' },
+  women: { en: 'Women', km: 'នារី' },
+  unisex: { en: 'Unisex', km: 'ទូទៅ' },
+  kids: { en: 'Kids', km: 'កុមារ' },
+  't-shirt': { en: 'T-Shirt', km: 'អាវយឺត' },
+  shirt: { en: 'Shirt', km: 'អាវសាច់ក្រណាត់' },
+  polo: { en: 'Polo', km: 'អាវប៉ូឡូ' },
+  hoodie: { en: 'Hoodie', km: 'អាវរងាមានមួក' },
+  sweater: { en: 'Sweater', km: 'អាវរងា' },
+  jacket: { en: 'Jacket', km: 'អាវធំ-អាវក្រៅ' },
+  coat: { en: 'Coat', km: 'អាវក្រៅវែង' },
+  dress: { en: 'Dress', km: 'រ៉ូប' },
+  jeans: { en: 'Jeans', km: 'ខោខូវប៊យ' },
+  trousers: { en: 'Trousers', km: 'ខោជើងវែងសាច់ក្រណាត់' },
+  pants: { en: 'Pants', km: 'ខោជើងវែង' },
+  shorts: { en: 'Shorts', km: 'ខោខ្លី' },
+  skirt: { en: 'Skirt', km: 'សំពត់' },
+  shoes: { en: 'Shoes', km: 'ស្បែកជើង' },
+  sneakers: { en: 'Sneakers', km: 'ស្បែកជើងប៉ាតា' },
+  'running-shoes': { en: 'Running Shoes', km: 'ស្បែកជើងកីឡា' },
+  boots: { en: 'Boots', km: 'ស្បែកជើងកវែង' },
+  sandals: { en: 'Sandals', km: 'ស្បែកជើងកន្ត្រក' },
+  heels: { en: 'Heels', km: 'ស្បែកជើងកែង' },
+  loafers: { en: 'Loafers', km: 'ស្បែកជើងស្បែក' },
+  slippers: { en: 'Slippers / Slides', km: 'ស្បែកជើងផ្ទាត់' },
+  flats: { en: 'Flats', km: 'ស្បែកជើងបាតរាប' },
+  cotton: { en: 'Cotton', km: 'សាច់កប្បាស' },
+  polyester: { en: 'Polyester', km: 'ប៉ូលីអែស្ទ័រ' },
+  denim: { en: 'Denim', km: 'ខូវប៊យ' },
+  linen: { en: 'Linen', km: 'សរសៃអំបោះ' },
+  silk: { en: 'Silk', km: 'សូត្រ' },
+  wool: { en: 'Wool', km: 'រោមចៀម' },
+  fleece: { en: 'Fleece', km: 'សាច់កម្ញី' },
+  leather: { en: 'Leather', km: 'ស្បែកសុទ្ធ' },
+  suede: { en: 'Suede', km: 'ស្បែកកម្ញី' },
+  canvas: { en: 'Canvas', km: 'ក្រណាត់ផ្ទាំងក្រាស់' },
+  mesh: { en: 'Mesh', km: 'សំណាញ់' },
+  rubber: { en: 'Rubber', km: 'កៅស៊ូ' },
+  synthetic: { en: 'Synthetic', km: 'ស្បែកសំយោគ' },
+  regular: { en: 'Regular', km: 'ទម្រង់ធម្មតា' },
+  slim: { en: 'Slim', km: 'រាងរឹប' },
+  oversized: { en: 'Oversized', km: 'រាងធំទូលាយ' },
+  loose: { en: 'Loose', km: 'រលុង' },
+  standard: { en: 'Standard', km: 'ស្តង់ដារ' },
+  wide: { en: 'Wide Fit', km: 'ទម្រង់ទូលាយ' },
+  narrow: { en: 'Narrow Fit', km: 'ទម្រង់តូច' },
+}
+
+function formatClothingAttribute(val, isKhmer) {
+  if (!val) return ''
+  const key = String(val).trim().toLowerCase()
+  const match = clothingAttributeDictionary[key]
+  if (!match) return val
+  return isKhmer ? `${match.km} (${match.en})` : `${match.en} / ${match.km}`
 }
 
 const RelatedProductCard = memo(function RelatedProductCard({ product, priority = false, onAuthRequired }) {
@@ -46,8 +104,9 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
   const [imageFailed, setImageFailed] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
+  const isComingSoon = product?.availability_status === 'coming_soon'
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
-  const available = isAvailableForSale(product)
+  const available = !isComingSoon && isAvailableForSale(product)
   const price = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
   const saleTimer = getFlashSaleTimerState(product, Date.now())
@@ -63,6 +122,8 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (isComingSoon) return
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -72,6 +133,7 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
 
   const handleUpdateQty = (e, newQty) => {
     e.stopPropagation()
+    if (product.variants_enabled && newQty > qty) return navigate(`/product/${product.id}`)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -103,6 +165,11 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
         <Heart size={17} className={wishlisted ? 'fill-pink-500' : ''} />
       </button>
       <div className="relative aspect-square overflow-hidden bg-gray-50">
+        {isComingSoon && (
+          <span className="absolute left-2.5 top-2.5 z-10 rounded-full bg-pink-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Coming Soon
+          </span>
+        )}
         {product.primary_image && !imageFailed ? (
           <>
             {!imageLoaded && showImageLoader && <div className="absolute inset-0 animate-pulse bg-gray-100" />}
@@ -127,6 +194,7 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
           onIncrease={(e) => handleUpdateQty(e, qty + 1)}
           onDecrease={(e) => handleUpdateQty(e, qty - 1)}
           soldOutLabel={t('common.soldOut')}
+          comingSoon={isComingSoon}
         />
       </div>
       <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
@@ -169,6 +237,7 @@ export default function ProductDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [qty, setQty] = useState(1)
+  const [selectedVariantId, setSelectedVariantId] = useState(null)
   const [activeImg, setActiveImg] = useState(0)
   const [activeTab, setActiveTab] = useState('description')
   const toggleWishlist = useWishlistStore((s) => s.toggle)
@@ -278,15 +347,74 @@ export default function ProductDetail() {
     }
   }
 
-  const images = product?.images?.length > 0 ? product.images : []
-  const stock = product?.current_stock ?? 0
-  const isInStock = product?.is_available_for_sale ?? stock > 0
-  const oldPrice = Number(product?.old_price || product?.wholesale_price || 0)
-  const currentPrice = Number(product?.display_price || product?.retail_price || 0)
+  const hasVariants = Boolean(product?.variants_enabled)
+  const variants = product?.variants || []
+  const variant = variants.find((row) => row.id === selectedVariantId) || variants.find((row) => row.is_available_for_sale) || variants[0]
+  const colors = [...new Set(variants.map((row) => row.color))]
+  const sizes = variants.filter((row) => row.color === variant?.color)
+  const images = useMemo(() => {
+    // Primary image ALWAYS comes first (index 0)
+    const mainImages = [...(product?.images || [])].sort((a, b) => {
+      if (a.is_primary && !b.is_primary) return -1
+      if (!a.is_primary && b.is_primary) return 1
+      return (a.order ?? 0) - (b.order ?? 0)
+    })
+
+    const seenUrls = new Set(mainImages.map((m) => m?.image).filter(Boolean))
+    const extraImages = []
+
+    const variantList = product?.variants || []
+    for (const v of variantList) {
+      if (v?.image_url && !seenUrls.has(v.image_url)) {
+        seenUrls.add(v.image_url)
+        extraImages.push({
+          id: `variant-${v.id}`,
+          image: v.image_url,
+          is_variant: true,
+          variant_id: v.id,
+        })
+      }
+    }
+
+    const combined = [...mainImages, ...extraImages]
+    if (combined.length > 0) return combined
+
+    if (product?.primary_image) {
+      return [{ id: 'primary', image: product.primary_image, is_primary: true }]
+    }
+    return []
+  }, [product?.images, product?.variants, product?.primary_image])
+  const isComingSoon = product?.availability_status === 'coming_soon'
+  const stock = hasVariants ? variant?.current_stock ?? 0 : product?.current_stock ?? 0
+  const variantMinimumMet = product?.availability_status === 'available' || stock >= (product?.min_order_qty || 1)
+  const isInStock = isComingSoon
+    ? false
+    : hasVariants
+      ? Boolean(variant?.is_available_for_sale && variantMinimumMet)
+      : (product?.is_available_for_sale ?? stock > 0)
+  const oldPrice = hasVariants ? Number(product?.compare_at_price || 0) : Number(product?.old_price || product?.wholesale_price || 0)
+  const currentPrice = Number(variant?.retail_price ?? product?.display_price ?? product?.retail_price ?? 0)
   const savedAmount = oldPrice > currentPrice ? oldPrice - currentPrice : 0
-  const saleProduct = product?.display_price ? { ...product, retail_price: product.display_price } : product
+  const saleProduct = variant ? {
+    ...product,
+    id: variant.id,
+    variant_parent: product.id,
+    variant_size: variant.size,
+    variant_color: variant.color,
+    variants_enabled: false,
+    name: variant.name,
+    code: variant.sku,
+    current_stock: stock,
+    is_available_for_sale: isInStock,
+    display_price: currentPrice,
+    retail_price: currentPrice,
+    primary_image: variant.image_url || product.primary_image || images[0]?.image || null,
+  } : product?.display_price ? { ...product, retail_price: product.display_price } : product
   const flashSaleMaxQty = product?.is_flash_sale_active ? Number(product?.flash_sale_max_order_qty || 0) : 0
-  const maxPurchaseQty = flashSaleMaxQty > 0 ? (stock > 0 ? Math.min(stock, flashSaleMaxQty) : flashSaleMaxQty) : (stock > 0 ? stock : 9999)
+  const maxPurchaseQty = hasVariants
+    ? (product.availability_status === 'available' ? 9999 : stock)
+    : flashSaleMaxQty > 0 ? (stock > 0 ? Math.min(stock, flashSaleMaxQty) : flashSaleMaxQty) : (stock > 0 ? stock : 9999)
+  const purchaseQty = Math.max(qty, hasVariants ? product.min_order_qty || 1 : 1)
   const productDescription = cleanProductText(product?.description)
   const productIngredients = cleanProductText(product?.ingredients)
   const reviewCount = Number(product?.review_count || reviews?.length || 0)
@@ -305,10 +433,15 @@ export default function ProductDetail() {
   useEffect(() => {
     setActiveImg(0)
     setQty(1)
+    setSelectedVariantId(null)
     setActiveTab('description')
     if (galleryScrollRef.current) galleryScrollRef.current.scrollLeft = 0
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [id])
+
+  useEffect(() => {
+    if (product?.variant_parent) navigate(`/product/${product.variant_parent}`, { replace: true })
+  }, [navigate, product?.variant_parent])
 
   useEffect(() => {
     // Preload nearby images for smoother swipes
@@ -350,6 +483,19 @@ export default function ProductDetail() {
     })
   }
 
+  const chooseVariant = (row) => {
+    setSelectedVariantId(row.id)
+    setQty(product?.min_order_qty || 1)
+    if (row?.image_url) {
+      const idx = images.findIndex((img) => img.image === row.image_url || img.variant_id === row.id || img.id === `variant-${row.id}`)
+      if (idx !== -1) {
+        showImageAt(idx)
+        return
+      }
+    }
+    showImageAt(0)
+  }
+
   const handleAddToCart = () => {
     if (!product || !isInStock) return
     if (!loggedIn) {
@@ -357,7 +503,7 @@ export default function ProductDetail() {
       return
     }
 
-    const toAdd = Math.min(qty, maxPurchaseQty || qty)
+    const toAdd = Math.min(purchaseQty, maxPurchaseQty || purchaseQty)
     const result = addItem(saleProduct, toAdd)
     if (result?.success) {
       setAdded(true)
@@ -375,9 +521,13 @@ export default function ProductDetail() {
       return
     }
 
-    addItem(saleProduct, Math.min(qty, maxPurchaseQty || qty))
+    const result = addItem(saleProduct, Math.min(purchaseQty, maxPurchaseQty || purchaseQty))
+    if (!result?.success) {
+      if (result?.reason === 'stock_limit') showStockLimitToast(saleProduct, result.maxQuantity)
+      return
+    }
     clearSelection()
-    toggleSelected(product.id)
+    toggleSelected(saleProduct.id)
     navigate('/checkout')
   }
 
@@ -421,7 +571,7 @@ export default function ProductDetail() {
   }
 
   return (
-    <div className="product-detail-view bg-white pb-24 md:pb-0">
+    <div className={`product-detail-view bg-white ${hasVariants ? 'pb-36' : 'pb-24'} md:pb-0`}>
       <div
         className={`sticky top-0 z-30 -mx-4 -mt-4 mb-4 grid min-h-[64px] grid-cols-[44px_1fr_auto] items-center border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[calc(0.75rem+var(--page-safe-top))] backdrop-blur transition-[transform,opacity] duration-300 ease-out will-change-transform motion-reduce:transition-none md:hidden ${
           mobileHeaderVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'
@@ -500,22 +650,6 @@ export default function ProductDetail() {
                 </div>
               )}
             </div>
-            {images.length > 1 && (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-2.5 py-1.5 text-[11px] font-medium text-pink-600 shadow-sm ring-1 ring-pink-50">
-                <div className="pointer-events-auto flex max-w-[180px] gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {images.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => showImageAt(i)}
-                      aria-label={`Show product image ${i + 1}`}
-                      className={`h-2 shrink-0 rounded-full transition-all duration-300 ${i === activeImg ? 'w-5 bg-pink-600' : 'w-2 bg-pink-200'}`}
-                    />
-                  ))}
-                </div>
-                <span className="tabular-nums">{activeImg + 1}/{images.length}</span>
-              </div>
-            )}
           </div>
 
           <div className="mt-3 hidden justify-center px-4 md:flex md:px-0">
@@ -599,12 +733,71 @@ export default function ProductDetail() {
               <span className="text-gray-400">({reviewCount || reviews.length || 0})</span>
             </button>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-              isInStock ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+              isComingSoon
+                ? 'bg-pink-50 text-pink-700 ring-1 ring-pink-200'
+                : isInStock
+                  ? 'bg-green-50 text-green-600'
+                  : 'bg-red-50 text-red-500'
             }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${isInStock ? 'bg-green-500' : 'bg-red-500'}`} />
-              {isInStock ? t('common.inStock') : t('common.outOfStock')}
+              <span className={`h-1.5 w-1.5 rounded-full ${isComingSoon ? 'bg-pink-600' : isInStock ? 'bg-green-500' : 'bg-red-500'}`} />
+              {isComingSoon ? 'Coming Soon' : isInStock ? t('common.inStock') : t('common.outOfStock')}
             </span>
           </div>
+
+          {hasVariants && variant && (
+            <div className="mt-4 space-y-3">
+              <fieldset>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <legend className="text-sm font-bold text-gray-900">{t('product.variantColor')}</legend>
+                  {variant?.color && (
+                    <span className="text-xs font-semibold text-pink-600">
+                      : {variant.color}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {colors.map((color) => {
+                    const hex = getColorHex(color)
+                    const isSelected = variant.color === color
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition active:scale-95 ${
+                          isSelected
+                            ? 'border-pink-600 bg-pink-50/70 font-bold text-pink-700 ring-1 ring-pink-500/20 shadow-xs'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-pink-200 hover:bg-pink-50/20'
+                        }`}
+                        onClick={() => {
+                          if (color === variant.color) return
+                          const matches = variants.filter((row) => row.color === color)
+                          chooseVariant(matches.find((row) => row.size === variant.size && row.is_available_for_sale) || matches.find((row) => row.is_available_for_sale) || matches[0])
+                        }}
+                      >
+                        {hex && (
+                          <span
+                            className="h-4 w-4 shrink-0 rounded-full border border-black/15 shadow-2xs"
+                            style={{ backgroundColor: hex }}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>{color}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend className="mb-1 text-sm font-bold text-gray-900">{t('product.variantSize')}</legend>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map((row) => (
+                    <button key={row.id} type="button" aria-pressed={variant.id === row.id} className={`rounded-lg border px-3 py-1.5 text-sm ${variant.id === row.id ? 'border-pink-600 bg-pink-50 font-bold text-pink-700' : 'border-gray-200 text-gray-700'} ${row.is_available_for_sale ? '' : 'line-through'}`} onClick={() => chooseVariant(row)}>{row.size}</button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          )}
 
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <span className="text-[30px] font-bold leading-none text-pink-600 md:text-4xl md:font-black">{formatCurrency(currentPrice)}</span>
@@ -618,54 +811,51 @@ export default function ProductDetail() {
             )}
           </div>
 
-          <div className="mt-4 flex items-center md:hidden">
-            <button
-              type="button"
-              onClick={handleToggleWishlist}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition active:scale-95 ${
-                isWishlisted ? 'border-pink-200 bg-pink-50 text-pink-600' : 'border-gray-200 text-gray-600'
-              }`}
-            >
-              <Heart size={16} className={isWishlisted ? 'fill-pink-500' : ''} />
-              {t('nav.wishlist')}
-            </button>
-          </div>
-
           {flashSaleMaxQty > 0 && (
             <p className="mt-2 text-sm font-medium text-pink-600 md:hidden">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</p>
           )}
 
           {product.store_name && (
-            <div className="mt-4 flex items-center justify-between rounded-2xl border border-gray-100 bg-gray-50/80 p-3 shadow-xs">
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-pink-100/70 bg-gradient-to-r from-pink-50/50 via-white to-pink-50/30 p-3 sm:p-3.5 shadow-xs">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-700 font-bold text-sm uppercase shadow-xs">
-                  {product.store_name.slice(0, 2)}
-                </div>
+                {product.store_logo ? (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white border border-pink-100 p-1 shadow-xs">
+                    <img
+                      src={product.store_logo}
+                      alt={product.store_name}
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                        if (e.target.parentElement) {
+                          e.target.parentElement.innerHTML = `<span class="text-xs font-black text-pink-600">${(product.store_name || '').slice(0, 2).toUpperCase()}</span>`
+                        }
+                      }}
+                      className="h-full w-full object-contain rounded-lg"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-700 font-bold text-sm uppercase shadow-xs">
+                    {product.store_name.slice(0, 2)}
+                  </div>
+                )}
                 <div className="min-w-0">
-                  <p className="text-[11px] text-gray-500 font-medium">Sold & Shipped by</p>
-                  <div className="flex items-center gap-1.5 font-bold text-gray-900 text-sm truncate">
+                  <p className="text-[11px] text-gray-500 font-medium leading-tight">Sold & Shipped by</p>
+                  <div className="flex items-center gap-1.5 font-bold text-gray-900 text-sm truncate mt-0.5">
                     <span>{product.store_name}</span>
                     {product.store_verified && (
-                      <ShieldCheck size={14} className="text-blue-500 shrink-0" title="Verified Store Partner" />
+                      <ShieldCheck size={15} className="text-blue-500 shrink-0" title="Verified Store Partner" />
                     )}
                   </div>
                 </div>
               </div>
               <Link
-                to={`/store/${product.store_slug}`}
-                className="shrink-0 text-xs font-bold text-pink-600 hover:text-pink-700 px-3 py-1.5 rounded-xl bg-white border border-pink-100 shadow-xs transition hover:bg-pink-50"
+                to={`/store/${product.store_slug || product.store}`}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-pink-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm shadow-pink-200 transition hover:bg-pink-700 active:scale-95"
               >
-                Visit Store →
+                <span>{t('storesPage.visitStore', { defaultValue: 'Visit Store' })}</span>
+                <ArrowUpRight size={14} />
               </Link>
             </div>
           )}
-
-          <div className="mt-4 grid grid-cols-4 overflow-hidden rounded-2xl bg-gray-50/80 py-3 shadow-sm ring-1 ring-gray-100">
-            <FeatureChip icon={Droplet} label={t('product.deepHydration')} />
-            <FeatureChip icon={Sparkles} label={t('product.brightening')} />
-            <FeatureChip icon={ShieldCheck} label={t('product.skinBarrier')} />
-            <FeatureChip icon={Leaf} label={t('product.allSkinTypes')} iconClass="text-green-500" />
-          </div>
 
           <div className="mt-4 hidden flex-wrap items-center gap-4 border-y border-gray-100 py-5 md:flex">
             <span className="text-sm font-black text-gray-700">{t('product.quantity')}</span>
@@ -673,40 +863,49 @@ export default function ProductDetail() {
               <button onClick={() => setQty((q) => Math.max(product.min_order_qty || 1, q - 1))} className="shop-icon-btn h-10 w-10">
                 <Minus size={15} />
               </button>
-              <span className="w-10 text-center text-base font-black">{qty}</span>
+              <span className="w-10 text-center text-base font-black">{purchaseQty}</span>
               <button disabled={!isInStock} onClick={() => {
-                if (qty >= maxPurchaseQty) {
+                if (purchaseQty >= maxPurchaseQty) {
                   showStockLimitToast(saleProduct, maxPurchaseQty)
                 } else {
-                  setQty((q) => Math.min(maxPurchaseQty, q + 1))
+                  setQty(Math.min(maxPurchaseQty, purchaseQty + 1))
                 }
               }} className="shop-icon-btn h-10 w-10 disabled:opacity-50">
                 <Plus size={15} />
               </button>
             </div>
             {flashSaleMaxQty > 0 && <span className="text-sm font-black text-pink-600">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</span>}
-            {!isInStock && <span className="text-sm font-black text-red-500">{t('common.outOfStock')}</span>}
+            {!isInStock && (
+              <span className={`text-sm font-bold ${isComingSoon ? 'text-pink-600' : 'text-red-500'}`}>
+                {isComingSoon ? 'Coming Soon' : t('common.outOfStock')}
+              </span>
+            )}
           </div>
 
-          <div className="mt-6 hidden flex-col gap-3 sm:flex-row md:flex">
-            <button
-              onClick={handleAddToCart}
-              disabled={!isInStock}
-              className={`pd-khmer-font flex flex-1 items-center justify-center gap-2 rounded-lg border py-4 text-base font-bold transition ${
-                added ? 'border-green-500 bg-green-500 text-white' : 'border-pink-500 bg-white text-pink-600 hover:bg-pink-50'
-              }`}
-            >
-              {added ? <Check size={19} /> : <ShoppingCart size={19} />}
-              {added ? t('product.added') : t('common.addToCart')}
-            </button>
-            <button
-              onClick={handleBuyNow}
-              disabled={!isInStock}
-              className="pd-khmer-font shop-btn-primary flex-1 py-4 text-base font-bold"
-            >
-              <Zap size={19} /> {t('common.buyNow')}
-            </button>
-          </div>
+          {isComingSoon ? (
+            <div className="mt-6 hidden sm:flex">
+              <button
+                type="button"
+                disabled
+                className="pd-khmer-font flex flex-1 items-center justify-center gap-2 rounded-xl bg-pink-600 py-4 text-base font-bold text-white shadow-sm transition opacity-95 cursor-not-allowed"
+              >
+                <span>Coming Soon</span>
+              </button>
+            </div>
+          ) : (
+            <div className="mt-6 hidden flex-col gap-3 sm:flex-row md:flex">
+              <button
+                onClick={handleAddToCart}
+                disabled={!isInStock}
+                className={`pd-khmer-font flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-base font-bold shadow-sm transition active:scale-[0.99] ${
+                  added ? 'bg-green-500 text-white' : 'shop-btn-primary'
+                }`}
+              >
+                {added ? <Check size={19} /> : <ShoppingCart size={19} />}
+                {added ? t('product.added') : t('common.addToCart')}
+              </button>
+            </div>
+          )}
 
           {/* Tabs Section matching requested UI */}
           <div ref={reviewsSectionRef} className="mt-6 md:mt-8 border-t border-gray-100 pt-2">
@@ -793,6 +992,46 @@ export default function ProductDetail() {
                       </span>
                     </div>
 
+                    {product.clothing_gender && (
+                      <div className="flex items-center justify-between px-5 py-3.5">
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">
+                          {isKhmer ? 'ភេទ' : 'Gender'}
+                        </span>
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">
+                          {formatClothingAttribute(product.clothing_gender, isKhmer)}
+                        </span>
+                      </div>
+                    )}
+                    {product.clothing_type && (
+                      <div className="flex items-center justify-between px-5 py-3.5">
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">
+                          {isKhmer ? 'ប្រភេទផលិតផល' : 'Item Type'}
+                        </span>
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">
+                          {formatClothingAttribute(product.clothing_type, isKhmer)}
+                        </span>
+                      </div>
+                    )}
+                    {product.clothing_material && (
+                      <div className="flex items-center justify-between px-5 py-3.5">
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">
+                          {isKhmer ? 'សាច់ក្រណាត់ / សម្ភារៈ' : 'Material'}
+                        </span>
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">
+                          {formatClothingAttribute(product.clothing_material, isKhmer)}
+                        </span>
+                      </div>
+                    )}
+                    {product.clothing_fit && (
+                      <div className="flex items-center justify-between px-5 py-3.5">
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">
+                          {isKhmer ? 'ទម្រង់ / ទទឹង' : 'Fit / Width'}
+                        </span>
+                        <span className="pd-khmer-font text-[14px] sm:text-[15px] font-bold text-gray-900 text-right">
+                          {formatClothingAttribute(product.clothing_fit, isKhmer)}
+                        </span>
+                      </div>
+                    )}
                     {product.weight && (
                       <div className="flex items-center justify-between px-5 py-3.5">
                         <span className="pd-khmer-font text-[14px] sm:text-[15px] font-semibold text-gray-500">Weight</span>
@@ -957,57 +1196,58 @@ export default function ProductDetail() {
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-100 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 md:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-[112px_1fr] items-center gap-3">
-          <div className="flex h-12 items-center justify-between rounded-full border border-gray-200 bg-white px-3">
+        {isComingSoon ? (
+          <div className="mx-auto max-w-lg">
             <button
               type="button"
-              onClick={() => setQty((q) => Math.max(product.min_order_qty || 1, q - 1))}
-              className="flex h-8 w-8 items-center justify-center text-gray-800 active:scale-95 disabled:text-gray-300"
-              disabled={qty <= (product.min_order_qty || 1)}
-              aria-label="Decrease quantity"
+              disabled
+              className="pd-khmer-font flex h-12 w-full items-center justify-center rounded-full bg-pink-600 px-4 text-sm font-bold text-white shadow-sm opacity-95 cursor-not-allowed"
             >
-              <Minus size={16} strokeWidth={2.5} />
-            </button>
-            <span className="min-w-6 text-center text-sm font-bold text-gray-950">{qty}</span>
-            <button
-              type="button"
-              onClick={() => {
-                if (qty >= maxPurchaseQty) {
-                  showStockLimitToast(saleProduct, maxPurchaseQty)
-                } else {
-                  setQty((q) => Math.min(maxPurchaseQty, q + 1))
-                }
-              }}
-              className="flex h-8 w-8 items-center justify-center text-gray-950 active:scale-95 disabled:text-gray-300"
-              disabled={!isInStock}
-              aria-label="Increase quantity"
-            >
-              <Plus size={16} strokeWidth={2.5} />
+              <span>Coming Soon</span>
             </button>
           </div>
+        ) : (
+          <div className="mx-auto grid max-w-lg grid-cols-[112px_1fr] items-center gap-3">
+            <div className="flex h-12 items-center justify-between rounded-full border border-gray-200 bg-white px-3">
+              <button
+                type="button"
+                onClick={() => setQty((q) => Math.max(product.min_order_qty || 1, q - 1))}
+                className="flex h-8 w-8 items-center justify-center text-gray-800 active:scale-95 disabled:text-gray-300"
+                disabled={purchaseQty <= (product.min_order_qty || 1)}
+                aria-label="Decrease quantity"
+              >
+                <Minus size={16} strokeWidth={2.5} />
+              </button>
+              <span className="min-w-6 text-center text-sm font-bold text-gray-950">{purchaseQty}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (purchaseQty >= maxPurchaseQty) {
+                    showStockLimitToast(saleProduct, maxPurchaseQty)
+                  } else {
+                    setQty(Math.min(maxPurchaseQty, purchaseQty + 1))
+                  }
+                }}
+                className="flex h-8 w-8 items-center justify-center text-gray-950 active:scale-95 disabled:text-gray-300"
+                disabled={!isInStock}
+                aria-label="Increase quantity"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+              </button>
+            </div>
 
-          <button
-            onClick={handleAddToCart}
-            disabled={!isInStock}
-            className="pd-khmer-font flex h-12 items-center justify-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-bold text-white transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500"
-          >
-            <span>{isInStock ? t('common.addToCart') : t('common.outOfStock')}</span>
-            {isInStock && <span>{formatCurrency(currentPrice * qty)}</span>}
-          </button>
-        </div>
+            <button
+              onClick={handleAddToCart}
+              disabled={!isInStock}
+              className="pd-khmer-font flex h-12 items-center justify-center gap-2 rounded-full bg-pink-600 px-4 text-sm font-bold text-white transition active:scale-[0.98] hover:bg-pink-700 disabled:bg-gray-300 disabled:text-gray-500"
+            >
+              <span>{isInStock ? t('common.addToCart') : t('common.outOfStock')}</span>
+              {isInStock && <span>{formatCurrency(currentPrice * purchaseQty)}</span>}
+            </button>
+          </div>
+        )}
       </div>
 
-    </div>
-  )
-}
-
-function FeatureChip({ icon: Icon, label, iconClass = 'text-pink-600' }) {
-  return (
-    <div className="flex min-w-0 flex-col items-center justify-center gap-1.5 border-r border-gray-100 px-2 text-center last:border-r-0">
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-50">
-        <Icon size={17} className={iconClass} />
-      </span>
-      <span className="pd-khmer-font text-[11px] sm:text-xs font-semibold leading-normal text-gray-600 text-center">{label}</span>
     </div>
   )
 }

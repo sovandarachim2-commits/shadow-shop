@@ -96,11 +96,14 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showImageLoader, setShowImageLoader] = useState(false)
 
+  const isComingSoon = product?.availability_status === 'coming_soon'
   const saleProduct = product.display_price ? { ...product, retail_price: product.display_price } : product
-  const available = isAvailableForSale(product)
+  const available = !isComingSoon && isAvailableForSale(product)
 
   const handleAdd = (e) => {
     e.stopPropagation()
+    if (isComingSoon) return
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -110,6 +113,7 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
 
   const handleIncrease = (e) => {
     e.stopPropagation()
+    if (product.variants_enabled) return navigate(`/product/${product.id}`)
     if (!loggedIn) {
       onAuthRequired?.('cart')
       return
@@ -144,6 +148,11 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
       onClick={() => navigate(`/product/${product.id}`)}
     >
       <div className="relative aspect-square overflow-hidden bg-gray-50">
+        {isComingSoon && (
+          <span className="absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+            Coming Soon
+          </span>
+        )}
         {product.primary_image && !imageFailed ? (
           <>
             {!imageLoaded && showImageLoader && <ProductImageLoading />}
@@ -168,6 +177,7 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
           onIncrease={handleIncrease}
           onDecrease={handleDecrease}
           soldOutLabel={t('common.soldOut')}
+          comingSoon={isComingSoon}
         />
       </div>
       <div className="flex min-h-0 flex-col p-2.5 sm:p-3">

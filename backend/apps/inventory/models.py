@@ -55,6 +55,7 @@ class StockMovement(models.Model):
     after_qty = models.IntegerField()
     reference = models.CharField(max_length=100, blank=True)
     reference_type = models.CharField(max_length=50, blank=True)
+    warehouse_deltas = models.JSONField(default=dict, blank=True)
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

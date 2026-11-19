@@ -121,6 +121,12 @@
     "price": "Price",
     "stock": "Stock",
     "quantity": "Quantity",
+    "variantColor": "Color",
+    "variantSize": "Size",
+    "variantSku": "SKU {{sku}}",
+    "variantStock": "{{quantity}} in stock",
+    "chooseOptions": "Choose options",
+    "chooseAvailableOptions": "Choose an available size and color before checkout.",
     "description": "Description",
     "additionalInfo": "Additional Information",
     "benefits": "Benefits",
@@ -182,6 +188,7 @@
     "total": "Total",
     "checkout": "Checkout",
     "remove": "Remove",
+    "confirmRemoveItem": "Remove from your cart?",
     "items": "items",
     "clearAll": "Clear All",
     "selectAllProducts": "Select all products",
@@ -1038,6 +1045,12 @@
       "myCouponsDesc": "View your coupons",
       "pointHistory": "Point History",
       "pointHistoryDesc": "View your activity",
+      "redeemShort": "Redeem",
+      "redeemShortDesc": "Use points",
+      "couponsShort": "Coupons",
+      "couponsShortDesc": "My coupons",
+      "historyShort": "History",
+      "historyShortDesc": "Point activity",
       "promoTitle": "More Points, More Rewards!",
       "promoDesc": "Earn more points and unlock amazing rewards.",
       "earnNow": "Earn Now",
@@ -1200,7 +1213,8 @@
   "wishlist": {
     "title": "My Wishlist",
     "empty": "Your wishlist is empty",
-    "emptyText": "Save your favourite products here"
+    "emptyText": "Save your favourite products here",
+    "confirmRemoveItem": "Remove from your wishlist?"
   },
   "installApp": {
     "title": "Install Shadow Shop",

@@ -21,7 +21,7 @@ function AddStockModal({ onClose }) {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products-for-stock'],
-    queryFn: () => productsApi.products.list({ page_size: 200 }).then((r) => r.data.results || r.data),
+    queryFn: () => productsApi.products.list({ page_size: 500, stock_items: true }).then((r) => r.data.results || r.data),
   })
 
   const { data: storages = [] } = useQuery({

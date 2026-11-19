@@ -19,7 +19,11 @@ def preview_checkout_amount(request, checkout_data):
 
     subtotal = Decimal('0')
     for item in validated['items']:
-        subtotal += Decimal(str(item['unit_price'])) * int(item['quantity'])
+        unit_price = Decimal(str(item['unit_price']))
+        product = item.get('product')
+        if product and product.variant_parent_id and not item.get('is_free_gift') and unit_price != product.active_price:
+            raise ValidationError({'items': f'The price for {product.code} changed. Refresh your cart and try again.'})
+        subtotal += unit_price * int(item['quantity'])
 
     delivery_fee = Decimal(str(validated.get('delivery_fee') or 0))
     discount = Decimal('0')
@@ -40,10 +44,12 @@ def preview_checkout_amount(request, checkout_data):
 
 
 @transaction.atomic
-def create_customer_order(request, checkout_data, payment_status='unpaid'):
+def create_customer_order(request, checkout_data, payment_status='unpaid', paid_variant_snapshot=False):
     payload = dict(checkout_data)
     payload['payment_status'] = payment_status
-    serializer = CustomerCheckoutSerializer(data=payload, context={'request': request})
+    serializer = CustomerCheckoutSerializer(data=payload, context={
+        'request': request, 'paid_variant_snapshot': paid_variant_snapshot,
+    })
     serializer.is_valid(raise_exception=True)
     return serializer.save()
 
@@ -73,6 +79,7 @@ def fulfill_pending_checkout(pending_checkout, request=None):
         request,
         pending_checkout.checkout_data,
         payment_status='paid',
+        paid_variant_snapshot=True,
     )
     pending_checkout.order = order
     pending_checkout.status = PendingCheckout.STATUS_PAID

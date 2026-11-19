@@ -16,7 +16,7 @@ from .models import Customer, Order, OrderStatusHistory, Wishlist, CartItem, Pre
 from .serializers import (
     CustomerSerializer, OrderListSerializer, OrderDetailSerializer,
     OrderCreateSerializer, CustomerCheckoutSerializer, OrderStatusHistorySerializer,
-    WishlistSerializer, CartItemSerializer, PrepareRecordSerializer, OutRecordSerializer,
+    WishlistSerializer, CartItemSerializer, PrepareRecordSerializer, OutRecordSerializer, validate_cart_product,
     OrderAdminUpdateSerializer, RewardItemSerializer, RewardRedemptionSerializer, RewardSettingsSerializer, PointTransactionSerializer, PromoCodeSerializer,
 )
 from .rewards import (
@@ -291,8 +291,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    @transaction.atomic
     def update_status(self, request, pk=None):
-        order = self.get_object()
+        order = Order.objects.select_for_update().get(pk=self.get_object().pk)
         new_status = request.data.get('status')
         note = request.data.get('note', '')
 
@@ -1129,8 +1130,16 @@ class CartViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return CartItem.objects.filter(user=self.request.user).select_related(
-            'product', 'product__category', 'product__brand', 'product_set'
-        ).prefetch_related('product__images', 'product_set__images')
+            'product', 'product__category', 'product__brand', 'product_set', 'product__variant_parent__store',
+        ).prefetch_related('product__images', 'product__variant_parent__images', 'product__stock', 'product_set__images')
+
+    def _validate_product_quantity(self, product_id, quantity):
+        from apps.products.models import Product
+
+        product = Product.objects.select_related('variant_parent__store', 'stock').filter(pk=product_id).first()
+        if product is None:
+            raise ValidationError({'detail': 'Product not found.'})
+        validate_cart_product(product, quantity)
 
     def create(self, request, *args, **kwargs):
         product_id = request.data.get('product') or request.data.get('product_id')
@@ -1153,6 +1162,8 @@ class CartViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Either product or product_set is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if product_id:
+            existing_quantity = self.get_queryset().filter(product_id=product_id).values_list('quantity', flat=True).first() or 0
+            self._validate_product_quantity(product_id, existing_quantity + quantity)
             item, created = CartItem.objects.get_or_create(
                 user=request.user,
                 product_id=product_id,
@@ -1212,6 +1223,7 @@ class CartViewSet(viewsets.ModelViewSet):
 
                 if product_id:
                     try:
+                        self._validate_product_quantity(product_id, qty)
                         item, created = CartItem.objects.get_or_create(
                             user=request.user,
                             product_id=product_id,
@@ -1269,6 +1281,8 @@ class CartViewSet(viewsets.ModelViewSet):
                 item.delete()
             return Response({'status': 'deleted'}, status=status.HTTP_200_OK)
 
+        if product_id:
+            self._validate_product_quantity(product_id, quantity)
         if not item:
             if product_set_id:
                 item = CartItem.objects.create(user=request.user, product_set_id=product_set_id, quantity=quantity)

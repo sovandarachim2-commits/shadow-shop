@@ -10,6 +10,7 @@ export function Modal({
   children,
   size = 'md',
   className,
+  contentClassName,
   backdropClassName,
   closeOnBackdrop = true,
 }) {
@@ -53,7 +54,7 @@ export function Modal({
             </button>
           </div>
         )}
-        <div className="max-h-[85vh] overflow-y-auto">{children}</div>
+        <div className={cn('max-h-[85vh] overflow-y-auto', contentClassName)}>{children}</div>
       </div>
     </div>
   )
