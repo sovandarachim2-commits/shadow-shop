@@ -115,6 +115,7 @@ function PosterForm({ poster, brands, onSubmit, onClose, isSaving, uploadProgres
     start_at: toLocalInputValue(poster?.start_at),
     end_at: toLocalInputValue(poster?.end_at),
     display_frequency: poster?.display_frequency || 'once_per_session',
+    display_delay_seconds: poster?.display_delay_seconds ?? 0,
     status: poster?.status || 'published',
     send_notification: false,
   }))
@@ -171,6 +172,7 @@ function PosterForm({ poster, brands, onSubmit, onClose, isSaving, uploadProgres
     fd.append('start_at', form.start_at ? new Date(form.start_at).toISOString() : '')
     fd.append('end_at', form.end_at ? new Date(form.end_at).toISOString() : '')
     fd.append('display_frequency', form.display_frequency)
+    fd.append('display_delay_seconds', form.display_delay_seconds || '0')
     fd.append('status', form.status)
     if (form.send_notification) fd.append('send_notification', 'true')
 
@@ -358,6 +360,21 @@ function PosterForm({ poster, brands, onSubmit, onClose, isSaving, uploadProgres
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="poster-display-delay">Display Delay (seconds)</label>
+          <input
+            id="poster-display-delay"
+            type="number"
+            min={0}
+            step={1}
+            className="input-field"
+            value={form.display_delay_seconds}
+            onChange={(e) => setForm({ ...form, display_delay_seconds: e.target.value })}
+            aria-describedby="poster-display-delay-help"
+          />
+          <p id="poster-display-delay-help" className="mt-1 text-xs text-gray-500">Seconds after opening the storefront. Use 0 to show immediately.</p>
         </div>
 
         {form.target_audience === 'membership' && (

@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -60,6 +61,14 @@ class Store(models.Model):
     banner = models.ImageField(upload_to='stores/banners/', null=True, blank=True)
     
     phone = models.CharField(max_length=50, blank=True)
+    telegram_username = models.CharField(
+        max_length=33,
+        blank=True,
+        validators=[RegexValidator(
+            r'\A@?[A-Za-z][A-Za-z0-9_]{1,31}\Z',
+            'Enter a Telegram username such as @yourstore.',
+        )],
+    )
     email = models.EmailField(blank=True)
     province = models.CharField(max_length=100, blank=True)
     district = models.CharField(max_length=100, blank=True)

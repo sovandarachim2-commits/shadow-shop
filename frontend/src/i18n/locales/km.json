@@ -165,6 +165,7 @@
     "submitReview": "ដាក់ស្នើមតិវាយតម្លៃ",
     "noReviewsYet": "មិនទាន់មានមតិវាយតម្លៃទេ",
     "customer": "អតិថិជន",
+    "comingSoon": "មកដល់ឆាប់ៗ",
     "productSet": "សំណុំផលិតផល",
     "productSetBadge": "សំណុំ",
     "productSetNotFound": "រកមិនឃើញសំណុំផលិតផល",
@@ -244,6 +245,11 @@
     "noProductsFound": "រកមិនឃើញផលិតផល",
     "searchForProducts": "ស្វែងរកផលិតផល",
     "sortBy": "តម្រៀបតាម",
+    "filterAndSort": "តម្រង & តម្រៀប",
+    "gridView": "ទិដ្ឋភាពក្រឡា",
+    "listView": "ទិដ្ឋភាពបញ្ជី",
+    "category": "ប្រភេទ",
+    "brand": "ម៉ាក",
     "resultsFor": "លទ្ធផលសម្រាប់ \"{{query}}\""
   },
   "auth": {

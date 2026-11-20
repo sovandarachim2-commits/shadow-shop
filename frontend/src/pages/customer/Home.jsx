@@ -453,13 +453,19 @@ const ProductCard = memo(function ProductCard({ product, badge, priority = false
         </div>
         <h3 className="khmer-title mt-1 line-clamp-2 text-sm text-gray-950">{product.name}</h3>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
-          {oldPrice > currentPrice && (
+          {isComingSoon ? (
+            <span className="text-xs sm:text-sm font-bold text-pink-600">{t('product.comingSoon', 'Coming Soon')}</span>
+          ) : (
             <>
-              <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
-              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">
-                {t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}
-              </span>
+              <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
+              {oldPrice > currentPrice && (
+                <>
+                  <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
+                  <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">
+                    {t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}
+                  </span>
+                </>
+              )}
             </>
           )}
         </div>

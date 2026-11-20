@@ -128,6 +128,7 @@ function ProductFormSection({ title, children }) {
 function ProductForm({ product, categories, brands, stores, onSave, onClose, isSaving, isLoading }) {
   const currentUser = useAuthStore((state) => state.user)
   const isStorePartner = ['store_owner', 'store_manager'].includes(currentUser?.role)
+  const showPromotionFlags = currentUser?.role !== 'store_owner'
   const assignedStore = Array.isArray(currentUser?.assigned_stores) && currentUser.assigned_stores.length > 0
     ? currentUser.assigned_stores[0]
     : null
@@ -183,8 +184,10 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
     min_order_qty: product?.min_order_qty || 1,
     availability_status: product?.availability_status || 'auto',
     is_active: product?.is_active ?? true,
-    is_new_arrival: product?.is_new_arrival ?? false,
-    is_best_seller: product?.is_best_seller ?? false,
+    ...(showPromotionFlags && {
+      is_new_arrival: product?.is_new_arrival ?? false,
+      is_best_seller: product?.is_best_seller ?? false,
+    }),
   })
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
@@ -195,8 +198,10 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
 
     const nextErrors = {}
     if (!form.name.trim()) nextErrors.name = 'Product name is required'
-    if (!String(form.retail_price).trim()) nextErrors.retail_price = 'Retail price is required'
-    if (String(form.compare_at_price).trim() && Number(form.compare_at_price) <= Number(form.retail_price)) {
+    if (form.availability_status !== 'coming_soon' && !String(form.retail_price).trim()) {
+      nextErrors.retail_price = 'Retail price is required'
+    }
+    if (String(form.compare_at_price).trim() && String(form.retail_price).trim() && Number(form.compare_at_price) <= Number(form.retail_price)) {
       nextErrors.compare_at_price = 'Old price must be higher than the retail price'
     }
     if (form.variants_enabled && (!isClothing || !form.variants.length)) {
@@ -290,7 +295,7 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="product-form-retail">
-                    Retail Price ($) <span className="font-bold text-red-500">*</span>
+                    Retail Price ($) {form.availability_status !== 'coming_soon' && <span className="font-bold text-red-500">*</span>}
                   </label>
                   <input
                     id="product-form-retail"
@@ -300,8 +305,8 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
                     className="input-field bg-white aria-[invalid=true]:border-red-500"
                     value={form.retail_price}
                     onChange={(e) => set('retail_price', e.target.value)}
-                    placeholder="0.00"
-                    aria-required="true"
+                    placeholder={form.availability_status === 'coming_soon' ? 'Optional for Coming Soon' : '0.00'}
+                    aria-required={form.availability_status !== 'coming_soon'}
                     aria-invalid={Boolean(errors.retail_price)}
                     aria-describedby={errors.retail_price ? 'product-form-retail-error' : undefined}
                   />
@@ -429,7 +434,10 @@ function ProductForm({ product, categories, brands, stores, onSave, onClose, isS
                 </span>
               </label>
               <div className="divide-y divide-slate-100 border-t border-slate-100 pt-1">
-                {[['is_active', 'Active'], ['is_new_arrival', 'New Arrival'], ['is_best_seller', 'Best Seller']].map(([key, label]) => (
+                {[
+                  ['is_active', 'Active'],
+                  ...(showPromotionFlags ? [['is_new_arrival', 'New Arrival'], ['is_best_seller', 'Best Seller']] : []),
+                ].map(([key, label]) => (
                   <label key={key} className="flex cursor-pointer items-center justify-between gap-3 py-2.5 text-sm font-medium text-slate-700 last:pb-0">
                     {label}
                     <input type="checkbox" checked={form[key]} onChange={(e) => set(key, e.target.checked)} className="h-4 w-4 accent-purple-600" />

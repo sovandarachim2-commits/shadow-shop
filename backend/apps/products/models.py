@@ -760,6 +760,7 @@ class OfferPoster(models.Model):
     start_at = models.DateTimeField(null=True, blank=True)
     end_at = models.DateTimeField(null=True, blank=True)
     display_frequency = models.CharField(max_length=30, choices=FREQUENCY_CHOICES, default=FREQ_SESSION)
+    display_delay_seconds = models.PositiveSmallIntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     approval_status = models.CharField(max_length=20, choices=APPROVAL_CHOICES, default=APPROVAL_PENDING)
     rejection_reason = models.CharField(max_length=300, blank=True)

@@ -1460,6 +1460,7 @@ export default function StoreManagement({ initialTab }) {
       slug: '',
       store_type: 'retail',
       phone: '',
+      telegram_username: '',
       email: '',
       province: 'Phnom Penh',
       district: '',
@@ -1589,6 +1590,7 @@ export default function StoreManagement({ initialTab }) {
     store_type: 'partner',
     status: 'active',
     phone: '',
+    telegram_username: '',
     email: '',
     province: 'Phnom Penh',
     district: '',
@@ -1632,6 +1634,7 @@ export default function StoreManagement({ initialTab }) {
       formData.append('store_type', payload.store_type || 'partner')
       formData.append('status', payload.status || 'active')
       formData.append('phone', payload.phone?.trim() || '')
+      formData.append('telegram_username', payload.telegram_username?.trim() || '')
       formData.append('email', payload.email?.trim() || '')
       formData.append('province', payload.province?.trim() || 'Phnom Penh')
       formData.append('district', payload.district?.trim() || '')
@@ -1681,6 +1684,7 @@ export default function StoreManagement({ initialTab }) {
         store_type: 'partner',
         status: 'active',
         phone: '',
+        telegram_username: '',
         email: '',
         province: 'Phnom Penh',
         district: '',
@@ -1769,6 +1773,7 @@ export default function StoreManagement({ initialTab }) {
       }
       queryClient.invalidateQueries({ queryKey: ['stores-admin-list'] })
       queryClient.invalidateQueries({ queryKey: ['stores-admin-summary'] })
+      queryClient.invalidateQueries({ queryKey: ['public-store-detail'] })
       setEditStoreModal((prev) => ({ ...prev, isOpen: false }))
     },
     onError: (err) => {
@@ -1810,6 +1815,7 @@ export default function StoreManagement({ initialTab }) {
         slug: store.slug || '',
         store_type: store.store_type || 'retail',
         phone: store.phone || '',
+        telegram_username: store.telegram_username || '',
         email: store.email || '',
         province: store.province || 'Phnom Penh',
         district: store.district || '',
@@ -2482,11 +2488,6 @@ export default function StoreManagement({ initialTab }) {
         {/* Tab 2: Partner Inquiries */}
         {activeTab === 'inquiries' && (
           <div>
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <span className="text-sm font-bold text-gray-700">Inbound Seller Partnership Applications</span>
-              <span className="text-xs text-gray-500">Submitted via customer "Sell with Us" form</span>
-            </div>
-
             <Table>
               <Thead>
                 <tr>
@@ -2546,6 +2547,7 @@ export default function StoreManagement({ initialTab }) {
                                   code: generateStoreCode(),
                                   slug: inq.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                                   phone: inq.phone,
+                                  telegram_username: '',
                                   contract_number: `CTR-${new Date().getFullYear()}-${String(inq.id).padStart(3, '0')}`,
                                 }))
                                 setIsCreateModalOpen(true)
@@ -3121,6 +3123,19 @@ export default function StoreManagement({ initialTab }) {
                   className="input-field"
                 />
               </div>
+              <div>
+                <label htmlFor="new-store-telegram" className="block text-xs font-bold text-gray-700 mb-1">Telegram Username</label>
+                <input
+                  id="new-store-telegram"
+                  value={newStore.telegram_username}
+                  onChange={(e) => setNewStore((prev) => ({ ...prev, telegram_username: e.target.value }))}
+                  maxLength={33}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="@yourstore"
+                  className="input-field"
+                />
+              </div>
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
@@ -3593,6 +3608,22 @@ export default function StoreManagement({ initialTab }) {
                       form: { ...prev.form, phone: e.target.value },
                     }))
                   }
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-store-telegram" className="block text-xs font-bold text-gray-700 mb-1">Telegram Username</label>
+                <input
+                  id="edit-store-telegram"
+                  value={editStoreModal.form?.telegram_username || ''}
+                  onChange={(e) => setEditStoreModal((prev) => ({
+                    ...prev,
+                    form: { ...prev.form, telegram_username: e.target.value },
+                  }))}
+                  maxLength={33}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="@yourstore"
                   className="input-field"
                 />
               </div>

@@ -1,11 +1,11 @@
 import { useMemo, useState, useEffect, useCallback, useRef, startTransition, memo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, ChevronDown, Gift, ChevronLeft, SlidersHorizontal, Clock3 } from 'lucide-react'
+import { Search, ShoppingBag, Heart, Grid2X2, List, Star, X, ShoppingCart, ChevronDown, Gift, ChevronLeft, SlidersHorizontal, Clock3, Plus } from 'lucide-react'
 import { productsApi } from '@/api/products'
 import HeaderActionIcons from '@/components/customer/HeaderActionIcons'
 import HeaderBrandMark from '@/components/customer/HeaderBrandMark'
-import { ProductImageAddButton } from '@/components/customer/CustomerUi'
+import { CartQuantityStepper, ProductImageAddButton } from '@/components/customer/CustomerUi'
 import { STOREFRONT_LIVE_QUERY } from '@/utils/constants'
 import { cn, formatCurrency } from '@/utils/helpers'
 import { getFlashSaleTimerState, hasFlashSaleTimer } from '@/utils/flashSale'
@@ -15,6 +15,13 @@ import { showCartAddedToast, handleCartAdd } from '@/components/customer/CartAdd
 import useAuthStore from '@/store/authStore'
 import useUiStore from '@/store/uiStore'
 import { useTranslation } from 'react-i18next'
+
+const SHOP_VIEW_STORAGE_KEY = 'shadow-shop-product-list-view'
+const LIST_ROW_CLASS = 'md:flex md:items-center md:gap-4 md:rounded-xl md:p-3 md:shadow-none lg:gap-5 lg:p-3.5'
+const LIST_HOVER_CLASS = 'md:hover:translate-y-0 md:hover:border-pink-200 md:hover:shadow-none'
+const LIST_THUMBNAIL_CLASS = 'md:size-24 md:shrink-0 md:rounded-lg lg:size-28'
+const LIST_DETAILS_CLASS = 'md:min-w-0 md:flex-1 md:p-0'
+const LIST_TITLE_CLASS = 'md:text-base md:leading-snug'
 
 function FilterSelect({ children, ...props }) {
   return (
@@ -30,11 +37,11 @@ function FilterSelect({ children, ...props }) {
   )
 }
 
-function ProductCardSkeleton() {
+function ProductCardSkeleton({ isListView }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card">
-      <div className="aspect-square animate-pulse bg-gray-100" />
-      <div className="space-y-2 p-2.5 sm:p-3">
+    <div className={cn('overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card', isListView && LIST_ROW_CLASS)}>
+      <div className={cn('aspect-square animate-pulse bg-gray-100', isListView && LIST_THUMBNAIL_CLASS)} />
+      <div className={cn('space-y-2 p-2.5 sm:p-3', isListView && `${LIST_DETAILS_CLASS} md:max-w-sm`)}>
         <div className="h-3 w-2/3 animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-full animate-pulse rounded bg-gray-100" />
         <div className="h-4 w-4/5 animate-pulse rounded bg-gray-100" />
@@ -60,6 +67,33 @@ function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
 }
 
+function ListCartAction({ available, comingSoon, qty, onAdd, onIncrease, onDecrease }) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="hidden min-w-36 shrink-0 items-center justify-end md:flex">
+      {!available && (
+        <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700">
+          {t(comingSoon ? 'product.comingSoon' : 'common.soldOut')}
+        </span>
+      )}
+      {available && qty > 0 && (
+        <CartQuantityStepper quantity={qty} onIncrease={onIncrease} onDecrease={onDecrease} />
+      )}
+      {available && qty === 0 && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg bg-pink-600 px-3 text-sm font-semibold text-white transition hover:bg-pink-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pink-600"
+        >
+          <Plus size={16} aria-hidden="true" />
+          {t('common.addToCart')}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function FlashSaleTimer({ item, compact = false }) {
   const hasTimer = hasFlashSaleTimer(item)
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -82,7 +116,7 @@ function FlashSaleTimer({ item, compact = false }) {
   )
 }
 
-const ProductCard = memo(function ProductCard({ product, priority = false, onAuthRequired }) {
+const ProductCard = memo(function ProductCard({ product, priority = false, onAuthRequired, isListView }) {
   const { t } = useTranslation()
   const addItem = useCartStore((s) => s.addItem)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
@@ -132,6 +166,7 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
 
   const currentPrice = Number(product.display_price || product.retail_price || 0)
   const oldPrice = Number(product.old_price || 0)
+  const cartAction = { available, comingSoon: isComingSoon, qty, onAdd: handleAdd, onIncrease: handleIncrease, onDecrease: handleDecrease }
 
   useEffect(() => {
     setImageLoaded(false)
@@ -144,12 +179,12 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
 
   return (
     <article
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
+      className={cn('group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft', isListView && LIST_ROW_CLASS, isListView && LIST_HOVER_CLASS)}
       onClick={() => navigate(`/product/${product.id}`)}
     >
-      <div className="relative aspect-square overflow-hidden bg-gray-50">
+      <div className={cn('relative aspect-square overflow-hidden bg-gray-50', isListView && LIST_THUMBNAIL_CLASS)}>
         {isComingSoon && (
-          <span className="absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+          <span className={cn('absolute left-3 top-3 z-10 rounded-full bg-pink-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm', isListView && 'md:hidden')}>
             Coming Soon
           </span>
         )}
@@ -170,42 +205,43 @@ const ProductCard = memo(function ProductCard({ product, priority = false, onAut
         ) : (
           <ProductImageFallback />
         )}
-        <ProductImageAddButton
-          available={available}
-          qty={qty}
-          onAdd={handleAdd}
-          onIncrease={handleIncrease}
-          onDecrease={handleDecrease}
-          soldOutLabel={t('common.soldOut')}
-          comingSoon={isComingSoon}
-        />
+        <div className={isListView ? 'md:hidden' : undefined}>
+          <ProductImageAddButton {...cartAction} soldOutLabel={t('common.soldOut')} />
+        </div>
       </div>
-      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
-        <div className="flex min-w-0 items-center justify-between gap-2">
+      <div className={cn('flex min-h-0 flex-col p-2.5 sm:p-3', isListView && LIST_DETAILS_CLASS)}>
+        <div className={cn('flex min-w-0 items-center justify-between gap-2', isListView && 'md:justify-start md:gap-3')}>
           <span className="truncate text-xs font-semibold text-gray-400">{product.brand_name || t('product.noBrand')}</span>
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-500">
             <Star size={13} className="fill-yellow-400 text-yellow-400" />{product.rating > 0 ? product.rating : '4.8'} <span className="text-gray-300">(126)</span>
           </span>
         </div>
-        <h3 className="khmer-title mt-1 line-clamp-2 text-sm text-gray-950">{product.name}</h3>
+        <h3 className={cn('khmer-title mt-1 line-clamp-2 text-sm text-gray-950', isListView && LIST_TITLE_CLASS)}>{product.name}</h3>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
-          {oldPrice > currentPrice && (
+          {isComingSoon ? (
+            <span className="text-xs sm:text-sm font-bold text-pink-600">{t('product.comingSoon', 'Coming Soon')}</span>
+          ) : (
             <>
-              <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
-              <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">
-                {t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}
-              </span>
+              <span className="text-base font-black leading-none text-pink-600">{formatCurrency(currentPrice)}</span>
+              {oldPrice > currentPrice && (
+                <>
+                  <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
+                  <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[10px] font-bold leading-4 text-pink-600">
+                    {t('product.saveAmount', { amount: formatCurrency(oldPrice - currentPrice) })}
+                  </span>
+                </>
+              )}
             </>
           )}
         </div>
         <FlashSaleTimer item={product} />
       </div>
+      {isListView && <ListCartAction {...cartAction} />}
     </article>
   )
 })
 
-const ProductSetCard = memo(function ProductSetCard({ productSet, priority = false, onAuthRequired }) {
+const ProductSetCard = memo(function ProductSetCard({ productSet, priority = false, onAuthRequired, isListView }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const addItem = useCartStore((s) => s.addItem)
@@ -265,6 +301,8 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
     updateQuantity(cartProduct.cart_key, qty - 1)
   }
 
+  const cartAction = { available: setStock > 0, qty, onAdd: handleAdd, onIncrease: handleIncrease, onDecrease: handleDecrease }
+
   useEffect(() => {
     setImageLoaded(false)
     setImageFailed(false)
@@ -276,10 +314,10 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
 
   return (
     <article
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft"
+      className={cn('group relative cursor-pointer overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft', isListView && LIST_ROW_CLASS, isListView && LIST_HOVER_CLASS)}
       onClick={() => navigate(`/product-set/${productSet.id}`)}
     >
-      <div className="relative aspect-square overflow-hidden bg-gray-50">
+      <div className={cn('relative aspect-square overflow-hidden bg-gray-50', isListView && LIST_THUMBNAIL_CLASS)}>
         {imageUrl && !imageFailed ? (
           <>
             {!imageLoaded && showImageLoader && <ProductImageLoading />}
@@ -297,28 +335,23 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
         ) : (
           <ProductImageFallback />
         )}
-        <span className="absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-xs font-black text-pink-600 shadow-sm">
+        <span className={cn('absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-xs font-black text-pink-600 shadow-sm', isListView && 'md:hidden')}>
           {t('product.productSetBadge')}
         </span>
-        <ProductImageAddButton
-          available={setStock > 0}
-          qty={qty}
-          onAdd={handleAdd}
-          onIncrease={handleIncrease}
-          onDecrease={handleDecrease}
-          soldOutLabel={t('common.soldOut')}
-        />
+        <div className={isListView ? 'md:hidden' : undefined}>
+          <ProductImageAddButton {...cartAction} soldOutLabel={t('common.soldOut')} />
+        </div>
       </div>
-      <div className="flex min-h-0 flex-col p-2.5 sm:p-3">
+      <div className={cn('flex min-h-0 flex-col p-2.5 sm:p-3', isListView && LIST_DETAILS_CLASS)}>
         <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-gray-400">
           <span className="truncate">{t('product.productSet')}</span>
         </div>
-        <h3 className="mt-1 line-clamp-2 text-sm font-black leading-tight text-gray-950">{productSet.name}</h3>
+        <h3 className={cn('mt-1 line-clamp-2 text-sm font-black leading-tight text-gray-950', isListView && LIST_TITLE_CLASS)}>{productSet.name}</h3>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
           <span className="text-base font-black leading-none text-pink-600">{formatCurrency(price)}</span>
           {oldPrice > price && <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
         </div>
-        <div className="mt-2 flex items-center gap-1">
+        <div className={cn('mt-2 flex items-center gap-1', isListView && 'md:hidden')}>
           <Gift size={14} className="text-pink-500" />
           <span className="text-xs font-semibold text-gray-500">
             {setStock > 0 ? t('common.inStock') : t('common.soldOut')}
@@ -326,6 +359,7 @@ const ProductSetCard = memo(function ProductSetCard({ productSet, priority = fal
         </div>
         <FlashSaleTimer item={productSet} />
       </div>
+      {isListView && <ListCartAction {...cartAction} />}
     </article>
   )
 })
@@ -344,8 +378,42 @@ export default function ProductList() {
   const [categoryId, setCategoryId] = useState(categoryParam)
   const [brand, setBrand] = useState(brandParam)
   const [sortBy, setSortBy] = useState('-created_at')
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem(SHOP_VIEW_STORAGE_KEY) === 'list' ? 'list' : 'grid'
+    } catch {
+      return 'grid'
+    }
+  })
+  const isListView = view === 'list'
+  const [showFilters, setShowFilters] = useState(false)
   const openAuthModal = useUiStore((s) => s.openAuthModal)
   const [showGridRefetchLoader, setShowGridRefetchLoader] = useState(false)
+
+  const handleViewChange = (mode) => {
+    setView(mode)
+    try {
+      localStorage.setItem(SHOP_VIEW_STORAGE_KEY, mode)
+    } catch {
+      // The current page can still switch views when browser storage is unavailable.
+    }
+  }
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (categoryId) count++
+    if (brand) count++
+    if (sortBy && sortBy !== '-created_at') count++
+    return count
+  }, [categoryId, brand, sortBy])
+
+  const handleClearFilters = useCallback(() => {
+    startTransition(() => {
+      setCategoryId('')
+      setBrand('')
+      setSortBy('-created_at')
+    })
+  }, [])
 
   const onAuthRequired = useCallback((type = 'cart') => {
     openAuthModal(type)
@@ -516,83 +584,147 @@ export default function ProductList() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="shop-icon-btn h-11 w-11">
-            <Grid2X2 size={18} />
-          </button>
-          <button className="shop-icon-btn h-11 w-11">
-            <List size={18} />
-          </button>
+          {[
+            { mode: 'grid', Icon: Grid2X2, label: t('shop.gridView') },
+            { mode: 'list', Icon: List, label: t('shop.listView') },
+          ].map(({ mode, Icon, label }) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => handleViewChange(mode)}
+              aria-label={label}
+              aria-pressed={view === mode}
+              aria-controls="shop-product-results"
+              title={label}
+              className="shop-icon-btn h-11 w-11 aria-pressed:border-pink-300 aria-pressed:bg-pink-50 aria-pressed:text-pink-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pink-600"
+            >
+              <Icon size={18} aria-hidden="true" />
+            </button>
+          ))}
         </div>
       </div>
 
       <div>
         <section>
-          <div className="-mx-4 mb-4 border-b border-gray-100 bg-white px-4 pb-3 pt-1 md:mx-0 md:mb-5 md:rounded-2xl md:border md:bg-white/95 md:p-3 md:shadow-card md:backdrop-blur">
-            <div className={cn('grid min-w-0 gap-2', isSearchResult ? 'grid-cols-[48px_1fr_1fr]' : 'grid-cols-3')}>
-              {isSearchResult && (
-                <button className="flex h-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-800">
-                  <SlidersHorizontal size={18} />
+          {/* Header Bar with Count & Filter Toggle */}
+          <div className="mb-3.5 flex items-center justify-between gap-2">
+            <p className="text-xs sm:text-sm font-semibold text-gray-500">
+              <span className="font-bold text-gray-950">{total}</span>{' '}
+              {isSearchResult ? <>{t('shop.resultsFor', { query: search })}</> : t('common.products')}
+            </p>
+
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="rounded-lg px-2 py-1 text-xs font-bold text-gray-500 hover:text-pink-600 hover:bg-gray-100 transition"
+                >
+                  {t('common.clear', 'Clear')}
                 </button>
               )}
-              <FilterSelect
-                value={categoryId}
-                onChange={(e) => { const v = e.target.value; startTransition(() => setCategoryId(v)) }}
+              <button
+                type="button"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs sm:text-sm font-bold shadow-xs transition active:scale-95',
+                  showFilters || activeFilterCount > 0
+                    ? 'border-pink-300 bg-pink-50 text-pink-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                )}
+                aria-expanded={showFilters}
+                aria-label="Toggle filters"
               >
-                <option value="">{t('shop.allCategories')}</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
-                ))}
-              </FilterSelect>
-              {!isSearchResult && (
-                <FilterSelect
-                value={brand}
-                onChange={(e) => { const v = e.target.value; startTransition(() => setBrand(v)) }}
-                >
-                  <option value="">{t('shop.allBrands')}</option>
-                  {shopBrands.map((b) => (
-                    <option key={b.id} value={String(b.id)}>{b.name}</option>
-                  ))}
-                </FilterSelect>
-              )}
-              <FilterSelect
-                value={sortBy}
-                onChange={(e) => { const v = e.target.value; startTransition(() => setSortBy(v)) }}
-              >
-                <option value="-created_at">{isSearchResult ? t('shop.sortBy') : t('shop.newest')}</option>
-                <option value="retail_price">{t('shop.priceLowHigh')}</option>
-                <option value="-retail_price">{t('shop.priceHighLow')}</option>
-                <option value="-rating">{t('shop.bestRated')}</option>
-              </FilterSelect>
+                <SlidersHorizontal size={15} className={showFilters || activeFilterCount > 0 ? 'text-pink-600' : 'text-gray-500'} />
+                <span>{t('shop.filterAndSort', 'Filter & Sort')}</span>
+                {activeFilterCount > 0 && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-pink-600 px-1 text-[10px] font-black text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown size={14} className={cn('text-gray-400 transition-transform duration-200', showFilters && 'rotate-180')} />
+              </button>
             </div>
           </div>
 
-          <div className="mb-4">
-            <p className="text-sm font-semibold text-gray-500">
-              <span className="text-gray-950">{total}</span>               {isSearchResult ? (
-                <>{t('shop.resultsFor', { query: search })}</>
-              ) : t('common.products')}
-            </p>
-          </div>
+          {/* Collapsible Filter Panel */}
+          {showFilters && (
+            <div className="mb-4 rounded-2xl border border-gray-200/80 bg-white p-3 sm:p-4 shadow-sm animate-slide-up">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                    {t('shop.category', 'Category')}
+                  </label>
+                  <FilterSelect
+                    value={categoryId}
+                    onChange={(e) => { const v = e.target.value; startTransition(() => setCategoryId(v)) }}
+                  >
+                    <option value="">{t('shop.allCategories')}</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
+                    ))}
+                  </FilterSelect>
+                </div>
 
-          <div className="relative z-0 -mx-2.5 grid grid-cols-2 gap-2 sm:mx-0 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 md:gap-4">
+                {!isSearchResult && (
+                  <div>
+                    <label className="mb-1 block text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                      {t('shop.brand', 'Brand')}
+                    </label>
+                    <FilterSelect
+                      value={brand}
+                      onChange={(e) => { const v = e.target.value; startTransition(() => setBrand(v)) }}
+                    >
+                      <option value="">{t('shop.allBrands')}</option>
+                      {shopBrands.map((b) => (
+                        <option key={b.id} value={String(b.id)}>{b.name}</option>
+                      ))}
+                    </FilterSelect>
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                    {t('shop.sortBy', 'Sort By')}
+                  </label>
+                  <FilterSelect
+                    value={sortBy}
+                    onChange={(e) => { const v = e.target.value; startTransition(() => setSortBy(v)) }}
+                  >
+                    <option value="-created_at">{isSearchResult ? t('shop.sortBy') : t('shop.newest')}</option>
+                    <option value="retail_price">{t('shop.priceLowHigh')}</option>
+                    <option value="-retail_price">{t('shop.priceHighLow')}</option>
+                    <option value="-rating">{t('shop.bestRated')}</option>
+                  </FilterSelect>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div
+            id="shop-product-results"
+            className={cn('relative z-0 -mx-2.5 grid grid-cols-2 gap-2 sm:mx-0 sm:grid-cols-3 sm:gap-3', isListView ? 'md:grid-cols-1 md:gap-2.5' : 'md:gap-4 lg:grid-cols-4')}
+          >
             {isGridLoading
-              ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} />)
+              ? Array.from({ length: 8 }).map((_, i) => <ProductCardSkeleton key={i} isListView={isListView} />)
               : (
                 <>
                   {productSets.map((set, i) => (
-                    <ProductSetCard 
-                      key={`set-${set.id}`} 
-                      productSet={set} 
-                      priority={i < 4} 
+                    <ProductSetCard
+                      key={`set-${set.id}`}
+                      productSet={set}
+                      priority={i < 4}
                       onAuthRequired={onAuthRequired}
+                      isListView={isListView}
                     />
                   ))}
                   {visibleProducts.map((p, i) => (
-                    <ProductCard 
-                      key={p.id} 
-                      product={p} 
-                      priority={i < 6} 
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      priority={i < 6}
                       onAuthRequired={onAuthRequired}
+                      isListView={isListView}
                     />
                   ))}
                   {visibleCount < products.length && (

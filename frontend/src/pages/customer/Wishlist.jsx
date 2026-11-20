@@ -150,10 +150,16 @@ export default function Wishlist() {
 
                       <div className="mt-3 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 md:mt-5">
                         <div>
-                          <p className="text-lg font-black text-pink-600 md:text-xl">{formatCurrency(price)}</p>
-                          <p className={cn('text-xs font-bold', inStock ? 'text-emerald-500' : 'text-gray-400')}>
-                            {inStock ? 'IN STOCK' : 'OUT OF STOCK'}
-                          </p>
+                          {product?.availability_status === 'coming_soon' ? (
+                            <p className="text-base font-bold text-pink-600">{t('product.comingSoon', 'Coming Soon')}</p>
+                          ) : (
+                            <>
+                              <p className="text-lg font-black text-pink-600 md:text-xl">{formatCurrency(price)}</p>
+                              <p className={cn('text-xs font-bold', inStock ? 'text-emerald-500' : 'text-gray-400')}>
+                                {inStock ? 'IN STOCK' : 'OUT OF STOCK'}
+                              </p>
+                            </>
+                          )}
                         </div>
                         {inStock && quantity > 0 && !product.variants_enabled ? (
                           <CartQuantityStepper

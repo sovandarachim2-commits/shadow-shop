@@ -406,7 +406,11 @@ export default function CustomerLayout() {
                   <div className="mt-2 flex flex-1 flex-col">
                     <p className="khmer-title line-clamp-2 text-[11px] text-gray-950 group-hover:text-pink-600">{product.name}</p>
                     <div className="mt-auto flex items-center justify-between pt-1.5">
-                      <span className="text-xs font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
+                      {product.availability_status === 'coming_soon' ? (
+                        <span className="text-[10px] font-bold text-pink-600">{t('product.comingSoon', 'Coming Soon')}</span>
+                      ) : (
+                        <span className="text-xs font-black text-pink-600">{formatCurrency(product.display_price || product.retail_price)}</span>
+                      )}
                       {product.brand_name && (
                         <span className="max-w-[50px] truncate text-[9px] font-bold text-gray-400">
                           {product.brand_name}

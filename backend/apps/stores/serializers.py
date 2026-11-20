@@ -137,7 +137,7 @@ class PublicStoreSerializer(serializers.ModelSerializer):
         model = Store
         fields = (
             'id', 'name', 'code', 'slug', 'store_type', 'status',
-            'logo', 'banner', 'phone', 'email', 'province',
+            'logo', 'banner', 'phone', 'telegram_username', 'email', 'province',
             'district', 'address', 'description', 'bio', 'is_verified', 'category',
             'is_published', 'is_public_approved', 'show_on_homepage',
             'is_featured', 'homepage_display_order',

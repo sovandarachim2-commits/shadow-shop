@@ -54,6 +54,10 @@ function markPosterSeen(poster, permanently = false) {
   }
 }
 
+function getDisplayDelayMs(poster) {
+  return (Number(poster.display_delay_seconds) || 0) * 1000
+}
+
 function formatCountdown(endAt) {
   if (!endAt) return null
   const diff = new Date(endAt).getTime() - Date.now()
@@ -77,7 +81,9 @@ export default function OffersForYouModal({
 }) {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const [isOpen, setIsOpen] = useState(false)
+  const [storefrontEnteredAt] = useState(() => performance.now())
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const [dismissedPosterIds, setDismissedPosterIds] = useState(() => new Set())
   const [activeIndex, setActiveIndex] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(() =>
@@ -109,27 +115,42 @@ export default function OffersForYouModal({
 
   const eligiblePosters = useMemo(() => {
     if (previewMode) return Array.isArray(previewPosters) ? previewPosters : []
-    if (isStaffOrAdmin) return fetchedPosters
-    // For customers: if any active poster has not been suppressed, show all active posters so the carousel has all slides
-    const hasUnseen = fetchedPosters.some((p) => !isPosterSuppressed(p))
-    return hasUnseen ? fetchedPosters : []
+    if (!isStaffOrAdmin && !fetchedPosters.some((p) => !isPosterSuppressed(p))) return []
+    // Later posters join the end of the carousel as their delays expire.
+    return [...fetchedPosters].sort((a, b) => getDisplayDelayMs(a) - getDisplayDelayMs(b))
   }, [previewMode, previewPosters, fetchedPosters, isStaffOrAdmin])
 
-  // Open automatically when eligible posters exist in storefront mode
   useEffect(() => {
-    if (previewMode) {
-      setIsOpen(Boolean(isOpenOverride))
-      setActiveIndex(0)
-      return
+    if (previewMode || !eligiblePosters.length) return undefined
+    const delays = eligiblePosters.map(getDisplayDelayMs)
+    let timer
+    const updateElapsedTime = () => {
+      const elapsed = performance.now() - storefrontEnteredAt
+      setElapsedMs(elapsed)
+      const nextDelay = delays.find((delay) => delay > elapsed)
+      if (nextDelay !== undefined) {
+        timer = window.setTimeout(updateElapsedTime, nextDelay - elapsed)
+      }
     }
-    if (eligiblePosters.length > 0) {
-      setIsOpen(true)
-      setActiveIndex(0)
-    }
-  }, [previewMode, isOpenOverride, eligiblePosters.length])
+    updateElapsedTime()
+    return () => window.clearTimeout(timer)
+  }, [previewMode, eligiblePosters, storefrontEnteredAt])
 
-  const openState = previewMode ? Boolean(isOpenOverride) : isOpen
-  const posters = eligiblePosters
+  useEffect(() => {
+    if (previewMode) setActiveIndex(0)
+  }, [previewMode, isOpenOverride])
+
+  const posters = useMemo(() => {
+    if (previewMode) return eligiblePosters
+    const now = Date.now()
+    const readyPosters = eligiblePosters.filter((poster) =>
+      !dismissedPosterIds.has(poster.id) &&
+      getDisplayDelayMs(poster) <= elapsedMs &&
+      (!poster.end_at || Date.parse(poster.end_at) >= now),
+    )
+    return isStaffOrAdmin || readyPosters.some((poster) => !isPosterSuppressed(poster)) ? readyPosters : []
+  }, [previewMode, eligiblePosters, dismissedPosterIds, elapsedMs, isStaffOrAdmin])
+  const openState = previewMode ? Boolean(isOpenOverride) : posters.length > 0
   const currentPoster = posters[activeIndex] || posters[0] || null
 
   const handlePrev = useCallback((e) => {
@@ -164,15 +185,17 @@ export default function OffersForYouModal({
       return
     }
     posters.forEach((p) => markPosterSeen(p))
-    setIsOpen(false)
+    setDismissedPosterIds((ids) => new Set([...ids, ...posters.map((p) => p.id)]))
+    setActiveIndex(0)
+    setIsHovered(false)
   }, [previewMode, onCloseOverride, posters])
 
   // Keyboard navigation (Arrow keys + Escape)
   useEffect(() => {
-    if (!openState || posters.length <= 1) return undefined
+    if (!openState) return undefined
     const onKeyDown = (e) => {
-      if (e.key === 'ArrowLeft') handlePrev()
-      if (e.key === 'ArrowRight') handleNext()
+      if (e.key === 'ArrowLeft' && posters.length > 1) handlePrev()
+      if (e.key === 'ArrowRight' && posters.length > 1) handleNext()
       if (e.key === 'Escape') handleClose()
     }
     window.addEventListener('keydown', onKeyDown)
@@ -193,12 +216,7 @@ export default function OffersForYouModal({
   const handleActionClick = () => {
     if (!currentPoster) return
     const target = currentPoster.resolved_action_url || currentPoster.action_url || '/shop'
-    if (!previewMode) {
-      posters.forEach((p) => markPosterSeen(p))
-      setIsOpen(false)
-    } else {
-      onCloseOverride?.()
-    }
+    handleClose()
     if (/^https?:\/\//i.test(target)) {
       window.open(target, '_blank', 'noopener,noreferrer')
     } else {
@@ -215,7 +233,7 @@ export default function OffersForYouModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={currentPoster.title || 'Special Offer'}

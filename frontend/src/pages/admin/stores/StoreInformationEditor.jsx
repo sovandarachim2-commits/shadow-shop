@@ -88,7 +88,7 @@ export default function StoreInformationEditor({ store, isAdmin, onClose }) {
   const bodyRef = useRef(null)
   const nameInputRef = useRef(null)
   const [form, setForm] = useState(() => Object.fromEntries(
-    ['name', 'code', 'slug', 'store_type', 'phone', 'email', 'province', 'district', 'address', 'bio', 'description', 'category'].map((key) => [key, store[key] || '']),
+    ['name', 'code', 'slug', 'store_type', 'phone', 'telegram_username', 'email', 'province', 'district', 'address', 'bio', 'description', 'category'].map((key) => [key, store[key] || '']),
   ))
   const [logoFile, setLogoFile] = useState(null)
   const [bannerFile, setBannerFile] = useState(null)
@@ -158,7 +158,7 @@ export default function StoreInformationEditor({ store, isAdmin, onClose }) {
     if (isAdmin) {
       for (const key of ['code', 'slug', 'store_type']) if (form[key]) payload.append(key, form[key])
     }
-    for (const key of ['phone', 'email', 'province', 'district', 'address', 'bio', 'description', 'category']) payload.append(key, form[key])
+    for (const key of ['phone', 'telegram_username', 'email', 'province', 'district', 'address', 'bio', 'description', 'category']) payload.append(key, form[key])
     if (logoFile) payload.append('logo', logoFile)
     if (bannerFile) payload.append('banner', bannerFile)
     setFormError('')
@@ -199,6 +199,7 @@ export default function StoreInformationEditor({ store, isAdmin, onClose }) {
               <h3 id="store-contact-editor-title" className="mb-3 flex items-center gap-2 text-sm font-semibold"><MapPin size={17} className="text-purple-600" /> Contact &amp; Location</h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field id="store-phone" label="Phone Number"><input id="store-phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => set('phone', event.target.value)} maxLength={50} placeholder="012 345 678" className={inputClass} /></Field>
+                <Field id="store-telegram" label="Telegram Username"><input id="store-telegram" value={form.telegram_username} onChange={(event) => set('telegram_username', event.target.value)} maxLength={33} autoCapitalize="none" spellCheck={false} placeholder="@yourstore" className={inputClass} /></Field>
                 <Field id="store-email" label="Email Address"><input id="store-email" type="email" autoComplete="email" value={form.email} onChange={(event) => set('email', event.target.value)} placeholder="store@example.com" className={inputClass} /></Field>
                 <Field id="store-province" label="Province / City"><select id="store-province" value={form.province} onChange={(event) => set('province', event.target.value)} className={inputClass}><option value="">Select province / city</option>{form.province && !hasKnownProvince && <option value={form.province}>{form.province}</option>}{CAMBODIA_PROVINCES.map((province) => <option key={province.key} value={province.key}>{province.label}</option>)}</select></Field>
                 <Field id="store-district" label="District / Khan"><input id="store-district" value={form.district} onChange={(event) => set('district', event.target.value)} maxLength={100} placeholder="e.g. Toul Kork" className={inputClass} /></Field>

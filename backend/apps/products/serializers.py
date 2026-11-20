@@ -835,7 +835,7 @@ class OfferPosterSerializer(serializers.ModelSerializer):
             'store', 'store_name', 'store_slug',
             'button_label', 'action_type', 'action_url', 'resolved_action_url',
             'target_audience', 'membership_levels',
-            'priority', 'start_at', 'end_at', 'display_frequency',
+            'priority', 'start_at', 'end_at', 'display_frequency', 'display_delay_seconds',
             'status', 'approval_status', 'rejection_reason',
             'created_by', 'created_by_name', 'approved_by', 'approved_at',
             'created_at', 'updated_at',

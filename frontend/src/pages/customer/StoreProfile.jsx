@@ -3,10 +3,11 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
-  Store, ShieldCheck, MapPin, Phone, MessageCircle,
-  Share2, ArrowLeft, Star, ShoppingBag, Package, Eye, X, ExternalLink
+  Store, ShieldCheck, MapPin,
+  Share2, ArrowLeft, ShoppingBag, Package, Eye, X, ExternalLink
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import telegramLogo from '@/assets/telegram.svg'
 import { storesApi } from '@/api/stores'
 import { productsApi } from '@/api/products'
 import { formatCurrency } from '@/utils/helpers'
@@ -18,6 +19,17 @@ import { handleCartAdd } from '@/components/customer/CartAddedToast'
 
 function isAvailableForSale(product) {
   return product?.is_available_for_sale ?? Number(product?.current_stock || 0) > 0
+}
+
+function getStoreTelegramUrl(store) {
+  const username = store.telegram_username?.trim().replace(/^@/, '')
+  if (username && /^[a-z][a-z0-9_]{1,31}$/i.test(username)) return `https://t.me/${username}`
+
+  const phone = store.phone?.trim().replace(/[\s().-]/g, '') || ''
+  if (/^0[1-9]\d{7,8}$/.test(phone)) return `https://t.me/+855${phone.slice(1)}`
+  if (/^855[1-9]\d{7,8}$/.test(phone)) return `https://t.me/+${phone}`
+  if (/^\+[1-9]\d{6,14}$/.test(phone)) return `https://t.me/${phone}`
+  return ''
 }
 
 const StoreProductCard = memo(function StoreProductCard({ product }) {
@@ -117,13 +129,19 @@ const StoreProductCard = memo(function StoreProductCard({ product }) {
           {product.name}
         </h3>
         <div className="mt-auto pt-2 flex items-baseline gap-1.5">
-          <span className="text-sm sm:text-base font-black text-pink-600 font-mono">
-            {formatCurrency(currentPrice)}
-          </span>
-          {oldPrice > currentPrice && (
-            <span className="text-xs text-gray-400 line-through font-mono">
-              {formatCurrency(oldPrice)}
-            </span>
+          {isComingSoon ? (
+            <span className="text-xs sm:text-sm font-bold text-pink-600 font-sans">{t('product.comingSoon', 'Coming Soon')}</span>
+          ) : (
+            <>
+              <span className="text-sm sm:text-base font-black text-pink-600 font-mono">
+                {formatCurrency(currentPrice)}
+              </span>
+              {oldPrice > currentPrice && (
+                <span className="text-xs text-gray-400 line-through font-mono">
+                  {formatCurrency(oldPrice)}
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -210,6 +228,11 @@ export default function StoreProfile() {
     )
   }
 
+  const telegramUrl = getStoreTelegramUrl(store)
+  const bio = store.bio?.trim()
+  const description = store.description?.trim()
+  const location = [store.district, store.province].filter(Boolean).join(', ')
+
   return (
     <div className="min-h-screen bg-gray-50 pb-28 sm:pb-20">
       {/* Store Banner Container */}
@@ -248,6 +271,8 @@ export default function StoreProfile() {
 
           {/* Share button */}
           <button
+            type="button"
+            aria-label="Share Store"
             onClick={(e) => {
               e.stopPropagation()
               handleShare()
@@ -261,8 +286,8 @@ export default function StoreProfile() {
 
       {/* Store Header Card */}
       <div className="max-w-[1500px] mx-auto px-4 sm:px-6 md:px-8 relative z-10 -mt-16 sm:-mt-20">
-        <div className="rounded-3xl bg-white p-5 sm:p-7 shadow-xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
-          <div className="flex items-center gap-4 sm:gap-6">
+        <section aria-labelledby="store-profile-name" className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex items-center gap-3 sm:gap-5">
             {/* Store Avatar */}
             <div
               onClick={() => {
@@ -270,7 +295,7 @@ export default function StoreProfile() {
                   setImagePreview({ src: store.logo, title: `${store.name} - Logo` })
                 }
               }}
-              className={`h-20 w-20 sm:h-24 sm:w-24 rounded-2xl bg-white p-1.5 shadow-lg border border-gray-200 shrink-0 overflow-hidden transition ${
+              className={`h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white p-1 transition sm:h-20 sm:w-20 ${
                 store.logo ? 'cursor-pointer group relative hover:ring-2 hover:ring-pink-500' : ''
               }`}
               title={store.logo ? 'Click to preview logo' : ''}
@@ -291,57 +316,43 @@ export default function StoreProfile() {
 
             {/* Store Info */}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black text-gray-950 truncate">{store.name}</h1>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 id="store-profile-name" className="text-lg font-bold leading-tight text-gray-950 [overflow-wrap:anywhere] sm:text-2xl">{store.name}</h1>
                 {store.is_verified && (
-                  <ShieldCheck size={20} className="text-blue-500 shrink-0" title="Verified Store Partner" />
+                  <ShieldCheck size={18} className="shrink-0 text-blue-500" role="img" aria-label="Verified Store Partner" />
                 )}
               </div>
-
-              {store.bio && (
-                <p className="text-xs sm:text-sm text-gray-600 mt-1 max-w-lg leading-relaxed">{store.bio}</p>
+              {location && (
+                <p className="mt-1 flex items-center gap-1.5 text-xs leading-5 text-gray-500 sm:text-sm">
+                  <MapPin size={14} className="shrink-0" aria-hidden="true" />
+                  <span className="[overflow-wrap:anywhere]">{location}</span>
+                </p>
               )}
-
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-500 mt-2.5">
-                {store.province && (
-                  <span className="flex items-center gap-1">
-                    <MapPin size={13} className="text-gray-400" />
-                    <span>{store.province}</span>
-                  </span>
-                )}
-                {store.phone && (
-                  <span className="flex items-center gap-1 font-mono">
-                    <Phone size={13} className="text-gray-400" />
-                    <span>{store.phone}</span>
-                  </span>
-                )}
-                <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-bold border border-green-200 text-[11px]">
-                  Official Partner
-                </span>
-              </div>
             </div>
-          </div>
-
-          {/* Contact / Action buttons */}
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center shrink-0 w-full md:w-auto mt-1 md:mt-0">
-            {store.phone && (
+            {telegramUrl && (
               <a
-                href={`tel:${store.phone}`}
-                className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition active:scale-95 text-center"
+                href={telegramUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t('footer.chatTelegram')}
+                title={t('footer.chatTelegram')}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-100 bg-sky-50 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600 sm:w-auto sm:px-3"
               >
-                <Phone size={14} />
-                <span>Call Store</span>
+                <img src={telegramLogo} alt="" width={24} height={24} className="h-6 w-6" />
+                <span className="hidden sm:inline">Telegram</span>
               </a>
             )}
-            <button
-              onClick={handleShare}
-              className="inline-flex flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-xl bg-pink-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-pink-200 hover:bg-pink-700 transition active:scale-95 text-center"
-            >
-              <Share2 size={14} />
-              <span>Share Store</span>
-            </button>
           </div>
-        </div>
+
+          {(bio || description) && (
+            <div className="mt-4 space-y-1.5 border-t border-gray-100 pt-4 sm:mt-5">
+              {bio && <p className="max-w-[70ch] whitespace-pre-line text-sm font-semibold leading-6 text-gray-900 [overflow-wrap:anywhere]">{bio}</p>}
+              {description && description !== bio && (
+                <p className="max-w-[70ch] whitespace-pre-line text-sm leading-6 text-gray-600 [overflow-wrap:anywhere]">{description}</p>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* Store Catalog Section */}
         <div className="mt-8 sm:mt-10">

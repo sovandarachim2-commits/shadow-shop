@@ -165,6 +165,7 @@
     "submitReview": "Submit Review",
     "noReviewsYet": "No reviews yet",
     "customer": "Customer",
+    "comingSoon": "Coming Soon",
     "productSet": "Product Set",
     "productSetBadge": "SET",
     "productSetNotFound": "Product set not found",
@@ -244,6 +245,11 @@
     "noProductsFound": "No products found",
     "searchForProducts": "Search for products",
     "sortBy": "Sort by",
+    "filterAndSort": "Filter & Sort",
+    "gridView": "Grid view",
+    "listView": "List view",
+    "category": "Category",
+    "brand": "Brand",
     "resultsFor": "Results for \"{{query}}\""
   },
   "auth": {

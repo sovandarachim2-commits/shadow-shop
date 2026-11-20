@@ -207,8 +207,14 @@ const RelatedProductCard = memo(function RelatedProductCard({ product, priority 
         </div>
         <h3 className="khmer-title mt-1 line-clamp-2 text-base font-bold leading-snug text-gray-950 sm:text-sm">{product.name}</h3>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
-          <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
-          {oldPrice > price && <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+          {isComingSoon ? (
+            <span className="text-xs sm:text-sm font-bold text-pink-600">{t('product.comingSoon', 'Coming Soon')}</span>
+          ) : (
+            <>
+              <span className="text-base font-black leading-none text-pink-600 sm:text-lg">{formatCurrency(price)}</span>
+              {oldPrice > price && <span className="text-xs font-semibold text-gray-400 line-through">{formatCurrency(oldPrice)}</span>}
+            </>
+          )}
         </div>
         {saleTimer?.value && <div className="mt-2 flex w-fit items-center gap-1 rounded-lg bg-pink-50 px-2 py-1 text-[11px] font-black leading-none text-pink-600"><Zap size={12} /><span>{saleTimer.label} {saleTimer.value}</span></div>}
       </div>
@@ -799,17 +805,25 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <div className="mt-2 flex flex-wrap items-end gap-3">
-            <span className="text-[30px] font-bold leading-none text-pink-600 md:text-4xl md:font-black">{formatCurrency(currentPrice)}</span>
-            {oldPrice > currentPrice && (
-              <span className="text-base font-medium text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
-            )}
-            {savedAmount > 0 && (
-              <span className="rounded-full bg-pink-50 px-2.5 py-1 text-xs font-semibold text-pink-600">
-                {t('product.saveAmount', { amount: formatCurrency(savedAmount) })}
+          {isComingSoon ? (
+            <div className="mt-2 flex items-center">
+              <span className="text-xl sm:text-2xl font-black text-pink-600">
+                {t('product.comingSoon', 'Coming Soon')}
               </span>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              <span className="text-[30px] font-bold leading-none text-pink-600 md:text-4xl md:font-black">{formatCurrency(currentPrice)}</span>
+              {oldPrice > currentPrice && (
+                <span className="text-base font-medium text-gray-400 line-through">{formatCurrency(oldPrice)}</span>
+              )}
+              {savedAmount > 0 && (
+                <span className="rounded-full bg-pink-50 px-2.5 py-1 text-xs font-semibold text-pink-600">
+                  {t('product.saveAmount', { amount: formatCurrency(savedAmount) })}
+                </span>
+              )}
+            </div>
+          )}
 
           {flashSaleMaxQty > 0 && (
             <p className="mt-2 text-sm font-medium text-pink-600 md:hidden">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</p>
@@ -857,30 +871,32 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <div className="mt-4 hidden flex-wrap items-center gap-4 border-y border-gray-100 py-5 md:flex">
-            <span className="text-sm font-black text-gray-700">{t('product.quantity')}</span>
-            <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-1">
-              <button onClick={() => setQty((q) => Math.max(product.min_order_qty || 1, q - 1))} className="shop-icon-btn h-10 w-10">
-                <Minus size={15} />
-              </button>
-              <span className="w-10 text-center text-base font-black">{purchaseQty}</span>
-              <button disabled={!isInStock} onClick={() => {
-                if (purchaseQty >= maxPurchaseQty) {
-                  showStockLimitToast(saleProduct, maxPurchaseQty)
-                } else {
-                  setQty(Math.min(maxPurchaseQty, purchaseQty + 1))
-                }
-              }} className="shop-icon-btn h-10 w-10 disabled:opacity-50">
-                <Plus size={15} />
-              </button>
+          {!isComingSoon && (
+            <div className="mt-4 hidden flex-wrap items-center gap-4 border-y border-gray-100 py-5 md:flex">
+              <span className="text-sm font-black text-gray-700">{t('product.quantity')}</span>
+              <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-1">
+                <button onClick={() => setQty((q) => Math.max(product.min_order_qty || 1, q - 1))} className="shop-icon-btn h-10 w-10">
+                  <Minus size={15} />
+                </button>
+                <span className="w-10 text-center text-base font-black">{purchaseQty}</span>
+                <button disabled={!isInStock} onClick={() => {
+                  if (purchaseQty >= maxPurchaseQty) {
+                    showStockLimitToast(saleProduct, maxPurchaseQty)
+                  } else {
+                    setQty(Math.min(maxPurchaseQty, purchaseQty + 1))
+                  }
+                }} className="shop-icon-btn h-10 w-10 disabled:opacity-50">
+                  <Plus size={15} />
+                </button>
+              </div>
+              {flashSaleMaxQty > 0 && <span className="text-sm font-black text-pink-600">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</span>}
+              {!isInStock && (
+                <span className="text-sm font-bold text-red-500">
+                  {t('common.outOfStock')}
+                </span>
+              )}
             </div>
-            {flashSaleMaxQty > 0 && <span className="text-sm font-black text-pink-600">{t('product.maxPerOrder', { count: flashSaleMaxQty })}</span>}
-            {!isInStock && (
-              <span className={`text-sm font-bold ${isComingSoon ? 'text-pink-600' : 'text-red-500'}`}>
-                {isComingSoon ? 'Coming Soon' : t('common.outOfStock')}
-              </span>
-            )}
-          </div>
+          )}
 
           {isComingSoon ? (
             <div className="mt-6 hidden sm:flex">
