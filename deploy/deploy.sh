@@ -12,7 +12,8 @@ git pull origin main
 
 echo "2. Backend: Install dependencies..."
 source $APP_DIR/venv/bin/activate
-pip install -r $BACKEND_DIR/requirements.txt
+pip install --upgrade pip --quiet
+pip install --disable-pip-version-check -r $BACKEND_DIR/requirements.txt
 
 echo "3. Backend: Run migrations and seed roles/permissions..."
 cd $BACKEND_DIR
